@@ -60,7 +60,7 @@ app.post('/webhook', async (req, res) => {
                         'api-key': process.env.BREVO_API_KEY
                     },
                     body: JSON.stringify({
-                        sender: { name: "Your Business", email: "no-reply@your-account-email.com" }, // use the email you signed up with on Brevo
+                        sender: { name: "OpenClaw", email: "FluentWithKyle@gmail.com" },
                         to: [{ email: clientEmail, name: clientName }],
                         subject: 'Your Next Steps / Package Selection',
                         htmlContent: `<p>Hi ${clientName},</p><p>Thanks for booking a call! Please complete your package selection here: <a href="${personalizedTallyUrl}">Click here to select your package</a></p>`
