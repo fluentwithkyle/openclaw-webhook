@@ -13,7 +13,6 @@ app.post('/webhook', async (req, res) => {
     console.log('--- RAW WEBHOOK BODY ---');
     console.log(JSON.stringify(eventData, null, 2));
 
-    // Support both Cal.com payload styles and direct test structures
     const payload = eventData.payload || eventData;
     const attendees = payload.attendees || (payload.responses && payload.responses.attendee ? [payload.responses.attendee] : []);
     
@@ -22,7 +21,6 @@ app.post('/webhook', async (req, res) => {
         const clientName = attendee.name || payload.name || payload.clientName || 'Valued Client';
         const clientEmail = attendee.email || payload.email || payload.attendeeEmail || '';
 
-        // Extract the custom LINE ID from Cal.com responses
         let lineId = '';
         const responses = payload.responses;
         if (responses) {
@@ -42,7 +40,6 @@ app.post('/webhook', async (req, res) => {
         console.log(`Parsed Client Email: ${clientEmail}`);
         console.log(`Parsed Client LINE ID: ${lineId}`);
 
-        // Your active Tally #2 link with exact hidden field parameters
         const tallyBaseUrl = 'https://tally.so/r/lb26p6';
         const encodedName = encodeURIComponent(clientName);
         const encodedEmail = encodeURIComponent(clientEmail);
@@ -52,27 +49,28 @@ app.post('/webhook', async (req, res) => {
         
         console.log('Generated Personalized Tally #2 URL:', personalizedTallyUrl);
 
-        // Send the email automatically via Resend API
+        // Send the email automatically via Brevo API
         if (clientEmail) {
             try {
-                const resendResponse = await fetch('https://api.resend.com/emails', {
+                const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
                     method: 'POST',
                     headers: {
+                        'Accept': 'application/json',
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`
+                        'api-key': process.env.BREVO_API_KEY
                     },
                     body: JSON.stringify({
-                        from: 'onboarding@resend.dev',
-                        to: [clientEmail],
+                        sender: { name: "Your Business", email: "no-reply@your-account-email.com" }, // use the email you signed up with on Brevo
+                        to: [{ email: clientEmail, name: clientName }],
                         subject: 'Your Next Steps / Package Selection',
-                        html: `<p>Hi ${clientName},</p><p>Thanks for booking a call! Please complete your package selection here: <a href="${personalizedTallyUrl}">Click here to select your package</a></p>`
+                        htmlContent: `<p>Hi ${clientName},</p><p>Thanks for booking a call! Please complete your package selection here: <a href="${personalizedTallyUrl}">Click here to select your package</a></p>`
                     })
                 });
 
-                const emailResult = await resendResponse.json();
-                console.log('Resend API Response:', emailResult);
+                const emailResult = await brevoResponse.json();
+                console.log('Brevo API Response:', emailResult);
             } catch (error) {
-                console.error('Failed to send email:', error);
+                console.error('Failed to send email via Brevo:', error);
             }
         } else {
             console.log('Skipped email: No client email address found in payload.');
