@@ -49,28 +49,25 @@ app.post('/webhook', async (req, res) => {
         
         console.log('Generated Personalized Tally #2 URL:', personalizedTallyUrl);
 
-        // Send the email automatically via Brevo API
+        // Send the email automatically via Google Apps Script Web App
         if (clientEmail) {
             try {
-                const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+                const scriptResponse = await fetch('https://script.google.com/macros/s/AKfycbzh7dEtGMxxYhZuiqOxw1LByPjA4xZM6_W8c-PCK_K10tmDazmt4kefFAVMW1r8T47D/exec', {
                     method: 'POST',
                     headers: {
-                        'Accept': 'application/json',
                         'Content-Type': 'application/json',
-                        'api-key': process.env.BREVO_API_KEY
                     },
                     body: JSON.stringify({
-                        sender: { name: "OpenClaw", email: "FluentwithKyle@gmail.com" },
-                        to: [{ email: clientEmail, name: clientName }],
-                        subject: 'Your Next Steps / Package Selection',
-                        htmlContent: `<p>Hi ${clientName},</p><p>Thanks for booking a call! Please complete your package selection here: <a href="${personalizedTallyUrl}">Click here to select your package</a></p>`
+                        email: clientEmail,
+                        name: clientName,
+                        tallyUrl: personalizedTallyUrl
                     })
                 });
 
-                const emailResult = await brevoResponse.json();
-                console.log('Brevo API Response:', emailResult);
+                const scriptResult = await scriptResponse.json();
+                console.log('Google Apps Script Response:', scriptResult);
             } catch (error) {
-                console.error('Failed to send email via Brevo:', error);
+                console.error('Failed to send email via Google Apps Script:', error);
             }
         } else {
             console.log('Skipped email: No client email address found in payload.');
