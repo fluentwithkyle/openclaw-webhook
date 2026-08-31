@@ -22,11 +22,14 @@ app.post('/webhook', (req, res) => {
         let lineId = '';
         const responses = eventData.payload.responses;
         if (responses) {
-            // Look for the custom field matching your LINE ID label
-            // Cal.com often stores responses as an object or keys based on identifiers
-            for (const key in responses) {
-                if (responses[key] && (key.toLowerCase().includes('line') || (responses[key].label && responses[key].label.toLowerCase().includes('line')))) {
-                    lineId = responses[key].value || responses[key];
+            for (const key in responses.answers || responses) {
+                const answerObj = responses.answers ? responses.answers[key] : responses[key];
+                const label = answerObj && answerObj.label ? answerObj.label.toLowerCase() : '';
+                const val = answerObj && answerObj.value !== undefined ? answerObj.value : answerObj;
+                
+                if (key.toLowerCase().includes('line') || label.includes('line')) {
+                    lineId = val;
+                    break;
                 }
             }
         }
@@ -35,9 +38,8 @@ app.post('/webhook', (req, res) => {
         console.log(`Client Email: ${clientEmail}`);
         console.log(`Client LINE ID: ${lineId}`);
 
-        // Construct the personalized Tally #2 URL automatically
-        // Replace 'YOUR_TALLY_ID' with your actual Tally #2 form ID when ready
-        const tallyBaseUrl = 'https://tally.so/r/YOUR_TALLY_ID';
+        // Your active Tally #2 link with exact hidden field parameters
+        const tallyBaseUrl = 'https://tally.so/r/lb26p6';
         const encodedName = encodeURIComponent(clientName);
         const encodedEmail = encodeURIComponent(clientEmail);
         const encodedLineId = encodeURIComponent(lineId);
