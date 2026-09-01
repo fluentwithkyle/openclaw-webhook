@@ -80,7 +80,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ==========================================
-// Tally #2 Webhook Route: Captures package selection after intro meeting
+// Tally #2 Webhook Route: Captures package selection and logs to Google Sheets
 // ==========================================
 app.post('/tally-webhook', async (req, res) => {
   try {
@@ -94,12 +94,28 @@ app.post('/tally-webhook', async (req, res) => {
 
     console.log(`Received Tally #2 submission for ${clientName} - Package: ${selectedPackage}`);
 
-    res.status(200).json({ status: 'success', message: 'Tally #2 payload received' });
+    // Forward the payload data to your Google Apps Script Web App URL
+    const gasUrl = "https://script.google.com/macros/s/AKfycbzh7dEtGMxxYhZuiqOxw1LByPjA4xZM6_W8c-PCK_K10tmDazmt4kefFAVMW1r8T47D/exec";
+    
+    // Using fetch to push data to Google Apps Script
+    await fetch(gasUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: clientName,
+        email: clientEmail,
+        line_id: lineId,
+        package: selectedPackage
+      })
+    });
+
+    res.status(200).json({ status: 'success', message: 'Tally #2 payload received and logged to CRM' });
   } catch (error) {
     console.error('Error processing Tally #2 webhook:', error);
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
+
 
 
 const PORT = process.env.PORT || 3000;
