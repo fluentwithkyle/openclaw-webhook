@@ -79,6 +79,29 @@ app.post('/webhook', async (req, res) => {
     res.status(200).json({ status: 'success', message: 'Webhook processed successfully' });
 });
 
+// ==========================================
+// Tally #2 Webhook Route: Captures package selection after intro meeting
+// ==========================================
+app.post('/tally-webhook', async (req, res) => {
+  try {
+    const payload = req.body;
+    const submission = payload.data || payload;
+    
+    const clientName = submission.fields?.find(f => f.label === "Name")?.value || submission.name;
+    const clientEmail = submission.fields?.find(f => f.label === "Email")?.value || submission.email;
+    const lineId = submission.fields?.find(f => f.label === "LINE ID")?.value || submission.line_id;
+    const selectedPackage = submission.fields?.find(f => f.label === "Package Selection")?.value || submission.package;
+
+    console.log(`Received Tally #2 submission for ${clientName} - Package: ${selectedPackage}`);
+
+    res.status(200).json({ status: 'success', message: 'Tally #2 payload received' });
+  } catch (error) {
+    console.error('Error processing Tally #2 webhook:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is listening on port ${PORT}`);
