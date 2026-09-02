@@ -6,7 +6,6 @@ app.use(express.json());
 
 // ==========================================
 // LINE Notification Helper
-// Sends direct push messages to your personal LINE account using API credentials
 // ==========================================
 async function sendLineNotification(text) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -53,7 +52,6 @@ app.post('/webhook', async (req, res) => {
     console.log('--- RAW WEBHOOK BODY ---');
     console.log(JSON.stringify(eventData, null, 2));
 
-    // Determine trigger type and event title from Cal.com payload structure
     const triggerEvent = eventData.triggerEvent || eventData.event || '';
     const payload = eventData.payload || eventData;
     const eventTitle = payload.title || payload.eventType?.title || 'Unknown Event';
@@ -64,6 +62,25 @@ app.post('/webhook', async (req, res) => {
         const attendee = attendees[0] || {};
         const clientName = attendee.name || payload.name || payload.clientName || 'Valued Client';
         const clientEmail = attendee.email || payload.email || payload.attendeeEmail || '';
+
+        const rawStartTime = payload.startTime || '';
+        const rawEndTime = payload.endTime || '';
+        const location = payload.location || 'Online / None Specified';
+        const notes = payload.additionalNotes || payload.description || 'None';
+        
+        let formattedTime = 'Not specified';
+        if (rawStartTime && rawEndTime) {
+            const startObj = new Date(rawStartTime);
+            const endObj = new Date(rawEndTime);
+            formattedTime = `${startObj.toLocaleString()} - ${endObj.toLocaleTimeString()}`;
+        }
+
+        let guestsStr = 'None';
+        if (payload.guests && Array.isArray(payload.guests) && payload.guests.length > 0) {
+            guestsStr = payload.guests.join(', ');
+        } else if (attendees.length > 1) {
+            guestsStr = attendees.slice(1).map(a => a.email || a.name).join(', ');
+        }
 
         let lineId = '';
         const responses = payload.responses;
@@ -84,6 +101,7 @@ app.post('/webhook', async (req, res) => {
         console.log(`Trigger Type: ${triggerEvent}`);
         console.log(`Parsed Client Name: ${clientName}`);
         console.log(`Parsed Client Email: ${clientEmail}`);
+        console.log(`Parsed Client LINE ID: ${lineId}`);
 
         const tallyBaseUrl = 'https://tally.so/r/lb26p6';
         const encodedName = encodeURIComponent(clientName);
@@ -91,15 +109,29 @@ app.post('/webhook', async (req, res) => {
         const encodedLineId = encodeURIComponent(lineId);
         const personalizedTallyUrl = `${tallyBaseUrl}?name=${encodedName}&email=${encodedEmail}&line_id=${encodedLineId}`;
 
-        // 1. LINE Notification Logic (Fires on Booking Created for all, or standard webhooks)
+        const lineMessage = 
+`Event Type: ${eventTitle}
+
+Name: ${clientName}
+
+Date/Start-End Time: ${formattedTime}
+
+Location: ${location}
+
+Line ID: ${lineId || 'Not provided'}
+
+Email: ${clientEmail}
+
+Notes: ${notes}
+
+Additional Guests: ${guestsStr}`;
+
+        // 1. LINE Notification Logic (Fires only on booking creation)
         if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
-            await sendLineNotification(`📅 New Booking: ${eventTitle}\nName: ${clientName}\nEmail: ${clientEmail}`);
-        } else if (triggerEvent === 'MEETING_ENDED') {
-            await sendLineNotification(`✅ Meeting Ended: ${eventTitle}\nClient: ${clientName}`);
+            await sendLineNotification(lineMessage);
         }
 
-        // 2. Google Apps Script Email Logic
-        // Only triggers for 'Free Intro Chat' specifically when the meeting has ended
+        // 2. Google Apps Script Email Logic (Fires only when Free Intro Chat meeting ends)
         const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
         const shouldSendEmail = isFreeIntro && triggerEvent === 'MEETING_ENDED';
 
