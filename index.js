@@ -39,16 +39,13 @@ async function sendLineNotification(text) {
 
 // ==========================================
 // Server Health Check Route
-// A basic endpoint to verify that the server is online and running on Render
 // ==========================================
 app.get('/', (req, res) => {
     res.send('OpenClaw webhook server is running!');
 });
 
 // ==========================================
-// Primary Webhook Route (Cal.com / Tally #1)
-// Parses incoming booking payloads, generates a personalized Tally URL, 
-// triggers your Google Apps Script email automation, and alerts your LINE account
+// Primary Webhook Route (Cal.com & Tally)
 // ==========================================
 app.post('/webhook', async (req, res) => {
     const eventData = req.body;
@@ -56,7 +53,11 @@ app.post('/webhook', async (req, res) => {
     console.log('--- RAW WEBHOOK BODY ---');
     console.log(JSON.stringify(eventData, null, 2));
 
+    // Determine trigger type and event title from Cal.com payload structure
+    const triggerEvent = eventData.triggerEvent || eventData.event || '';
     const payload = eventData.payload || eventData;
+    const eventTitle = payload.title || payload.eventType?.title || 'Unknown Event';
+    
     const attendees = payload.attendees || (payload.responses && payload.responses.attendee ? [payload.responses.attendee] : []);
     
     if (attendees.length > 0 || payload.email || payload.attendeeEmail) {
@@ -79,24 +80,30 @@ app.post('/webhook', async (req, res) => {
             }
         }
 
+        console.log(`Event Title: ${eventTitle}`);
+        console.log(`Trigger Type: ${triggerEvent}`);
         console.log(`Parsed Client Name: ${clientName}`);
         console.log(`Parsed Client Email: ${clientEmail}`);
-        console.log(`Parsed Client LINE ID: ${lineId}`);
 
         const tallyBaseUrl = 'https://tally.so/r/lb26p6';
         const encodedName = encodeURIComponent(clientName);
         const encodedEmail = encodeURIComponent(clientEmail);
         const encodedLineId = encodeURIComponent(lineId);
-
         const personalizedTallyUrl = `${tallyBaseUrl}?name=${encodedName}&email=${encodedEmail}&line_id=${encodedLineId}`;
-        
-        console.log('Generated Personalized Tally #2 URL:', personalizedTallyUrl);
 
-        // Send instant LINE notification to your personal account
-        await sendLineNotification(`📅 New Booking/Submission!\nName: ${clientName}\nEmail: ${clientEmail}`);
+        // 1. LINE Notification Logic (Fires on Booking Created for all, or standard webhooks)
+        if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
+            await sendLineNotification(`📅 New Booking: ${eventTitle}\nName: ${clientName}\nEmail: ${clientEmail}`);
+        } else if (triggerEvent === 'MEETING_ENDED') {
+            await sendLineNotification(`✅ Meeting Ended: ${eventTitle}\nClient: ${clientName}`);
+        }
 
-        // Send the email automatically via Google Apps Script Web App
-        if (clientEmail) {
+        // 2. Google Apps Script Email Logic
+        // Only triggers for 'Free Intro Chat' specifically when the meeting has ended
+        const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
+        const shouldSendEmail = isFreeIntro && triggerEvent === 'MEETING_ENDED';
+
+        if (shouldSendEmail && clientEmail) {
             try {
                 const scriptResponse = await fetch('https://script.google.com/macros/s/AKfycbzh7dEtGMxxYhZuiqOxw1LByPjA4xZM6_W8c-PCK_K10tmDazmt4kefFAVMW1r8T47D/exec', {
                     method: 'POST',
@@ -111,15 +118,15 @@ app.post('/webhook', async (req, res) => {
                 });
 
                 const scriptResult = await scriptResponse.json();
-                console.log('Google Apps Script Response:', scriptResult);
+                console.log('Google Apps Script Email Response:', scriptResult);
             } catch (error) {
                 console.error('Failed to send email via Google Apps Script:', error);
             }
         } else {
-            console.log('Skipped email: No client email address found in payload.');
+            console.log(`Skipped email: Condition not met (Is Free Intro: ${isFreeIntro}, Trigger: ${triggerEvent})`);
         }
     } else {
-        console.log('Webhook received, but no attendee/email data found in standard structure.');
+        console.log('Webhook received, but no attendee/email data found.');
     }
     
     res.status(200).json({ status: 'success', message: 'Webhook processed successfully' });
@@ -127,7 +134,6 @@ app.post('/webhook', async (req, res) => {
 
 // ==========================================
 // Server Port Listener
-// Binds the Express application to the environment-assigned port (defaulting to 3000)
 // ==========================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
