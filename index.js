@@ -1,12 +1,55 @@
 const express = require('express');
+const axios = require('axios');
 const app = express();
 
 app.use(express.json());
 
+// ==========================================
+// LINE Notification Helper
+// Sends direct push messages to your personal LINE account using API credentials
+// ==========================================
+async function sendLineNotification(text) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const userId = process.env.LINE_USER_ID;
+
+  if (!token || !userId) {
+    console.log('LINE credentials missing from environment variables; skipping push notification.');
+    return;
+  }
+
+  try {
+    await axios.post(
+      'https://api.line.me/v2/bot/message/push',
+      {
+        to: userId,
+        messages: [{ type: 'text', text: text }]
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    console.log('LINE notification sent successfully.');
+  } catch (error) {
+    console.error('Error sending LINE notification:', error.response?.data || error.message);
+  }
+}
+
+// ==========================================
+// Server Health Check Route
+// A basic endpoint to verify that the server is online and running on Render
+// ==========================================
 app.get('/', (req, res) => {
     res.send('OpenClaw webhook server is running!');
 });
 
+// ==========================================
+// Primary Webhook Route (Cal.com / Tally #1)
+// Parses incoming booking payloads, generates a personalized Tally URL, 
+// triggers your Google Apps Script email automation, and alerts your LINE account
+// ==========================================
 app.post('/webhook', async (req, res) => {
     const eventData = req.body;
     
@@ -49,6 +92,9 @@ app.post('/webhook', async (req, res) => {
         
         console.log('Generated Personalized Tally #2 URL:', personalizedTallyUrl);
 
+        // Send instant LINE notification to your personal account
+        await sendLineNotification(`📅 New Booking/Submission!\nName: ${clientName}\nEmail: ${clientEmail}`);
+
         // Send the email automatically via Google Apps Script Web App
         if (clientEmail) {
             try {
@@ -80,44 +126,9 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ==========================================
-// Tally #2 Webhook Route: Captures package selection and logs to Google Sheets
+// Server Port Listener
+// Binds the Express application to the environment-assigned port (defaulting to 3000)
 // ==========================================
-app.post('/tally-webhook', async (req, res) => {
-  try {
-    const payload = req.body;
-    const submission = payload.data || payload;
-    
-    const clientName = submission.fields?.find(f => f.label === "Name")?.value || submission.name;
-    const clientEmail = submission.fields?.find(f => f.label === "Email")?.value || submission.email;
-    const lineId = submission.fields?.find(f => f.label === "LINE ID")?.value || submission.line_id;
-    const selectedPackage = submission.fields?.find(f => f.label === "Package Selection")?.value || submission.package;
-
-    console.log(`Received Tally #2 submission for ${clientName} - Package: ${selectedPackage}`);
-
-    // Forward the payload data to your Google Apps Script Web App URL
-    const gasUrl = "https://script.google.com/macros/s/AKfycbzh7dEtGMxxYhZuiqOxw1LByPjA4xZM6_W8c-PCK_K10tmDazmt4kefFAVMW1r8T47D/exec";
-    
-    // Using fetch to push data to Google Apps Script
-    await fetch(gasUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: clientName,
-        email: clientEmail,
-        line_id: lineId,
-        package: selectedPackage
-      })
-    });
-
-    res.status(200).json({ status: 'success', message: 'Tally #2 payload received and logged to CRM' });
-  } catch (error) {
-    console.error('Error processing Tally #2 webhook:', error);
-    res.status(500).json({ status: 'error', message: error.message });
-  }
-});
-
-
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is listening on port ${PORT}`);
