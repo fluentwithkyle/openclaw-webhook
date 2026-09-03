@@ -1,12 +1,22 @@
+/* ==========================================================================
+   OPENCLAW AUTOMATIONS - RENDER BACKEND SERVER
+   - Purpose: Central webhook router for Cal.com & Tally, triggers LINE 
+     notifications, communicates with Google Apps Script for Gmail, and logs 
+     client data into your Google Sheet CRM.
+   ========================================================================== */
+
 const express = require('express');
 const axios = require('axios');
 const app = express();
 
 app.use(express.json());
 
-// ==========================================
+// Google Apps Script Web App URL (Acts as your free bridge to Gmail and Google Sheets)
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzh7dEtGMxxYhZuiqOxw1LByPjA4xZM6_W8c-PCK_K10tmDazmt4kefFAVMW1r8T47D/exec';
+
+// ==========================================================================
 // LINE Notification Helper
-// ==========================================
+// ==========================================================================
 async function sendLineNotification(text) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   const userId = process.env.LINE_USER_ID;
@@ -36,16 +46,67 @@ async function sendLineNotification(text) {
   }
 }
 
-// ==========================================
+// ==========================================================================
+// Google Apps Script Bridge Helper
+// - Sends instructions to your Apps Script to either send emails or append rows.
+// ==========================================================================
+async function triggerAppsScript(payload) {
+  try {
+    const response = await axios.post(APPS_SCRIPT_URL, payload, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    console.log('Google Apps Script Bridge Response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to communicate with Google Apps Script:', error.message);
+  }
+}
+
+// ==========================================================================
 // Server Health Check Route
-// ==========================================
+// ==========================================================================
 app.get('/', (req, res) => {
     res.send('OpenClaw webhook server is running!');
 });
 
-// ==========================================
-// Primary Webhook Route (Cal.com & Tally)
-// ==========================================
+// ==========================================================================
+// Tally Webhook Route (Handles intake forms & package selections)
+// ==========================================================================
+app.post('/tally-webhook', async (req, res) => {
+    try {
+        const formData = req.body;
+        console.log('--- RAW TALLY WEBHOOK BODY ---');
+        console.log(JSON.stringify(formData, null, 2));
+
+        // Extract fields from Tally payload (adaptable to your form structure)
+        const clientName = formData.name || formData.clientName || 'Unknown Client';
+        const clientEmail = formData.email || formData.clientEmail || '';
+        const clientLineId = formData.lineId || formData.line_id || '';
+        const selectedPackage = formData.package || formData.selectedPackage || 'Flex Pass';
+        const credits = selectedPackage.toLowerCase().includes('flex') || selectedPackage.toLowerCase().includes('monthly') ? 4 : 1;
+
+        // Send instruction to Google Apps Script to append the row into the 'Clients' tab
+        await triggerAppsScript({
+            action: 'append_row',
+            timestamp: new Date().toISOString(),
+            name: clientName,
+            email: clientEmail,
+            lineId: clientLineId,
+            packageSelected: selectedPackage,
+            paymentStatus: 'Pending',
+            sessionCredits: credits
+        });
+
+        res.status(200).json({ status: 'success', message: 'Logged to Google Sheet via Apps Script' });
+    } catch (err) {
+        console.error('Error processing Tally webhook:', err.message);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ==========================================================================
+// Primary Webhook Route (Cal.com Bookings & Meetings)
+// ==========================================================================
 app.post('/webhook', async (req, res) => {
     const eventData = req.body;
     
@@ -114,13 +175,6 @@ app.post('/webhook', async (req, res) => {
             }
         }
 
-        console.log(`Event Title: ${eventTitle}`);
-        console.log(`Trigger Type: ${triggerEvent}`);
-        console.log(`Parsed Client Name: ${clientName}`);
-        console.log(`Parsed Client Email: ${clientEmail}`);
-        console.log(`Parsed Client LINE ID: ${lineId}`);
-        console.log(`Parsed Tally Questions: ${tallyQuestions}`);
-
         const tallyBaseUrl = 'https://tally.so/r/lb26p6';
         const encodedName = encodeURIComponent(clientName);
         const encodedEmail = encodeURIComponent(clientEmail);
@@ -157,24 +211,12 @@ ${tallyQuestions || 'Not provided'}`;
         const shouldSendEmail = isFreeIntro && triggerEvent === 'MEETING_ENDED';
 
         if (shouldSendEmail && clientEmail) {
-            try {
-                const scriptResponse = await fetch('https://script.google.com/macros/s/AKfycbzh7dEtGMxxYhZuiqOxw1LByPjA4xZM6_W8c-PCK_K10tmDazmt4kefFAVMW1r8T47D/exec', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: clientEmail,
-                        name: clientName,
-                        tallyUrl: personalizedTallyUrl
-                    })
-                });
-
-                const scriptResult = await scriptResponse.json();
-                console.log('Google Apps Script Email Response:', scriptResult);
-            } catch (error) {
-                console.error('Failed to send email via Google Apps Script:', error);
-            }
+            await triggerAppsScript({
+                action: 'send_email',
+                name: clientName,
+                email: clientEmail,
+                tallyUrl: personalizedTallyUrl
+            });
         } else {
             console.log(`Skipped email: Condition not met (Is Free Intro: ${isFreeIntro}, Trigger: ${triggerEvent})`);
         }
