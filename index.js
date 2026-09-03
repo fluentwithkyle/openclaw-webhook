@@ -74,15 +74,44 @@ app.get('/', (req, res) => {
 // ==========================================================================
 app.post('/tally-webhook', async (req, res) => {
     try {
-        const formData = req.body;
+        const eventData = req.body;
         console.log('--- RAW TALLY WEBHOOK BODY ---');
-        console.log(JSON.stringify(formData, null, 2));
+        console.log(JSON.stringify(eventData, null, 2));
 
-        // Extract fields from Tally payload (adaptable to your form structure)
-        const clientName = formData.name || formData.clientName || 'Unknown Client';
-        const clientEmail = formData.email || formData.clientEmail || '';
-        const clientLineId = formData.lineId || formData.line_id || '';
-        const selectedPackage = formData.package || formData.selectedPackage || 'Flex Pass';
+        // Tally nests form responses inside data.fields
+        const payloadData = eventData.data || eventData;
+        const fields = payloadData.fields || [];
+
+        let clientName = 'Unknown Client';
+        let clientEmail = '';
+        let clientLineId = '';
+        let selectedPackage = 'Flex Pass';
+
+        // Loop through Tally's fields array to extract answers by label/key
+        fields.forEach(field => {
+            const label = (field.label || '').toLowerCase();
+            const value = field.value;
+
+            if (!value) return;
+
+            if (label.includes('name')) {
+                clientName = Array.isArray(value) ? value.join(', ') : value;
+            } else if (label.includes('email')) {
+                clientEmail = Array.isArray(value) ? value.join(', ') : value;
+            } else if (label.includes('line')) {
+                clientLineId = Array.isArray(value) ? value.join(', ') : value;
+            } else if (label.includes('package') || label.includes('pass') || label.includes('select')) {
+                selectedPackage = Array.isArray(value) ? value.join(', ') : value;
+            }
+        });
+
+        // Fallbacks if query parameters were passed in the Tally URL
+        if (payloadData.query) {
+            clientName = payloadData.query.name || clientName;
+            clientEmail = payloadData.query.email || clientEmail;
+            clientLineId = payloadData.query.line_id || clientLineId;
+        }
+
         const credits = selectedPackage.toLowerCase().includes('flex') || selectedPackage.toLowerCase().includes('monthly') ? 4 : 1;
 
         // Send instruction to Google Apps Script to append the row into the 'Clients' tab
@@ -103,6 +132,7 @@ app.post('/tally-webhook', async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
 
 // ==========================================================================
 // Primary Webhook Route (Cal.com Bookings & Meetings)
