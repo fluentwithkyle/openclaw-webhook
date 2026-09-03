@@ -97,8 +97,14 @@ app.post('/webhook', async (req, res) => {
                     }
                 }
 
-                // Pull tally_questions directly from the webhook query string
-                let tallyQuestions = req.query.tally_questions || 'Not provided';
+                        // Pull tally_questions from query string or request body metadata
+                        let tallyQuestions = req.query.tally_questions || payload.tally_questions || 'Not provided';
+        
+                        // Clean up literal placeholder text if it slips through
+                        if (tallyQuestions === '{tally_questions}') {
+                        tallyQuestions = 'Not provided';
+                }
+
 
 
         console.log(`Event Title: ${eventTitle}`);
