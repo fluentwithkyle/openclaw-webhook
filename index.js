@@ -83,6 +83,7 @@ app.post('/webhook', async (req, res) => {
         }
 
         let lineId = '';
+        let tallyQuestions = '';
         const responses = payload.responses;
         if (responses) {
             for (const key in responses.answers || responses) {
@@ -92,7 +93,9 @@ app.post('/webhook', async (req, res) => {
                 
                 if (key.toLowerCase().includes('line') || label.includes('line')) {
                     lineId = val;
-                    break;
+                }
+                if (key.toLowerCase().includes('tally') || label.includes('tally')) {
+                    tallyQuestions = Array.isArray(val) ? val.join(', ') : val;
                 }
             }
         }
@@ -102,6 +105,7 @@ app.post('/webhook', async (req, res) => {
         console.log(`Parsed Client Name: ${clientName}`);
         console.log(`Parsed Client Email: ${clientEmail}`);
         console.log(`Parsed Client LINE ID: ${lineId}`);
+        console.log(`Parsed Tally Questions: ${tallyQuestions}`);
 
         const tallyBaseUrl = 'https://tally.so/r/lb26p6';
         const encodedName = encodeURIComponent(clientName);
@@ -124,7 +128,10 @@ Email: ${clientEmail}
 
 Notes: ${notes}
 
-Additional Guests: ${guestsStr}`;
+Additional Guests: ${guestsStr}
+
+Tally Questions:
+${tallyQuestions || 'Not provided'}`;
 
         // 1. LINE Notification Logic (Fires only on booking creation)
         if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
