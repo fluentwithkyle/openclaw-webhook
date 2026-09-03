@@ -82,30 +82,37 @@ app.post('/webhook', async (req, res) => {
             guestsStr = attendees.slice(1).map(a => a.email || a.name).join(', ');
         }
 
-                let lineId = '';
-                const responses = payload.responses;
-                if (responses) {
-                   for (const key in responses.answers || responses) {
-                        const answerObj = responses.answers ? responses.answers[key] : responses[key];
-                        const label = answerObj && answerObj.label ? answerObj.label.toLowerCase() : '';
-                        const val = answerObj && answerObj.value !== undefined ? answerObj.value : answerObj;
-                
-                        if (key.toLowerCase().includes('line') || label.includes('line')) {
-                           lineId = val;
-                           break;
-                        }
+        let lineId = '';
+        const responses = payload.responses;
+        if (responses) {
+           for (const key in responses.answers || responses) {
+                const answerObj = responses.answers ? responses.answers[key] : responses[key];
+                const label = answerObj && answerObj.label ? answerObj.label.toLowerCase() : '';
+                const val = answerObj && answerObj.value !== undefined ? answerObj.value : answerObj;
+        
+                if (key.toLowerCase().includes('line') || label.includes('line')) {
+                   lineId = val;
+                   break;
+                }
+            }
+        }
+
+        let tallyQuestions = 'Not provided';
+        if (responses) {
+            const targetAnswer = responses.tally_questions || responses.answers?.tally_questions;
+            if (targetAnswer) {
+                tallyQuestions = typeof targetAnswer === 'object' ? targetAnswer.value : targetAnswer;
+            } else {
+                for (const key in responses.answers || responses) {
+                    const answerObj = responses.answers ? responses.answers[key] : responses[key];
+                    const val = answerObj && answerObj.value !== undefined ? answerObj.value : answerObj;
+                    if (key.toLowerCase().includes('tally')) {
+                        tallyQuestions = Array.isArray(val) ? val.join(', ') : val;
+                        break;
                     }
                 }
-
-                        // Pull tally_questions from query string or request body metadata
-                        let tallyQuestions = req.query.tally_questions || payload.tally_questions || 'Not provided';
-        
-                        // Clean up literal placeholder text if it slips through
-                        if (tallyQuestions === '{tally_questions}') {
-                        tallyQuestions = 'Not provided';
-                }
-
-
+            }
+        }
 
         console.log(`Event Title: ${eventTitle}`);
         console.log(`Trigger Type: ${triggerEvent}`);
