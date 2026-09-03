@@ -82,23 +82,24 @@ app.post('/webhook', async (req, res) => {
             guestsStr = attendees.slice(1).map(a => a.email || a.name).join(', ');
         }
 
-        let lineId = '';
-        let tallyQuestions = '';
-        const responses = payload.responses;
-        if (responses) {
-            for (const key in responses.answers || responses) {
-                const answerObj = responses.answers ? responses.answers[key] : responses[key];
-                const label = answerObj && answerObj.label ? answerObj.label.toLowerCase() : '';
-                const val = answerObj && answerObj.value !== undefined ? answerObj.value : answerObj;
+                let lineId = '';
+                const responses = payload.responses;
+                if (responses) {
+                   for (const key in responses.answers || responses) {
+                        const answerObj = responses.answers ? responses.answers[key] : responses[key];
+                        const label = answerObj && answerObj.label ? answerObj.label.toLowerCase() : '';
+                        const val = answerObj && answerObj.value !== undefined ? answerObj.value : answerObj;
                 
-                if (key.toLowerCase().includes('line') || label.includes('line')) {
-                    lineId = val;
+                        if (key.toLowerCase().includes('line') || label.includes('line')) {
+                           lineId = val;
+                           break;
+                        }
+                    }
                 }
-                if (key.toLowerCase().includes('tally') || label.includes('tally')) {
-                    tallyQuestions = Array.isArray(val) ? val.join(', ') : val;
-                }
-            }
-        }
+
+                // Pull tally_questions directly from the webhook query string
+                let tallyQuestions = req.query.tally_questions || 'Not provided';
+
 
         console.log(`Event Title: ${eventTitle}`);
         console.log(`Trigger Type: ${triggerEvent}`);
