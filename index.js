@@ -85,23 +85,45 @@ app.post('/tally-webhook', async (req, res) => {
         let clientName = 'Unknown Client';
         let clientEmail = '';
         let clientLineId = '';
-        let selectedPackage = 'Flex Pass';
+        let selectedPackage = 'Not specified';
 
-        // Loop through Tally's fields array to extract answers by label/key
+        // Known package options matching your form choices
+        const knownPackages = [
+            'Weekly Intensive Retainer',
+            'Monthly Retainer + LINE Support',
+            'Flex Pass',
+            'Deep Dive',
+            'Single Session'
+        ];
+
+        // Loop through Tally's fields array to extract answers and detect packages
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
             const value = field.value;
 
             if (!value) return;
 
+            const valStr = Array.isArray(value) ? value.join(', ') : String(value);
+            const valLower = valStr.toLowerCase();
+
             if (label.includes('name')) {
-                clientName = Array.isArray(value) ? value.join(', ') : value;
+                clientName = valStr;
             } else if (label.includes('email')) {
-                clientEmail = Array.isArray(value) ? value.join(', ') : value;
+                clientEmail = valStr;
             } else if (label.includes('line')) {
-                clientLineId = Array.isArray(value) ? value.join(', ') : value;
-            } else if (label.includes('package') || label.includes('pass') || label.includes('select')) {
-                selectedPackage = Array.isArray(value) ? value.join(', ') : value;
+                clientLineId = valStr;
+            } else {
+                // Check if the value itself matches one of your known packages
+                for (const pkg of knownPackages) {
+                    if (valLower.includes(pkg.toLowerCase())) {
+                        selectedPackage = pkg;
+                        break;
+                    }
+                }
+                // Fallback catch-all if field label mentions package/pass/select
+                if (selectedPackage === 'Not specified' && (label.includes('package') || label.includes('pass') || label.includes('select') || label.includes('choose'))) {
+                    selectedPackage = valStr;
+                }
             }
         });
 
@@ -112,7 +134,14 @@ app.post('/tally-webhook', async (req, res) => {
             clientLineId = payloadData.query.line_id || clientLineId;
         }
 
-        const credits = selectedPackage.toLowerCase().includes('flex') || selectedPackage.toLowerCase().includes('monthly') ? 4 : 1;
+        // Dynamically compute credits based on the chosen package
+        let credits = 0;
+        const pkgLower = selectedPackage.toLowerCase();
+        if (pkgLower.includes('monthly') || pkgLower.includes('weekly') || pkgLower.includes('flex') || pkgLower.includes('4')) {
+            credits = 4;
+        } else if (selectedPackage !== 'Not specified') {
+            credits = 1;
+        }
 
         // Send instruction to Google Apps Script to append the row into the 'Clients' tab
         await triggerAppsScript({
