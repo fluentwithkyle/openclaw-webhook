@@ -281,6 +281,15 @@ ${tallyQuestions || 'Not provided'}`;
     res.status(200).json({ status: 'success', message: 'Webhook processed successfully' });
 });
 
+// Self-ping to keep Render free tier awake every 14 minutes (14 * 60 * 1000 ms)
+const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000;
+setInterval(() => {
+    axios.get('https://openclaw-webhook-iz6s.onrender.com/')
+        .then(() => console.log('Keep-alive ping sent successfully.'))
+        .catch(err => console.error('Keep-alive ping failed:', err.message));
+}, KEEP_ALIVE_INTERVAL);
+
+
 // ==========================================
 // Server Port Listener
 // ==========================================
