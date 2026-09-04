@@ -87,16 +87,7 @@ app.post('/tally-webhook', async (req, res) => {
         let clientLineId = '';
         let selectedPackage = 'Not specified';
 
-        // Known package options matching your form choices
-        const knownPackages = [
-            'Weekly Intensive Retainer',
-            'Monthly Retainer + LINE Support',
-            'Flex Pass',
-            'Deep Dive',
-            'Single Session'
-        ];
-
-        // Loop through Tally's fields array to extract answers and detect packages
+        // Loop through Tally's fields array to extract answers and detect packages via URL slugs or labels
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
             const value = field.value;
@@ -113,19 +104,60 @@ app.post('/tally-webhook', async (req, res) => {
             } else if (label.includes('line')) {
                 clientLineId = valStr;
             } else {
-                // Check if the value itself matches one of your known packages
-                for (const pkg of knownPackages) {
-                    if (valLower.includes(pkg.toLowerCase())) {
-                        selectedPackage = pkg;
-                        break;
-                    }
-                }
-                // Fallback catch-all if field label mentions package/pass/select
-                if (selectedPackage === 'Not specified' && (label.includes('package') || label.includes('pass') || label.includes('select') || label.includes('choose'))) {
+                // Map Cal.com URL slugs and direct package text to official package names
+                if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) {
+                    selectedPackage = 'Free Intro Chat';
+                } else if (valLower.includes('intensive-retainer') || valLower.includes('intensive retainer')) {
+                    selectedPackage = 'Weekly Intensive Retainer';
+                } else if (valLower.includes('monthly-retainer') || valLower.includes('monthly retainer')) {
+                    selectedPackage = 'Monthly Retainer + LINE Support';
+                } else if (valLower.includes('flex-pass') || valLower.includes('flex pass')) {
+                    selectedPackage = 'Flex Pass';
+                } else if (valLower.includes('deep-dive') || valLower.includes('deep dive')) {
+                    selectedPackage = 'Deep Dive';
+                } else if (valLower.includes('single-session') || valLower.includes('single session')) {
+                    selectedPackage = 'Single Session';
+                } else if (label.includes('package') || label.includes('pass') || label.includes('select') || label.includes('choose') || label.includes('booking url')) {
                     selectedPackage = valStr;
                 }
             }
         });
+
+        // Fallbacks if query parameters were passed in the Tally URL
+        if (payloadData.query) {
+            clientName = payloadData.query.name || clientName;
+            clientEmail = payloadData.query.email || clientEmail;
+            clientLineId = payloadData.query.line_id || clientLineId;
+        }
+
+        // Dynamically compute session credits based on your exact tier rules
+        let credits = 0;
+        const pkgLower = selectedPackage.toLowerCase();
+        if (pkgLower.includes('intensive') || pkgLower.includes('monthly') || pkgLower.includes('flex')) {
+            credits = 4;
+        } else if (pkgLower.includes('deep dive') || pkgLower.includes('single session') || pkgLower.includes('intro')) {
+            credits = 1;
+        }
+
+        // Send instruction to Google Apps Script to append the row into the 'Clients' tab
+        await triggerAppsScript({
+            action: 'append_row',
+            timestamp: new Date().toISOString(),
+            name: clientName,
+            email: clientEmail,
+            lineId: clientLineId,
+            packageSelected: selectedPackage,
+            paymentStatus: 'Pending',
+            sessionCredits: credits
+        });
+
+        res.status(200).json({ status: 'success', message: 'Logged to Google Sheet via Apps Script' });
+    } catch (err) {
+        console.error('Error processing Tally webhook:', err.message);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 
         // Fallbacks if query parameters were passed in the Tally URL
         if (payloadData.query) {
