@@ -148,7 +148,9 @@ app.post('/tally-webhook', async (req, res) => {
             lineId: clientLineId,
             packageSelected: selectedPackage,
             paymentStatus: 'Pending',
-            sessionCredits: credits
+            sessionCredits: credits,
+            scheduleStatus: 'Pending Booking'
+
         });
 
         res.status(200).json({ status: 'success', message: 'Logged to Google Sheet via Apps Script' });
