@@ -158,43 +158,6 @@ app.post('/tally-webhook', async (req, res) => {
     }
 });
 
-
-        // Fallbacks if query parameters were passed in the Tally URL
-        if (payloadData.query) {
-            clientName = payloadData.query.name || clientName;
-            clientEmail = payloadData.query.email || clientEmail;
-            clientLineId = payloadData.query.line_id || clientLineId;
-        }
-
-        // Dynamically compute credits based on the chosen package
-        let credits = 0;
-        const pkgLower = selectedPackage.toLowerCase();
-        if (pkgLower.includes('monthly') || pkgLower.includes('weekly') || pkgLower.includes('flex') || pkgLower.includes('4')) {
-            credits = 4;
-        } else if (selectedPackage !== 'Not specified') {
-            credits = 1;
-        }
-
-        // Send instruction to Google Apps Script to append the row into the 'Clients' tab
-        await triggerAppsScript({
-            action: 'append_row',
-            timestamp: new Date().toISOString(),
-            name: clientName,
-            email: clientEmail,
-            lineId: clientLineId,
-            packageSelected: selectedPackage,
-            paymentStatus: 'Pending',
-            sessionCredits: credits
-        });
-
-        res.status(200).json({ status: 'success', message: 'Logged to Google Sheet via Apps Script' });
-    } catch (err) {
-        console.error('Error processing Tally webhook:', err.message);
-        res.status(500).json({ status: 'error', message: err.message });
-    }
-});
-
-
 // ==========================================================================
 // Primary Webhook Route (Cal.com Bookings & Meetings)
 // ==========================================================================
