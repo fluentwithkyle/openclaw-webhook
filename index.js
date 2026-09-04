@@ -1,9 +1,9 @@
-/* ==========================================================================
-   OPENCLAW AUTOMATIONS - RENDER BACKEND SERVER
-   - Purpose: Central webhook router for Cal.com & Tally, triggers LINE 
-     notifications, communicates with Google Apps Script for Gmail, and logs 
-     client data into your Google Sheet CRM.
-   ========================================================================== */
+// ==========================================================================
+// OPENCLAW AUTOMATIONS - RENDER BACKEND SERVER
+// - Purpose: Central webhook router for Cal.com & Tally, triggers LINE 
+//   notifications, communicates with Google Apps Script for Gmail, and logs 
+//   client data into your Google Sheet CRM.
+// ==========================================================================
 
 const express = require('express');
 const axios = require('axios');
@@ -150,7 +150,6 @@ app.post('/tally-webhook', async (req, res) => {
             paymentStatus: 'Pending',
             sessionCredits: credits,
             scheduleStatus: 'Pending Booking'
-
         });
 
         res.status(200).json({ status: 'success', message: 'Logged to Google Sheet via Apps Script' });
@@ -158,6 +157,30 @@ app.post('/tally-webhook', async (req, res) => {
         console.error('Error processing Tally webhook:', err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
+});
+
+// ==========================================================================
+// Cal.com Booking Confirmation Webhook Route (Updates status to Confirmed)
+// ==========================================================================
+app.post('/cal-webhook', async (req, res) => {
+  try {
+    const email = req.body.payload?.attendees?.[0]?.email || req.body.attendees?.[0]?.email;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Attendee email not found in webhook payload' });
+    }
+
+    const result = await triggerAppsScript({
+      action: 'update_status',
+      email: email,
+      scheduleStatus: 'Confirmed'
+    });
+
+    res.status(200).json({ status: 'success', result });
+  } catch (error) {
+    console.error('Error handling Cal.com webhook:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ==========================================================================
