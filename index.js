@@ -93,11 +93,7 @@ Elapsed: ${hoursElapsed} hours without booking.`;
     res.status(500).json({ error: error.message });
   }
 });
-// Temporary Test Route (GET) - Safe to remove later
-app.get('/abandoned-alert', async (req, res) => {
-  await sendLineNotification("TEST ABANDONED ALERT VIA BROWSER");
-  res.status(200).send("Test notification sent!");
-});
+
 
 // ==========================================================================
 // Tally Webhook Route (Handles intake forms & package selections)
