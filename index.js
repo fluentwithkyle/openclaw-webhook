@@ -70,6 +70,31 @@ app.get('/', (req, res) => {
 });
 
 // ==========================================================================
+// Abandoned Booking Alert Route
+// ==========================================================================
+app.post('/abandoned-alert', async (req, res) => {
+  try {
+    const { name, email, lineId, packageSelected, timestamp, hoursElapsed } = req.body;
+    
+    const message = 
+`ABANDONED BOOKING ALERT
+
+Name: ${name}
+Email: ${email}
+LINE ID: ${lineId || 'Not provided'}
+Package: ${packageSelected || 'Not specified'}
+Submitted At: ${timestamp || 'Unknown'}
+Elapsed: ${hoursElapsed} hours without booking.`;
+
+    await sendLineNotification(message);
+    res.status(200).json({ status: 'success', message: 'Abandoned alert sent' });
+  } catch (error) {
+    console.error('Error handling abandoned alert:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================================================
 // Tally Webhook Route (Handles intake forms & package selections)
 // ==========================================================================
 app.post('/tally-webhook', async (req, res) => {
