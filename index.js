@@ -111,7 +111,6 @@ app.post('/tally-webhook', async (req, res) => {
         let clientEmail = '';
         let clientLineId = '';
         let selectedPackage = 'Not specified';
-        let location = '';
         let profession = '';
         let englishReality = '';
         let goal3Month = '';
@@ -132,8 +131,6 @@ app.post('/tally-webhook', async (req, res) => {
                 clientEmail = valStr;
             } else if (label.includes('line')) {
                 clientLineId = valStr;
-            } else if (label.includes('location') || label.includes('address')) {
-                location = valStr;
             } else if (label.includes('profession') || label.includes('field') || label.includes('job')) {
                 profession = valStr;
             } else if (label.includes('reality') || label.includes('current english')) {
@@ -181,7 +178,6 @@ app.post('/tally-webhook', async (req, res) => {
             name: clientName,
             email: clientEmail,
             lineId: clientLineId,
-            location: location,
             profession: profession,
             englishReality: englishReality,
             goal3Month: goal3Month,
@@ -192,12 +188,13 @@ app.post('/tally-webhook', async (req, res) => {
             scheduleStatus: 'Pending Booking'
         });
 
-        res.status(200).json({ status: 'success', message: 'Logged expanded Tally data to Google Sheet via Apps Script' });
+        res.status(200).json({ status: 'success', message: 'Logged expanded Tally data to Google Sheet' });
     } catch (err) {
         console.error('Error processing Tally webhook:', err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
 
 
 // ======================================================================== ==
