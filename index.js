@@ -316,25 +316,31 @@ app.post('/webhook', async (req, res) => {
         const encodedLineId = encodeURIComponent(lineId);
         const personalizedTallyUrl = `${tallyBaseUrl}?name=${encodedName}&email=${encodedEmail}&line_id=${encodedLineId}`;
 
-        const lineMessage = 
-        `Event Type: ${eventTitle}
+        const lineMessage = `Event Type: ${eventTitle}
 
-         Name: ${clientName}
+        Name: ${clientName}
 
-         Date/Start-End Time: ${formattedTime}
+        Date/Start-End Time: ${formattedTime}
 
-         Location: ${location}
+        Location: ${location}
 
-         Line ID: ${lineId || 'Not provided'}
+        Line ID: ${lineId || 'Not provided'}
 
-         Email: ${clientEmail}
+        Email: ${clientEmail}
 
-         Notes: ${notes}
+        Notes: ${notes}
 
-         Additional Guests: ${guestsStr}
+        Additional Guests: ${guestsStr}
 
-         Tally Questions:
-         ${tallyQuestions || 'Not provided'}`;
+        Tally Questions:
+        ${tallyQuestions || 'Not provided'}
+
+        --- CLIENT DIAGNOSTIC CONTEXT ---
+        Profession: ${profession || 'Not provided'}
+        English Reality: ${englishReality || 'Not provided'}
+        3-Month Goal: ${goal3Month || 'Not provided'}
+        Conversation Topics: ${conversationTopics || 'Not provided'}`;
+
 
           // 1. LINE Notification Logic (Fires only on booking creation)
           if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
