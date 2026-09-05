@@ -317,29 +317,40 @@ app.post('/webhook', async (req, res) => {
         const personalizedTallyUrl = `${tallyBaseUrl}?name=${encodedName}&email=${encodedEmail}&line_id=${encodedLineId}`;
 
         const lineMessage = 
-`Event Type: ${eventTitle}
+        `Event Type: ${eventTitle}
 
-Name: ${clientName}
+         Name: ${clientName}
 
-Date/Start-End Time: ${formattedTime}
+         Date/Start-End Time: ${formattedTime}
 
-Location: ${location}
+         Location: ${location}
 
-Line ID: ${lineId || 'Not provided'}
+         Line ID: ${lineId || 'Not provided'}
 
-Email: ${clientEmail}
+         Email: ${clientEmail}
 
-Notes: ${notes}
+         Notes: ${notes}
 
-Additional Guests: ${guestsStr}
+         Additional Guests: ${guestsStr}
 
-Tally Questions:
-${tallyQuestions || 'Not provided'}`;
+         Tally Questions:
+         ${tallyQuestions || 'Not provided'}`;
 
-        // 1. LINE Notification Logic (Fires only on booking creation)
-        if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
-            await sendLineNotification(lineMessage);
-        }
+          // 1. LINE Notification Logic (Fires only on booking creation)
+          if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
+              await sendLineNotification(lineMessage);
+              
+              if (clientEmail) {
+                  await triggerAppsScript({
+                      action: 'update_status',
+                      email: clientEmail,
+                      scheduleStatus: 'Confirmed',
+                      location: location,
+                      bookingDateTime: formattedTime
+                  });
+              }
+          }
+
 
         // 2. Google Apps Script Email Logic (Fires only when Free Intro Chat meeting ends)
         const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
