@@ -104,7 +104,6 @@ app.post('/tally-webhook', async (req, res) => {
         console.log('--- RAW TALLY WEBHOOK BODY ---');
         console.log(JSON.stringify(eventData, null, 2));
 
-        // Tally nests form responses inside data.fields
         const payloadData = eventData.data || eventData;
         const fields = payloadData.fields || [];
 
@@ -112,8 +111,12 @@ app.post('/tally-webhook', async (req, res) => {
         let clientEmail = '';
         let clientLineId = '';
         let selectedPackage = 'Not specified';
+        let location = '';
+        let profession = '';
+        let englishReality = '';
+        let goal3Month = '';
+        let conversationTopics = '';
 
-        // Loop through Tally's fields array to extract answers and detect packages via URL slugs or labels
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
             const value = field.value;
@@ -129,8 +132,17 @@ app.post('/tally-webhook', async (req, res) => {
                 clientEmail = valStr;
             } else if (label.includes('line')) {
                 clientLineId = valStr;
+            } else if (label.includes('location') || label.includes('address')) {
+                location = valStr;
+            } else if (label.includes('profession') || label.includes('field') || label.includes('job')) {
+                profession = valStr;
+            } else if (label.includes('reality') || label.includes('current english')) {
+                englishReality = valStr;
+            } else if (label.includes('goal') || label.includes('3-month')) {
+                goal3Month = valStr;
+            } else if (label.includes('topic') || label.includes('conversation')) {
+                conversationTopics = valStr;
             } else {
-                // Map Cal.com URL slugs and direct package text to official package names
                 if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) {
                     selectedPackage = 'Free Intro Chat';
                 } else if (valLower.includes('intensive-retainer') || valLower.includes('intensive retainer')) {
@@ -149,14 +161,12 @@ app.post('/tally-webhook', async (req, res) => {
             }
         });
 
-        // Fallbacks if query parameters were passed in the Tally URL
         if (payloadData.query) {
             clientName = payloadData.query.name || clientName;
             clientEmail = payloadData.query.email || clientEmail;
             clientLineId = payloadData.query.line_id || clientLineId;
         }
 
-        // Dynamically compute session credits based on your exact tier rules
         let credits = 0;
         const pkgLower = selectedPackage.toLowerCase();
         if (pkgLower.includes('intensive') || pkgLower.includes('monthly') || pkgLower.includes('flex')) {
@@ -165,25 +175,30 @@ app.post('/tally-webhook', async (req, res) => {
             credits = 1;
         }
 
-        // Send instruction to Google Apps Script to append the row into the 'Clients' tab
         await triggerAppsScript({
             action: 'append_row',
             timestamp: new Date().toISOString(),
             name: clientName,
             email: clientEmail,
             lineId: clientLineId,
+            location: location,
+            profession: profession,
+            englishReality: englishReality,
+            goal3Month: goal3Month,
+            conversationTopics: conversationTopics,
             packageSelected: selectedPackage,
             paymentStatus: 'Pending',
             sessionCredits: credits,
             scheduleStatus: 'Pending Booking'
         });
 
-        res.status(200).json({ status: 'success', message: 'Logged to Google Sheet via Apps Script' });
+        res.status(200).json({ status: 'success', message: 'Logged expanded Tally data to Google Sheet via Apps Script' });
     } catch (err) {
         console.error('Error processing Tally webhook:', err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
 
 // ==========================================================================
 // Cal.com Booking Confirmation Webhook Route (Updates status to Confirmed)
