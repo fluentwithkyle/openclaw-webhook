@@ -304,20 +304,40 @@ Conversation Topics: ${conversationTopics}`;
             await sendLineNotification(`CANCELLATION ALERT\nName: ${clientName}\nEmail: ${clientEmail}\nReason: ${cancelReason}`);
         }
 
-        const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
-        if (isFreeIntro && triggerEvent === 'MEETING_ENDED' && clientEmail) {
+            const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
+            if (isFreeIntro && triggerEvent === 'MEETING_ENDED' && clientEmail) {
             const personalizedTallyUrl = `https://tally.so/r/lb26p6?name=${encodeURIComponent(clientName)}&email=${encodeURIComponent(clientEmail)}&line_id=${encodeURIComponent(lineId)}`;
-            await triggerAppsScript({
-                action: 'send_email',
-                name: clientName,
-                email: clientEmail,
-                tallyUrl: personalizedTallyUrl
+            const firstName = clientName.split(' ')[0] || clientName;
+
+            // Fetch template dynamically from Google Sheets via Apps Script
+            const templateRes = await triggerAppsScript({
+                action: 'get_template',
+                templateKey: 'intro_followup'
             });
+
+            if (templateRes && templateRes.status === 'success' && templateRes.data) {
+                let subject = templateRes.data.subject;
+                let bodyHtml = templateRes.data.body;
+
+                // Replace placeholders with client data
+                bodyHtml = bodyHtml.replace(/{{firstName}}/g, firstName)
+                                   .replace(/{{tallyUrl}}/g, personalizedTallyUrl);
+
+                await triggerAppsScript({
+                    action: 'send_email',
+                    email: clientEmail,
+                    subject: subject,
+                    htmlBody: bodyHtml
+                });
+            } else {
+                console.error('Failed to fetch email template from Google Sheets.');
+            }
         }
     }
     
     res.status(200).json({ status: 'success' });
 });
+
 
 const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000;
 setInterval(() => {
