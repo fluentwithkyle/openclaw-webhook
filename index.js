@@ -200,21 +200,35 @@ app.post('/tally-webhook', async (req, res) => {
 });
 
 
-// ==========================================================================
-// Cal.com Booking Confirmation Webhook Route (Updates status to Confirmed)
-// ==========================================================================
+// ======================================================================== ==
+// Cal.com Booking Confirmation Webhook Route (Updates status, location, & time)
+// ======================================================================== ==
 app.post('/cal-webhook', async (req, res) => {
   try {
-    const email = req.body.payload?.attendees?.[0]?.email || req.body.attendees?.[0]?.email;
-    
+    const payload = req.body.payload || req.body;
+    const email = payload.attendees?.[0]?.email || payload.email;
+          
     if (!email) {
       return res.status(400).json({ error: 'Attendee email not found in webhook payload' });
+    }
+
+    const location = payload.location || 'Online / None Specified';
+    const rawStartTime = payload.startTime || '';
+    const rawEndTime = payload.endTime || '';
+            
+    let bookingDateTime = 'Not specified';
+    if (rawStartTime && rawEndTime) {
+        const startObj = new Date(rawStartTime);
+        const endObj = new Date(rawEndTime);
+        bookingDateTime = `${startObj.toLocaleString()} - ${endObj.toLocaleTimeString()}`;
     }
 
     const result = await triggerAppsScript({
       action: 'update_status',
       email: email,
-      scheduleStatus: 'Confirmed'
+      scheduleStatus: 'Confirmed',
+      location: location,
+      bookingDateTime: bookingDateTime
     });
 
     res.status(200).json({ status: 'success', result });
@@ -223,6 +237,7 @@ app.post('/cal-webhook', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // ==========================================================================
 // Primary Webhook Route (Cal.com Bookings & Meetings)
