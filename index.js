@@ -45,19 +45,8 @@ app.get('/', (req, res) => {
 app.post('/abandoned-alert', async (req, res) => {
    try {
      const { name, email, lineId, packageSelected, timestamp, hoursElapsed, location, profession, englishReality, goal3Month, conversationTopics } = req.body;
-          
-     const message = `ABANDONED BOOKING ALERT
-Name: ${name}
-Email: ${email}
-LINE ID: ${lineId || 'Not provided'}
-Package: ${packageSelected || 'Not specified'}
-Submitted At: ${timestamp || 'Unknown'}
-Elapsed: ${hoursElapsed} hours without booking.
-Location: ${location || 'Not provided'}
-Profession: ${profession || 'Not provided'}
-English Reality: ${englishReality || 'Not provided'}
-3-Month Goal: ${goal3Month || 'Not provided'}
-Conversation Topics: ${conversationTopics || 'Not provided'}`;
+        
+     const message = `ABANDONED BOOKING ALERT\nName: ${name}\nEmail: ${email}\nLINE ID: ${lineId || 'Not provided'}\nPackage: ${packageSelected || 'Not specified'}\nSubmitted At: ${timestamp || 'Unknown'}\nElapsed: ${hoursElapsed} hours without booking.\nLocation: ${location || 'Not provided'}\nProfession: ${profession || 'Not provided'}\nEnglish Reality: ${englishReality || 'Not provided'}\n3-Month Goal: ${goal3Month || 'Not provided'}\nConversation Topics: ${conversationTopics || 'Not provided'}`;
 
      await sendLineNotification(message);
      res.status(200).json({ status: 'success', message: 'Abandoned alert sent' });
@@ -84,168 +73,82 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
 
         fields.forEach(field => {
-            const label = (field.label || '').toLowerCase();
+            const label = field.label ? field.label.toLowerCase() : '';
             const value = field.value;
+
             if (!value) return;
 
-            const valStr = Array.isArray(value) ? value.join(', ') : String(value);
-            const valLower = valStr.toLowerCase();
-
-            if (label.includes('name')) clientName = valStr;
-            else if (label.includes('email')) clientEmail = valStr;
-            else if (label.includes('line')) clientLineId = valStr;
-            else if (label.includes('location') || label.includes('address')) location = valStr;
-            else if (label.includes('profession') || label.includes('field') || label.includes('job')) profession = valStr;
-            else if (label.includes('reality') || label.includes('current english')) englishReality = valStr;
-            else if (label.includes('goal') || label.includes('3-month')) goal3Month = valStr;
-            else if (label.includes('topic') || label.includes('conversation')) conversationTopics = valStr;
-            else {
-                if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) selectedPackage = 'Free Intro Chat';
-                else if (valLower.includes('intensive-retainer')) selectedPackage = 'Weekly Intensive Retainer';
-                else if (valLower.includes('monthly-retainer')) selectedPackage = 'Monthly Retainer + LINE Support';
-                else if (valLower.includes('flex-pass')) selectedPackage = 'Flex Pass';
-                else if (valLower.includes('deep-dive')) selectedPackage = 'Deep Dive';
-                else if (valLower.includes('single-session')) selectedPackage = 'Single Session';
-                else if (label.includes('package') || label.includes('pass') || label.includes('select')) selectedPackage = valStr;
+            if (label.includes('name') || label.includes('full name')) {
+                clientName = Array.isArray(value) ? value.join(' ') : String(value);
+            } else if (label.includes('email')) {
+                clientEmail = String(value);
+            } else if (label.includes('line') || label.includes('messaging')) {
+                clientLineId = String(value);
+            } else if (label.includes('package') || label.includes('select')) {
+                selectedPackage = Array.isArray(value) ? value.join(', ') : String(value);
+            } else if (label.includes('location') || label.includes('address') || label.includes('city')) {
+                location = Array.isArray(value) ? value.join(', ') : String(value);
+            } else if (label.includes('profession') || label.includes('field') || label.includes('job')) {
+                profession = Array.isArray(value) ? value.join(', ') : String(value);
+            } else if (label.includes('current english reality') || label.includes('reality')) {
+                englishReality = Array.isArray(value) ? value.join(', ') : String(value);
+            } else if (label.includes('3-month goal') || label.includes('goal')) {
+                goal3Month = Array.isArray(value) ? value.join(', ') : String(value);
+            } else if (label.includes('conversation topics') || label.includes('topics')) {
+                conversationTopics = Array.isArray(value) ? value.join(', ') : String(value);
             }
         });
 
-        if (payloadData.query) {
-            clientName = payloadData.query.name || clientName;
-            clientEmail = payloadData.query.email || clientEmail;
-            clientLineId = payloadData.query.line_id || clientLineId;
-        }
-
-        let credits = 0;
-        const pkgLower = selectedPackage.toLowerCase();
-        if (pkgLower.includes('intensive') || pkgLower.includes('monthly') || pkgLower.includes('flex')) credits = 4;
-        else if (pkgLower.includes('deep dive') || pkgLower.includes('single session') || pkgLower.includes('intro')) credits = 1;
+        const submissionTimestamp = new Date().toISOString();
 
         await triggerAppsScript({
             action: 'append_row',
-            timestamp: new Date().toISOString(),
             name: clientName,
             email: clientEmail,
             lineId: clientLineId,
+            packageSelected: selectedPackage,
+            timestamp: submissionTimestamp,
             location: location,
             profession: profession,
             englishReality: englishReality,
             goal3Month: goal3Month,
             conversationTopics: conversationTopics,
-            packageSelected: selectedPackage,
-            paymentStatus: 'Pending',
-            sessionCredits: credits,
             scheduleStatus: 'Pending Booking'
         });
 
-        res.status(200).json({ status: 'success', message: 'Logged Tally data to CRM' });
-    } catch (err) {
-        console.error('Error processing Tally webhook:', err.message);
-        res.status(500).json({ status: 'error', message: err.message });
-    }
-});
-
-app.post('/cal-webhook', async (req, res) => {
-  try {
-    const payload = req.body.payload || req.body;
-    const email = payload.attendees?.[0]?.email || payload.email;
-          
-    if (!email) return res.status(400).json({ error: 'Attendee email not found' });
-
-    const location = payload.location || 'Online / None Specified';
-    const rawStartTime = payload.startTime || '';
-    const rawEndTime = payload.endTime || '';
-            
-    let bookingDateTime = 'Not specified';
-    if (rawStartTime && rawEndTime) {
-        bookingDateTime = `${new Date(rawStartTime).toLocaleString()} - ${new Date(rawEndTime).toLocaleTimeString()}`;
-    }
-
-    const triggerEvent = req.body.triggerEvent || '';
-    if (triggerEvent === 'BOOKING_CANCELLED') {
-        const cancelReason = payload.cancellationReason || payload.reason || 'None provided';
-        await triggerAppsScript({
-          action: 'update_status',
-          email: email,
-          scheduleStatus: 'Cancelled',
-          cancellationStatus: 'Cancelled',
-          cancellationReason: cancelReason
-        });
-        await sendLineNotification(`CANCELLATION ALERT\nEmail: ${email}\nReason: ${cancelReason}`);
-    } else {
-        await triggerAppsScript({
-          action: 'update_status',
-          email: email,
-          scheduleStatus: 'Confirmed',
-          location: location,
-          bookingDateTime: bookingDateTime
-        });
+    } catch (error) {
+        console.error('Error processing Tally webhook:', error);
     }
 
     res.status(200).json({ status: 'success' });
-  } catch (error) {
-    console.error('Error handling Cal.com webhook:', error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
-app.post('/webhook', async (req, res) => {
-    const eventData = req.body;
-    const triggerEvent = eventData.triggerEvent || eventData.event || '';
-    const payload = eventData.payload || eventData;
-    const attendees = payload.attendees || [];
-    
-    if (attendees.length > 0 || payload.email) {
+app.post('/cal-webhook', async (req, res) => {
+    try {
+        const eventData = req.body;
+        const triggerEvent = eventData.triggerEvent || eventData.event;
+        const payload = eventData.payload || {};
+
+        const attendees = payload.attendees || [];
         const clientEmail = attendees[0]?.email || payload.email;
         const clientName = attendees[0]?.name || payload.name || 'Unknown Client';
-        const eventTitle = payload.title || payload.eventType?.title || 'Meeting';
-        const rawStartTime = payload.startTime || payload.start_time;
-        const rawEndTime = payload.endTime || payload.end_time;
-        
-        let formattedTime = 'Not specified';
-        if (rawStartTime && rawEndTime) {
-            formattedTime = `${new Date(rawStartTime).toLocaleString()} - ${new Date(rawEndTime).toLocaleTimeString()}`;
-        }
+        const lineId = payload.responses?.line_id || payload.customAnswers?.line_id || 'Not provided';
+        const eventTitle = payload.title || payload.eventType?.title || 'Free Intro Chat';
+        const startTime = payload.startTime || payload.start;
+        const location = payload.location || 'Online / Video Call';
 
-        const location = payload.location || 'Online / None Specified';
-        const responses = payload.responses || payload.metadata || {};
-        
-        let lineId = responses.line_id || responses.lineId || '';
-        let profession = responses.profession || 'Not provided';
-        let englishReality = responses.english_reality || 'Not provided';
-        let goal3Month = responses.goal_3_month || 'Not provided';
-        let conversationTopics = responses.conversation_topics || 'Not provided';
-        let notes = payload.additionalNotes || payload.notes || 'None';
-        let guestsStr = payload.additionalGuests?.length ? payload.additionalGuests.join(', ') : 'None';
+        if (triggerEvent === 'BOOKING_CREATED') {
+            await triggerAppsScript({
+                action: 'update_status',
+                email: clientEmail,
+                scheduleStatus: 'Confirmed',
+                bookingTimestamp: startTime,
+                location: location
+            });
 
-        const lineMessage = `Event Type: ${eventTitle}
-Name: ${clientName}
-Date/Start-End Time: ${formattedTime}
-Location: ${location}
-LINE ID: ${lineId || 'Not provided'}
-Email: ${clientEmail}
-Notes: ${notes}
-Additional Guests: ${guestsStr}
-
---- CLIENT DIAGNOSTIC CONTEXT ---
-Profession: ${profession}
-English Reality: ${englishReality}
-3-Month Goal: ${goal3Month}
-Conversation Topics: ${conversationTopics}`;
-
-        if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
-            await sendLineNotification(lineMessage);
-            if (clientEmail) {
-                await triggerAppsScript({
-                    action: 'update_status',
-                    email: clientEmail,
-                    scheduleStatus: 'Confirmed',
-                    location: location,
-                    bookingDateTime: formattedTime
-                });
-            }
-        } else if (triggerEvent === 'BOOKING_CANCELLED') {
-            const cancelReason = payload.cancellationReason || 'None provided';
+            await sendLineNotification(`BOOKING CREATED\nName: ${clientName}\nEmail: ${clientEmail}\nEvent: ${eventTitle}\nTime: ${startTime}\nLocation: ${location}`);
+        } else if (triggerEvent === 'BOOKING_CANCELLED' || triggerEvent === 'CANCELLED') {
+            const cancelReason = payload.cancellationReason || 'No reason provided';
             await triggerAppsScript({
                 action: 'update_status',
                 email: clientEmail,
@@ -266,10 +169,42 @@ Conversation Topics: ${conversationTopics}`;
                 tallyUrl: personalizedTallyUrl
             });
         }
+    } catch (error) {
+        console.error('Error handling Cal.com webhook:', error);
     }
-    
+     
     res.status(200).json({ status: 'success' });
 });
+
+// ========================================================================== // Render Internal Cron Scheduler (Abandoned Booking Check) // ==========================================================================
+async function checkAbandonedBookings() {
+    try {
+        console.log('Running scheduled abandoned booking check...');
+        const result = await triggerAppsScript({ action: 'check_abandoned_pending' });
+        if (result && result.abandonedClients && result.abandonedClients.length > 0) {
+            for (const client of result.abandonedClients) {
+                await axios.post(`https://openclaw-webhook-iz6s.onrender.com/abandoned-alert`, {
+                    name: client.name,
+                    email: client.email,
+                    lineId: client.lineId,
+                    packageSelected: client.packageSelected,
+                    timestamp: client.timestamp,
+                    hoursElapsed: client.hoursElapsed,
+                    location: client.location,
+                    profession: client.profession,
+                    englishReality: client.englishReality,
+                    goal3Month: client.goal3Month,
+                    conversationTopics: client.conversationTopics
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error in scheduled abandoned booking check:', error.message);
+    }
+}
+
+// Run abandoned check every 15 minutes
+setInterval(checkAbandonedBookings, 15 * 60 * 1000);
 
 const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000;
 setInterval(() => {
