@@ -241,25 +241,20 @@ app.post('/cal-webhook', async (req, res) => {
 // ==========================================================================
 app.post('/webhook', async (req, res) => {
     const eventData = req.body;
-    
+          
     console.log('--- RAW WEBHOOK BODY ---');
     console.log(JSON.stringify(eventData, null, 2));
 
     const triggerEvent = eventData.triggerEvent || eventData.event || '';
     const payload = eventData.payload || eventData;
-    const eventTitle = payload.title || payload.eventType?.title || 'Unknown Event';
+    const attendees = payload.attendees || [];
     
-    const attendees = payload.attendees || (payload.responses && payload.responses.attendee ? [payload.responses.attendee] : []);
-    
-    if (attendees.length > 0 || payload.email || payload.attendeeEmail) {
-        const attendee = attendees[0] || {};
-        const clientName = attendee.name || payload.name || payload.clientName || 'Valued Client';
-        const clientEmail = attendee.email || payload.email || payload.attendeeEmail || '';
-
-        const rawStartTime = payload.startTime || '';
-        const rawEndTime = payload.endTime || '';
-        const location = payload.location || 'Online / None Specified';
-        const notes = payload.additionalNotes || payload.description || 'None';
+    if (attendees.length > 0 || payload.email) {
+        const clientEmail = attendees[0]?.email || payload.email;
+        const clientName = attendees[0]?.name || payload.name || 'Unknown Client';
+        const eventTitle = payload.title || payload.eventType?.title || 'Meeting';
+        const rawStartTime = payload.startTime || payload.start_time;
+        const rawEndTime = payload.endTime || payload.end_time;
         
         let formattedTime = 'Not specified';
         if (rawStartTime && rawEndTime) {
@@ -268,26 +263,19 @@ app.post('/webhook', async (req, res) => {
             formattedTime = `${startObj.toLocaleString()} - ${endObj.toLocaleTimeString()}`;
         }
 
-        let guestsStr = 'None';
-        if (payload.guests && Array.isArray(payload.guests) && payload.guests.length > 0) {
-            guestsStr = payload.guests.join(', ');
-        } else if (attendees.length > 1) {
-            guestsStr = attendees.slice(1).map(a => a.email || a.name).join(', ');
-        }
-
-        let lineId = '';
-        const responses = payload.responses;
-        if (responses) {
-           for (const key in responses.answers || responses) {
-                const answerObj = responses.answers ? responses.answers[key] : responses[key];
-                const label = answerObj && answerObj.label ? answerObj.label.toLowerCase() : '';
-                const val = answerObj && answerObj.value !== undefined ? answerObj.value : answerObj;
+        const location = payload.location || 'Online / None Specified';
+        const responses = payload.responses || payload.metadata || {};
         
-                if (key.toLowerCase().includes('line') || label.includes('line')) {
-                   lineId = val;
-                   break;
-                }
-            }
+        let lineId = responses.line_id || responses.lineId || '';
+        let profession = responses.profession || responses.field || 'Not provided';
+        let englishReality = responses.english_reality || responses.englishReality || 'Not provided';
+        let goal3Month = responses.goal_3_month || responses.goal3Month || 'Not provided';
+        let conversationTopics = responses.conversation_topics || responses.conversationTopics || 'Not provided';
+        let notes = payload.additionalNotes || payload.notes || 'None';
+        
+        let guestsStr = 'None';
+        if (payload.additionalGuests && payload.additionalGuests.length > 0) {
+            guestsStr = payload.additionalGuests.join(', ');
         }
 
         let tallyQuestions = 'Not provided';
@@ -315,45 +303,43 @@ app.post('/webhook', async (req, res) => {
 
         const lineMessage = `Event Type: ${eventTitle}
 
-        Name: ${clientName}
+Name: ${clientName}
 
-        Date/Start-End Time: ${formattedTime}
+Date/Start-End Time: ${formattedTime}
 
-        Location: ${location}
+Location: ${location}
 
-        Line ID: ${lineId || 'Not provided'}
+Line ID: ${lineId || 'Not provided'}
 
-        Email: ${clientEmail}
+Email: ${clientEmail}
 
-        Notes: ${notes}
+Notes: ${notes}
 
-        Additional Guests: ${guestsStr}
+Additional Guests: ${guestsStr}
 
-        Tally Questions:
-        ${tallyQuestions || 'Not provided'}
+Tally Questions:
+${tallyQuestions || 'Not provided'}
 
-        --- CLIENT DIAGNOSTIC CONTEXT ---
-        Profession: ${profession || 'Not provided'}
-        English Reality: ${englishReality || 'Not provided'}
-        3-Month Goal: ${goal3Month || 'Not provided'}
-        Conversation Topics: ${conversationTopics || 'Not provided'}`;
+--- CLIENT DIAGNOSTIC CONTEXT ---
+Profession: ${profession}
+English Reality: ${englishReality}
+3-Month Goal: ${goal3Month}
+Conversation Topics: ${conversationTopics}`;
 
+        // 1. LINE Notification Logic & CRM Update (Fires only on booking creation)
+        if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
+            await sendLineNotification(lineMessage);
 
-          // 1. LINE Notification Logic (Fires only on booking creation)
-          if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
-              await sendLineNotification(lineMessage);
-              
-              if (clientEmail) {
-                  await triggerAppsScript({
-                      action: 'update_status',
-                      email: clientEmail,
-                      scheduleStatus: 'Confirmed',
-                      location: location,
-                      bookingDateTime: formattedTime
-                  });
-              }
-          }
-
+            if (clientEmail) {
+                await triggerAppsScript({
+                    action: 'update_status',
+                    email: clientEmail,
+                    scheduleStatus: 'Confirmed',
+                    location: location,
+                    bookingDateTime: formattedTime
+                });
+            }
+        }
 
         // 2. Google Apps Script Email Logic (Fires only when Free Intro Chat meeting ends)
         const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
@@ -375,6 +361,7 @@ app.post('/webhook', async (req, res) => {
     
     res.status(200).json({ status: 'success', message: 'Webhook processed successfully' });
 });
+
 
 // Self-ping to keep Render free tier awake every 14 minutes (14 * 60 * 1000 ms)
 const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000;
