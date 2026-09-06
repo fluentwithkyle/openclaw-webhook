@@ -160,11 +160,10 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
         let questionText = '';
 
-                function getFieldText(field) {
+        function getFieldText(field) {
             const value = field.value;
             if (value === undefined || value === null) return '';
             
-            // If it's a plain text, textarea, or email input without option lookups
             if (typeof value === 'string' || typeof value === 'number') {
                 return String(value).trim();
             }
@@ -173,7 +172,7 @@ app.post('/tally-webhook', async (req, res) => {
                 return value ? field.label : '';
             }
 
-            // If field has options and value contains option IDs or text
+            // Map option IDs/texts to pure option strings (without repeating question text)
             if (field.options && Array.isArray(field.options)) {
                 const valArray = Array.isArray(value) ? value : [value];
                 const matchedTexts = field.options
@@ -190,7 +189,6 @@ app.post('/tally-webhook', async (req, res) => {
             return String(value).trim();
         }
 
-
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
             const valStr = getFieldText(field);
@@ -202,7 +200,7 @@ app.post('/tally-webhook', async (req, res) => {
                 clientName = valStr;
             } else if (label.includes('email') || label.includes('e-mail')) {
                 clientEmail = valStr;
-            } else if (label.includes('line') || label.includes('id') || label.includes('app id')) {
+            } else if (label.includes('line') || label.includes('id') || label.includes('messaging app')) {
                 clientLineId = valStr;
             } else if (label.includes('location') || label.includes('address')) {
                 location = valStr;
@@ -272,7 +270,7 @@ Question: ${questionText}`;
         if (pkgLower.includes('intensive') || pkgLower.includes('monthly') || pkgLower.includes('flex')) credits = 4;
         else if (pkgLower.includes('deep dive') || pkgLower.includes('single session') || pkgLower.includes('intro')) credits = 1;
 
-        console.log(`[Tally Parsed Data] Upserting Client -> Name: ${clientName}, Email: ${clientEmail}, Package: ${selectedPackage}`);
+        console.log(`[Tally Parsed Data] Upserting Client -> Name: ${clientName}, Email: ${clientEmail}, Line ID: ${clientLineId}, Package: ${selectedPackage}`);
 
         await triggerAppsScript({
             action: 'upsert_client',
@@ -298,6 +296,7 @@ Question: ${questionText}`;
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
 
 
 app.post('/webhook', async (req, res) => {
