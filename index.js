@@ -160,7 +160,6 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
         let questionText = '';
 
-        // Helper to map Tally option IDs to their readable text values
         function getFieldText(field) {
             const value = field.value;
             if (value === undefined || value === null) return '';
@@ -169,14 +168,13 @@ app.post('/tally-webhook', async (req, res) => {
                 return value ? field.label : '';
             }
 
-            // If field has options and value contains option IDs
             if (field.options && Array.isArray(field.options)) {
                 const valArray = Array.isArray(value) ? value : [value];
                 const matchedTexts = field.options
                     .filter(opt => valArray.includes(opt.id) || valArray.includes(opt.text))
                     .map(opt => opt.text);
                 if (matchedTexts.length > 0) {
-                    return matchedTexts.join('; ');
+                    return matchedTexts.join(', ');
                 }
             }
 
@@ -193,15 +191,15 @@ app.post('/tally-webhook', async (req, res) => {
 
             const valLower = valStr.toLowerCase();
 
-            if (label.includes('name')) {
+            if (label.includes('name') || label.includes('full name') || label.includes('your name')) {
                 clientName = valStr;
-            } else if (label.includes('email')) {
+            } else if (label.includes('email') || label.includes('e-mail')) {
                 clientEmail = valStr;
-            } else if (label.includes('line')) {
+            } else if (label.includes('line') || label.includes('id') || label.includes('app id')) {
                 clientLineId = valStr;
             } else if (label.includes('location') || label.includes('address')) {
                 location = valStr;
-            } else if (label.includes('profession') || label.includes('field') || label.includes('job')) {
+            } else if (label.includes('profession') || label.includes('field') || label.includes('job') || label.includes('manager')) {
                 profession = valStr;
             } else if (label.includes('reality') || label.includes('statement best describes') || label.includes('current english')) {
                 englishReality = valStr;
@@ -293,6 +291,7 @@ Question: ${questionText}`;
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
 
 app.post('/webhook', async (req, res) => {
     console.log('[Webhook INBOUND] Processing global /webhook payload...');
