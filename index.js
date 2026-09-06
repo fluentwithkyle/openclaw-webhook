@@ -160,42 +160,41 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
         let questionText = '';
 
-                function getFieldText(field) {
+        // Helper to extract clean text and strip out any prepended question labels or parentheses wrappers
+        function extractCleanValues(field) {
             const value = field.value;
             if (value === undefined || value === null) return '';
-            
-            // If it's a multi-select or checkbox array containing IDs or values
+
+            let rawValues = [];
             if (Array.isArray(value)) {
-                if (field.options && Array.isArray(field.options)) {
-                    const matchedTexts = field.options
-                        .filter(opt => value.includes(opt.id) || value.includes(opt.text))
-                        .map(opt => opt.text);
-                    if (matchedTexts.length > 0) {
-                        return matchedTexts.join(', ');
-                    }
+                rawValues = value.map(v => {
+                    if (typeof v === 'object' && v !== null) return v.text || v.id || '';
+                    return String(v);
+                });
+            } else if (field.options && Array.isArray(field.options)) {
+                const valArray = [value];
+                rawValues = field.options
+                    .filter(opt => valArray.includes(opt.id) || valArray.includes(opt.text))
+                    .map(opt => opt.text);
+                if (rawValues.length === 0) rawValues = [String(value)];
+            } else {
+                rawValues = [String(value)];
+            }
+
+            // Clean up each value: remove parentheses wrapping or prepended question strings if present
+            return rawValues.map(item => {
+                let cleaned = item.trim();
+                // If Tally embedded the choice inside parentheses like "Question text (User choice)", extract the inner part
+                if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+                    cleaned = cleaned.slice(1, -1).trim();
                 }
-                return value.join(', ');
-            }
-
-            // If single value matches options
-            if (field.options && Array.isArray(field.options)) {
-                const matchedOpt = field.options.find(opt => opt.id === value || opt.text === value);
-                if (matchedOpt) {
-                    return matchedOpt.text;
-                }
-            }
-
-            if (typeof value === 'boolean') {
-                return value ? field.label : '';
-            }
-
-            return String(value).trim();
+                return cleaned;
+            }).filter(Boolean).join(', ');
         }
-
 
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
-            const valStr = getFieldText(field);
+            const valStr = extractCleanValues(field);
             if (!valStr || valStr === 'false') return;
 
             const valLower = valStr.toLowerCase();
@@ -300,6 +299,7 @@ Question: ${questionText}`;
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
 
 
 
