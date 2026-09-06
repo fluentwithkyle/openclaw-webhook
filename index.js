@@ -75,7 +75,6 @@ Conversation Topics: ${client.conversationTopics || 'Not provided'}`;
 
                 await sendLineNotification(message);
 
-                // Update status in CRM so it doesn't alert again
                 await triggerAppsScript({
                     action: 'update_status',
                     email: client.email,
@@ -99,7 +98,7 @@ app.post('/webhook/cal', async (req, res) => {
     if (!req.body || Object.keys(req.body).length === 0 || req.body.triggerEvent === 'PING') {
       return res.status(200).json({ success: true, message: 'Cal.com ping received successfully' });
     }
-    req.url = '/cal-webhook';
+    req.url = '/webhook';
     return app._router.handle(req, res);
   } catch (error) {
     console.error('Error in /webhook/cal:', error);
@@ -151,7 +150,7 @@ app.post('/tally-webhook', async (req, res) => {
         const payloadData = eventData.data || eventData;
         const fields = payloadData.fields || [];
 
-        let clientName = 'Unknown Client';
+        let clientName = '';
         let clientEmail = '';
         let clientLineId = '';
         let selectedPackage = 'Not specified';
@@ -160,6 +159,7 @@ app.post('/tally-webhook', async (req, res) => {
         let englishReality = '';
         let goal3Month = '';
         let conversationTopics = '';
+        let questionText = '';
 
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
@@ -177,6 +177,7 @@ app.post('/tally-webhook', async (req, res) => {
             else if (label.includes('reality') || label.includes('current english')) englishReality = valStr;
             else if (label.includes('goal') || label.includes('3-month')) goal3Month = valStr;
             else if (label.includes('topic') || label.includes('conversation')) conversationTopics = valStr;
+            else if (label.includes('question') || label.includes('have a question')) questionText = valStr;
             else {
                 if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) selectedPackage = 'Free Intro Chat';
                 else if (valLower.includes('intensive-retainer')) selectedPackage = 'Weekly Intensive Retainer';
@@ -192,6 +193,40 @@ app.post('/tally-webhook', async (req, res) => {
             clientName = payloadData.query.name || clientName;
             clientEmail = payloadData.query.email || clientEmail;
             clientLineId = payloadData.query.line_id || clientLineId;
+        }
+
+        const isQuestionSubmission = !!questionText || fields.some(f => (f.label || '').toLowerCase().includes('question') && f.value);
+        const isTallyZero = !clientEmail && !clientName && fields.length === 0;
+
+        if (isTallyZero) {
+            console.log('[Tally Zero] Received empty submission or page load ping. Skipping CRM log.');
+            return res.status(200).json({ status: 'success', message: 'Tally 0 ignored successfully' });
+        }
+
+        if (isQuestionSubmission) {
+            console.log('[Tally Question] Processing "Have a Question?" submission...');
+            const qMessage = `QUESTION RECEIVED!
+Name: ${clientName || 'Not provided'}
+Email: ${clientEmail || 'Not provided'}
+LINE ID: ${clientLineId || 'Not provided'}
+Question: ${questionText}`;
+
+            await sendLineNotification(qMessage);
+
+            await triggerAppsScript({
+                action: 'append_row',
+                timestamp: new Date().toISOString(),
+                name: clientName || 'Unknown Questioner',
+                email: clientEmail || 'no-email-' + Date.now(),
+                lineId: clientLineId,
+                packageSelected: 'Question Received',
+                paymentStatus: 'N/A',
+                sessionCredits: 0,
+                scheduleStatus: 'Question Received',
+                questionText: questionText
+            });
+
+            return res.status(200).json({ status: 'success', message: 'Question processed and notified' });
         }
 
         let credits = 0;
@@ -226,56 +261,6 @@ app.post('/tally-webhook', async (req, res) => {
     }
 });
 
-app.post('/cal-webhook', async (req, res) => {
-  console.log('[Webhook INBOUND] Processing /cal-webhook payload...');
-  try {
-    const payload = req.body.payload || req.body;
-    const email = payload.attendees?.[0]?.email || payload.email;
-          
-    if (!email) {
-      console.log('[cal-webhook Warning] Attendee email not found in payload.');
-      return res.status(400).json({ error: 'Attendee email not found' });
-    }
-
-    const location = payload.location || 'Online / None Specified';
-    const rawStartTime = payload.startTime || '';
-    const rawEndTime = payload.endTime || '';
-            
-    let bookingDateTime = 'Not specified';
-    if (rawStartTime && rawEndTime) {
-        bookingDateTime = `${new Date(rawStartTime).toLocaleString()} - ${new Date(rawEndTime).toLocaleTimeString()}`;
-    }
-
-    const triggerEvent = req.body.triggerEvent || '';
-    console.log(`[Cal.com Parsed Data] Event: ${triggerEvent}, Email: ${email}, Location: ${location}`);
-
-    if (triggerEvent === 'BOOKING_CANCELLED') {
-        const cancelReason = payload.cancellationReason || payload.reason || 'None provided';
-        await triggerAppsScript({
-          action: 'update_status',
-          email: email,
-          scheduleStatus: 'Cancelled',
-          cancellationStatus: 'Cancelled',
-          cancellationReason: cancelReason
-        });
-        await sendLineNotification(`CANCELLATION ALERT\nEmail: ${email}\nReason: ${cancelReason}`);
-    } else {
-        await triggerAppsScript({
-          action: 'update_status',
-          email: email,
-          scheduleStatus: 'Confirmed',
-          location: location,
-          bookingDateTime: bookingDateTime
-        });
-    }
-
-    res.status(200).json({ status: 'success' });
-  } catch (error) {
-    console.error('Error handling Cal.com webhook:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 app.post('/webhook', async (req, res) => {
     console.log('[Webhook INBOUND] Processing global /webhook payload...');
     const eventData = req.body;
@@ -301,27 +286,41 @@ app.post('/webhook', async (req, res) => {
         const responses = payload.responses || payload.metadata || {};
         
         let lineId = responses.line_id || responses.lineId || '';
-        let profession = responses.profession || 'Not provided';
-        let englishReality = responses.english_reality || 'Not provided';
-        let goal3Month = responses.goal_3_month || 'Not provided';
-        let conversationTopics = responses.conversation_topics || 'Not provided';
         let notes = payload.additionalNotes || payload.notes || 'None';
         let guestsStr = payload.additionalGuests?.length ? payload.additionalGuests.join(', ') : 'None';
+
+        // Fetch client diagnostic context from CRM via Apps Script using email reference
+        let clientContext = { profession: 'Not provided', englishReality: 'Not provided', goal3Month: 'Not provided', conversationTopics: 'Not provided', lineId: lineId };
+        if (clientEmail) {
+            const lookupRes = await triggerAppsScript({
+                action: 'get_client_by_email',
+                email: clientEmail
+            });
+            if (lookupRes && lookupRes.status === 'success' && lookupRes.data) {
+                clientContext = {
+                    profession: lookupRes.data.profession || 'Not provided',
+                    englishReality: lookupRes.data.englishReality || 'Not provided',
+                    goal3Month: lookupRes.data.goal3Month || 'Not provided',
+                    conversationTopics: lookupRes.data.conversationTopics || 'Not provided',
+                    lineId: lookupRes.data.lineId || lineId
+                };
+            }
+        }
 
         const lineMessage = `Event Type: ${eventTitle}
 Name: ${clientName}
 Date/Start-End Time: ${formattedTime}
 Location: ${location}
-LINE ID: ${lineId || 'Not provided'}
+LINE ID: ${clientContext.lineId || 'Not provided'}
 Email: ${clientEmail}
 Notes: ${notes}
 Additional Guests: ${guestsStr}
 
 --- CLIENT DIAGNOSTIC CONTEXT ---
-Profession: ${profession}
-English Reality: ${englishReality}
-3-Month Goal: ${goal3Month}
-Conversation Topics: ${conversationTopics}`;
+Profession: ${clientContext.profession}
+English Reality: ${clientContext.englishReality}
+3-Month Goal: ${clientContext.goal3Month}
+Conversation Topics: ${clientContext.conversationTopics}`;
 
         if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
             await sendLineNotification(lineMessage);
@@ -335,7 +334,7 @@ Conversation Topics: ${conversationTopics}`;
                 });
             }
         } else if (triggerEvent === 'BOOKING_CANCELLED') {
-            const cancelReason = payload.cancellationReason || 'None provided';
+            const cancelReason = payload.cancellationReason || payload.reason || 'None provided';
             await triggerAppsScript({
                 action: 'update_status',
                 email: clientEmail,
@@ -343,16 +342,28 @@ Conversation Topics: ${conversationTopics}`;
                 cancellationStatus: 'Cancelled',
                 cancellationReason: cancelReason
             });
-            await sendLineNotification(`CANCELLATION ALERT\nName: ${clientName}\nEmail: ${clientEmail}\nReason: ${cancelReason}`);
+
+            const cancelMessage = `CANCELLATION ALERT
+Name: ${clientName}
+Email: ${clientEmail}
+LINE ID: ${clientContext.lineId || 'Not provided'}
+Package / Event: ${eventTitle}
+Profession: ${clientContext.profession}
+English Reality: ${clientContext.englishReality}
+3-Month Goal: ${clientContext.goal3Month}
+Conversation Topics: ${clientContext.conversationTopics}
+Reason: ${cancelReason}`;
+
+            await sendLineNotification(cancelMessage);
         }
 
         const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
         if (isFreeIntro && triggerEvent === 'MEETING_ENDED' && clientEmail) {
             console.log(`[Meeting Ended Trigger] Free intro meeting ended for ${clientEmail}. Preparing personalized Tally email...`);
-            const personalizedTallyUrl = `https://tally.so/r/lb26p6?name=${encodeURIComponent(clientName)}&email=${encodeURIComponent(clientEmail)}&line_id=${encodeURIComponent(lineId)}`;
+            const targetLineId = clientContext.lineId || lineId;
+            const personalizedTallyUrl = `https://tally.so/r/lb26p6?name=${encodeURIComponent(clientName)}&email=${encodeURIComponent(clientEmail)}&line_id=${encodeURIComponent(targetLineId)}`;
             const firstName = clientName.split(' ')[0] || clientName;
 
-            // Fetch template dynamically from Google Sheets via Apps Script
             const templateRes = await triggerAppsScript({
                 action: 'get_template',
                 templateKey: 'intro_followup'
@@ -362,7 +373,6 @@ Conversation Topics: ${conversationTopics}`;
                 let subject = templateRes.data.subject;
                 let bodyHtml = templateRes.data.body;
 
-                // Replace placeholders with client data
                 bodyHtml = bodyHtml.replace(/{{firstName}}/g, firstName)
                                    .replace(/{{tallyUrl}}/g, personalizedTallyUrl);
 
