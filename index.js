@@ -160,14 +160,20 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
         let questionText = '';
 
-        function getFieldText(field) {
+                function getFieldText(field) {
             const value = field.value;
             if (value === undefined || value === null) return '';
             
+            // If it's a plain text, textarea, or email input without option lookups
+            if (typeof value === 'string' || typeof value === 'number') {
+                return String(value).trim();
+            }
+
             if (typeof value === 'boolean') {
                 return value ? field.label : '';
             }
 
+            // If field has options and value contains option IDs or text
             if (field.options && Array.isArray(field.options)) {
                 const valArray = Array.isArray(value) ? value : [value];
                 const matchedTexts = field.options
@@ -181,8 +187,9 @@ app.post('/tally-webhook', async (req, res) => {
             if (Array.isArray(value)) {
                 return value.join(', ');
             }
-            return String(value);
+            return String(value).trim();
         }
+
 
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
