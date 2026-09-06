@@ -90,6 +90,33 @@ app.get('/', (req, res) => {
     res.send('OpenClaw webhook server is running!');
 });
 
+// Cal.com Ping & Webhook Routes (Added /webhook/cal and /webhook/tally to support multiple endpoints)
+app.post('/webhook/cal', async (req, res) => {
+  try {
+    // Satisfy Cal.com ping tests or handle incoming requests seamlessly
+    if (!req.body || Object.keys(req.body).length === 0 || req.body.triggerEvent === 'PING') {
+      return res.status(200).json({ success: true, message: 'Cal.com ping received successfully' });
+    }
+    
+    // Delegate to existing cal-webhook logic
+    req.url = '/cal-webhook';
+    return app._router.handle(req, res);
+  } catch (error) {
+    console.error('Error in /webhook/cal:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/webhook/tally', async (req, res) => {
+  try {
+    req.url = '/tally-webhook';
+    return app._router.handle(req, res);
+  } catch (error) {
+    console.error('Error in /webhook/tally:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/abandoned-alert', async (req, res) => {
    try {
      const { name, email, lineId, packageSelected, timestamp, hoursElapsed, location, profession, englishReality, goal3Month, conversationTopics } = req.body;
