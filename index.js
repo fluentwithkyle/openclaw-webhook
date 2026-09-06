@@ -160,34 +160,38 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
         let questionText = '';
 
-        function getFieldText(field) {
+                function getFieldText(field) {
             const value = field.value;
             if (value === undefined || value === null) return '';
             
-            if (typeof value === 'string' || typeof value === 'number') {
-                return String(value).trim();
+            // If it's a multi-select or checkbox array containing IDs or values
+            if (Array.isArray(value)) {
+                if (field.options && Array.isArray(field.options)) {
+                    const matchedTexts = field.options
+                        .filter(opt => value.includes(opt.id) || value.includes(opt.text))
+                        .map(opt => opt.text);
+                    if (matchedTexts.length > 0) {
+                        return matchedTexts.join(', ');
+                    }
+                }
+                return value.join(', ');
+            }
+
+            // If single value matches options
+            if (field.options && Array.isArray(field.options)) {
+                const matchedOpt = field.options.find(opt => opt.id === value || opt.text === value);
+                if (matchedOpt) {
+                    return matchedOpt.text;
+                }
             }
 
             if (typeof value === 'boolean') {
                 return value ? field.label : '';
             }
 
-            // Map option IDs/texts to pure option strings (without repeating question text)
-            if (field.options && Array.isArray(field.options)) {
-                const valArray = Array.isArray(value) ? value : [value];
-                const matchedTexts = field.options
-                    .filter(opt => valArray.includes(opt.id) || valArray.includes(opt.text))
-                    .map(opt => opt.text);
-                if (matchedTexts.length > 0) {
-                    return matchedTexts.join(', ');
-                }
-            }
-
-            if (Array.isArray(value)) {
-                return value.join(', ');
-            }
             return String(value).trim();
         }
+
 
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
