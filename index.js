@@ -160,42 +160,33 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
         let questionText = '';
 
-        // Helper to extract clean text and strip out any prepended question labels or parentheses wrappers
-        function extractCleanValues(field) {
-            const value = field.value;
-            if (value === undefined || value === null) return '';
-
-            let rawValues = [];
-            if (Array.isArray(value)) {
-                rawValues = value.map(v => {
-                    if (typeof v === 'object' && v !== null) return v.text || v.id || '';
-                    return String(v);
-                });
-            } else if (field.options && Array.isArray(field.options)) {
-                const valArray = [value];
-                rawValues = field.options
-                    .filter(opt => valArray.includes(opt.id) || valArray.includes(opt.text))
-                    .map(opt => opt.text);
-                if (rawValues.length === 0) rawValues = [String(value)];
-            } else {
-                rawValues = [String(value)];
-            }
-
-            // Clean up each value: remove parentheses wrapping or prepended question strings if present
-            return rawValues.map(item => {
-                let cleaned = item.trim();
-                // If Tally embedded the choice inside parentheses like "Question text (User choice)", extract the inner part
-                if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
-                    cleaned = cleaned.slice(1, -1).trim();
-                }
-                return cleaned;
-            }).filter(Boolean).join(', ');
-        }
-
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
-            const valStr = extractCleanValues(field);
-            if (!valStr || valStr === 'false') return;
+            const value = field.value;
+            if (value === undefined || value === null) return;
+
+            // Extract text cleanly whether it's a string, array, or Tally option objects/UUIDs
+            let valStr = '';
+            if (Array.isArray(value)) {
+                valStr = value.map(v => {
+                    if (typeof v === 'object' && v !== null) return v.text || v.id || '';
+                    // If v is a UUID and field.options exists, map it to option text
+                    if (field.options && Array.isArray(field.options)) {
+                        const match = field.options.find(opt => opt.id === v || opt.text === v);
+                        if (match) return match.text;
+                    }
+                    return String(v);
+                }).filter(Boolean).join(', ');
+            } else if (typeof value === 'object' && value !== null) {
+                valStr = value.text || value.id || '';
+            } else if (field.options && Array.isArray(field.options)) {
+                const match = field.options.find(opt => opt.id === value || opt.text === value);
+                valStr = match ? match.text : String(value);
+            } else {
+                valStr = String(value).trim();
+            }
+
+            if (!valStr || valStr.toLowerCase() === 'false') return;
 
             const valLower = valStr.toLowerCase();
 
@@ -299,6 +290,7 @@ Question: ${questionText}`;
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
 
 
 
