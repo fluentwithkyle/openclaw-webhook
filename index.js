@@ -161,52 +161,52 @@ app.post('/tally-webhook', async (req, res) => {
         let questionText = '';
 
         fields.forEach(field => {
-            const label = (field.label || '').toLowerCase();
+            const label = (field.label || '').trim();
+            const labelLower = label.toLowerCase();
             const value = field.value;
+            
             if (value === undefined || value === null) return;
 
-            // Extract text cleanly whether it's a string, array, or Tally option objects/UUIDs
-            let valStr = '';
-            if (Array.isArray(value)) {
-                valStr = value.map(v => {
-                    if (typeof v === 'object' && v !== null) return v.text || v.id || '';
-                    // If v is a UUID and field.options exists, map it to option text
-                    if (field.options && Array.isArray(field.options)) {
-                        const match = field.options.find(opt => opt.id === v || opt.text === v);
-                        if (match) return match.text;
-                    }
-                    return String(v);
-                }).filter(Boolean).join(', ');
-            } else if (typeof value === 'object' && value !== null) {
-                valStr = value.text || value.id || '';
-            } else if (field.options && Array.isArray(field.options)) {
-                const match = field.options.find(opt => opt.id === value || opt.text === value);
-                valStr = match ? match.text : String(value);
-            } else {
-                valStr = String(value).trim();
-            }
+            // Simple, reliable value extractor that maps options or parses arrays safely
+            let extracted = [];
+            const valuesArr = Array.isArray(value) ? value : [value];
 
+            valuesArr.forEach(v => {
+                if (typeof v === 'string' || typeof v === 'number') {
+                    // Check if field has options to resolve UUID strings to text
+                    if (field.options && Array.isArray(field.options)) {
+                        const matchedOpt = field.options.find(opt => opt.id === v || opt.text === v);
+                        extracted.push(matchedOpt ? matchedOpt.text : String(v));
+                    } else {
+                        extracted.push(String(v));
+                    }
+                } else if (typeof v === 'object' && v !== null) {
+                    extracted.push(v.text || v.id || '');
+                }
+            });
+
+            const valStr = extracted.filter(Boolean).join(', ').trim();
             if (!valStr || valStr.toLowerCase() === 'false') return;
 
             const valLower = valStr.toLowerCase();
 
-            if (label.includes('name') || label.includes('full name') || label.includes('your name')) {
+            if (labelLower.includes('name') || labelLower.includes('full name') || labelLower.includes('your name')) {
                 clientName = valStr;
-            } else if (label.includes('email') || label.includes('e-mail')) {
+            } else if (labelLower.includes('email') || labelLower.includes('e-mail')) {
                 clientEmail = valStr;
-            } else if (label.includes('line') || label.includes('id') || label.includes('messaging app')) {
+            } else if (labelLower.includes('line') || labelLower.includes('id') || labelLower.includes('messaging app')) {
                 clientLineId = valStr;
-            } else if (label.includes('location') || label.includes('address')) {
+            } else if (labelLower.includes('location') || labelLower.includes('address')) {
                 location = valStr;
-            } else if (label.includes('profession') || label.includes('field') || label.includes('job') || label.includes('manager')) {
+            } else if (labelLower.includes('profession') || labelLower.includes('field') || labelLower.includes('job') || labelLower.includes('manager')) {
                 profession = valStr;
-            } else if (label.includes('reality') || label.includes('statement best describes') || label.includes('current english')) {
+            } else if (labelLower.includes('reality') || labelLower.includes('statement best describes') || labelLower.includes('current english')) {
                 englishReality = valStr;
-            } else if (label.includes('goal') || label.includes('three months') || label.includes('3-month') || label.includes('difficult today')) {
+            } else if (labelLower.includes('goal') || labelLower.includes('three months') || labelLower.includes('3-month') || labelLower.includes('difficult today')) {
                 goal3Month = valStr;
-            } else if (label.includes('happily spend') || label.includes('topic') || label.includes('conversation')) {
+            } else if (labelLower.includes('happily spend') || labelLower.includes('topic') || labelLower.includes('conversation')) {
                 conversationTopics = valStr;
-            } else if (label === 'have a question?' || label.includes('your question') || (label.includes('question') && !label.includes('goal') && !label.includes('topic'))) {
+            } else if (labelLower === 'have a question?' || labelLower.includes('your question')) {
                 questionText = valStr;
             } else {
                 if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) selectedPackage = 'Free Intro Chat';
@@ -215,7 +215,7 @@ app.post('/tally-webhook', async (req, res) => {
                 else if (valLower.includes('flex-pass')) selectedPackage = 'Flex Pass';
                 else if (valLower.includes('deep-dive')) selectedPackage = 'Deep Dive';
                 else if (valLower.includes('single-session')) selectedPackage = 'Single Session';
-                else if (label.includes('package') || label.includes('pass') || label.includes('select')) selectedPackage = valStr;
+                else if (labelLower.includes('package') || labelLower.includes('pass') || labelLower.includes('select')) selectedPackage = valStr;
             }
         });
 
@@ -291,10 +291,6 @@ Question: ${questionText}`;
     }
 });
 
-
-
-
-
 app.post('/webhook', async (req, res) => {
     console.log('[Webhook INBOUND] Processing global /webhook payload...');
     const eventData = req.body;
@@ -323,7 +319,6 @@ app.post('/webhook', async (req, res) => {
         let notes = payload.additionalNotes || payload.notes || 'None';
         let guestsStr = payload.additionalGuests?.length ? payload.additionalGuests.join(', ') : 'None';
 
-        // Fetch client diagnostic context from CRM via Apps Script using email reference
         let clientContext = { profession: 'Not provided', englishReality: 'Not provided', goal3Month: 'Not provided', conversationTopics: 'Not provided', lineId: lineId };
         if (clientEmail) {
             const lookupRes = await triggerAppsScript({
