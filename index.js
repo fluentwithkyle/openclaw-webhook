@@ -28,13 +28,15 @@ async function sendLineNotification(text) {
 }
 
 async function triggerAppsScript(payload) {
+   console.log(`[Apps Script OUTBOUND] Action: ${payload.action}`, JSON.stringify(payload, null, 2));
    try {
      const response = await axios.post(APPS_SCRIPT_URL, payload, {
        headers: { 'Content-Type': 'application/json' }
      });
+     console.log(`[Apps Script INBOUND] Action: ${payload.action} Response:`, JSON.stringify(response.data, null, 2));
      return response.data;
    } catch (error) {
-     console.error('Failed to communicate with Google Apps Script:', error.message);
+     console.error(`[Apps Script ERROR] Action: ${payload.action} Failed:`, error.message);
    }
 }
 
@@ -90,15 +92,13 @@ app.get('/', (req, res) => {
     res.send('OpenClaw webhook server is running!');
 });
 
-// Cal.com Ping & Webhook Routes (Added /webhook/cal and /webhook/tally to support multiple endpoints)
+// Cal.com Ping & Webhook Routes
 app.post('/webhook/cal', async (req, res) => {
+  console.log('[Webhook INBOUND] Hit /webhook/cal with body:', JSON.stringify(req.body, null, 2));
   try {
-    // Satisfy Cal.com ping tests or handle incoming requests seamlessly
     if (!req.body || Object.keys(req.body).length === 0 || req.body.triggerEvent === 'PING') {
       return res.status(200).json({ success: true, message: 'Cal.com ping received successfully' });
     }
-    
-    // Delegate to existing cal-webhook logic
     req.url = '/cal-webhook';
     return app._router.handle(req, res);
   } catch (error) {
@@ -108,6 +108,7 @@ app.post('/webhook/cal', async (req, res) => {
 });
 
 app.post('/webhook/tally', async (req, res) => {
+  console.log('[Webhook INBOUND] Hit /webhook/tally with body:', JSON.stringify(req.body, null, 2));
   try {
     req.url = '/tally-webhook';
     return app._router.handle(req, res);
@@ -118,6 +119,7 @@ app.post('/webhook/tally', async (req, res) => {
 });
 
 app.post('/abandoned-alert', async (req, res) => {
+   console.log('[Webhook INBOUND] Hit /abandoned-alert with body:', JSON.stringify(req.body, null, 2));
    try {
      const { name, email, lineId, packageSelected, timestamp, hoursElapsed, location, profession, englishReality, goal3Month, conversationTopics } = req.body;
           
@@ -143,6 +145,7 @@ Conversation Topics: ${conversationTopics || 'Not provided'}`;
 });
 
 app.post('/tally-webhook', async (req, res) => {
+    console.log('[Webhook INBOUND] Processing /tally-webhook payload...');
     try {
         const eventData = req.body;
         const payloadData = eventData.data || eventData;
@@ -196,6 +199,8 @@ app.post('/tally-webhook', async (req, res) => {
         if (pkgLower.includes('intensive') || pkgLower.includes('monthly') || pkgLower.includes('flex')) credits = 4;
         else if (pkgLower.includes('deep dive') || pkgLower.includes('single session') || pkgLower.includes('intro')) credits = 1;
 
+        console.log(`[Tally Parsed Data] Name: ${clientName}, Email: ${clientEmail}, Package: ${selectedPackage}`);
+
         await triggerAppsScript({
             action: 'append_row',
             timestamp: new Date().toISOString(),
@@ -213,6 +218,7 @@ app.post('/tally-webhook', async (req, res) => {
             scheduleStatus: 'Pending Booking'
         });
 
+        console.log('[Webhook OUTBOUND SUCCESS] Tally data logged to CRM.');
         res.status(200).json({ status: 'success', message: 'Logged Tally data to CRM' });
     } catch (err) {
         console.error('Error processing Tally webhook:', err.message);
@@ -221,11 +227,15 @@ app.post('/tally-webhook', async (req, res) => {
 });
 
 app.post('/cal-webhook', async (req, res) => {
+  console.log('[Webhook INBOUND] Processing /cal-webhook payload...');
   try {
     const payload = req.body.payload || req.body;
     const email = payload.attendees?.[0]?.email || payload.email;
           
-    if (!email) return res.status(400).json({ error: 'Attendee email not found' });
+    if (!email) {
+      console.log('[cal-webhook Warning] Attendee email not found in payload.');
+      return res.status(400).json({ error: 'Attendee email not found' });
+    }
 
     const location = payload.location || 'Online / None Specified';
     const rawStartTime = payload.startTime || '';
@@ -237,6 +247,8 @@ app.post('/cal-webhook', async (req, res) => {
     }
 
     const triggerEvent = req.body.triggerEvent || '';
+    console.log(`[Cal.com Parsed Data] Event: ${triggerEvent}, Email: ${email}, Location: ${location}`);
+
     if (triggerEvent === 'BOOKING_CANCELLED') {
         const cancelReason = payload.cancellationReason || payload.reason || 'None provided';
         await triggerAppsScript({
@@ -265,11 +277,14 @@ app.post('/cal-webhook', async (req, res) => {
 });
 
 app.post('/webhook', async (req, res) => {
+    console.log('[Webhook INBOUND] Processing global /webhook payload...');
     const eventData = req.body;
     const triggerEvent = eventData.triggerEvent || eventData.event || '';
     const payload = eventData.payload || eventData;
     const attendees = payload.attendees || [];
     
+    console.log(`[Global Webhook Meta] TriggerEvent: ${triggerEvent}, Attendees count: ${attendees.length}`);
+
     if (attendees.length > 0 || payload.email) {
         const clientEmail = attendees[0]?.email || payload.email;
         const clientName = attendees[0]?.name || payload.name || 'Unknown Client';
@@ -331,8 +346,9 @@ Conversation Topics: ${conversationTopics}`;
             await sendLineNotification(`CANCELLATION ALERT\nName: ${clientName}\nEmail: ${clientEmail}\nReason: ${cancelReason}`);
         }
 
-            const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
-            if (isFreeIntro && triggerEvent === 'MEETING_ENDED' && clientEmail) {
+        const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
+        if (isFreeIntro && triggerEvent === 'MEETING_ENDED' && clientEmail) {
+            console.log(`[Meeting Ended Trigger] Free intro meeting ended for ${clientEmail}. Preparing personalized Tally email...`);
             const personalizedTallyUrl = `https://tally.so/r/lb26p6?name=${encodeURIComponent(clientName)}&email=${encodeURIComponent(clientEmail)}&line_id=${encodeURIComponent(lineId)}`;
             const firstName = clientName.split(' ')[0] || clientName;
 
@@ -356,6 +372,7 @@ Conversation Topics: ${conversationTopics}`;
                     subject: subject,
                     htmlBody: bodyHtml
                 });
+                console.log(`[Email Sent] Follow-up email successfully dispatched to ${clientEmail}`);
             } else {
                 console.error('Failed to fetch email template from Google Sheets.');
             }
@@ -364,7 +381,6 @@ Conversation Topics: ${conversationTopics}`;
     
     res.status(200).json({ status: 'success' });
 });
-
 
 const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000;
 setInterval(() => {
