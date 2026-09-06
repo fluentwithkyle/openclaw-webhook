@@ -160,23 +160,56 @@ app.post('/tally-webhook', async (req, res) => {
         let conversationTopics = '';
         let questionText = '';
 
+        // Helper to map Tally option IDs to their readable text values
+        function getFieldText(field) {
+            const value = field.value;
+            if (value === undefined || value === null) return '';
+            
+            if (typeof value === 'boolean') {
+                return value ? field.label : '';
+            }
+
+            // If field has options and value contains option IDs
+            if (field.options && Array.isArray(field.options)) {
+                const valArray = Array.isArray(value) ? value : [value];
+                const matchedTexts = field.options
+                    .filter(opt => valArray.includes(opt.id) || valArray.includes(opt.text))
+                    .map(opt => opt.text);
+                if (matchedTexts.length > 0) {
+                    return matchedTexts.join('; ');
+                }
+            }
+
+            if (Array.isArray(value)) {
+                return value.join(', ');
+            }
+            return String(value);
+        }
+
         fields.forEach(field => {
             const label = (field.label || '').toLowerCase();
-            const value = field.value;
-            if (!value) return;
+            const valStr = getFieldText(field);
+            if (!valStr || valStr === 'false') return;
 
-            const valStr = Array.isArray(value) ? value.join(', ') : String(value);
             const valLower = valStr.toLowerCase();
 
-            if (label.includes('name')) clientName = valStr;
-            else if (label.includes('email')) clientEmail = valStr;
-            else if (label.includes('line')) clientLineId = valStr;
-            else if (label.includes('location') || label.includes('address')) location = valStr;
-            else if (label.includes('profession') || label.includes('field') || label.includes('job')) profession = valStr;
-            else if (label.includes('reality') || label.includes('current english')) englishReality = valStr;
-            else if (label.includes('goal') || label.includes('3-month')) goal3Month = valStr;
-            else if (label.includes('topic') || label.includes('conversation')) conversationTopics = valStr;
-            else if (label === 'have a question?' || label.includes('your question') || (label.includes('question') && !label.includes('goal') && !label.includes('topic'))) {
+            if (label.includes('name')) {
+                clientName = valStr;
+            } else if (label.includes('email')) {
+                clientEmail = valStr;
+            } else if (label.includes('line')) {
+                clientLineId = valStr;
+            } else if (label.includes('location') || label.includes('address')) {
+                location = valStr;
+            } else if (label.includes('profession') || label.includes('field') || label.includes('job')) {
+                profession = valStr;
+            } else if (label.includes('reality') || label.includes('statement best describes') || label.includes('current english')) {
+                englishReality = valStr;
+            } else if (label.includes('goal') || label.includes('three months') || label.includes('3-month') || label.includes('difficult today')) {
+                goal3Month = valStr;
+            } else if (label.includes('happily spend') || label.includes('topic') || label.includes('conversation')) {
+                conversationTopics = valStr;
+            } else if (label === 'have a question?' || label.includes('your question') || (label.includes('question') && !label.includes('goal') && !label.includes('topic'))) {
                 questionText = valStr;
             } else {
                 if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) selectedPackage = 'Free Intro Chat';
@@ -201,7 +234,6 @@ app.post('/tally-webhook', async (req, res) => {
             return res.status(200).json({ status: 'success', message: 'Tally 0 ignored successfully' });
         }
 
-        // Strict Question check: Must have questionText AND NOT be an intake form with profession/goals
         const isQuestionSubmission = !!questionText && !profession && !englishReality && !goal3Month;
 
         if (isQuestionSubmission) {
@@ -237,7 +269,6 @@ Question: ${questionText}`;
 
         console.log(`[Tally Parsed Data] Upserting Client -> Name: ${clientName}, Email: ${clientEmail}, Package: ${selectedPackage}`);
 
-        // Use upsert to update existing row if client already submitted Tally 1 (handles Tally 2 cleanly)
         await triggerAppsScript({
             action: 'upsert_client',
             timestamp: new Date().toISOString(),
