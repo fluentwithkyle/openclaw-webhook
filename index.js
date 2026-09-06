@@ -91,7 +91,6 @@ app.get('/', (req, res) => {
     res.send('OpenClaw webhook server is running!');
 });
 
-// Cal.com Ping & Webhook Routes
 app.post('/webhook/cal', async (req, res) => {
   console.log('[Webhook INBOUND] Hit /webhook/cal with body:', JSON.stringify(req.body, null, 2));
   try {
@@ -177,8 +176,9 @@ app.post('/tally-webhook', async (req, res) => {
             else if (label.includes('reality') || label.includes('current english')) englishReality = valStr;
             else if (label.includes('goal') || label.includes('3-month')) goal3Month = valStr;
             else if (label.includes('topic') || label.includes('conversation')) conversationTopics = valStr;
-            else if (label.includes('question') || label.includes('have a question')) questionText = valStr;
-            else {
+            else if (label === 'have a question?' || label.includes('your question') || (label.includes('question') && !label.includes('goal') && !label.includes('topic'))) {
+                questionText = valStr;
+            } else {
                 if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) selectedPackage = 'Free Intro Chat';
                 else if (valLower.includes('intensive-retainer')) selectedPackage = 'Weekly Intensive Retainer';
                 else if (valLower.includes('monthly-retainer')) selectedPackage = 'Monthly Retainer + LINE Support';
@@ -195,13 +195,14 @@ app.post('/tally-webhook', async (req, res) => {
             clientLineId = payloadData.query.line_id || clientLineId;
         }
 
-        const isQuestionSubmission = !!questionText || fields.some(f => (f.label || '').toLowerCase().includes('question') && f.value);
         const isTallyZero = !clientEmail && !clientName && fields.length === 0;
-
         if (isTallyZero) {
             console.log('[Tally Zero] Received empty submission or page load ping. Skipping CRM log.');
             return res.status(200).json({ status: 'success', message: 'Tally 0 ignored successfully' });
         }
+
+        // Strict Question check: Must have questionText AND NOT be an intake form with profession/goals
+        const isQuestionSubmission = !!questionText && !profession && !englishReality && !goal3Month;
 
         if (isQuestionSubmission) {
             console.log('[Tally Question] Processing "Have a Question?" submission...');
@@ -234,10 +235,11 @@ Question: ${questionText}`;
         if (pkgLower.includes('intensive') || pkgLower.includes('monthly') || pkgLower.includes('flex')) credits = 4;
         else if (pkgLower.includes('deep dive') || pkgLower.includes('single session') || pkgLower.includes('intro')) credits = 1;
 
-        console.log(`[Tally Parsed Data] Name: ${clientName}, Email: ${clientEmail}, Package: ${selectedPackage}`);
+        console.log(`[Tally Parsed Data] Upserting Client -> Name: ${clientName}, Email: ${clientEmail}, Package: ${selectedPackage}`);
 
+        // Use upsert to update existing row if client already submitted Tally 1 (handles Tally 2 cleanly)
         await triggerAppsScript({
-            action: 'append_row',
+            action: 'upsert_client',
             timestamp: new Date().toISOString(),
             name: clientName,
             email: clientEmail,
@@ -253,8 +255,8 @@ Question: ${questionText}`;
             scheduleStatus: 'Pending Booking'
         });
 
-        console.log('[Webhook OUTBOUND SUCCESS] Tally data logged to CRM.');
-        res.status(200).json({ status: 'success', message: 'Logged Tally data to CRM' });
+        console.log('[Webhook OUTBOUND SUCCESS] Tally data upserted to CRM.');
+        res.status(200).json({ status: 'success', message: 'Upserted Tally data to CRM' });
     } catch (err) {
         console.error('Error processing Tally webhook:', err.message);
         res.status(500).json({ status: 'error', message: err.message });
@@ -330,7 +332,8 @@ Conversation Topics: ${clientContext.conversationTopics}`;
                     email: clientEmail,
                     scheduleStatus: 'Confirmed',
                     location: location,
-                    bookingDateTime: formattedTime
+                    bookingDateTime: formattedTime,
+                    bookingNotes: notes
                 });
             }
         } else if (triggerEvent === 'BOOKING_CANCELLED') {
