@@ -40,23 +40,6 @@ async function triggerAppsScript(payload) {
    }
 }
 
-// Helper to format timestamps to Taipei time (24h, no seconds: MM_DD_YY HH:MM)
-function formatTaipeiTime(dateInput) {
-    if (!dateInput) return 'Not specified';
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return String(dateInput);
-
-    // Convert to Taipei Time (UTC+8)
-    const taipeiDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-    const mm = String(taipeiDate.getMonth() + 1).padStart(2, '0');
-    const dd = String(taipeiDate.getDate()).padStart(2, '0');
-    const yy = String(taipeiDate.getFullYear()).slice(-2);
-    const hh = String(taipeiDate.getHours()).padStart(2, '0');
-    const min = String(taipeiDate.getMinutes()).padStart(2, '0');
-
-    return `${mm}_${yy}_${yy.length ? yy : ''}${mm}_${dd}_${yy}, ${hh}:${min}`.replace(/^(\d{2}_\d{2}_\d{2}),.*/, '$1') + `, ${hh}:${min}`; // Simplified safe formatter
-}
-
 function cleanTaipeiTimestamp(dateInput) {
     if (!dateInput) return '';
     const d = new Date(dateInput);
@@ -67,10 +50,9 @@ function cleanTaipeiTimestamp(dateInput) {
     const yy = String(taipeiDate.getFullYear()).slice(-2);
     const hh = String(taipeiDate.getHours()).padStart(2, '0');
     const min = String(taipeiDate.getMinutes()).padStart(2, '0');
-    return `${mm}_${dd}_${yy}, ${hh}:${min}`;
+    return `${mm}_${dd}_${yy} ${hh}:${min}`;
 }
 
-// Internal Cron Scheduler: Checks for abandoned bookings every 5 minutes
 const ABANDONED_CHECK_INTERVAL = 5 * 60 * 1000;
 setInterval(async () => {
     console.log('Running internal cron: Checking for abandoned bookings...');
@@ -104,7 +86,6 @@ ${formattedSubTime}
 Elapsed: ${hoursElapsed} hours 
 
 Location: ${client.location || 'Not provided'}
-
 Profession: ${client.profession || 'Not provided'}
 
 English Reality: 
@@ -165,7 +146,7 @@ app.post('/tally-webhook', async (req, res) => {
     try {
         const eventData = req.body;
         const payloadData = eventData.data || eventData;
-        fields = payloadData.fields || [];
+        const fields = payloadData.fields || [];
 
         let clientName = '';
         let clientEmail = '';
@@ -344,14 +325,17 @@ app.post('/webhook', async (req, res) => {
         
         let lineId = responses.line_id || responses.lineId || '';
         let guestNameInput = responses['1-on-2-session'] || responses.guest_name || '';
-        let guestInfoInput = responses['guest-info'] || '';
+        let guestInfoInput = String(responses['guest-info'] || '');
         let bookingNotes = responses['notes-2'] || payload.additionalNotes || payload.notes || '';
 
         let guestEmail = '';
         let guestLineId = '';
         if (guestInfoInput) {
-            if (guestInfoInput.includes('@')) guestEmail = guestInfoInput;
-            else guestLineId = guestInfoInput;
+            if (guestInfoInput.includes('@')) {
+                guestEmail = guestInfoInput;
+            } else {
+                guestLineId = guestInfoInput;
+            }
         }
 
         const sessionType = guestNameInput ? '1-on-2' : '1-on-1';
@@ -375,17 +359,18 @@ app.post('/webhook', async (req, res) => {
         }
 
         const resolvedLineId = clientContext.lineId || lineId || 'Not provided';
-        const guestDisplay = guestNameInput ? ` w/ Mr chen & ${guestNameInput}` : '';
+        const guestDisplay = guestNameInput ? ` w/ Guest: ${guestNameInput}` : '';
 
         const lineMessage = `Booking Created 😎
 
 ${eventTitle}
 ${formattedTime}
-${guestDisplay}
+Session Type: ${sessionType}${guestDisplay}
 
 Location: ${location || 'Not provided'}
 LINE ID: ${resolvedLineId}
 Email: ${clientEmail || 'Not provided'}
+Guest Email/Line: ${guestInfoInput || 'None'}
 Notes: ${bookingNotes || 'None'}
 
 Profession: ${clientContext.profession}
@@ -427,7 +412,7 @@ ${clientContext.conversationTopics}`;
                 cancellationReason: cancelReason
             });
 
-            const cancelMessage = `x Canceled Booking x
+            const cancelMessage = `❌ Canceled Booking ❌
 
 Reason: 
 ${cancelReason}
