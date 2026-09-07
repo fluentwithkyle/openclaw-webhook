@@ -74,7 +74,7 @@ async function handleCalWebhook(req, res) {
             bookingNotes = '';
         }
 
-        const sessionType = (rawGuestField || guestInfoInput) ? '1-on-2' : '1-on-1';
+        const sessionType = (guestNameInput || guestEmail || guestLineId) ? '1-on-2' : '1-on-1';
 
         let clientContext = { profession: 'Not provided', englishReality: 'Not provided', goal3Month: 'Not provided', conversationTopics: 'Not provided', lineId: lineId };
         if (clientEmail || lineId) {
