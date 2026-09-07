@@ -334,35 +334,42 @@ app.post('/webhook', async (req, res) => {
 
         const location = payload.location || '';
         const responses = payload.responses || payload.metadata || {};
+        const userFields = payload.userFieldsResponses || {};
         
         let lineId = typeof responses.line_id === 'string' ? responses.line_id : (typeof responses.lineId === 'string' ? responses.lineId : '');
         
-        // Safely extract Cal.com custom questions using identifiers and filter out literal default labels/placeholders
-        const rawGuestNameInput = responses['1-on-2-session'] || responses.guest_name || '';
-        let guestNameInput = '';
-        if (typeof rawGuestNameInput === 'string') guestNameInput = rawGuestNameInput.trim();
-        else if (typeof rawGuestNameInput === 'object' && rawGuestNameInput !== null) {
-            guestNameInput = rawGuestNameInput.text || rawGuestNameInput.label || JSON.stringify(rawGuestNameInput);
+        // Helper to extract values robustly from Cal.com responses or userFieldsResponses
+        function extractCalField(key) {
+            let val = responses[key] || userFields[key] || '';
+            if (val && typeof val === 'object') {
+                val = val.value || val.text || val.label || JSON.stringify(val);
+            }
+            return typeof val === 'string' ? val.trim() : '';
+        }
+
+        // Safely extract Cal.com custom questions using identifiers
+        let guestNameInput = extractCalField('1-on-2-session');
+        if (!guestNameInput) {
+            guestNameInput = extractCalField('guest_name');
         }
         if (guestNameInput.toLowerCase() === 'is this a 1-on-2 session?' || guestNameInput.toLowerCase() === 'add guest name') {
             guestNameInput = '';
         }
 
-        const rawGuestInfo = responses['guest-info'] || '';
-        let guestInfoInput = '';
-        if (typeof rawGuestInfo === 'string') guestInfoInput = rawGuestInfo.trim();
-        else if (typeof rawGuestInfo === 'object' && rawGuestInfo !== null) {
-            guestInfoInput = rawGuestInfo.text || rawGuestInfo.label || JSON.stringify(rawGuestInfo);
-        }
+        let guestInfoInput = extractCalField('guest-info');
         if (guestInfoInput.toLowerCase() === 'guest email or line id') {
             guestInfoInput = '';
         }
 
-        const rawNotes = responses['notes-2'] || payload.additionalNotes || payload.notes || '';
-        let bookingNotes = '';
-        if (typeof rawNotes === 'string') bookingNotes = rawNotes.trim();
-        else if (typeof rawNotes === 'object' && rawNotes !== null) {
-            bookingNotes = rawNotes.text || rawNotes.label || JSON.stringify(rawNotes);
+        let bookingNotes = extractCalField('notes-2');
+        if (!bookingNotes) {
+            bookingNotes = payload.additionalNotes || payload.notes || responses.notes || '';
+        }
+        if (bookingNotes && typeof bookingNotes === 'object') {
+            bookingNotes = bookingNotes.text || bookingNotes.label || JSON.stringify(bookingNotes);
+        }
+        if (typeof bookingNotes === 'string') {
+            bookingNotes = bookingNotes.trim();
         }
         if (bookingNotes.toLowerCase() === 'want to add anything?') {
             bookingNotes = '';
