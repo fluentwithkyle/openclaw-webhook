@@ -87,7 +87,8 @@ Name: ${client.name}
 Email: ${client.email}
 LINE ID: ${client.lineId || 'Not provided'}
 
-${cleanEventTitle(client.packageSelected || 'Not specified')} ${client.bookingDateTime || 'Not specified'}
+${cleanEventTitle(client.packageSelected || 'Not specified')}
+${client.bookingDateTime || 'Not specified'}
 
 ${formattedSubTime}
 Elapsed: ${hoursElapsed} hours 
@@ -336,12 +337,15 @@ app.post('/webhook', async (req, res) => {
         
         let lineId = typeof responses.line_id === 'string' ? responses.line_id : (typeof responses.lineId === 'string' ? responses.lineId : '');
         
-        // Safely extract custom questions and handle object-type inputs without throwing errors
+        // Safely extract Cal.com custom questions using identifiers and filter out literal default labels/placeholders
         const rawGuestNameInput = responses['1-on-2-session'] || responses.guest_name || '';
         let guestNameInput = '';
         if (typeof rawGuestNameInput === 'string') guestNameInput = rawGuestNameInput.trim();
         else if (typeof rawGuestNameInput === 'object' && rawGuestNameInput !== null) {
             guestNameInput = rawGuestNameInput.text || rawGuestNameInput.label || JSON.stringify(rawGuestNameInput);
+        }
+        if (guestNameInput.toLowerCase() === 'is this a 1-on-2 session?' || guestNameInput.toLowerCase() === 'add guest name') {
+            guestNameInput = '';
         }
 
         const rawGuestInfo = responses['guest-info'] || '';
@@ -350,12 +354,18 @@ app.post('/webhook', async (req, res) => {
         else if (typeof rawGuestInfo === 'object' && rawGuestInfo !== null) {
             guestInfoInput = rawGuestInfo.text || rawGuestInfo.label || JSON.stringify(rawGuestInfo);
         }
+        if (guestInfoInput.toLowerCase() === 'guest email or line id') {
+            guestInfoInput = '';
+        }
 
         const rawNotes = responses['notes-2'] || payload.additionalNotes || payload.notes || '';
         let bookingNotes = '';
         if (typeof rawNotes === 'string') bookingNotes = rawNotes.trim();
         else if (typeof rawNotes === 'object' && rawNotes !== null) {
             bookingNotes = rawNotes.text || rawNotes.label || JSON.stringify(rawNotes);
+        }
+        if (bookingNotes.toLowerCase() === 'want to add anything?') {
+            bookingNotes = '';
         }
 
         let guestEmail = '';
@@ -393,7 +403,8 @@ app.post('/webhook', async (req, res) => {
 
         const lineMessage = `Booking Created 😎
 
-${eventTitle} ${formattedTime}
+${eventTitle}
+${formattedTime}
 Session Type: ${sessionType}${guestDisplay}
 
 Location: ${location || 'Not provided'}
@@ -450,7 +461,8 @@ Name: ${clientName}
 Email: ${clientEmail || 'Not provided'}
 LINE ID: ${resolvedLineId}
 
-${eventTitle} ${formattedTime}
+${eventTitle}
+${formattedTime}
 
 Location: ${location}
 
