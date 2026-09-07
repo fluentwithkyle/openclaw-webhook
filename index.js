@@ -40,6 +40,7 @@ async function triggerAppsScript(payload) {
    }
 }
 
+// Helper: Format timestamps to Taipei time (24h, no seconds: MM_DD_YY HH:MM)
 function cleanTaipeiTimestamp(dateInput) {
     if (!dateInput) return '';
     const d = new Date(dateInput);
@@ -53,6 +54,13 @@ function cleanTaipeiTimestamp(dateInput) {
     return `${mm}_${dd}_${yy} ${hh}:${min}`;
 }
 
+// Clean event titles by removing subtitles like "| Fluent With Kyle"
+function cleanEventTitle(title) {
+    if (!title) return 'Meeting';
+    return title.split('|')[0].trim();
+}
+
+// Internal Cron Scheduler: Checks for abandoned bookings every 5 minutes
 const ABANDONED_CHECK_INTERVAL = 5 * 60 * 1000;
 setInterval(async () => {
     console.log('Running internal cron: Checking for abandoned bookings...');
@@ -79,8 +87,7 @@ Name: ${client.name}
 Email: ${client.email}
 LINE ID: ${client.lineId || 'Not provided'}
 
-${client.packageSelected || 'Not specified'}
-${client.bookingDateTime || 'Not specified'}
+${cleanEventTitle(client.packageSelected || 'Not specified')} ${client.bookingDateTime || 'Not specified'}
 
 ${formattedSubTime}
 Elapsed: ${hoursElapsed} hours 
@@ -311,22 +318,45 @@ app.post('/webhook', async (req, res) => {
     if (attendees.length > 0 || payload.email) {
         const clientEmail = attendees[0]?.email || payload.email;
         const clientName = attendees[0]?.name || payload.name || 'Unknown Client';
-        const eventTitle = payload.title || payload.eventType?.title || 'Meeting';
+        const rawEventTitle = payload.title || payload.eventType?.title || 'Meeting';
+        const eventTitle = cleanEventTitle(rawEventTitle);
+        
         const rawStartTime = payload.startTime || payload.start_time;
         const rawEndTime = payload.endTime || payload.end_time;
         
         let formattedTime = 'Not specified';
         if (rawStartTime && rawEndTime) {
-            formattedTime = `${cleanTaipeiTimestamp(rawStartTime)} - ${new Date(rawEndTime).toLocaleTimeString('en-US', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })}`;
+            const endObj = new Date(rawEndTime);
+            const endTimeStr = !isNaN(endObj.getTime()) ? endObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+            formattedTime = `${cleanTaipeiTimestamp(rawStartTime)} - ${endTimeStr}`;
         }
 
         const location = payload.location || '';
         const responses = payload.responses || payload.metadata || {};
         
-        let lineId = responses.line_id || responses.lineId || '';
-        let guestNameInput = responses['1-on-2-session'] || responses.guest_name || '';
-        let guestInfoInput = String(responses['guest-info'] || '');
-        let bookingNotes = responses['notes-2'] || payload.additionalNotes || payload.notes || '';
+        let lineId = typeof responses.line_id === 'string' ? responses.line_id : (typeof responses.lineId === 'string' ? responses.lineId : '');
+        
+        // Safely extract custom questions and handle object-type inputs without throwing errors
+        const rawGuestNameInput = responses['1-on-2-session'] || responses.guest_name || '';
+        let guestNameInput = '';
+        if (typeof rawGuestNameInput === 'string') guestNameInput = rawGuestNameInput.trim();
+        else if (typeof rawGuestNameInput === 'object' && rawGuestNameInput !== null) {
+            guestNameInput = rawGuestNameInput.text || rawGuestNameInput.label || JSON.stringify(rawGuestNameInput);
+        }
+
+        const rawGuestInfo = responses['guest-info'] || '';
+        let guestInfoInput = '';
+        if (typeof rawGuestInfo === 'string') guestInfoInput = rawGuestInfo.trim();
+        else if (typeof rawGuestInfo === 'object' && rawGuestInfo !== null) {
+            guestInfoInput = rawGuestInfo.text || rawGuestInfo.label || JSON.stringify(rawGuestInfo);
+        }
+
+        const rawNotes = responses['notes-2'] || payload.additionalNotes || payload.notes || '';
+        let bookingNotes = '';
+        if (typeof rawNotes === 'string') bookingNotes = rawNotes.trim();
+        else if (typeof rawNotes === 'object' && rawNotes !== null) {
+            bookingNotes = rawNotes.text || rawNotes.label || JSON.stringify(rawNotes);
+        }
 
         let guestEmail = '';
         let guestLineId = '';
@@ -363,8 +393,7 @@ app.post('/webhook', async (req, res) => {
 
         const lineMessage = `Booking Created 😎
 
-${eventTitle}
-${formattedTime}
+${eventTitle} ${formattedTime}
 Session Type: ${sessionType}${guestDisplay}
 
 Location: ${location || 'Not provided'}
@@ -421,8 +450,7 @@ Name: ${clientName}
 Email: ${clientEmail || 'Not provided'}
 LINE ID: ${resolvedLineId}
 
-${eventTitle} 
-${formattedTime}
+${eventTitle} ${formattedTime}
 
 Location: ${location}
 
