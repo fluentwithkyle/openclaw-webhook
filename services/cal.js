@@ -40,14 +40,27 @@ async function handleCalWebhook(req, res) {
             return typeof val === 'string' ? val.trim() : '';
         }
 
-        let guestNameInput = extractCalField('1-on-2-session') || extractCalField('guest_name');
-        if (guestNameInput.toLowerCase() === 'is this a 1-on-2 session?' || guestNameInput.toLowerCase() === 'add guest name') {
-            guestNameInput = '';
+        let rawGuestField = extractCalField('1-on-2-session') || extractCalField('guest_name');
+        let guestInfoInput = extractCalField('guest-info');
+
+        let guestNameInput = '';
+        let guestEmail = '';
+        let guestLineId = '';
+
+        if (rawGuestField && rawGuestField.toLowerCase() !== 'is this a 1-on-2 session?' && rawGuestField.toLowerCase() !== 'add guest name') {
+            if (rawGuestField.includes('@')) {
+                guestEmail = rawGuestField;
+            } else {
+                guestNameInput = rawGuestField;
+            }
         }
 
-        let guestInfoInput = extractCalField('guest-info');
-        if (guestInfoInput.toLowerCase() === 'guest email or line id') {
-            guestInfoInput = '';
+        if (guestInfoInput && guestInfoInput.toLowerCase() !== 'guest email or line id') {
+            if (guestInfoInput.includes('@')) {
+                guestEmail = guestEmail || guestInfoInput;
+            } else {
+                guestLineId = guestInfoInput;
+            }
         }
 
         let bookingNotes = extractCalField('notes-2') || payload.additionalNotes || payload.notes || responses.notes || '';
@@ -61,14 +74,7 @@ async function handleCalWebhook(req, res) {
             bookingNotes = '';
         }
 
-        let guestEmail = '';
-        let guestLineId = '';
-        if (guestInfoInput) {
-            if (guestInfoInput.includes('@')) guestEmail = guestInfoInput;
-            else guestLineId = guestInfoInput;
-        }
-
-        const sessionType = guestNameInput ? '1-on-2' : '1-on-1';
+        const sessionType = (rawGuestField || guestInfoInput) ? '1-on-2' : '1-on-1';
 
         let clientContext = { profession: 'Not provided', englishReality: 'Not provided', goal3Month: 'Not provided', conversationTopics: 'Not provided', lineId: lineId };
         if (clientEmail || lineId) {
@@ -89,7 +95,7 @@ async function handleCalWebhook(req, res) {
         }
 
         const resolvedLineId = clientContext.lineId || lineId || 'Not provided';
-        const guestDisplay = guestNameInput ? ` w/ Guest: ${guestNameInput}` : '';
+        const guestDisplay = (guestNameInput || guestEmail || guestLineId) ? ` w/ Guest: ${guestNameInput || guestEmail || guestLineId}` : '';
 
         const lineMessage = `Booking Created 😎\n\n${eventTitle}\n${formattedTime}\nSession Type: ${sessionType}${guestDisplay}\n\nLocation: ${location || 'Not provided'}\nLINE ID: ${resolvedLineId}\nEmail: ${clientEmail || 'Not provided'}\nGuest Email/Line: ${guestInfoInput || 'None'}\nNotes: ${bookingNotes || 'None'}\n\nProfession: ${clientContext.profession}\n\nEnglish Reality: \n${clientContext.englishReality}\n\n3-Month Goal: \n${clientContext.goal3Month}\n\nConversation Topics: \n${clientContext.conversationTopics}`;
 
