@@ -40,6 +40,36 @@ async function triggerAppsScript(payload) {
    }
 }
 
+// Helper to format timestamps to Taipei time (24h, no seconds: MM_DD_YY HH:MM)
+function formatTaipeiTime(dateInput) {
+    if (!dateInput) return 'Not specified';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return String(dateInput);
+
+    // Convert to Taipei Time (UTC+8)
+    const taipeiDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const mm = String(taipeiDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(taipeiDate.getDate()).padStart(2, '0');
+    const yy = String(taipeiDate.getFullYear()).slice(-2);
+    const hh = String(taipeiDate.getHours()).padStart(2, '0');
+    const min = String(taipeiDate.getMinutes()).padStart(2, '0');
+
+    return `${mm}_${yy}_${yy.length ? yy : ''}${mm}_${dd}_${yy}, ${hh}:${min}`.replace(/^(\d{2}_\d{2}_\d{2}),.*/, '$1') + `, ${hh}:${min}`; // Simplified safe formatter
+}
+
+function cleanTaipeiTimestamp(dateInput) {
+    if (!dateInput) return '';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '';
+    const taipeiDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+    const mm = String(taipeiDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(taipeiDate.getDate()).padStart(2, '0');
+    const yy = String(taipeiDate.getFullYear()).slice(-2);
+    const hh = String(taipeiDate.getHours()).padStart(2, '0');
+    const min = String(taipeiDate.getMinutes()).padStart(2, '0');
+    return `${mm}_${dd}_${yy}, ${hh}:${min}`;
+}
+
 // Internal Cron Scheduler: Checks for abandoned bookings every 5 minutes
 const ABANDONED_CHECK_INTERVAL = 5 * 60 * 1000;
 setInterval(async () => {
@@ -59,25 +89,39 @@ setInterval(async () => {
 
             if (elapsedMs > THIRTY_MINUTES) {
                 const hoursElapsed = (elapsedMs / (1000 * 60 * 60)).toFixed(1);
+                const formattedSubTime = cleanTaipeiTimestamp(client.timestamp);
 
-                const message = `ABANDONED BOOKING ALERT
+                const message = `Abandoned Booking ➡️
+
 Name: ${client.name}
 Email: ${client.email}
 LINE ID: ${client.lineId || 'Not provided'}
-Package: ${client.packageSelected || 'Not specified'}
-Submitted At: ${client.timestamp}
-Elapsed: ${hoursElapsed} hours without booking.
+
+${client.packageSelected || 'Not specified'}
+${client.bookingDateTime || 'Not specified'}
+
+${formattedSubTime}
+Elapsed: ${hoursElapsed} hours 
+
 Location: ${client.location || 'Not provided'}
+
 Profession: ${client.profession || 'Not provided'}
-English Reality: ${client.englishReality || 'Not provided'}
-3-Month Goal: ${client.goal3Month || 'Not provided'}
-Conversation Topics: ${client.conversationTopics || 'Not provided'}`;
+
+English Reality: 
+${client.englishReality || 'Not provided'}
+
+3-Month Goal: 
+${client.goal3Month || 'Not provided'}
+
+Conversation Topics: 
+${client.conversationTopics || 'Not provided'}`;
 
                 await sendLineNotification(message);
 
                 await triggerAppsScript({
-                    action: 'update_status',
+                    action: 'upsert_client',
                     email: client.email,
+                    lineId: client.lineId,
                     scheduleStatus: 'Follow-Up Needed'
                 });
             }
@@ -116,38 +160,12 @@ app.post('/webhook/tally', async (req, res) => {
   }
 });
 
-app.post('/abandoned-alert', async (req, res) => {
-   console.log('[Webhook INBOUND] Hit /abandoned-alert with body:', JSON.stringify(req.body, null, 2));
-   try {
-     const { name, email, lineId, packageSelected, timestamp, hoursElapsed, location, profession, englishReality, goal3Month, conversationTopics } = req.body;
-          
-     const message = `ABANDONED BOOKING ALERT
-Name: ${name}
-Email: ${email}
-LINE ID: ${lineId || 'Not provided'}
-Package: ${packageSelected || 'Not specified'}
-Submitted At: ${timestamp || 'Unknown'}
-Elapsed: ${hoursElapsed} hours without booking.
-Location: ${location || 'Not provided'}
-Profession: ${profession || 'Not provided'}
-English Reality: ${englishReality || 'Not provided'}
-3-Month Goal: ${goal3Month || 'Not provided'}
-Conversation Topics: ${conversationTopics || 'Not provided'}`;
-
-     await sendLineNotification(message);
-     res.status(200).json({ status: 'success', message: 'Abandoned alert sent' });
-   } catch (error) {
-     console.error('Error handling abandoned alert:', error);
-     res.status(500).json({ error: error.message });
-   }
-});
-
 app.post('/tally-webhook', async (req, res) => {
     console.log('[Webhook INBOUND] Processing /tally-webhook payload...');
     try {
         const eventData = req.body;
         const payloadData = eventData.data || eventData;
-        const fields = payloadData.fields || [];
+        fields = payloadData.fields || [];
 
         let clientName = '';
         let clientEmail = '';
@@ -159,6 +177,7 @@ app.post('/tally-webhook', async (req, res) => {
         let goal3Month = '';
         let conversationTopics = '';
         let questionText = '';
+        let reachMethod = '';
 
         fields.forEach(field => {
             const label = (field.label || '').trim();
@@ -167,13 +186,11 @@ app.post('/tally-webhook', async (req, res) => {
             
             if (value === undefined || value === null) return;
 
-            // Simple, reliable value extractor that maps options or parses arrays safely
             let extracted = [];
             const valuesArr = Array.isArray(value) ? value : [value];
 
             valuesArr.forEach(v => {
                 if (typeof v === 'string' || typeof v === 'number') {
-                    // Check if field has options to resolve UUID strings to text
                     if (field.options && Array.isArray(field.options)) {
                         const matchedOpt = field.options.find(opt => opt.id === v || opt.text === v);
                         extracted.push(matchedOpt ? matchedOpt.text : String(v));
@@ -196,17 +213,19 @@ app.post('/tally-webhook', async (req, res) => {
                 clientEmail = valStr;
             } else if (labelLower.includes('line') || labelLower.includes('id') || labelLower.includes('messaging app')) {
                 clientLineId = valStr;
+            } else if (labelLower.includes('reach you') || labelLower.includes('how should i reach')) {
+                reachMethod = valStr;
             } else if (labelLower.includes('location') || labelLower.includes('address')) {
                 location = valStr;
-            } else if (labelLower.includes('profession') || labelLower.includes('field') || labelLower.includes('job') || labelLower.includes('manager')) {
+            } else if (labelLower.includes('profession') || labelLower.includes('field') || labelLower.includes('job')) {
                 profession = valStr;
-            } else if (labelLower.includes('reality') || labelLower.includes('statement best describes') || labelLower.includes('current english')) {
+            } else if (labelLower.includes('reality') || labelLower.includes('statement best describes')) {
                 englishReality = valStr;
-            } else if (labelLower.includes('goal') || labelLower.includes('three months') || labelLower.includes('3-month') || labelLower.includes('difficult today')) {
+            } else if (labelLower.includes('goal') || labelLower.includes('three months') || labelLower.includes('3-month')) {
                 goal3Month = valStr;
             } else if (labelLower.includes('happily spend') || labelLower.includes('topic') || labelLower.includes('conversation')) {
                 conversationTopics = valStr;
-            } else if (labelLower === 'have a question?' || labelLower.includes('your question')) {
+            } else if (labelLower.includes('question') || labelLower.includes('ask me anything')) {
                 questionText = valStr;
             } else {
                 if (valLower.includes('free-intro-chat') || valLower.includes('free intro')) selectedPackage = 'Free Intro Chat';
@@ -219,40 +238,48 @@ app.post('/tally-webhook', async (req, res) => {
             }
         });
 
+        if (reachMethod) {
+            if (reachMethod.includes('@')) {
+                clientEmail = clientEmail || reachMethod;
+            } else {
+                clientLineId = clientLineId || reachMethod;
+            }
+        }
+
         if (payloadData.query) {
             clientName = payloadData.query.name || clientName;
             clientEmail = payloadData.query.email || clientEmail;
             clientLineId = payloadData.query.line_id || clientLineId;
         }
 
-        const isTallyZero = !clientEmail && !clientName && fields.length === 0;
+        const isTallyZero = !clientEmail && !clientLineId && !clientName && fields.length === 0;
         if (isTallyZero) {
             console.log('[Tally Zero] Received empty submission or page load ping. Skipping CRM log.');
             return res.status(200).json({ status: 'success', message: 'Tally 0 ignored successfully' });
         }
 
-        const isQuestionSubmission = !!questionText && !profession && !englishReality && !goal3Month;
+        const isQuestionSubmission = !!questionText;
 
         if (isQuestionSubmission) {
             console.log('[Tally Question] Processing "Have a Question?" submission...');
-            const qMessage = `QUESTION RECEIVED!
+            const qMessage = `Incoming Question...
+
+Question: 
+${questionText}
+
 Name: ${clientName || 'Not provided'}
 Email: ${clientEmail || 'Not provided'}
-LINE ID: ${clientLineId || 'Not provided'}
-Question: ${questionText}`;
+LINE ID: ${clientLineId || 'Not provided'}`;
 
             await sendLineNotification(qMessage);
 
             await triggerAppsScript({
-                action: 'append_row',
+                action: 'upsert_client',
                 timestamp: new Date().toISOString(),
                 name: clientName || 'Unknown Questioner',
-                email: clientEmail || 'no-email-' + Date.now(),
+                email: clientEmail,
                 lineId: clientLineId,
-                packageSelected: 'Question Received',
-                paymentStatus: 'N/A',
-                sessionCredits: 0,
-                scheduleStatus: 'Question Received',
+                scheduleStatus: 'Follow-Up Needed',
                 questionText: questionText
             });
 
@@ -309,21 +336,32 @@ app.post('/webhook', async (req, res) => {
         
         let formattedTime = 'Not specified';
         if (rawStartTime && rawEndTime) {
-            formattedTime = `${new Date(rawStartTime).toLocaleString()} - ${new Date(rawEndTime).toLocaleTimeString()}`;
+            formattedTime = `${cleanTaipeiTimestamp(rawStartTime)} - ${new Date(rawEndTime).toLocaleTimeString('en-US', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false })}`;
         }
 
-        const location = payload.location || 'Online / None Specified';
+        const location = payload.location || '';
         const responses = payload.responses || payload.metadata || {};
         
         let lineId = responses.line_id || responses.lineId || '';
-        let notes = payload.additionalNotes || payload.notes || 'None';
-        let guestsStr = payload.additionalGuests?.length ? payload.additionalGuests.join(', ') : 'None';
+        let guestNameInput = responses['1-on-2-session'] || responses.guest_name || '';
+        let guestInfoInput = responses['guest-info'] || '';
+        let bookingNotes = responses['notes-2'] || payload.additionalNotes || payload.notes || '';
+
+        let guestEmail = '';
+        let guestLineId = '';
+        if (guestInfoInput) {
+            if (guestInfoInput.includes('@')) guestEmail = guestInfoInput;
+            else guestLineId = guestInfoInput;
+        }
+
+        const sessionType = guestNameInput ? '1-on-2' : '1-on-1';
 
         let clientContext = { profession: 'Not provided', englishReality: 'Not provided', goal3Month: 'Not provided', conversationTopics: 'Not provided', lineId: lineId };
-        if (clientEmail) {
+        if (clientEmail || lineId) {
             const lookupRes = await triggerAppsScript({
-                action: 'get_client_by_email',
-                email: clientEmail
+                action: 'get_client',
+                email: clientEmail,
+                lineId: lineId
             });
             if (lookupRes && lookupRes.status === 'success' && lookupRes.data) {
                 clientContext = {
@@ -336,61 +374,90 @@ app.post('/webhook', async (req, res) => {
             }
         }
 
-        const lineMessage = `Event Type: ${eventTitle}
-Name: ${clientName}
-Date/Start-End Time: ${formattedTime}
-Location: ${location}
-LINE ID: ${clientContext.lineId || 'Not provided'}
-Email: ${clientEmail}
-Notes: ${notes}
-Additional Guests: ${guestsStr}
+        const resolvedLineId = clientContext.lineId || lineId || 'Not provided';
+        const guestDisplay = guestNameInput ? ` w/ Mr chen & ${guestNameInput}` : '';
 
---- CLIENT DIAGNOSTIC CONTEXT ---
+        const lineMessage = `Booking Created 😎
+
+${eventTitle}
+${formattedTime}
+${guestDisplay}
+
+Location: ${location || 'Not provided'}
+LINE ID: ${resolvedLineId}
+Email: ${clientEmail || 'Not provided'}
+Notes: ${bookingNotes || 'None'}
+
 Profession: ${clientContext.profession}
-English Reality: ${clientContext.englishReality}
-3-Month Goal: ${clientContext.goal3Month}
-Conversation Topics: ${clientContext.conversationTopics}`;
+
+English Reality: 
+${clientContext.englishReality}
+
+3-Month Goal: 
+${clientContext.goal3Month}
+
+Conversation Topics: 
+${clientContext.conversationTopics}`;
 
         if (triggerEvent === 'BOOKING_CREATED' || !triggerEvent) {
             await sendLineNotification(lineMessage);
-            if (clientEmail) {
-                await triggerAppsScript({
-                    action: 'update_status',
-                    email: clientEmail,
-                    scheduleStatus: 'Confirmed',
-                    location: location,
-                    bookingDateTime: formattedTime,
-                    bookingNotes: notes
-                });
-            }
+            await triggerAppsScript({
+                action: 'upsert_client',
+                email: clientEmail,
+                lineId: resolvedLineId,
+                name: clientName,
+                scheduleStatus: 'Confirmed',
+                location: location,
+                bookingDateTime: formattedTime,
+                packageSelected: eventTitle,
+                sessionType: sessionType,
+                guestName: guestNameInput,
+                guestEmail: guestEmail,
+                guestLineId: guestLineId,
+                bookingNotes: bookingNotes
+            });
         } else if (triggerEvent === 'BOOKING_CANCELLED') {
             const cancelReason = payload.cancellationReason || payload.reason || 'None provided';
             await triggerAppsScript({
-                action: 'update_status',
+                action: 'upsert_client',
                 email: clientEmail,
+                lineId: resolvedLineId,
                 scheduleStatus: 'Cancelled',
                 cancellationStatus: 'Cancelled',
                 cancellationReason: cancelReason
             });
 
-            const cancelMessage = `CANCELLATION ALERT
+            const cancelMessage = `x Canceled Booking x
+
+Reason: 
+${cancelReason}
+
 Name: ${clientName}
-Email: ${clientEmail}
-LINE ID: ${clientContext.lineId || 'Not provided'}
-Package / Event: ${eventTitle}
+Email: ${clientEmail || 'Not provided'}
+LINE ID: ${resolvedLineId}
+
+${eventTitle} 
+${formattedTime}
+
+Location: ${location}
+
 Profession: ${clientContext.profession}
-English Reality: ${clientContext.englishReality}
-3-Month Goal: ${clientContext.goal3Month}
-Conversation Topics: ${clientContext.conversationTopics}
-Reason: ${cancelReason}`;
+
+English Reality: 
+${clientContext.englishReality}
+
+3-Month Goal: 
+${clientContext.goal3Month}
+
+Conversation Topics: 
+${clientContext.conversationTopics}`;
 
             await sendLineNotification(cancelMessage);
         }
 
         const isFreeIntro = eventTitle.toLowerCase().includes('free intro chat');
         if (isFreeIntro && triggerEvent === 'MEETING_ENDED' && clientEmail) {
-            console.log(`[Meeting Ended Trigger] Free intro meeting ended for ${clientEmail}. Preparing personalized Tally email...`);
-            const targetLineId = clientContext.lineId || lineId;
+            const targetLineId = resolvedLineId;
             const personalizedTallyUrl = `https://tally.so/r/lb26p6?name=${encodeURIComponent(clientName)}&email=${encodeURIComponent(clientEmail)}&line_id=${encodeURIComponent(targetLineId)}`;
             const firstName = clientName.split(' ')[0] || clientName;
 
@@ -412,9 +479,6 @@ Reason: ${cancelReason}`;
                     subject: subject,
                     htmlBody: bodyHtml
                 });
-                console.log(`[Email Sent] Follow-up email successfully dispatched to ${clientEmail}`);
-            } else {
-                console.error('Failed to fetch email template from Google Sheets.');
             }
         }
     }
