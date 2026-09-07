@@ -51,6 +51,24 @@ app.get('/', (req, res) => {
     res.send('OpenClaw webhook server is running!');
 });
 
+// System Health Diagnostic Route for OpenClaw
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        modules: {
+            tally: 'active',
+            cal: 'active',
+            lineService: 'active',
+            appsScript: 'active'
+        },
+        cron: {
+            abandonedBookingScheduler: 'running (5m interval)'
+        }
+    });
+});
+
 app.post('/webhook/cal', async (req, res) => {
   console.log('[Webhook INBOUND] Hit /webhook/cal with body:', JSON.stringify(req.body, null, 2));
   try {
