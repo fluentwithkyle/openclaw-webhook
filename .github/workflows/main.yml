@@ -1,6 +1,7 @@
 name: Gemini Assistant
 
 on:
+  workflow_dispatch:
   issues:
     types: [opened]
   issue_comment:
@@ -9,15 +10,18 @@ on:
 jobs:
   gemini:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
       issues: write
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: google-github-actions/run-gemini-cli@v0
+      - name: Run Gemini
+        uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -26,6 +30,16 @@ jobs:
             You are the development AI for the Fluent with Kyle
             OpenClaw project.
 
-            Read the repository files before making changes.
-            Follow the project's architecture and existing code.
+            First, inspect the repository and understand its existing
+            architecture before making any changes.
+
+            Follow the project's existing architecture and conventions.
+
             Make careful, production-ready changes.
+
+            When modifying code:
+            - Preserve existing functionality.
+            - Keep the architecture modular.
+            - Avoid unnecessary changes.
+            - Explain what you changed and why.
+            - Verify your work before finishing.
