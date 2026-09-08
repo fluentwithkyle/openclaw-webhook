@@ -24,6 +24,7 @@ jobs:
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           prompt: |
@@ -41,5 +42,4 @@ jobs:
             - Preserve existing functionality.
             - Keep the architecture modular.
             - Avoid unnecessary changes.
-            - Explain what you changed and why.
             - Verify your work before finishing.
