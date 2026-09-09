@@ -2,13 +2,15 @@
 
 ## Purpose and authority
 
-This document is the authoritative development roadmap and operating guide for AI agents working in this repository. Read it with `GEMINI.md`, `package.json`, and the relevant implementation before changing the system.
+This document is the authoritative operating document for both the application architecture and the intended AI-agent operating model. Read it with `GEMINI.md`, `package.json`, and the relevant implementation before changing the system.
 
-The system automates the Fluent with Kyle client lifecycle. It receives Tally intake and Cal.com events, makes lifecycle and communication decisions in Render/OpenClaw, persists CRM data in Google Sheets through Google Apps Script, sends operational notifications through LINE, and sends client email through Gmail.
+The system automates the Fluent with Kyle client lifecycle. The Node.js application receives Tally intake and Cal.com events, makes lifecycle and communication decisions, persists CRM data in Google Sheets through Google Apps Script, sends operational notifications through LINE, and sends client email through Gmail.
+
+The **AI-agent architecture** below describes the target operating model. It is intentionally separate from the **application architecture** that follows it. A target role or workflow is not evidence that its programmatic integration is already available.
 
 ### Core boundary
 
-> **Render/OpenClaw makes business decisions.**
+> **The Node.js application makes business decisions.**
 >
 > **Google Apps Script performs Google-specific operations.**
 
@@ -16,7 +18,7 @@ In practical terms:
 
 | Layer | Responsibility |
 | --- | --- |
-| Render/OpenClaw (Node.js) | Intake and booking processing, lifecycle decisions and transitions, eligibility, package/credit logic, notification content, and workflow orchestration. |
+| Node.js application (currently deployed in the Render/OpenClaw environment) | Intake and booking processing, lifecycle decisions and transitions, eligibility, package/credit logic, notification content, and workflow orchestration. |
 | Google Apps Script | Google Sheets CRM reads/writes and Gmail delivery through the Apps Script web-app adapter. |
 | Google Sheets | The current CRM record and operational interface. |
 | Gmail | Email delivery channel. |
@@ -27,67 +29,44 @@ Do not turn this roadmap into permission for a broad redesign. The application i
 
 ---
 
-## AI development system
+## AI-agent operating model (target architecture)
 
-### Gemini — architect and reviewer
+### Purpose and authority
 
-Gemini is responsible for:
+This section defines the desired coordination model for AI-assisted work on this repository. It does **not** assert that every integration needed to implement that model exists today. The application architecture begins in the next section and remains the source of truth for the running system.
 
-- architecture;
-- large-context repository analysis;
-- planning and reasoning;
-- dependency mapping;
-- Google- and GitHub-specific analysis;
-- architectural review; and
-- integration review.
+| Role | Target responsibility |
+| --- | --- |
+| Human (Kyle) — Director | Sets high-level objectives, makes strategic decisions, and retains final authority. Kyle should not manually relay tasks, plans, reviews, or results between AI agents. |
+| OpenClaw — Orchestrator | Acts as the coordination and handoff layer between Kyle and the specialist agents. It receives objectives, determines delegation, passes context and results, coordinates iterative work, tracks task and repository state, verifies completion, and returns a consolidated result to Kyle. |
+| Gemini — Architect / Reviewer | Performs repository analysis, architecture interpretation, implementation planning, architectural and integration review, and identification of architectural issues. It does not own routine implementation. |
+| Codex — Primary Builder | Implements approved plans, modifies repository files, runs tests, debugs issues, verifies behavior, and makes corrections following review. |
+| Groq / free open models — Utility layer | Handles quick questions, transformations, boilerplate, high-volume inexpensive tasks, and other appropriately scoped utility work. |
+| Local Goose — Local/background execution layer | Handles advantageous local repository work, repetitive or background tasks, local experimentation, and similar execution work. |
+| GitHub — Shared source of truth | Centralizes repository state, code, documentation, commits, and history. Agents coordinate around the repository rather than keeping independent, competing copies of architectural truth. |
 
-Gemini analyzes the repository, understands the architecture, and produces an implementation plan. Gemini reviews the finished implementation for architectural and integration correctness; it is not the primary implementation agent.
+### Target OpenClaw-mediated workflow
 
-### Codex — primary builder
-
-Codex is responsible for:
-
-- primary implementation;
-- debugging;
-- multi-file changes;
-- tests;
-- refactoring;
-- verification; and
-- final corrections.
-
-Codex implements the reviewed plan, makes the smallest appropriate changes, runs relevant checks, and resolves the final issues found in review.
-
-### Groq / free open models — utility capacity
-
-Use Groq and free open models for quick questions, boilerplate, simple transformations, and high-volume iterations. They must not independently redefine the system architecture.
-
-### Local Goose — local execution support
-
-Use Local Goose for local development, repetitive tasks, background processing, experimentation, and large batches of low-risk work. It operates within the boundaries in this document.
-
-### Standard development loop
+The intended workflow is adaptive, not a mandatory fixed sequence. OpenClaw chooses the appropriate agents and order for the objective; it is the intended communication and handoff layer rather than Kyle.
 
 ```text
-Gemini
-  → analyze repository
-  → understand architecture
-  → produce implementation plan
-
-Codex
-  → implement plan
-  → modify files
-  → run tests
-  → debug
-  → verify
-
-Gemini
-  → architectural / integration review
-
-Codex
-  → final corrections
+Human objective
+  → OpenClaw analyzes and coordinates
+  → appropriate specialist agent(s)
+  → results and context return to OpenClaw
+  → OpenClaw delegates subsequent work
+  → implementation / testing / review / correction cycle
+  → OpenClaw verifies completion
+  → consolidated result to Human
 ```
 
-**Gemini is the architect/reviewer. Codex is the primary builder.**
+For example, OpenClaw may ask Gemini for analysis or review, Codex for implementation and verification, Groq/free models for narrowly scoped utility work, and Local Goose for advantageous local or background execution. It passes the relevant plan, repository context, outputs, and review findings between those agents so Kyle does not need to perform manual relays.
+
+### Verified capabilities and integration requirements
+
+The repository verifies only the application code and configuration documented in the application sections below. It does **not** currently verify a programmatic OpenClaw integration with Gemini, Codex, Groq/free models, or Local Goose, nor a mechanism for OpenClaw to invoke or exchange context with those agents.
+
+Establishing any needed invocation, communication, state-tracking, repository-access, and result-handoff mechanisms is a future implementation/configuration requirement. Verify the relevant configuration before claiming an integration exists or relying on it in an automated workflow.
 
 ### Agent operating rules
 
@@ -97,9 +76,9 @@ Before changing code, an agent must:
 2. Inspect the relevant current implementation and interfaces.
 3. Identify the smallest change that meets the request.
 4. Preserve existing behavior unless the request explicitly changes it.
-5. Keep business logic in Render and Google-specific implementation in Apps Script.
+5. Keep business logic in the Node.js application and Google-specific implementation in Apps Script.
 6. Avoid unrelated rewrites and unnecessary dependencies.
-7. Run focused verification and update architecture documentation when a material boundary or roadmap item changes.
+7. Run focused verification and update this document when an actual architectural boundary or roadmap item changes.
 
 ---
 
@@ -216,7 +195,7 @@ Duplicate-alert prevention/durable processing is still needed: the current seque
 The Google Apps Script source is versioned in `google-apps-script/`. It is part of the current repository—not a future target.
 
 ```text
-Render/OpenClaw
+Node.js application
   → action payload to Apps Script web app
   → Code.js action routing
   → CRM.js / Email delivery functions
@@ -322,7 +301,7 @@ Keep this change narrow: authenticate and validate the current Node-to-Apps-Scri
 6. **Expand focused automated testing.** Testing remains an identified gap.
 7. **Continue gradual domain-oriented refactoring.**
 8. **Centralize event processing later.**
-9. **Expand the OpenClaw management layer later.**
+9. **Implement the required OpenClaw orchestration integrations/configuration** only when a concrete requirement justifies them and after verifying the available mechanisms.
 
 ### Intentionally deferred architecture
 
@@ -332,11 +311,13 @@ The following are future directions, not current implementation mandates:
 workflow-modular intermediate system
   → gradual domain-oriented business modules
   → centralized event processing
-  → OpenClaw management layer
   → more complete client lifecycle automation
+
+separately: target OpenClaw-mediated AI-agent operating model
+  → verified orchestration integrations/configuration when justified
 ```
 
-Do not introduce an event bus, a new persistence system, a wholesale CRM replacement, broad framework changes, or an OpenClaw management plane while addressing the immediate authentication task. Make each later transition only when a concrete requirement justifies it and after reviewing the existing workflow boundaries.
+Do not introduce an event bus, a new persistence system, a wholesale CRM replacement, broad framework changes, or an OpenClaw application-management plane while addressing the immediate authentication task. Make each later transition only when a concrete requirement justifies it and after reviewing the existing workflow boundaries.
 
 ---
 
@@ -345,10 +326,10 @@ Do not introduce an event bus, a new persistence system, a wholesale CRM replace
 For any implementation work:
 
 - Treat the current repository implementation as the source of truth.
-- Preserve the Render-owned business-decision boundary.
+- Preserve the Node.js-owned business-decision boundary.
 - Preserve Apps Script as the Google-specific adapter.
 - Prefer focused tests and targeted checks; add tests where a change has a clear seam.
 - Check imports/exports, asynchronous behavior, error handling, environment variables, and external action payloads.
 - Update this roadmap when an architectural milestone is actually complete; do not mark planned work as complete.
 
-The end state is a reliable, incremental automation system in which Render/OpenClaw owns the client lifecycle and Google Apps Script remains a minimal, authenticated adapter for Google Sheets and Gmail.
+The application end state is a reliable, incremental automation system in which the Node.js application owns the client lifecycle and Google Apps Script remains a minimal, authenticated adapter for Google Sheets and Gmail. The intended AI-agent end state is an OpenClaw-mediated operating model with GitHub as the shared source of truth; integrations are claimed only after they are verified.
