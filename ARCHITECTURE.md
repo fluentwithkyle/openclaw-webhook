@@ -68,6 +68,59 @@ The repository verifies only the application code and configuration documented i
 
 Establishing any needed invocation, communication, state-tracking, repository-access, and result-handoff mechanisms is a future implementation/configuration requirement. Verify the relevant configuration before claiming an integration exists or relying on it in an automated workflow.
 
+### Orchestration capability audit — 2026-09-09
+
+This is an environment and repository audit, not an integration implementation. It supersedes no application boundary above and deliberately does not add an OpenClaw dependency, credential, service, or application route.
+
+#### What is available now
+
+| Component | Evidence inspected | Current conclusion |
+| --- | --- | --- |
+| OpenClaw | No `openclaw` executable, package, process, home/configuration directory, or repository configuration was found. | **Not installed or configured in this environment.** It currently cannot invoke any agent, retain orchestration state, or pass agent context/results. |
+| Codex | The host has `/opt/codex/bin/codex` (`codex-cli 0.144.0-alpha.4`) and a running Codex app-server process. `codex login status` reports `Not logged in`. | The CLI binary is present, but it is not authenticated for a standalone invocation. Its running process is not evidence of an OpenClaw integration. |
+| Gemini | The only repository integration is `.github/workflows/main.yml`, which runs `google-github-actions/run-gemini-cli` and requires the repository secret `GEMINI_API_KEY`. No local Gemini CLI, Gemini environment variable, or OpenClaw provider configuration was found. | Gemini can be invoked by that GitHub Actions workflow when its secret exists; it is **not** available to OpenClaw from this environment. |
+| Groq / free models | No Groq CLI, SDK dependency, `GROQ_*` environment variable, provider configuration, or local-model runtime was found. | **Not configured.** No Groq/free-model invocation is currently available. |
+| Local Goose | No Goose executable, package, configuration, process, or local-model runtime was found. | **Not installed or configured.** No Local Goose invocation is currently available. |
+| GitHub | The checkout has no Git remote, and `gh auth status` reports no authenticated GitHub host. The GitHub Actions workflow requests repository write permissions, but its actual access depends on the GitHub-hosted workflow token and secrets at run time. | Git history is present locally, but this environment cannot currently push, create pull requests, or serve as the shared GitHub coordination point. |
+
+The repository itself contains no `.env*`, OpenClaw configuration, agent manifest, MCP configuration, or provider credentials. The only ignored runtime-configuration files are `.clasp.json` and `.clasprc.json`; they are unrelated to agent orchestration.
+
+#### Codex invocation and result handoff
+
+The concrete executable interface available on this host is Codex CLI's non-interactive command:
+
+```text
+/opt/codex/bin/codex exec [options] <prompt>
+```
+
+It supports a working directory (`-C`), a sandbox policy (`-s`), JSONL event output (`--json`), and writing the final agent message to a file (`--output-last-message <file>`). Those options provide an implementable handoff contract **once an orchestrator is installed and authorized to start the CLI**: OpenClaw (or another approved runner) supplies a bounded prompt and repository path, captures JSONL/final output, then gives the resulting summary, changed-file list, test results, and commit/PR reference to the next agent. Codex must first be authenticated with an approved OpenAI account or API credential; no credential belongs in this repository.
+
+This audit does **not** claim that the absent OpenClaw installation has a built-in Codex adapter, a shell-execution permission, or a configured Agent Client Protocol (ACP)/MCP bridge. Before adopting a specific OpenClaw-to-Codex adapter, install the intended OpenClaw release and validate its official, release-matched documentation and its configured tool/agent permissions. Do not substitute an unreviewed webhook or give an agent unrestricted shell access merely to make this work.
+
+There is therefore no present agent-to-agent context channel. Until OpenClaw is configured, the durable coordination surfaces are Git commits and GitHub pull requests; at execution time, the orchestrator should pass only task-scoped inputs and structured outputs rather than relying on implicit shared chat history.
+
+#### Accounts, permissions, and configuration required
+
+Configuration belongs on a persistent orchestration host, outside this application repository. At minimum, that host needs:
+
+1. **OpenClaw installation and its release-matched configuration file.** Run its supported onboarding/configuration workflow, select an orchestrator model/account, and restrict the main agent to explicitly approved subagents and tools. Preserve the generated configuration outside Git and do not commit secrets.
+2. **Codex CLI plus authentication.** Install or expose the Codex CLI to the OpenClaw service account, authenticate it using the approved OpenAI account/API mechanism, and allow the orchestrator only the intended non-interactive command in the intended repository/worktree. Use a constrained sandbox and explicit working directory; avoid bypassing Codex approvals/sandboxing.
+3. **GitHub identity and repository access.** Configure either a GitHub App or a fine-grained token for the orchestration service account with the least permissions needed: repository contents read/write for implementation, pull-request read/write for reviews/PRs, and issues read/write only if issue-driven delegation is enabled. Configure a repository remote and validate `gh auth status`/push access on the orchestration host. Protect the default branch and require review/status checks as appropriate.
+4. **Gemini credentials and execution path.** Retain `GEMINI_API_KEY` as a GitHub Actions secret for the existing workflow, or separately install/authenticate Gemini on the orchestration host if OpenClaw needs direct invocation. The GitHub Actions secret is not automatically available to OpenClaw. Scope any GitHub token used by the workflow independently from the orchestrator credential.
+5. **Groq/free-model provider choice and credentials.** Choose a supported provider/model intentionally, then configure its endpoint, model identifier, and API credential in the provider's secret store. If using a local free model, install and operate the selected local runtime and model separately; none is present here.
+6. **Goose installation and model backend.** Install Goose on the persistent host, configure its chosen model provider/local backend and credentials, and grant only the repository, shell, and network permissions required for its assigned background tasks. Verify its OpenClaw invocation path before assigning it work.
+
+#### Minimum next steps to make OpenClaw functional
+
+1. Provision one persistent, access-controlled orchestration host; do not use this Render webhook application as the agent-control plane.
+2. Install the chosen OpenClaw release there and complete its supported onboarding. Record the exact release, generated configuration path, enabled tool integrations, and permitted agent identities in an operations document kept separate from secrets.
+3. Configure and test one narrow builder lane first: OpenClaw → authenticated Codex CLI → isolated repository worktree → branch/commit/PR. Require structured final output and verify that OpenClaw receives it.
+4. Configure GitHub remote/authentication and validate a non-destructive read followed by a controlled branch/PR workflow. Do not grant production application, Render, Google, LINE, Cal.com, or Tally credentials to the orchestration agents.
+5. Add Gemini as a review-only lane only after deciding whether GitHub Actions or a direct provider integration is the authoritative path. Add Groq/free models and Goose one at a time after their provider/runtime, permissions, and handoff formats are verified.
+6. Run an end-to-end dry run on a documentation-only change: high-level objective to OpenClaw, Codex implementation, optional Gemini review, OpenClaw consolidation, and GitHub PR. Document the validated configuration only after that run succeeds.
+
+No configuration change is made by this audit. The next change should be limited to the external orchestration host and its secret store; application source code, Google Apps Script, and production webhook credentials remain out of scope.
+
 ### Agent operating rules
 
 Before changing code, an agent must:
