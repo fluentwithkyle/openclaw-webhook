@@ -1,3 +1,186 @@
+# Fluent with Kyle
+# OpenClaw Automation Architecture & Development System
+
+## AI Development Workflow
+
+This repository uses a multi-agent development system.
+
+The architecture and business requirements are maintained in this document.
+
+### Architect — Gemini
+
+Gemini is responsible for:
+
+- Large-context repository analysis
+- Architecture analysis
+- Planning
+- Reasoning about system-wide changes
+- Dependency mapping
+- Google-specific integration analysis
+- GitHub-specific analysis
+- Architectural review
+- Integration review
+
+Gemini should analyze the repository and produce clear implementation plans before major architectural work.
+
+Gemini should not be treated as the primary implementation agent.
+
+### Builder — Codex
+
+Codex is the primary implementation agent.
+
+Codex is responsible for:
+
+- Implementing approved plans
+- Writing code
+- Modifying multiple files
+- Debugging
+- Refactoring
+- Running tests
+- Verifying implementations
+- Completing final corrections
+- Maintaining production code
+
+Codex should read ARCHITECTURE.md before making architectural changes.
+
+### Utility Agents — Groq / Free Open Models
+
+Free and low-cost models are used for:
+
+- Quick technical questions
+- Boilerplate generation
+- Simple transformations
+- Text transformations
+- High-volume low-complexity iterations
+
+These models should not independently redefine the system architecture.
+
+### Local Agent — Goose
+
+Goose is used for local development tasks such as:
+
+- Repetitive work
+- Background processing
+- Large batches of low-risk tasks
+- Local experimentation
+- Unlimited local iteration
+
+Goose operates within the architectural boundaries defined by this repository.
+
+---
+
+## Standard Development Loop
+
+Major development work follows this sequence:
+
+Gemini
+↓
+Repository analysis
+↓
+Architecture understanding
+↓
+Implementation plan
+↓
+Codex
+↓
+Implementation
+↓
+Multi-file changes
+↓
+Tests
+↓
+Debugging
+↓
+Verification
+↓
+Gemini
+↓
+Architectural review
+↓
+Codex
+↓
+Final corrections
+
+The development roles are therefore:
+
+**Gemini = Architect / Reviewer**
+
+**Codex = Builder / Debugger / Tester**
+
+**Groq / Open Models = Utility**
+
+**Goose = Local Execution**
+
+---
+
+## Agent Operating Rules
+
+All agents must treat the existing production system as the source of truth.
+
+Before making changes:
+
+1. Read ARCHITECTURE.md.
+2. Read GEMINI.md when working with the repository.
+3. Inspect the relevant existing implementation.
+4. Understand existing behavior.
+5. Identify the smallest appropriate change.
+6. Preserve working functionality.
+7. Verify the implementation.
+
+Architectural changes should be deliberate and documented.
+
+Business logic belongs in Render.
+
+Google-specific operations belong in Google Apps Script.
+
+The CRM remains Google Sheets.
+
+External services remain event sources or communication channels.
+
+---
+
+## Current Development Strategy
+
+The project is being developed incrementally.
+
+The current working system remains operational while architecture is progressively refined.
+
+Development sequence:
+
+Current Working System
+↓
+Service-Modular System
+↓
+Workflow-Modular System
+↓
+Domain-Oriented Business System
+↓
+Centralized Event Processing
+↓
+OpenClaw Management Layer
+↓
+Complete Client Lifecycle Automation
+
+The immediate development objective should always be taken from the current roadmap in this document rather than invented independently by an AI agent.
+
+---
+
+## Change Discipline
+
+Agents should:
+
+- Preserve existing behavior.
+- Avoid unnecessary rewrites.
+- Avoid unnecessary dependencies.
+- Avoid unrelated refactoring.
+- Keep business logic centralized in Render.
+- Keep Google-specific implementation inside Apps Script.
+- Maintain clear module boundaries.
+- Prefer incremental architectural improvements.
+- Verify changes before completion.
+
+When a requested change conflicts with the documented architecture, the conflict should be identified before implementation.
+
 Fluent with Kyle
 OpenClaw Automation Architecture & Development Roadmap
 
