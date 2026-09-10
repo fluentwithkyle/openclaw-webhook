@@ -1,161 +1,131 @@
-# Fluent with Kyle — OpenClaw Automation Architecture & Development Roadmap
+Fluent with Kyle — OpenClaw Automation Architecture & Development Roadmap
 
-## Purpose and authority
+Purpose and authority
 
-This document is the authoritative operating document for both the application architecture and the intended AI-agent operating model. Read it with `GEMINI.md`, `package.json`, and the relevant implementation before changing the system.
+This document is the authoritative operating document for the Fluent with Kyle automation system.
 
-The system automates the Fluent with Kyle client lifecycle. The Node.js application receives Tally intake and Cal.com events, makes lifecycle and communication decisions, persists CRM data in Google Sheets through Google Apps Script, sends operational notifications through LINE, and sends client email through Gmail.
+It defines:
 
-The **AI-agent architecture** below describes the target operating model. It is intentionally separate from the **application architecture** that follows it. A target role or workflow is not evidence that its programmatic integration is already available.
+* the current production architecture;
+* business-logic and integration boundaries;
+* current repository structure;
+* client lifecycle and workflow architecture;
+* AI-agent development roles;
+* the proposed LINE-centered AI operating model;
+* architectural constraints;
+* security requirements;
+* development discipline;
+* the incremental roadmap.
 
-### Core boundary
+Read this document with GEMINI.md, package.json, and the relevant implementation before changing the system.
 
-> **The Node.js application makes business decisions.**
->
-> **Google Apps Script performs Google-specific operations.**
+The current repository implementation is the source of truth for what is actually implemented. This document must not describe proposed architecture as implemented.
 
-In practical terms:
+The application is production-oriented and must evolve through small, verified, incremental changes.
 
-| Layer | Responsibility |
-| --- | --- |
-| Node.js application (currently deployed in the Render/OpenClaw environment) | Intake and booking processing, lifecycle decisions and transitions, eligibility, package/credit logic, notification content, and workflow orchestration. |
-| Google Apps Script | Google Sheets CRM reads/writes and Gmail delivery through the Apps Script web-app adapter. |
-| Google Sheets | The current CRM record and operational interface. |
-| Gmail | Email delivery channel. |
-| Tally and Cal.com | Event sources. |
-| LINE | Operational communication channel, not a business-rules engine. |
+⸻
 
-Do not turn this roadmap into permission for a broad redesign. The application is production-oriented and must evolve through small, verified, incremental changes.
+Status labels
 
----
+Architectural components and roadmap items use these labels:
 
-## AI-agent operating model (target architecture)
+* CURRENT / IMPLEMENTED — Verified, functional component of the current system.
+* PROPOSED / TARGET — Agreed architectural direction that is not necessarily implemented.
+* UNDER VALIDATION — Proposed approach currently being tested or benchmarked.
+* DEPRECATED — Existing component or approach scheduled for retirement or replacement after appropriate verification.
 
-### Purpose and authority
+⸻
 
-This section defines the desired coordination model for AI-assisted work on this repository. It does **not** assert that every integration needed to implement that model exists today. The application architecture begins in the next section and remains the source of truth for the running system.
+1. Executive architecture
 
-| Role | Target responsibility |
-| --- | --- |
-| Human (Kyle) — Director | Sets high-level objectives, makes strategic decisions, and retains final authority. Kyle should not manually relay tasks, plans, reviews, or results between AI agents. |
-| OpenClaw — Orchestrator | Acts as the coordination and handoff layer between Kyle and the specialist agents. It receives objectives, determines delegation, passes context and results, coordinates iterative work, tracks task and repository state, verifies completion, and returns a consolidated result to Kyle. |
-| Gemini — Architect / Reviewer | Performs repository analysis, architecture interpretation, implementation planning, architectural and integration review, and identification of architectural issues. It does not own routine implementation. |
-| Codex — Primary Builder | Implements approved plans, modifies repository files, runs tests, debugs issues, verifies behavior, and makes corrections following review. |
-| Groq / free open models — Utility layer | Handles quick questions, transformations, boilerplate, high-volume inexpensive tasks, and other appropriately scoped utility work. |
-| Local Goose — Local/background execution layer | Handles advantageous local repository work, repetitive or background tasks, local experimentation, and similar execution work. |
-| GitHub — Shared source of truth | Centralizes repository state, code, documentation, commits, and history. Agents coordinate around the repository rather than keeping independent, competing copies of architectural truth. |
+1.1 Core architectural principle
 
-### Target OpenClaw-mediated workflow
+The primary architectural boundary is:
 
-The intended workflow is adaptive, not a mandatory fixed sequence. OpenClaw chooses the appropriate agents and order for the objective; it is the intended communication and handoff layer rather than Kyle.
+If it is a business decision, it belongs in Render.
 
-```text
-Human objective
-  → OpenClaw analyzes and coordinates
-  → appropriate specialist agent(s)
-  → results and context return to OpenClaw
-  → OpenClaw delegates subsequent work
-  → implementation / testing / review / correction cycle
-  → OpenClaw verifies completion
-  → consolidated result to Human
-```
+If it is a Google-specific operation, it belongs in Google Apps Script.
 
-For example, OpenClaw may ask Gemini for analysis or review, Codex for implementation and verification, Groq/free models for narrowly scoped utility work, and Local Goose for advantageous local or background execution. It passes the relevant plan, repository context, outputs, and review findings between those agents so Kyle does not need to perform manual relays.
+AI orchestration must not become a reason to move business rules out of Render or Google-specific operations out of Apps Script.
 
-### Verified capabilities and integration requirements
+The current production system is therefore:
 
-The repository verifies only the application code and configuration documented in the application sections below. It does **not** currently verify a programmatic OpenClaw integration with Gemini, Codex, Groq/free models, or Local Goose, nor a mechanism for OpenClaw to invoke or exchange context with those agents.
+Tally / Cal.com
+↓
+Render / Node.js
+↓
+Business decisions + workflow logic
+↓
+Google Apps Script
+↓
+Google Sheets / Gmail
+Render
+↓
+LINE notifications
+↓
+LINE
 
-Establishing any needed invocation, communication, state-tracking, repository-access, and result-handoff mechanisms is a future implementation/configuration requirement. Verify the relevant configuration before claiming an integration exists or relying on it in an automated workflow.
+The long-term target adds an AI control plane without replacing this production boundary.
 
-### Orchestration capability audit — 2026-09-09
+⸻
 
-This is an environment and repository audit, not an integration implementation. It supersedes no application boundary above and deliberately does not add an OpenClaw dependency, credential, service, or application route.
+2. Current production architecture
 
-#### What is available now
+2.1 Current system
 
-| Component | Evidence inspected | Current conclusion |
-| --- | --- | --- |
-| OpenClaw | No `openclaw` executable, package, process, home/configuration directory, or repository configuration was found. | **Not installed or configured in this environment.** It currently cannot invoke any agent, retain orchestration state, or pass agent context/results. |
-| Codex | The host has `/opt/codex/bin/codex` (`codex-cli 0.144.0-alpha.4`) and a running Codex app-server process. `codex login status` reports `Not logged in`. | The CLI binary is present, but it is not authenticated for a standalone invocation. Its running process is not evidence of an OpenClaw integration. |
-| Gemini | The only repository integration is `.github/workflows/main.yml`, which runs `google-github-actions/run-gemini-cli` and requires the repository secret `GEMINI_API_KEY`. No local Gemini CLI, Gemini environment variable, or OpenClaw provider configuration was found. | Gemini can be invoked by that GitHub Actions workflow when its secret exists; it is **not** available to OpenClaw from this environment. |
-| Groq / free models | No Groq CLI, SDK dependency, `GROQ_*` environment variable, provider configuration, or local-model runtime was found. | **Not configured.** No Groq/free-model invocation is currently available. |
-| Local Goose | No Goose executable, package, configuration, process, or local-model runtime was found. | **Not installed or configured.** No Local Goose invocation is currently available. |
-| GitHub | The checkout has no Git remote, and `gh auth status` reports no authenticated GitHub host. The GitHub Actions workflow requests repository write permissions, but its actual access depends on the GitHub-hosted workflow token and secrets at run time. | Git history is present locally, but this environment cannot currently push, create pull requests, or serve as the shared GitHub coordination point. |
+CURRENT / IMPLEMENTED
 
-The repository itself contains no `.env*`, OpenClaw configuration, agent manifest, MCP configuration, or provider credentials. The only ignored runtime-configuration files are `.clasp.json` and `.clasprc.json`; they are unrelated to agent orchestration.
+The Fluent with Kyle system automates the client lifecycle from intake through booking, follow-up, package selection, payment/session tracking, and booking management.
 
-#### Codex invocation and result handoff
+The current production application is hosted on Render and implemented in Node.js/Express.
 
-The concrete executable interface available on this host is Codex CLI's non-interactive command:
+Google Apps Script provides the Google-specific adapter layer.
 
-```text
-/opt/codex/bin/codex exec [options] <prompt>
-```
+Google Sheets is the current CRM and operational record.
 
-It supports a working directory (`-C`), a sandbox policy (`-s`), JSONL event output (`--json`), and writing the final agent message to a file (`--output-last-message <file>`). Those options provide an implementable handoff contract **once an orchestrator is installed and authorized to start the CLI**: OpenClaw (or another approved runner) supplies a bounded prompt and repository path, captures JSONL/final output, then gives the resulting summary, changed-file list, test results, and commit/PR reference to the next agent. Codex must first be authenticated with an approved OpenAI account or API credential; no credential belongs in this repository.
+Gmail is the email delivery channel.
 
-This audit does **not** claim that the absent OpenClaw installation has a built-in Codex adapter, a shell-execution permission, or a configured Agent Client Protocol (ACP)/MCP bridge. Before adopting a specific OpenClaw-to-Codex adapter, install the intended OpenClaw release and validate its official, release-matched documentation and its configured tool/agent permissions. Do not substitute an unreviewed webhook or give an agent unrestricted shell access merely to make this work.
+LINE is the operational communication channel.
 
-There is therefore no present agent-to-agent context channel. Until OpenClaw is configured, the durable coordination surfaces are Git commits and GitHub pull requests; at execution time, the orchestrator should pass only task-scoped inputs and structured outputs rather than relying on implicit shared chat history.
+Tally and Cal.com are external event sources.
 
-#### Accounts, permissions, and configuration required
+⸻
 
-Configuration belongs on a persistent orchestration host, outside this application repository. At minimum, that host needs:
+2.2 Current responsibility boundaries
 
-1. **OpenClaw installation and its release-matched configuration file.** Run its supported onboarding/configuration workflow, select an orchestrator model/account, and restrict the main agent to explicitly approved subagents and tools. Preserve the generated configuration outside Git and do not commit secrets.
-2. **Codex CLI plus authentication.** Install or expose the Codex CLI to the OpenClaw service account, authenticate it using the approved OpenAI account/API mechanism, and allow the orchestrator only the intended non-interactive command in the intended repository/worktree. Use a constrained sandbox and explicit working directory; avoid bypassing Codex approvals/sandboxing.
-3. **GitHub identity and repository access.** Configure either a GitHub App or a fine-grained token for the orchestration service account with the least permissions needed: repository contents read/write for implementation, pull-request read/write for reviews/PRs, and issues read/write only if issue-driven delegation is enabled. Configure a repository remote and validate `gh auth status`/push access on the orchestration host. Protect the default branch and require review/status checks as appropriate.
-4. **Gemini credentials and execution path.** Retain `GEMINI_API_KEY` as a GitHub Actions secret for the existing workflow, or separately install/authenticate Gemini on the orchestration host if OpenClaw needs direct invocation. The GitHub Actions secret is not automatically available to OpenClaw. Scope any GitHub token used by the workflow independently from the orchestrator credential.
-5. **Groq/free-model provider choice and credentials.** Choose a supported provider/model intentionally, then configure its endpoint, model identifier, and API credential in the provider's secret store. If using a local free model, install and operate the selected local runtime and model separately; none is present here.
-6. **Goose installation and model backend.** Install Goose on the persistent host, configure its chosen model provider/local backend and credentials, and grant only the repository, shell, and network permissions required for its assigned background tasks. Verify its OpenClaw invocation path before assigning it work.
+Layer	Responsibility
+Render / Node.js	Business decisions, lifecycle logic, webhook processing, workflow orchestration, CRM decisions, booking processing, notification content, and production scheduling.
+Google Apps Script	Google-specific execution, including Google Sheets reads/writes and Gmail delivery.
+Google Sheets	Current CRM record and operational interface.
+Gmail	Client email delivery.
+Tally	Intake and form/event source.
+Cal.com	Booking, cancellation, and meeting event source.
+LINE	Operational communication and notifications.
 
-#### Minimum next steps to make OpenClaw functional
+LINE is a communication channel, not a business-rules engine.
 
-1. Provision one persistent, access-controlled orchestration host; do not use this Render webhook application as the agent-control plane.
-2. Install the chosen OpenClaw release there and complete its supported onboarding. Record the exact release, generated configuration path, enabled tool integrations, and permitted agent identities in an operations document kept separate from secrets.
-3. Configure and test one narrow builder lane first: OpenClaw → authenticated Codex CLI → isolated repository worktree → branch/commit/PR. Require structured final output and verify that OpenClaw receives it.
-4. Configure GitHub remote/authentication and validate a non-destructive read followed by a controlled branch/PR workflow. Do not grant production application, Render, Google, LINE, Cal.com, or Tally credentials to the orchestration agents.
-5. Add Gemini as a review-only lane only after deciding whether GitHub Actions or a direct provider integration is the authoritative path. Add Groq/free models and Goose one at a time after their provider/runtime, permissions, and handoff formats are verified.
-6. Run an end-to-end dry run on a documentation-only change: high-level objective to OpenClaw, Codex implementation, optional Gemini review, OpenClaw consolidation, and GitHub PR. Document the validated configuration only after that run succeeds.
+⸻
 
-No configuration change is made by this audit. The next change should be limited to the external orchestration host and its secret store; application source code, Google Apps Script, and production webhook credentials remain out of scope.
+3. Current repository architecture
 
-### Agent operating rules
+The repository is at the workflow-modular intermediate stage.
 
-Before changing code, an agent must:
-
-1. Read this document and `GEMINI.md`.
-2. Inspect the relevant current implementation and interfaces.
-3. Identify the smallest change that meets the request.
-4. Preserve existing behavior unless the request explicitly changes it.
-5. Keep business logic in the Node.js application and Google-specific implementation in Apps Script.
-6. Avoid unrelated rewrites and unnecessary dependencies.
-7. Run focused verification and update this document when an actual architectural boundary or roadmap item changes.
-
----
-
-## Current repository architecture
-
-The repository is at the **workflow-modular intermediate stage**:
-
-```text
 index.js
-  → infrastructure, routes, health, scheduler startup, keep-alive
-
-workflows/abandonedBooking.js
-  → abandoned-booking business workflow
-
+→ infrastructure
+→ Express application
+→ routes
+→ health endpoint
+→ scheduler startup
+→ keep-alive
+workflows/
+→ business workflows
 services/
-  → integration and provider-processing services
-
+→ integration and provider-processing services
 google-apps-script/
-  → Google-specific adapter implementation
-```
+→ Google-specific adapter implementation
 
 Current source layout:
 
-```text
 openclaw-webhook/
 ├── index.js
 ├── workflows/
@@ -175,214 +145,1458 @@ openclaw-webhook/
 ├── GEMINI.md
 ├── package.json
 └── ARCHITECTURE.md
-```
 
-### Application shell — `index.js`
+⸻
 
-`index.js` creates the Express application, installs JSON middleware, registers the Tally and Cal.com webhook routes, exposes `/` and `/health`, starts the abandoned-booking interval, starts keep-alive requests, and listens on the configured port. It imports and starts the workflow, but **does not contain the abandoned-booking business workflow**.
+4. Render / Node.js application
 
-### Services
+4.1 Application shell — index.js
 
-- `services/tally.js` processes Tally submissions, extracts and normalizes intake data, handles question submissions, determines the initial state and credits, sends LINE question alerts, and requests CRM upserts.
-- `services/cal.js` processes Cal.com booking, cancellation, and meeting-ended events; retrieves client context; makes booking/cancellation decisions; creates LINE message content; and coordinates the current Free Intro follow-up email flow.
-- `services/appsScript.js` is the Node-to-Apps-Script gateway. It posts action payloads to `APPS_SCRIPT_URL` and also provides timestamp/title formatting helpers.
-- `services/lineService.js` sends the already-composed notification text to the LINE Messaging API.
+CURRENT / IMPLEMENTED
 
-Services may contain provider-specific processing. Business workflows belong in `workflows/` as they are extracted; do not move business rules into Apps Script.
+index.js creates the Express application and is responsible for infrastructure-level application startup.
 
----
+It currently:
 
-## Current lifecycle and event flows
+* installs JSON middleware;
+* registers Tally webhook routes;
+* registers Cal.com webhook routes;
+* exposes /;
+* exposes /health;
+* starts the abandoned-booking interval;
+* starts keep-alive behavior;
+* listens on the configured port;
+* imports and starts the abandoned-booking workflow.
 
-### Tally intake → CRM
+The abandoned-booking business logic itself belongs in:
 
-```text
-Tally webhook
-  → Render / services/tally.js
-  → normalize intake and determine package, credits, and lifecycle state
-  → services/appsScript.js
-  → Google Apps Script
-  → Google Sheets CRM
-```
+workflows/abandonedBooking.js
 
-A normal Tally #1 submission is written with `Schedule Status = Pending Booking`. Question submissions create a follow-up-needed CRM update and send a LINE alert. Current credit handling assigns four credits to the intensive/monthly/flex products and one credit to Deep Dive, Single Session, and Free Intro products.
+index.js should not become a container for unrelated business logic.
 
-### Booking, cancellation, and Free Intro follow-up
+⸻
 
-```text
-Cal.com webhook
-  → Render / services/cal.js
-  → look up CRM context through Apps Script
-  → decide the lifecycle update and create operational notification content
-  → Google Sheets CRM and LINE
-```
+5. Current service architecture
 
-For booking-created handling, Render determines session type from guest information, updates the CRM to `Confirmed`, and sends the booking notification. For cancellation handling, Render updates `Schedule Status` and `Cancellation Status` to `Cancelled`, records the cancellation reason, and sends the cancellation notification.
+5.1 Tally — services/tally.js
 
-For a `MEETING_ENDED` event whose title indicates Free Intro, Render generates the personalized Tally #2 URL and currently requests the `intro_followup` template from Apps Script, performs placeholder substitution in Render, then requests Gmail delivery through Apps Script. Moving template selection, personalization, and generation toward Render remains a later, incremental improvement.
+CURRENT / IMPLEMENTED
 
-### Abandoned booking — current Render-owned workflow
+The Tally service:
 
-The abandoned-booking workflow extraction is **COMPLETED**. `index.js` starts a five-minute scheduler; the business workflow is in `workflows/abandonedBooking.js`.
+* processes Tally submissions;
+* extracts and normalizes intake data;
+* handles question submissions;
+* determines initial lifecycle state;
+* determines initial credits;
+* sends LINE question alerts;
+* requests CRM upserts.
 
-```text
-scheduler
-  → abandonedBooking workflow
-  → get_pending
-  → elapsed-time calculation
-  → eligibility
-  → CRM update
-  → LINE notification
-```
+Business interpretation remains in Render.
 
-The workflow requests pending clients with `get_pending`, calculates elapsed time from the submitted timestamp, considers pending records eligible after the threshold, sends the LINE alert, then requests a CRM status update to `Follow-Up Needed`.
+⸻
 
-**Preserved strict behavior:** the current eligibility condition is `elapsedMs > 30 minutes` (strictly greater than 30 minutes), not greater-than-or-equal-to.
+5.2 Cal.com — services/cal.js
 
-Duplicate-alert prevention/durable processing is still needed: the current sequence relies on the CRM status update after notification and does not yet provide a durable idempotency mechanism. It is important, but it follows authentication of the Node-to-Apps-Script action contract.
+CURRENT / IMPLEMENTED
 
----
+The Cal.com service handles booking-related events and their business interpretation within Render.
 
-## Google Apps Script adapter
+The production architecture treats Cal.com as an event source.
 
-The Google Apps Script source is versioned in `google-apps-script/`. It is part of the current repository—not a future target.
+Render determines the appropriate lifecycle transition and resulting business state.
 
-```text
-Node.js application
-  → action payload to Apps Script web app
-  → Code.js action routing
-  → CRM.js / Email delivery functions
-  → Google Sheets CRM / Gmail
-```
+⸻
 
-### Deployment and trust boundary
+5.3 LINE — services/lineService.js
 
-`appsscript.json` declares a web app executed as the deploying user and accessible to anyone anonymous. The Node gateway posts action payloads to the configured Apps Script endpoint. This arrangement exposes a web-app endpoint that accepts actions for CRM writes and email delivery, while the current application-level action contract has no trust boundary.
+CURRENT / IMPLEMENTED
 
-The endpoint URL has historically been available through configuration/source. This must be treated as a production-hardening concern, not as an invitation to redesign the adapter.
+The LINE service handles operational communication and notification delivery.
 
-### Action routing — `Code.js`
+LINE is currently used for operational notifications and is not itself the business-rules engine.
 
-`Code.js` implements `doPost(e)`: it parses the request body, reads `data.action`, dispatches the supported action, and returns JSON through `ContentService`. The currently routed actions are:
+The future architecture expands LINE into Kyle’s natural-language control interface while preserving Render as the business-logic boundary.
 
-- `upsert_client` → CRM upsert;
-- `get_client` → CRM lookup by email or LINE ID;
-- `get_pending` → pending-booking retrieval;
-- `get_template` → email-template retrieval; and
-- `send_email` → Gmail send operation.
+⸻
 
-Unknown actions and caught errors produce an error response. This list documents the current implementation; do not invent action names or expand the contract without a narrowly scoped, reviewed change.
+5.4 Google Apps Script client — services/appsScript.js
 
-### CRM responsibilities — `CRM.js`
+CURRENT / IMPLEMENTED
 
-`CRM.js` owns the physical Google Sheets operations: opening the configured spreadsheet/tab, upserting clients by email or LINE ID, retrieving a client by email or LINE ID, retrieving clients in `Pending Booking`, and retrieving email templates from the `EmailTemplates` sheet. Its current row mapping covers the expanded 22-column Clients CRM, including identity, intake context, package, credits, schedule state, booking/cancellation data, and question text.
+services/appsScript.js is the Render-side client for the Google Apps Script adapter.
 
-Render decides which lifecycle transition and values should be applied. Apps Script carries out the Sheets read/write.
+Render sends action payloads to the Apps Script web application.
 
-### Email responsibilities — `Email.js`
+Apps Script executes Google-specific operations.
 
-`Email.js` contains the Gmail-specific `sendClientEmail(data)` implementation. It uses the request’s recipient, subject, and HTML body and sends through `GmailApp` with the Fluent with Kyle sender name. `Code.js` also contains a `sendClientEmail(data)` helper used by its route; the duplicate helper name is current repository state and should be handled carefully in any future focused cleanup. This document does not redefine that behavior or contract.
+Render remains responsible for determining what should happen.
 
-### Utility and manifest files
+⸻
 
-- `Utilities.js` provides the current JSON response helper.
-- `appsscript.json` defines the Apps Script runtime, timezone, required Sheets/Gmail/external-request scopes, and web-app deployment configuration.
+6. Google Apps Script adapter
 
-### Legacy Apps Script abandoned-booking workflow
+6.1 Role
 
-`google-apps-script/AbandonedBookings.js` exists in the repository and contains the prior Apps Script-based abandoned-booking check and a callback to Render. It is architecturally inconsistent with the current Render-owned workflow.
+CURRENT / IMPLEMENTED
 
-Repository code existing is **not proof** that a deployed Apps Script time-driven trigger invokes it. Before retirement, verify the deployed Apps Script project and whether such a trigger exists. If it is deployed, disable/retire it only after that verification and after confirming the Render workflow is the intended active path. Do not claim the legacy trigger is active without deployment evidence.
+The Google Apps Script source is versioned in:
 
----
+google-apps-script/
 
-## Current CRM and lifecycle model
+It is part of the current production architecture.
 
-Google Sheets is the current CRM. The `Clients` row shape is:
+The intended boundary is:
 
-| Column | Field |
-| --- | --- |
-| A | Timestamp |
-| B | Name |
-| C | Email |
-| D | LINE ID |
-| E | Location/Address |
-| F | Profession |
-| G | English Reality |
-| H | 3-Month Goal |
-| I | Conversation Topics |
-| J | Package |
-| K | 1-on-1 / 1-on-2 |
-| L | Guest Name |
-| M | Guest Email |
-| N | Guest LINE ID |
-| O | Payment Status |
-| P | Session Credits |
-| Q | Schedule Status |
-| R | Booking Date/Time |
-| S | Cancellation Status |
-| T | Cancellation Reason |
-| U | Booking Notes |
-| V | Question Text |
+Render
+↓
+Apps Script action
+↓
+Code.js
+↓
+CRM.js / Email.js
+↓
+Google Sheets / Gmail
 
-Current observed lifecycle states include `Pending Booking`, `Confirmed`, `Follow-Up Needed`, and `Cancelled`. Future work should standardize lifecycle states and CRM transition handling without changing currently working transitions accidentally.
+Apps Script should remain lightweight and Google-specific.
 
----
+⸻
 
-## Roadmap and sequencing
+6.2 Action routing — Code.js
 
-### Completed
+CURRENT / IMPLEMENTED
 
-- **COMPLETED — abandoned-booking workflow extraction.** The scheduler remains in `index.js`; the business workflow is in `workflows/abandonedBooking.js`.
-- **COMPLETED — Google Apps Script source included in the repository.** The adapter source and manifest are available under `google-apps-script/` for review with the Node implementation.
+Code.js implements doPost(e).
 
-### Single current highest-priority task
+It parses the request body, reads data.action, dispatches the supported action, and returns JSON through the current response mechanism.
 
-## Authenticate and harden the Node → Google Apps Script action contract
+Current routed actions are:
 
-This is the immediate production-hardening priority. The Apps Script web-app endpoint currently accepts actions that include CRM writes and email delivery, the endpoint is anonymously accessible at the deployment level, and the current contract lacks an application-level trust boundary. Because the endpoint URL has historically been available through configuration/source, authentication must be implemented **before** further reliability work.
+* upsert_client → CRM upsert;
+* get_client → CRM lookup by email or LINE ID;
+* get_pending → pending-booking retrieval;
+* get_template → email-template retrieval;
+* send_email → Gmail send operation.
 
-Keep this change narrow: authenticate and validate the current Node-to-Apps-Script request/response boundary without using it as an opportunity to replace the architecture, rename unrelated actions, or refactor unrelated workflows.
+Unknown actions and caught errors produce an error response.
 
-### After authentication, in approximate order
+This list documents the current implementation.
 
-1. **Retire or disable the legacy Apps Script abandoned-booking workflow** after verifying whether a deployed time-driven trigger exists.
-2. **Add durable, idempotent abandoned-booking processing** to prevent duplicate alerts and make retries safe.
-3. **Standardize Apps Script responses and Render error handling** at the existing adapter boundary.
-4. **Move email template selection, personalization, and generation toward Render** while retaining Apps Script for Gmail delivery.
-5. **Standardize lifecycle states and CRM transition handling.**
-6. **Expand focused automated testing.** Testing remains an identified gap.
-7. **Continue gradual domain-oriented refactoring.**
-8. **Centralize event processing later.**
-9. **Implement the required OpenClaw orchestration integrations/configuration** only when a concrete requirement justifies them and after verifying the available mechanisms.
+Do not invent new action names or expand this contract without a narrowly scoped, reviewed change.
 
-### Intentionally deferred architecture
+⸻
+
+6.3 CRM responsibilities — CRM.js
+
+CURRENT / IMPLEMENTED
+
+CRM.js owns physical Google Sheets operations, including:
+
+* opening the configured spreadsheet/tab;
+* upserting clients by email or LINE ID;
+* retrieving a client by email or LINE ID;
+* retrieving clients in Pending Booking;
+* retrieving email templates from the EmailTemplates sheet.
+
+The current CRM mapping covers the expanded 22-column Clients CRM, including identity, intake context, package, credits, schedule state, booking/cancellation data, and question text.
+
+Render determines lifecycle decisions and values.
+
+Apps Script performs the physical Sheets operations.
+
+⸻
+
+6.4 Email responsibilities — Email.js
+
+CURRENT / IMPLEMENTED
+
+Email.js contains the Gmail-specific sendClientEmail(data) implementation.
+
+It uses the request’s:
+
+* recipient;
+* subject;
+* HTML body;
+
+and sends through Gmail with the Fluent with Kyle sender name.
+
+Code.js also contains a sendClientEmail(data) helper used by its route.
+
+The duplicate helper name is current repository state and should be handled carefully in any future focused cleanup.
+
+This architecture document does not redefine that behavior.
+
+⸻
+
+6.5 Utility and manifest files
+
+CURRENT / IMPLEMENTED
+
+Utilities.js provides the current JSON response helper.
+
+appsscript.json defines the Apps Script runtime, timezone, required scopes, and web-app deployment configuration.
+
+⸻
+
+7. Apps Script trust boundary
+
+7.1 Current state
+
+CURRENT / IMPLEMENTED — HARDENING REQUIRED
+
+The current Apps Script web application is configured as an anonymous web app executed as the deploying user.
+
+The Node application posts action payloads to that endpoint.
+
+This creates a significant application-level trust-boundary gap because the endpoint accepts actions for CRM writes and Gmail delivery.
+
+The current action contract does not yet provide adequate application-level authentication.
+
+This is a production-hardening concern.
+
+It is not a reason to redesign the Apps Script architecture.
+
+⸻
+
+7.2 Highest-priority existing hardening work
+
+The first production-hardening change should authenticate and validate the existing Node → Apps Script action boundary.
+
+The intended incremental direction is:
+
+* require a server-side shared secret;
+* store it in Render environment variables and Apps Script Script Properties;
+* authenticate before action routing;
+* remove any hard-coded production endpoint fallback;
+* ensure secrets are never logged;
+* standardize success/error/unauthorized responses.
+
+The Apps Script web-app deployment may need to remain anonymously reachable if Render is not using OAuth.
+
+Application-level authentication is therefore the appropriate incremental boundary.
+
+⸻
+
+8. Legacy abandoned-booking workflow
+
+8.1 Current repository state
+
+CURRENT / IMPLEMENTED CODE — DEPRECATED ARCHITECTURALLY
+
+google-apps-script/AbandonedBookings.js contains the prior Apps Script-based abandoned-booking workflow.
+
+It is architecturally inconsistent with the current rule that:
+
+Render owns lifecycle decisions.
+
+The legacy script independently determines whether an abandoned booking exists, changes CRM data, and attempts to notify Render.
+
+Repository code alone is not proof that a deployed Apps Script time-driven trigger currently invokes it.
+
+Before retirement:
+
+1. verify the deployed Apps Script project;
+2. verify whether a time-driven trigger exists;
+3. confirm the Render workflow is the intended active path;
+4. disable/retire the legacy trigger if it is active;
+5. only then remove or deprecate the legacy implementation.
+
+Do not claim that the legacy trigger is active without deployment evidence.
+
+⸻
+
+9. Abandoned-booking workflow
+
+9.1 Current Render workflow
+
+CURRENT / IMPLEMENTED
+
+The current abandoned-booking workflow is:
+
+Pending Booking
+↓
+Elapsed time > 30 minutes
+↓
+Render detection
+↓
+CRM update
+↓
+LINE sales-recovery alert
+
+The eligibility condition is strictly:
+
+elapsedMs > 30 minutes
+
+not greater-than-or-equal-to 30 minutes.
+
+The business decision belongs entirely to Render.
+
+⸻
+
+9.2 Current reliability gap
+
+CURRENT GAP
+
+The current sequence is not durably idempotent.
+
+The workflow sends the LINE alert before the CRM status update completes.
+
+If the CRM update fails after the notification succeeds, the same client can remain eligible and be notified again on a subsequent scheduler cycle.
+
+Durable duplicate-alert prevention remains required.
+
+It should follow authentication and hardening of the Node → Apps Script action contract.
+
+⸻
+
+10. Client lifecycle architecture
+
+10.1 Intended complete lifecycle
+
+The intended complete lifecycle is:
+
+Tally #1
+↓
+Client Profile Created
+↓
+Pending Booking
+↓
+Free Intro Booking
+↓
+Booking Context + Diagnostic Data
+↓
+Confirmed
+↓
+Intro Meeting
+↓
+Meeting Ended
+↓
+Personalized Tally #2
+↓
+Package Selection
+↓
+Payment
+↓
+Sessions
+↓
+Booking Management
+↓
+Cancellation / Recovery
+
+Render owns the business interpretation of these transitions.
+
+⸻
+
+10.2 Abandoned booking lifecycle
+
+Tally #1
+↓
+Client Profile Created
+↓
+Pending Booking
+↓
+30+ minutes
+↓
+Render Detection
+↓
+Follow-up Needed
+↓
+CRM Update
+↓
+LINE Sales-Recovery Alert
+
+The exact current eligibility implementation is:
+
+elapsedMs > 30 minutes
+
+⸻
+
+10.3 Cancellation lifecycle
+
+Confirmed
+↓
+Cal.com Cancellation
+↓
+Render
+↓
+Identify Client
+↓
+Retrieve Client Context
+↓
+CRM Update
+├── Cancellation Status
+└── Cancellation Reason
+↓
+LINE Cancellation Alert
+↓
+Recovery Opportunity
+
+Render owns the business interpretation.
+
+⸻
+
+10.4 Future payment lifecycle
+
+Future payment integration should follow the same architectural boundary:
+
+Payment Event
+↓
+Render
+↓
+Identify Client
+↓
+Determine Package
+↓
+Determine Payment State
+↓
+Update CRM
+↓
+Calculate / Confirm Credits
+↓
+Trigger Next Lifecycle Event
+
+The payment provider may remain an external event source while Render owns the business interpretation.
+
+⸻
+
+10.5 Future session lifecycle
+
+The same architecture can support:
+
+Session Scheduled
+↓
+Session Completed
+↓
+Credit Used
+↓
+CRM Updated
+↓
+Remaining Credits Calculated
+↓
+Next Booking / Follow-Up
+
+This provides the foundation for a complete client-management engine.
+
+⸻
+
+11. Event and integration reliability gaps
+
+The following are known architectural gaps and should be addressed incrementally rather than through broad redesign.
+
+Tally / Cal.com event handling
+
+The current system does not yet have complete webhook signature verification or event-ID deduplication for all relevant Tally and Cal.com deliveries.
+
+Provider retries can therefore potentially repeat notifications, CRM upserts, or other actions.
+
+Abandoned-booking idempotency
+
+The current abandoned-booking workflow needs durable duplicate prevention.
+
+Apps Script responses
+
+Apps Script response handling should eventually be standardized with predictable success/error semantics.
+
+Email ownership
+
+Email template selection currently occurs through the Apps Script get_template action.
+
+The longer-term architecture should move email template selection, personalization, and HTML generation toward Render while retaining Gmail delivery in Apps Script.
+
+Duplicate sendClientEmail
+
+Code.js and Email.js currently contain duplicate sendClientEmail implementations.
+
+This is a known cleanup concern and should be handled as a focused change.
+
+Automated testing
+
+Automated tests, event fixtures, contract tests, and a formal test script remain identified gaps.
+
+⸻
+
+12. AI development system
+
+12.1 Architectural role of AI
+
+AI agents operate around the production system.
+
+They do not replace the production system’s business-logic boundaries.
+
+The AI development system consists of:
+
+Gemini — Architect / Reviewer
+
+CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
+
+Gemini is responsible for:
+
+* architecture;
+* large-context repository analysis;
+* planning;
+* reasoning about system-wide changes;
+* dependency mapping;
+* Google-specific integration analysis;
+* GitHub-specific analysis;
+* architectural review;
+* integration review.
+
+Gemini should analyze the repository and produce implementation plans.
+
+Gemini is not the primary implementation agent.
+
+⸻
+
+Codex — Primary Builder
+
+CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
+
+Codex is responsible for:
+
+* primary implementation;
+* debugging;
+* multi-file changes;
+* tests;
+* refactoring;
+* verification;
+* final corrections;
+* maintaining production code.
+
+Codex implements an approved plan and should make the smallest appropriate change.
+
+⸻
+
+Groq / Free Open Models — Utility Capacity
+
+CURRENT / PROPOSED
+
+Use lower-cost models for:
+
+* quick technical questions;
+* boilerplate;
+* simple transformations;
+* text transformations;
+* high-volume low-complexity iterations;
+* utility tasks.
+
+These models must not independently redefine the system architecture.
+
+⸻
+
+Local Goose — Local Execution Support
+
+CURRENT / PROPOSED
+
+Goose may be used for:
+
+* repetitive work;
+* background processing;
+* large batches of low-risk tasks;
+* local experimentation;
+* unlimited local iteration.
+
+Goose operates within the architectural boundaries defined by this document.
+
+⸻
+
+13. Standard development loop
+
+CURRENT / IMPLEMENTED OPERATING MODEL
+
+Major development work follows:
+
+Gemini
+↓
+Analyze repository
+↓
+Understand architecture
+↓
+Produce implementation plan
+↓
+Codex
+↓
+Implement plan
+↓
+Modify files
+↓
+Run tests
+↓
+Debug
+↓
+Verify
+↓
+Gemini
+↓
+Architectural / integration review
+↓
+Codex
+↓
+Final corrections
+
+Gemini is the architect/reviewer. Codex is the primary builder.
+
+⸻
+
+14. Proposed target AI architecture
+
+14.1 Objective
+
+PROPOSED / TARGET
+
+The long-term user experience is:
+
+Kyle should be able to use LINE as the single natural-language control interface for the system.
+
+Examples:
+
+“Give me this week’s bookings.”
+“Add this feature to the CRM.”
+“Here’s what I’m thinking for a system to automate lesson planning…”
+
+Kyle should not need to manually move between:
+
+* LINE;
+* Gemini;
+* Codex;
+* GitHub;
+* Render;
+* Google Apps Script;
+* other AI tools.
+
+The underlying agents and services should operate behind the LINE interface.
+
+⸻
+
+14.2 Target architecture
+
+                     KYLE
+                       ↓
+                     LINE
+                       ↓
+                Render / Node.js
+                       ↓
+             AI Orchestration Layer
+                       ↓
+                Agent Command
+                Protocol (ACP)
+                       ↓
+      ┌────────────────┼─────────────────┐
+      ↓                ↓                 ↓
+   Codex            Gemini          Utility Models
+      ↓                ↓                 ↓
+   GitHub          Research /          Utility
+   / Code           Review              Tasks
+      └────────────────┼─────────────────┘
+                       ↓
+             Authorized Capabilities
+                       ↓
+          ┌────────────┴────────────┐
+          ↓                         ↓
+   Render application        Google Apps Script
+   / business logic          / Google operations
+          ↓                         ↓
+   Existing workflows       Sheets / Gmail
+          └────────────┬────────────┘
+                       ↓
+                     LINE
+                       ↓
+                      KYLE
+
+GitHub Actions may serve as an ephemeral AI execution plane within this architecture.
+
+It does not replace Render as the production application server.
+
+⸻
+
+15. LINE as the control interface
+
+15.1 Role
+
+PROPOSED / TARGET
+
+LINE becomes Kyle’s natural-language control interface.
+
+The intended experience is:
+
+Kyle → LINE
+→ request received
+→ system understands request
+→ appropriate capability/agent selected
+→ task executed
+→ result returned
+→ LINE
+
+LINE itself does not make business decisions.
+
+Render remains responsible for production business rules.
+
+⸻
+
+15.2 Synchronous tasks
+
+Simple requests may eventually follow:
+
+LINE
+↓
+Render
+↓
+AI Router
+↓
+Approved read capability
+↓
+Existing production system
+↓
+Result
+↓
+LINE
+
+Example:
+
+“Give me this week’s bookings.”
+
+⸻
+
+15.3 Asynchronous tasks
+
+Longer tasks should follow:
+
+LINE
+↓
+Render
+↓
+Create task
+↓
+AI execution plane
+↓
+Orchestration
+↓
+Specialist / capability
+↓
+Task result
+↓
+Render
+↓
+LINE
+
+The architecture must eventually account for:
+
+* task state;
+* conversation context;
+* correlation IDs;
+* retries;
+* idempotency;
+* timeouts;
+* failures;
+* long-running tasks.
+
+These mechanisms are PROPOSED / TARGET, not claims of current implementation.
+
+⸻
+
+16. Agent Command Protocol
+
+16.1 Role
+
+PROPOSED / TARGET
+
+The Agent Command Protocol (ACP) will provide the structured boundary between AI orchestration and approved system capabilities.
+
+Conceptually:
+
+AI orchestration
+↓
+Structured Agent Command
+↓
+Authentication / Authorization
+↓
+Approved Capability
+↓
+Existing Application / Service
+↓
+Structured Result
+↓
+AI orchestration
+
+The AI layer should not directly manipulate production systems when an approved capability can provide the required operation.
+
+⸻
+
+16.2 ACP responsibilities
+
+The eventual ACP should define:
+
+* command identity;
+* command type;
+* validated parameters;
+* correlation ID;
+* idempotency key where required;
+* authentication context;
+* authorization;
+* structured result;
+* structured error;
+* retry semantics;
+* execution status;
+* logging requirements.
+
+The detailed ACP schema is not yet defined.
+
+It is the next architectural design task after this document is approved.
+
+⸻
+
+17. AI specialist roles
+
+17.1 Codex
+
+PROPOSED / TARGET
+
+Codex remains the primary implementation/build/debug/test specialist.
+
+Typical delegation:
+
+“Implement this feature.”
+“Fix this bug.”
+“Run the tests and resolve the failure.”
+“Update the CRM workflow.”
+
+⸻
+
+17.2 Gemini
+
+PROPOSED / TARGET
+
+Gemini remains the architecture, research, planning, and review specialist.
+
+Typical delegation:
+
+“Analyze this architecture.”
+“Research the best approach.”
+“Review this implementation.”
+“Identify integration risks.”
+“Produce an implementation plan.”
+
+⸻
+
+17.3 Qwen3 0.6B
+
+UNDER VALIDATION
+
+Qwen3 0.6B is a candidate low-cost router/orchestrator.
+
+It must not initially be treated as a fully autonomous reasoning or coding agent.
+
+The preferred constrained problem is:
+
+Natural language
+↓
+Structured intent
+↓
+Approved command
+
+Example:
+
+“Give me this week’s bookings.”
+↓
+GET_BOOKINGS
+
+or:
+
+“Add this feature to the CRM.”
+↓
+CODE_CHANGE_REQUEST
+↓
+Codex
+
+Qwen3 0.6B must be benchmarked before becoming a production-critical router.
+
+If it cannot reliably perform the required routing task, a stronger or different router may be used.
+
+The architecture should not become permanently dependent on a specific small model.
+
+⸻
+
+18. OpenClaw’s architectural role
+
+18.1 Status
+
+PROPOSED / TARGET
+
+OpenClaw is initially retained as the orchestration/mediation capability.
+
+Its value is not defined merely as “being the server.”
+
+Its potentially valuable responsibilities include:
+
+* agent handoffs;
+* tool/capability selection;
+* task orchestration;
+* context management;
+* multi-step execution;
+* coordinating specialist agents;
+* consolidating results.
+
+⸻
+
+18.2 Replaceability
+
+OpenClaw should be treated as a replaceable/pluggable orchestration layer.
+
+The production application must not depend on OpenClaw-specific business logic.
+
+The intended separation is:
+
+Production capabilities
+↕
+ACP
+↕
+Orchestration layer
+
+OpenClaw can therefore:
+
+* remain central;
+* become narrower;
+* be replaced;
+* or become optional,
+
+without requiring a redesign of the production business system.
+
+⸻
+
+19. GitHub Actions as AI execution plane
+
+19.1 Role
+
+PROPOSED / TARGET
+
+GitHub Actions may provide ephemeral execution for AI tasks.
+
+It can be used for:
+
+* launching AI tasks;
+* running specialist agents;
+* repository analysis;
+* code changes;
+* tests;
+* temporary orchestration jobs;
+* returning task results.
+
+GitHub Actions should not become:
+
+* the production application server;
+* the authoritative CRM;
+* the owner of business rules;
+* the replacement for Render production workflows.
+
+⸻
+
+19.2 Ephemeral execution principle
+
+GitHub Actions jobs are temporary execution environments.
+
+Persistent task state must therefore exist outside an individual job where required.
+
+Long-running orchestration must account for:
+
+* job limits;
+* concurrency;
+* retries;
+* cancellation;
+* result persistence;
+* task correlation;
+* secrets;
+* failure recovery.
+
+These are PROPOSED / TARGET concerns.
+
+⸻
+
+20. Production boundaries that do not change
+
+The following boundaries remain authoritative.
+
+Tally
+
+Tally remains an intake/event source.
+
+Cal.com
+
+Cal.com remains a booking/event source.
+
+Render
+
+Render remains the production application and business-logic layer.
+
+Google Apps Script
+
+Apps Script remains the Google-specific adapter.
+
+Google Sheets
+
+Google Sheets remains the current CRM.
+
+Gmail
+
+Gmail remains the email delivery channel.
+
+LINE
+
+LINE remains the communication channel and becomes the intended natural-language control interface for Kyle.
+
+GitHub
+
+GitHub remains the source of truth for code and architecture.
+
+Production workflows
+
+Critical production workflows remain on Render unless a later architectural decision deliberately moves them.
+
+Business rules must not be duplicated inside:
+
+* Qwen;
+* GitHub Actions;
+* specialist prompts;
+* other AI layers.
+
+⸻
+
+21. Security architecture
+
+PROPOSED / TARGET
+
+The AI layer introduces a new trust boundary and must be treated accordingly.
+
+21.1 Credential principle
+
+AI agents must not receive unrestricted production credentials.
+
+Agents should receive only the credentials and capabilities necessary for the task.
+
+⸻
+
+21.2 Capability principle
+
+AI agents should interact with approved capabilities rather than receiving unrestricted direct access to:
+
+* Google Sheets;
+* Gmail;
+* production state;
+* Render internals;
+* other production credentials.
+
+⸻
+
+21.3 Cross-system authentication
+
+Cross-system calls should use explicit authentication and authorization.
+
+The exact mechanism is to be determined during ACP design.
+
+HMAC, JWT, or another appropriately scoped mechanism may be evaluated.
+
+⸻
+
+21.4 Write protection
+
+Write-capable commands require:
+
+* structured validation;
+* authorization;
+* idempotency where appropriate;
+* audit logging;
+* explicit error handling.
+
+Read-only capabilities should be implemented first.
+
+⸻
+
+22. Task state and reliability
+
+PROPOSED / TARGET
+
+The future AI control plane should maintain explicit task state.
+
+At minimum, the architecture must support:
+
+* request ID;
+* correlation ID;
+* task status;
+* originating LINE interaction;
+* selected capability/agent;
+* execution result;
+* error state;
+* retry state;
+* timestamps.
+
+Potential states include:
+
+RECEIVED
+↓
+ROUTING
+↓
+QUEUED
+↓
+RUNNING
+↓
+COMPLETED
+
+with failure paths such as:
+
+RUNNING
+↓
+FAILED
+↓
+RETRYING
+↓
+COMPLETED / FAILED
+
+The exact state model is part of future ACP/task-system design.
+
+⸻
+
+23. Scheduled production workflows
+
+CURRENT / IMPLEMENTED + PROPOSED PRESERVATION
+
+Critical scheduled workflows remain on Render during the AI migration.
+
+In particular:
+
+Render
+↓
+abandonedBooking.js
+
+must remain operational independently of the AI orchestration layer.
+
+The fact that GitHub Actions becomes an AI execution plane does not justify moving production scheduling into GitHub Actions.
+
+⸻
+
+24. Migration roadmap
+
+The migration is incremental and non-destructive.
+
+The current production system must remain operational throughout the migration.
+
+⸻
+
+Phase 1 — Read-only LINE proof of concept
+
+PROPOSED / TARGET
+
+Goal:
+
+Allow Kyle to ask simple questions through LINE and receive information from the existing system.
+
+Example:
+
+“Give me this week’s bookings.”
+
+Architecture:
+
+LINE
+↓
+Render
+↓
+AI/router
+↓
+Read-only capability
+↓
+Existing data
+↓
+Render
+↓
+LINE
+
+Requirements:
+
+* no write operations;
+* use existing production boundaries;
+* accurate responses;
+* task correlation;
+* basic error handling.
+
+⸻
+
+Phase 2 — ACP and controlled commands
+
+PROPOSED / TARGET
+
+Define the detailed Agent Command Protocol.
+
+Establish:
+
+* command schemas;
+* result schemas;
+* authentication;
+* authorization;
+* validation;
+* correlation IDs;
+* idempotency;
+* logging;
+* retry behavior;
+* failure handling.
+
+Introduce narrowly scoped capabilities.
+
+⸻
+
+Phase 3 — Controlled write operations
+
+PROPOSED / TARGET
+
+Permit selected write operations only after the command boundary has been validated.
+
+Examples may eventually include:
+
+Update CRM status.
+Add CRM information.
+Trigger an approved workflow.
+Send an approved email.
+
+Every write capability must have an explicit contract and validation boundary.
+
+⸻
+
+Phase 4 — Full multi-agent orchestration
+
+PROPOSED / TARGET
+
+Enable complex tasks involving:
+
+* OpenClaw;
+* Codex;
+* Gemini;
+* Qwen or another router;
+* GitHub Actions;
+* approved production capabilities.
+
+Example:
+
+Kyle
+↓
+LINE
+↓
+Router / OpenClaw
+↓
+Gemini architecture analysis
+↓
+Codex implementation
+↓
+Tests
+↓
+Gemini review
+↓
+Codex corrections
+↓
+Result
+↓
+LINE
+
+The exact orchestration implementation should be determined from the validated ACP and proof-of-concept results.
+
+⸻
+
+25. Existing roadmap after AI architecture approval
+
+The AI architecture does not cancel the existing production-hardening roadmap.
+
+After the architecture is approved, implementation priorities remain approximately:
+
+1. Authenticate and harden the Node → Apps Script action contract.
+2. Verify and retire any deployed legacy Apps Script abandoned-booking trigger.
+3. Add durable abandoned-booking idempotency.
+4. Standardize Apps Script responses and Render error handling.
+5. Move email template selection/personalization toward Render while retaining Gmail delivery in Apps Script.
+6. Standardize lifecycle states and CRM transition handling.
+7. Expand automated testing, fixtures, and contract tests.
+8. Continue gradual domain-oriented refactoring.
+9. Consider centralized event processing only when justified.
+10. Expand the OpenClaw management/orchestration layer deliberately.
+11. Build and validate the LINE/AI control plane incrementally.
+
+AI orchestration must not cause these production-hardening requirements to be forgotten.
+
+⸻
+
+26. Intentionally deferred architecture
 
 The following are future directions, not current implementation mandates:
 
-```text
-workflow-modular intermediate system
-  → gradual domain-oriented business modules
-  → centralized event processing
-  → more complete client lifecycle automation
+Current workflow-modular system
+↓
+Gradual domain-oriented business modules
+↓
+Centralized event processing
+↓
+OpenClaw management/orchestration layer
+↓
+ACP-based AI capability layer
+↓
+LINE-centered natural-language control
+↓
+More complete client lifecycle automation
 
-separately: target OpenClaw-mediated AI-agent operating model
-  → verified orchestration integrations/configuration when justified
-```
+Do not introduce:
 
-Do not introduce an event bus, a new persistence system, a wholesale CRM replacement, broad framework changes, or an OpenClaw application-management plane while addressing the immediate authentication task. Make each later transition only when a concrete requirement justifies it and after reviewing the existing workflow boundaries.
+* an event bus;
+* a new persistence system;
+* a wholesale CRM replacement;
+* broad framework changes;
+* unnecessary infrastructure;
+* unrestricted agent access;
 
----
+merely because the target architecture has been defined.
 
-## Change discipline and verification
+Each transition requires a concrete requirement and review of the existing workflow boundaries.
 
-For any implementation work:
+⸻
 
-- Treat the current repository implementation as the source of truth.
-- Preserve the Node.js-owned business-decision boundary.
-- Preserve Apps Script as the Google-specific adapter.
-- Prefer focused tests and targeted checks; add tests where a change has a clear seam.
-- Check imports/exports, asynchronous behavior, error handling, environment variables, and external action payloads.
-- Update this roadmap when an architectural milestone is actually complete; do not mark planned work as complete.
+27. Next architectural work
 
-The application end state is a reliable, incremental automation system in which the Node.js application owns the client lifecycle and Google Apps Script remains a minimal, authenticated adapter for Google Sheets and Gmail. The intended AI-agent end state is an OpenClaw-mediated operating model with GitHub as the shared source of truth; integrations are claimed only after they are verified.
+After this architecture is approved, the next architectural task is:
+
+Design the Agent Command Protocol against the actual repository.
+
+The ACP design must identify:
+
+* available capabilities;
+* existing Render interfaces;
+* existing Apps Script actions;
+* authentication boundaries;
+* command schemas;
+* result schemas;
+* error schemas;
+* idempotency;
+* correlation IDs;
+* logging;
+* LINE integration points;
+* Codex integration points;
+* Gemini integration points;
+* OpenClaw integration points;
+* GitHub Actions execution boundaries.
+
+The ACP design must be grounded in the actual implementation.
+
+Do not invent interfaces that do not exist without explicitly labeling them as new requirements.
+
+Do not implement ACP until its design has been reviewed and approved.
+
+⸻
+
+28. Standard agent operating rules
+
+Before changing code, an agent must:
+
+1. Read ARCHITECTURE.md and GEMINI.md.
+2. Inspect the relevant current implementation and interfaces.
+3. Determine whether the requested behavior is CURRENT, PROPOSED, UNDER VALIDATION, or DEPRECATED.
+4. Identify the smallest change that meets the request.
+5. Preserve existing behavior unless the request explicitly changes it.
+6. Keep business logic in Render.
+7. Keep Google-specific implementation in Apps Script.
+8. Avoid unrelated rewrites.
+9. Avoid unnecessary dependencies.
+10. Preserve established external integration contracts unless a deliberate change is approved.
+11. Run focused verification.
+12. Update this architecture document when a material architectural boundary or roadmap milestone actually changes.
+
+Agents must not treat roadmap items as permission for broad redesign.
+
+⸻
+
+29. Change discipline and verification
+
+For implementation work:
+
+* Treat the current repository implementation as the source of truth.
+* Preserve the Render-owned business-decision boundary.
+* Preserve Apps Script as the Google-specific adapter.
+* Prefer focused tests and targeted checks.
+* Add tests where a change has a clear seam.
+* Check imports and exports.
+* Check asynchronous behavior.
+* Check error handling.
+* Check environment variables.
+* Check external action payloads.
+* Check webhook behavior.
+* Check idempotency where applicable.
+* Verify external integrations after material changes.
+* Update this document only when the architecture or roadmap genuinely changes.
+
+When a requested change conflicts with the documented architecture, identify the conflict before implementation.
+
+⸻
+
+30. Architectural end state
+
+The intended end state is a reliable, incremental automation system in which:
+
+                KYLE
+                  ↓
+                LINE
+                  ↓
+         Natural-language request
+                  ↓
+         Render / control boundary
+                  ↓
+      AI orchestration / OpenClaw
+                  ↓
+                ACP
+                  ↓
+    ┌─────────────┼─────────────┐
+    ↓             ↓             ↓
+  Codex         Gemini       Utilities
+    ↓             ↓             ↓
+ GitHub        Research      Low-cost
+  / Code        / Review      operations
+    └─────────────┼─────────────┘
+                  ↓
+         Approved capabilities
+                  ↓
+      ┌───────────┴───────────┐
+      ↓                       ↓
+   Render              Apps Script
+
+Business logic         Google operations
+↓                       ↓
+Workflows            Sheets / Gmail
+└───────────┬───────────┘
+↓
+LINE
+↓
+KYLE
+
+The key invariant remains:
+
+AI can orchestrate the system, but AI does not become the system’s business-logic owner.
+
+Render remains the production business-logic layer.
+
+Google Apps Script remains the Google-specific adapter.
+
+GitHub remains the source of truth.
+
+LINE becomes the intended human control interface.
+
+ACP becomes the controlled interface between AI orchestration and production capabilities.
+
+OpenClaw remains initially available as the orchestration/mediation layer but is deliberately kept replaceable.
+
+Qwen3 0.6B remains under validation until its routing reliability is demonstrated.
+
+The system evolves incrementally without requiring a wholesale rewrite of the working Fluent with Kyle application.
+
+⸻
+
+FINAL RESPONSE REQUIRED
+
+After completing the change, report:
+
+1. Whether ARCHITECTURE.md was successfully updated.
+2. Whether the resulting file matches the approved architecture.
+3. Whether any important current architecture was preserved or corrected.
+4. The exact files changed.
+5. The git diff summary.
+6. Whether the change was committed, and the commit hash if applicable.
+
+Do not make any unrelated changes.
