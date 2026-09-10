@@ -2,4 +2,3 @@ Warning: 256-color support not detected. Using a terminal with at least 256-colo
 YOLO mode is enabled. All tool calls will be automatically approved.
 YOLO mode is enabled. All tool calls will be automatically approved.
 Ripgrep is not available. Falling back to GrepTool.
-Error executing tool read_file: Path not in workspace: Attempted path "/home/runner/.config/kilo/kilo.jsonc" resolves outside the allowed workspace directories: /home/runner/work/openclaw-webhook/openclaw-webhook or the project temp directory: /home/runner/.gemini/tmp/openclaw-webhook
