@@ -625,11 +625,19 @@ They do not replace the production system’s business-logic boundaries.
 
 The AI development system consists of:
 
-Gemini — Architect / Reviewer
+Qwen3 0.6B — Router
 
 CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
 
-Gemini is responsible for:
+Qwen3 0.6B acts as the Router, directing requests to the appropriate AI specialist. It is not responsible for architecture, reasoning, or implementation.
+
+⸻
+
+NVIDIA Nemotron 3 Ultra — Architect / Reasoning / Research / Reviewer
+
+CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
+
+NVIDIA Nemotron 3 Ultra is responsible for:
 
 * architecture;
 * large-context repository analysis;
@@ -641,17 +649,15 @@ Gemini is responsible for:
 * architectural review;
 * integration review.
 
-Gemini should analyze the repository and produce implementation plans.
-
-Gemini is not the primary implementation agent.
+NVIDIA Nemotron 3 Ultra should analyze the repository and produce implementation plans.
 
 ⸻
 
-Codex — Primary Builder
+Kilo Code — Builder / Implementer / Tester
 
 CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
 
-Codex is responsible for:
+Kilo Code is responsible for:
 
 * primary implementation;
 * debugging;
@@ -662,11 +668,11 @@ Codex is responsible for:
 * final corrections;
 * maintaining production code.
 
-Codex implements an approved plan and should make the smallest appropriate change.
+Kilo Code implements an approved plan and should make the smallest appropriate change.
 
 ⸻
 
-Groq / Free Open Models — Utility Capacity
+Utility / Free / Local Models — Utility Specialists
 
 CURRENT / PROPOSED
 
@@ -705,35 +711,20 @@ CURRENT / IMPLEMENTED OPERATING MODEL
 
 Major development work follows:
 
-Gemini
+Qwen Router
   ↓
-Analyze repository
+NVIDIA Nemotron architecture/reasoning
   ↓
-Understand architecture
+Kilo implementation
   ↓
-Produce implementation plan
+tests/debugging
   ↓
-Codex
+NVIDIA Nemotron review
   ↓
-Implement plan
-  ↓
-Modify files
-  ↓
-Run tests
-  ↓
-Debug
-  ↓
-Verify
-  ↓
-Gemini
-  ↓
-Architectural / integration review
-  ↓
-Codex
-  ↓
-Final corrections
+Kilo corrections
 
-Gemini is the architect/reviewer. Codex is the primary builder.
+NVIDIA Nemotron is the architect/reviewer. Kilo Code is the primary builder.
+
 
 ⸻
 
@@ -769,26 +760,27 @@ The underlying agents and services should operate behind the LINE interface.
 
 14.2 Target architecture
 
-                         KYLE
-                           ↓
-                         LINE
-                           ↓
-                    Render / Node.js
-                           ↓
-                 AI Orchestration Layer
-                           ↓
-                    Agent Command
-                    Protocol (ACP)
-                           ↓
-          ┌────────────────┼─────────────────┐
-          ↓                ↓                 ↓
-       Codex            Gemini          Utility Models
-          ↓                ↓                 ↓
-       GitHub          Research /          Utility
-       / Code           Review              Tasks
-          └────────────────┼─────────────────┘
-                           ↓
-                 Authorized Capabilities
+                          KYLE
+                            ↓
+                          LINE
+                            ↓
+                     Render / Node.js
+                            ↓
+                  AI Orchestration Layer
+                            ↓
+                     Agent Command
+                     Protocol (ACP)
+                            ↓
+           ┌────────────────┼─────────────────┐
+           ↓                ↓                 ↓
+        Kilo Code        NVIDIA Nemotron   Utility Models
+           ↓                ↓                 ↓
+        GitHub          Research /          Utility
+        / Code           Review              Tasks
+           └────────────────┼─────────────────┘
+                            ↓
+                  Authorized Capabilities
+
                            ↓
               ┌────────────┴────────────┐
               ↓                         ↓
@@ -946,11 +938,11 @@ It is the next architectural design task after this document is approved.
 
 17. AI specialist roles
 
-17.1 Codex
+17.1 Kilo Code
 
 PROPOSED / TARGET
 
-Codex remains the primary implementation/build/debug/test specialist.
+Kilo Code remains the primary implementation/build/debug/test specialist.
 
 Typical delegation:
 
@@ -961,11 +953,11 @@ Typical delegation:
 
 ⸻
 
-17.2 Gemini
+17.2 NVIDIA Nemotron 3 Ultra
 
 PROPOSED / TARGET
 
-Gemini remains the architecture, research, planning, and review specialist.
+NVIDIA Nemotron 3 Ultra remains the architecture, research, planning, and review specialist.
 
 Typical delegation:
 
@@ -1364,8 +1356,8 @@ PROPOSED / TARGET
 Enable complex tasks involving:
 
 * OpenClaw;
-* Codex;
-* Gemini;
+* Kilo Code;
+* NVIDIA Nemotron 3 Ultra;
 * Qwen or another router;
 * GitHub Actions;
 * approved production capabilities.
@@ -1378,15 +1370,15 @@ LINE
  ↓
 Router / OpenClaw
  ↓
-Gemini architecture analysis
+NVIDIA Nemotron architecture analysis
  ↓
-Codex implementation
+Kilo Code implementation
  ↓
 Tests
  ↓
-Gemini review
+NVIDIA Nemotron review
  ↓
-Codex corrections
+Kilo Code corrections
  ↓
 Result
  ↓
