@@ -747,8 +747,8 @@ Examples:
 Kyle should not need to manually move between:
 
 * LINE;
-* Gemini;
-* Codex;
+* NVIDIA Nemotron 3 Ultra = Architect / Reasoning / Research / Reviewer;
+* Kilo Code = Builder / Implementer / Tester;
 * GitHub;
 * Render;
 * Google Apps Script;
@@ -994,10 +994,10 @@ GET_BOOKINGS
 or:
 
 "Add this feature to the CRM."
-      ↓
+↓
 CODE_CHANGE_REQUEST
-      ↓
-Codex
+↓
+Kilo Code
 
 Qwen3 0.6B must be benchmarked before becoming a production-critical router.
 
@@ -1462,8 +1462,8 @@ The ACP design must identify:
 * correlation IDs;
 * logging;
 * LINE integration points;
-* Codex integration points;
-* Gemini integration points;
+* Kilo Code integration points;
+* NVIDIA Nemotron 3 Ultra integration points;
 * OpenClaw integration points;
 * GitHub Actions execution boundaries.
 
@@ -1537,7 +1537,7 @@ The intended end state is a reliable, incremental automation system in which:
                       ↓
         ┌─────────────┼─────────────┐
         ↓             ↓             ↓
-      Codex         Gemini       Utilities
+      Kilo Code     NVIDIA Nemotron 3 Ultra  Utilities
         ↓             ↓             ↓
      GitHub        Research      Low-cost
       / Code        / Review      operations
