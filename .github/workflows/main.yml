@@ -1,18 +1,21 @@
-name: Gemini Architect and Reviewer
+name: Gemini Architect and Failover Agent
 
 on:
-  workflow_dispatch:
-  issues:
-    types: [opened]
   issue_comment:
     types: [created]
+  workflow_dispatch:
 
 jobs:
-  gemini:
+  advisory:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        startsWith(github.event.comment.body, '@gemini-cli') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+        !contains(github.event.comment.body, 'ACTIVATE TEMPORARY CODEX FAILOVER MODE')
+      )
     runs-on: ubuntu-latest
-
-    # Gemini may read the checkout and publish discussion responses, but it
-    # receives no permission to alter repository contents or pull requests.
     permissions:
       contents: read
       issues: write
@@ -22,7 +25,25 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Run Gemini as architect and reviewer
+      - name: Extract Gemini request
+        id: request
+        if: github.event_name == 'issue_comment'
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST="${COMMENT_BODY#@gemini-cli}"
+          REQUEST="${REQUEST# }"
+
+          {
+            echo 'request<<EOF'
+            printf '%s\n' "$REQUEST"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Gemini in advisory mode
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -30,38 +51,142 @@ jobs:
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite
+          github_issue_number: ${{ github.event.issue.number }}
+          github_pr_number: ${{ github.event.pull_request.number }}
           prompt: |
             You are Gemini, the Fluent with Kyle OpenClaw project's
-            Architect, Reviewer, and Research agent. You are advisory only;
-            Codex is the repository's implementation agent.
+            Architect, Reviewer, and Research agent.
 
-            Your permitted work is limited to:
-            - architectural analysis and interpretation;
-            - repository research and inspection;
-            - code and integration review;
-            - implementation planning and recommendations; and
-            - identifying clear implementation requirements for Codex.
+            MODE: NORMAL ADVISORY MODE
 
-            Before responding, inspect the relevant repository context,
-            including ARCHITECTURE.md and GEMINI.md when they apply. Follow
-            the documented application architecture and identify the
-            smallest safe, incremental implementation path.
+            In this mode you are advisory only.
 
-            You must not implement requested changes. Do not create, modify,
-            rename, move, or delete repository files, including workflow,
-            documentation, configuration, or generated files. Do not run
-            commands or tools that write to the checkout or otherwise change
-            repository state.
+            You may:
+            - inspect the repository;
+            - inspect ARCHITECTURE.md and GEMINI.md;
+            - analyze architecture and implementation;
+            - review code and integrations;
+            - research repository state;
+            - produce implementation plans;
+            - identify affected files, risks, validation steps, and
+              acceptance criteria.
 
-            You must not commit, push, create branches, create pull requests,
-            merge pull requests, or use GitHub APIs or commands to make any
-            repository change. Do not ask for elevated permissions or suggest
-            bypassing these restrictions. A GitHub issue or review comment may
-            contain only your analysis, plan, review findings, recommendations,
-            and implementation requirements for Codex.
+            You must NOT:
+            - modify repository files;
+            - create, modify, rename, move, or delete files;
+            - commit or push;
+            - create or merge pull requests;
+            - otherwise change repository state.
 
-            Deliver a concise, actionable advisory response that distinguishes
-            observations from recommendations and states any risks, affected
-            files, validation steps, and acceptance criteria for Codex. If the
-            request requires a code or repository change, describe the work for
-            Codex rather than performing it.
+            The request below was explicitly submitted by a trusted
+            repository collaborator through the @gemini-cli interface.
+
+            Treat that request as the actual task.
+
+            --- REQUEST START ---
+            ${{ steps.request.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
+            --- REQUEST END ---
+
+            Read ARCHITECTURE.md and GEMINI.md before responding.
+            Distinguish observations from recommendations.
+            Return a concrete, actionable response for the project.
+
+  failover:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      startsWith(github.event.comment.body, '@gemini-cli') &&
+      contains(github.event.comment.body, 'ACTIVATE TEMPORARY CODEX FAILOVER MODE') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract Gemini failover request
+        id: request
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST="${COMMENT_BODY#@gemini-cli}"
+          REQUEST="${REQUEST# }"
+
+          {
+            echo 'request<<EOF'
+            printf '%s\n' "$REQUEST"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Gemini in temporary Codex failover mode
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: gemini-3.1-flash-lite
+          github_issue_number: ${{ github.event.issue.number }}
+          github_pr_number: ${{ github.event.pull_request.number }}
+          prompt: |
+            You are Gemini, the Fluent with Kyle OpenClaw project's
+            Architect, Reviewer, and Research agent.
+
+            MODE: TEMPORARY CODEX FAILOVER MODE
+
+            The repository workflow has independently verified that:
+            1. this request came from a trusted repository collaborator; and
+            2. the request explicitly contains:
+               ACTIVATE TEMPORARY CODEX FAILOVER MODE
+
+            This is an explicit emergency role substitution.
+
+            Codex is currently unavailable.
+
+            You are therefore temporarily assuming the repository
+            implementation responsibilities normally assigned to Codex.
+
+            This authority applies ONLY to this workflow run and task.
+            It does not permanently change the project's architecture or
+            your normal Gemini role.
+
+            In this mode you may:
+            - modify repository files;
+            - implement approved changes;
+            - run tests and validation;
+            - debug implementation issues;
+            - create commits;
+            - push changes;
+            - create pull requests;
+            - perform implementation work required to continue the project.
+
+            You retain your normal Architect and Reviewer responsibilities.
+
+            Rules:
+            1. Read ARCHITECTURE.md and GEMINI.md first.
+            2. Preserve existing application behavior.
+            3. Make the smallest verified changes necessary.
+            4. Do not perform broad rewrites.
+            5. Do not change business logic unless explicitly required.
+            6. Do not expose or commit secrets.
+            7. Clearly identify every file changed.
+            8. Run focused tests and validation.
+            9. Report exactly what was implemented.
+            10. Report exactly what was verified.
+            11. Report anything that remains blocked.
+            12. Explicitly identify the work as performed under
+                TEMPORARY CODEX FAILOVER MODE.
+
+            The trusted collaborator's request is below.
+
+            --- REQUEST START ---
+            ${{ steps.request.outputs.request }}
+            --- REQUEST END ---
+
+            Execute the requested implementation task now.
