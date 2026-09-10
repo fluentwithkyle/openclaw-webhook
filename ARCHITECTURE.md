@@ -51,18 +51,18 @@ AI orchestration must not become a reason to move business rules out of Render o
 The current production system is therefore:
 
 Tally / Cal.com
-↓
+      ↓
 Render / Node.js
-↓
+      ↓
 Business decisions + workflow logic
-↓
+      ↓
 Google Apps Script
-↓
+      ↓
 Google Sheets / Gmail
 Render
-↓
+      ↓
 LINE notifications
-↓
+      ↓
 LINE
 
 The long-term target adds an AI control plane without replacing this production boundary.
@@ -111,18 +111,18 @@ LINE is a communication channel, not a business-rules engine.
 The repository is at the workflow-modular intermediate stage.
 
 index.js
-→ infrastructure
-→ Express application
-→ routes
-→ health endpoint
-→ scheduler startup
-→ keep-alive
+  → infrastructure
+  → Express application
+  → routes
+  → health endpoint
+  → scheduler startup
+  → keep-alive
 workflows/
-→ business workflows
+  → business workflows
 services/
-→ integration and provider-processing services
+  → integration and provider-processing services
 google-apps-script/
-→ Google-specific adapter implementation
+  → Google-specific adapter implementation
 
 Current source layout:
 
@@ -249,13 +249,13 @@ It is part of the current production architecture.
 The intended boundary is:
 
 Render
-↓
+  ↓
 Apps Script action
-↓
+  ↓
 Code.js
-↓
+  ↓
 CRM.js / Email.js
-↓
+  ↓
 Google Sheets / Gmail
 
 Apps Script should remain lightweight and Google-specific.
@@ -414,13 +414,13 @@ CURRENT / IMPLEMENTED
 The current abandoned-booking workflow is:
 
 Pending Booking
-↓
+      ↓
 Elapsed time > 30 minutes
-↓
+      ↓
 Render detection
-↓
+      ↓
 CRM update
-↓
+      ↓
 LINE sales-recovery alert
 
 The eligibility condition is strictly:
@@ -456,31 +456,31 @@ It should follow authentication and hardening of the Node → Apps Script action
 The intended complete lifecycle is:
 
 Tally #1
-↓
+   ↓
 Client Profile Created
-↓
+   ↓
 Pending Booking
-↓
+   ↓
 Free Intro Booking
-↓
+   ↓
 Booking Context + Diagnostic Data
-↓
+   ↓
 Confirmed
-↓
+   ↓
 Intro Meeting
-↓
+   ↓
 Meeting Ended
-↓
+   ↓
 Personalized Tally #2
-↓
+   ↓
 Package Selection
-↓
+   ↓
 Payment
-↓
+   ↓
 Sessions
-↓
+   ↓
 Booking Management
-↓
+   ↓
 Cancellation / Recovery
 
 Render owns the business interpretation of these transitions.
@@ -490,19 +490,19 @@ Render owns the business interpretation of these transitions.
 10.2 Abandoned booking lifecycle
 
 Tally #1
-↓
+   ↓
 Client Profile Created
-↓
+   ↓
 Pending Booking
-↓
+   ↓
 30+ minutes
-↓
+   ↓
 Render Detection
-↓
+   ↓
 Follow-up Needed
-↓
+   ↓
 CRM Update
-↓
+   ↓
 LINE Sales-Recovery Alert
 
 The exact current eligibility implementation is:
@@ -514,21 +514,21 @@ elapsedMs > 30 minutes
 10.3 Cancellation lifecycle
 
 Confirmed
-↓
+   ↓
 Cal.com Cancellation
-↓
+   ↓
 Render
-↓
+   ↓
 Identify Client
-↓
+   ↓
 Retrieve Client Context
-↓
+   ↓
 CRM Update
-├── Cancellation Status
-└── Cancellation Reason
-↓
+   ├── Cancellation Status
+   └── Cancellation Reason
+   ↓
 LINE Cancellation Alert
-↓
+   ↓
 Recovery Opportunity
 
 Render owns the business interpretation.
@@ -540,19 +540,19 @@ Render owns the business interpretation.
 Future payment integration should follow the same architectural boundary:
 
 Payment Event
-↓
+   ↓
 Render
-↓
+   ↓
 Identify Client
-↓
+   ↓
 Determine Package
-↓
+   ↓
 Determine Payment State
-↓
+   ↓
 Update CRM
-↓
+   ↓
 Calculate / Confirm Credits
-↓
+   ↓
 Trigger Next Lifecycle Event
 
 The payment provider may remain an external event source while Render owns the business interpretation.
@@ -564,15 +564,15 @@ The payment provider may remain an external event source while Render owns the b
 The same architecture can support:
 
 Session Scheduled
-↓
+       ↓
 Session Completed
-↓
+       ↓
 Credit Used
-↓
+       ↓
 CRM Updated
-↓
+       ↓
 Remaining Credits Calculated
-↓
+       ↓
 Next Booking / Follow-Up
 
 This provides the foundation for a complete client-management engine.
@@ -706,31 +706,31 @@ CURRENT / IMPLEMENTED OPERATING MODEL
 Major development work follows:
 
 Gemini
-↓
+  ↓
 Analyze repository
-↓
+  ↓
 Understand architecture
-↓
+  ↓
 Produce implementation plan
-↓
+  ↓
 Codex
-↓
+  ↓
 Implement plan
-↓
+  ↓
 Modify files
-↓
+  ↓
 Run tests
-↓
+  ↓
 Debug
-↓
+  ↓
 Verify
-↓
+  ↓
 Gemini
-↓
+  ↓
 Architectural / integration review
-↓
+  ↓
 Codex
-↓
+  ↓
 Final corrections
 
 Gemini is the architect/reviewer. Codex is the primary builder.
@@ -749,9 +749,9 @@ Kyle should be able to use LINE as the single natural-language control interface
 
 Examples:
 
-“Give me this week’s bookings.”
-“Add this feature to the CRM.”
-“Here’s what I’m thinking for a system to automate lesson planning…”
+"Give me this week's bookings."
+"Add this feature to the CRM."
+"Here's what I'm thinking for a system to automate lesson planning..."
 
 Kyle should not need to manually move between:
 
@@ -769,38 +769,38 @@ The underlying agents and services should operate behind the LINE interface.
 
 14.2 Target architecture
 
-                     KYLE
-                       ↓
-                     LINE
-                       ↓
-                Render / Node.js
-                       ↓
-             AI Orchestration Layer
-                       ↓
-                Agent Command
-                Protocol (ACP)
-                       ↓
-      ┌────────────────┼─────────────────┐
-      ↓                ↓                 ↓
-   Codex            Gemini          Utility Models
-      ↓                ↓                 ↓
-   GitHub          Research /          Utility
-   / Code           Review              Tasks
-      └────────────────┼─────────────────┘
-                       ↓
-             Authorized Capabilities
-                       ↓
-          ┌────────────┴────────────┐
-          ↓                         ↓
-   Render application        Google Apps Script
-   / business logic          / Google operations
-          ↓                         ↓
-   Existing workflows       Sheets / Gmail
-          └────────────┬────────────┘
-                       ↓
-                     LINE
-                       ↓
-                      KYLE
+                         KYLE
+                           ↓
+                         LINE
+                           ↓
+                    Render / Node.js
+                           ↓
+                 AI Orchestration Layer
+                           ↓
+                    Agent Command
+                    Protocol (ACP)
+                           ↓
+          ┌────────────────┼─────────────────┐
+          ↓                ↓                 ↓
+       Codex            Gemini          Utility Models
+          ↓                ↓                 ↓
+       GitHub          Research /          Utility
+       / Code           Review              Tasks
+          └────────────────┼─────────────────┘
+                           ↓
+                 Authorized Capabilities
+                           ↓
+              ┌────────────┴────────────┐
+              ↓                         ↓
+       Render application        Google Apps Script
+       / business logic          / Google operations
+              ↓                         ↓
+       Existing workflows       Sheets / Gmail
+              └────────────┬────────────┘
+                           ↓
+                         LINE
+                           ↓
+                          KYLE
 
 GitHub Actions may serve as an ephemeral AI execution plane within this architecture.
 
@@ -819,12 +819,12 @@ LINE becomes Kyle’s natural-language control interface.
 The intended experience is:
 
 Kyle → LINE
-→ request received
-→ system understands request
-→ appropriate capability/agent selected
-→ task executed
-→ result returned
-→ LINE
+     → request received
+     → system understands request
+     → appropriate capability/agent selected
+     → task executed
+     → result returned
+     → LINE
 
 LINE itself does not make business decisions.
 
@@ -837,22 +837,22 @@ Render remains responsible for production business rules.
 Simple requests may eventually follow:
 
 LINE
-↓
+ ↓
 Render
-↓
+ ↓
 AI Router
-↓
+ ↓
 Approved read capability
-↓
+ ↓
 Existing production system
-↓
+ ↓
 Result
-↓
+ ↓
 LINE
 
 Example:
 
-“Give me this week’s bookings.”
+"Give me this week's bookings."
 
 ⸻
 
@@ -861,21 +861,21 @@ Example:
 Longer tasks should follow:
 
 LINE
-↓
+ ↓
 Render
-↓
+ ↓
 Create task
-↓
+ ↓
 AI execution plane
-↓
+ ↓
 Orchestration
-↓
+ ↓
 Specialist / capability
-↓
+ ↓
 Task result
-↓
+ ↓
 Render
-↓
+ ↓
 LINE
 
 The architecture must eventually account for:
@@ -904,17 +904,17 @@ The Agent Command Protocol (ACP) will provide the structured boundary between AI
 Conceptually:
 
 AI orchestration
-↓
+      ↓
 Structured Agent Command
-↓
+      ↓
 Authentication / Authorization
-↓
+      ↓
 Approved Capability
-↓
+      ↓
 Existing Application / Service
-↓
+      ↓
 Structured Result
-↓
+      ↓
 AI orchestration
 
 The AI layer should not directly manipulate production systems when an approved capability can provide the required operation.
@@ -954,10 +954,10 @@ Codex remains the primary implementation/build/debug/test specialist.
 
 Typical delegation:
 
-“Implement this feature.”
-“Fix this bug.”
-“Run the tests and resolve the failure.”
-“Update the CRM workflow.”
+"Implement this feature."
+"Fix this bug."
+"Run the tests and resolve the failure."
+"Update the CRM workflow."
 
 ⸻
 
@@ -969,11 +969,11 @@ Gemini remains the architecture, research, planning, and review specialist.
 
 Typical delegation:
 
-“Analyze this architecture.”
-“Research the best approach.”
-“Review this implementation.”
-“Identify integration risks.”
-“Produce an implementation plan.”
+"Analyze this architecture."
+"Research the best approach."
+"Review this implementation."
+"Identify integration risks."
+"Produce an implementation plan."
 
 ⸻
 
@@ -988,23 +988,23 @@ It must not initially be treated as a fully autonomous reasoning or coding agent
 The preferred constrained problem is:
 
 Natural language
-↓
+      ↓
 Structured intent
-↓
+      ↓
 Approved command
 
 Example:
 
-“Give me this week’s bookings.”
-↓
+"Give me this week's bookings."
+      ↓
 GET_BOOKINGS
 
 or:
 
-“Add this feature to the CRM.”
-↓
+"Add this feature to the CRM."
+      ↓
 CODE_CHANGE_REQUEST
-↓
+      ↓
 Codex
 
 Qwen3 0.6B must be benchmarked before becoming a production-critical router.
@@ -1046,9 +1046,9 @@ The production application must not depend on OpenClaw-specific business logic.
 The intended separation is:
 
 Production capabilities
-↕
-ACP
-↕
+        ↕
+       ACP
+        ↕
 Orchestration layer
 
 OpenClaw can therefore:
@@ -1230,23 +1230,23 @@ At minimum, the architecture must support:
 Potential states include:
 
 RECEIVED
-↓
+   ↓
 ROUTING
-↓
+   ↓
 QUEUED
-↓
+   ↓
 RUNNING
-↓
+   ↓
 COMPLETED
 
 with failure paths such as:
 
 RUNNING
-↓
+   ↓
 FAILED
-↓
+   ↓
 RETRYING
-↓
+   ↓
 COMPLETED / FAILED
 
 The exact state model is part of future ACP/task-system design.
@@ -1262,7 +1262,7 @@ Critical scheduled workflows remain on Render during the AI migration.
 In particular:
 
 Render
-↓
+  ↓
 abandonedBooking.js
 
 must remain operational independently of the AI orchestration layer.
@@ -1289,22 +1289,22 @@ Allow Kyle to ask simple questions through LINE and receive information from the
 
 Example:
 
-“Give me this week’s bookings.”
+"Give me this week's bookings."
 
 Architecture:
 
 LINE
-↓
+ ↓
 Render
-↓
+ ↓
 AI/router
-↓
+ ↓
 Read-only capability
-↓
+ ↓
 Existing data
-↓
+ ↓
 Render
-↓
+ ↓
 LINE
 
 Requirements:
@@ -1373,23 +1373,23 @@ Enable complex tasks involving:
 Example:
 
 Kyle
-↓
+ ↓
 LINE
-↓
+ ↓
 Router / OpenClaw
-↓
+ ↓
 Gemini architecture analysis
-↓
+ ↓
 Codex implementation
-↓
+ ↓
 Tests
-↓
+ ↓
 Gemini review
-↓
+ ↓
 Codex corrections
-↓
+ ↓
 Result
-↓
+ ↓
 LINE
 
 The exact orchestration implementation should be determined from the validated ACP and proof-of-concept results.
@@ -1423,17 +1423,17 @@ AI orchestration must not cause these production-hardening requirements to be fo
 The following are future directions, not current implementation mandates:
 
 Current workflow-modular system
-↓
+        ↓
 Gradual domain-oriented business modules
-↓
+        ↓
 Centralized event processing
-↓
+        ↓
 OpenClaw management/orchestration layer
-↓
+        ↓
 ACP-based AI capability layer
-↓
+        ↓
 LINE-centered natural-language control
-↓
+        ↓
 More complete client lifecycle automation
 
 Do not introduce:
@@ -1531,40 +1531,39 @@ When a requested change conflicts with the documented architecture, identify the
 
 The intended end state is a reliable, incremental automation system in which:
 
-                KYLE
-                  ↓
-                LINE
-                  ↓
-         Natural-language request
-                  ↓
-         Render / control boundary
-                  ↓
-      AI orchestration / OpenClaw
-                  ↓
-                ACP
-                  ↓
-    ┌─────────────┼─────────────┐
-    ↓             ↓             ↓
-  Codex         Gemini       Utilities
-    ↓             ↓             ↓
- GitHub        Research      Low-cost
-  / Code        / Review      operations
-    └─────────────┼─────────────┘
-                  ↓
-         Approved capabilities
-                  ↓
-      ┌───────────┴───────────┐
-      ↓                       ↓
-   Render              Apps Script
-
-Business logic         Google operations
-↓                       ↓
-Workflows            Sheets / Gmail
-└───────────┬───────────┘
-↓
-LINE
-↓
-KYLE
+                    KYLE
+                      ↓
+                    LINE
+                      ↓
+             Natural-language request
+                      ↓
+             Render / control boundary
+                      ↓
+          AI orchestration / OpenClaw
+                      ↓
+                    ACP
+                      ↓
+        ┌─────────────┼─────────────┐
+        ↓             ↓             ↓
+      Codex         Gemini       Utilities
+        ↓             ↓             ↓
+     GitHub        Research      Low-cost
+      / Code        / Review      operations
+        └─────────────┼─────────────┘
+                      ↓
+             Approved capabilities
+                      ↓
+          ┌───────────┴───────────┐
+          ↓                       ↓
+       Render              Apps Script
+   Business logic         Google operations
+          ↓                       ↓
+       Workflows            Sheets / Gmail
+          └───────────┬───────────┘
+                      ↓
+                    LINE
+                      ↓
+                     KYLE
 
 The key invariant remains:
 
@@ -1585,18 +1584,3 @@ OpenClaw remains initially available as the orchestration/mediation layer but is
 Qwen3 0.6B remains under validation until its routing reliability is demonstrated.
 
 The system evolves incrementally without requiring a wholesale rewrite of the working Fluent with Kyle application.
-
-⸻
-
-FINAL RESPONSE REQUIRED
-
-After completing the change, report:
-
-1. Whether ARCHITECTURE.md was successfully updated.
-2. Whether the resulting file matches the approved architecture.
-3. Whether any important current architecture was preserved or corrected.
-4. The exact files changed.
-5. The git diff summary.
-6. Whether the change was committed, and the commit hash if applicable.
-
-Do not make any unrelated changes.
