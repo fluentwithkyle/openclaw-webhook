@@ -183,6 +183,14 @@ jobs:
             12. Explicitly identify the work as performed under
                 TEMPORARY CODEX FAILOVER MODE.
 
+            IMPORTANT REPOSITORY PERSISTENCE RULE:
+            You are operating inside the checked-out GitHub repository.
+            If the requested task requires repository changes, you MUST
+            actually modify the files in the workspace. Do not merely
+            describe the changes or provide a proposed patch in your
+            response. The workflow will verify and persist your changes
+            after this step.
+
             The trusted collaborator's request is below.
 
             --- REQUEST START ---
@@ -190,3 +198,50 @@ jobs:
             --- REQUEST END ---
 
             Execute the requested implementation task now.
+
+      - name: Verify and persist failover changes
+        shell: bash
+        env:
+          REQUEST: ${{ steps.request.outputs.request }}
+        run: |
+          set -euo pipefail
+
+          echo "Checking repository changes produced by Gemini..."
+          git status --short
+
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+            echo "ERROR: Gemini completed without producing any repository changes."
+            echo "Failover implementation was not persisted."
+            exit 1
+          fi
+
+          echo "Changes detected. Showing diff summary:"
+          git diff --stat
+          git status --short
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "ERROR: No staged changes remain after git add."
+            exit 1
+          fi
+
+          git commit -m "Gemini temporary Codex failover implementation"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+          echo "Verifying pushed repository state..."
+          git fetch origin "${GITHUB_REF_NAME}"
+          LOCAL_SHA="$(git rev-parse HEAD)"
+          REMOTE_SHA="$(git rev-parse "origin/${GITHUB_REF_NAME}")"
+
+          if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+            echo "ERROR: Push verification failed."
+            echo "Local:  $LOCAL_SHA"
+            echo "Remote: $REMOTE_SHA"
+            exit 1
+          fi
+
+          echo "Failover changes successfully committed and pushed: $LOCAL_SHA"
