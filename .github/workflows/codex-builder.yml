@@ -1,0 +1,42 @@
+name: Codex Task Implementation
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_prompt:
+        description: 'Natural language instructions for Codex'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Codex Agent
+        uses: openai/codex-action@v1
+        id: run_codex
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          prompt: ${{ inputs.task_prompt }}
+
+      - name: Create Pull Request with Changes
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "feat(codex): implement requested changes"
+          branch: codex/automated-task
+          title: "Codex Agent: Automated Implementation Task"
+          body: |
+            Automated code modifications requested via GitHub workflow dispatch.
+            
+            **Instructions provided:**
+            > ${{ inputs.task_prompt }}
