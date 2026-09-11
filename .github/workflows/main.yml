@@ -4,6 +4,12 @@ on:
   issue_comment:
     types: [created]
   workflow_dispatch:
+    inputs:
+      authorized_files:
+        description: 'Comma-separated list of files authorized for modification in failover mode'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   advisory:
@@ -124,6 +130,39 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      - name: Capture pre-Gemini repository state
+        id: pre_state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Capture all pre-existing state to detect ONLY Gemini's changes
+          PRE_STAGED="$(git diff --cached --name-only | sort -u)"
+          PRE_UNTRACKED="$(git ls-files --others --exclude-standard | sort -u)"
+          PRE_WORKTREE="$(git diff --name-only | sort -u)"
+          PRE_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
+
+          {
+            echo 'pre_staged<<EOF'
+            printf '%s\n' "$PRE_STAGED"
+            echo 'EOF'
+            echo 'pre_untracked<<EOF'
+            printf '%s\n' "$PRE_UNTRACKED"
+            echo 'EOF'
+            echo 'pre_worktree<<EOF'
+            printf '%s\n' "$PRE_WORKTREE"
+            echo 'EOF'
+            echo 'pre_deleted<<EOF'
+            printf '%s\n' "$PRE_DELETED"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Pre-Gemini state captured:"
+          echo "  Staged: $(printf '%s\n' "$PRE_STAGED" | wc -l) files"
+          echo "  Untracked: $(printf '%s\n' "$PRE_UNTRACKED" | wc -l) files"
+          echo "  Worktree modified: $(printf '%s\n' "$PRE_WORKTREE" | wc -l) files"
+          echo "  Deleted: $(printf '%s\n' "$PRE_DELETED" | wc -l) files"
+
       - name: Run Gemini in temporary Codex failover mode
         uses: google-github-actions/run-gemini-cli@v0
         env:
@@ -203,47 +242,88 @@ jobs:
         shell: bash
         env:
           REQUEST: ${{ steps.request.outputs.request }}
+          AUTHORIZED_FILES_INPUT: ${{ github.event.inputs.authorized_files }}
+          PRE_STAGED: ${{ steps.pre_state.outputs.pre_staged }}
+          PRE_UNTRACKED: ${{ steps.pre_state.outputs.pre_untracked }}
+          PRE_WORKTREE: ${{ steps.pre_state.outputs.pre_worktree }}
+          PRE_DELETED: ${{ steps.pre_state.outputs.pre_deleted }}
         run: |
           set -euo pipefail
 
-          # Authorized file scope for this failover task
-          # Only ARCHITECTURE.md is authorized per the task specification
-          AUTHORIZED_FILES="ARCHITECTURE.md"
+          # ============================================================
+          # COMMIT BOUNDARY HARDENING - GEMINI FAILOVER SCOPE GATE
+          # ============================================================
+
+          # Parse authorized files from workflow input (comma-separated)
+          # Falls back to ARCHITECTURE.md if not provided (backward compatibility)
+          if [ -n "$AUTHORIZED_FILES_INPUT" ]; then
+            # Split comma-separated input into newline-separated list
+            AUTHORIZED_FILES="$(printf '%s\n' "$AUTHORIZED_FILES_INPUT" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sed '/^$/d' | sort -u)"
+          else
+            AUTHORIZED_FILES="ARCHITECTURE.md"
+          fi
 
           echo "=== COMMIT SCOPE GATE ==="
-          echo "Authorized files: $AUTHORIZED_FILES"
+          echo "Authorized files:"
+          printf '%s\n' "$AUTHORIZED_FILES" | sed 's/^/  /'
 
-          echo "Checking repository changes produced by Gemini..."
-          git status --short
+          # Capture post-Gemini state
+          POST_STAGED="$(git diff --cached --name-only | sort -u)"
+          POST_UNTRACKED="$(git ls-files --others --exclude-standard | sort -u)"
+          POST_WORKTREE="$(git diff --name-only | sort -u)"
+          POST_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
 
-          if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+          # Compute ONLY the changes introduced by Gemini (delta from pre-state)
+          # New staged files = post-staged minus pre-staged
+          GEMINI_STAGED="$(comm -13 <(printf '%s\n' "$PRE_STAGED") <(printf '%s\n' "$POST_STAGED"))"
+          # New untracked files = post-untracked minus pre-untracked
+          GEMINI_UNTRACKED="$(comm -13 <(printf '%s\n' "$PRE_UNTRACKED") <(printf '%s\n' "$POST_UNTRACKED"))"
+          # New worktree modifications = post-worktree minus pre-worktree
+          GEMINI_WORKTREE="$(comm -13 <(printf '%s\n' "$PRE_WORKTREE") <(printf '%s\n' "$POST_WORKTREE"))"
+          # New deletions = post-deleted minus pre-deleted
+          GEMINI_DELETED="$(comm -13 <(printf '%s\n' "$PRE_DELETED") <(printf '%s\n' "$POST_DELETED"))"
+
+          # All files changed by Gemini (union of all categories)
+          ALL_GEMINI_CHANGES="$(printf '%s\n%s\n%s\n%s\n' "$GEMINI_STAGED" "$GEMINI_UNTRACKED" "$GEMINI_WORKTREE" "$GEMINI_DELETED" | sort -u | sed '/^$/d')"
+
+          echo "=== GEMINI CHANGES DETECTED ==="
+          if [ -z "$ALL_GEMINI_CHANGES" ]; then
             echo "ERROR: Gemini completed without producing any repository changes."
             echo "Failover implementation was not persisted."
             exit 1
           fi
 
-          echo "Changes detected. Showing diff summary:"
-          git diff --stat
-          git status --short
+          printf '%s\n' "$ALL_GEMINI_CHANGES" | sed 's/^/  /'
 
-          # Get all changed files (modified, added, deleted)
-          CHANGED_FILES="$(git diff --name-only)"
-          ADDED_FILES="$(git ls-files --others --exclude-standard)"
-          DELETED_FILES="$(git diff --name-only --diff-filter=D)"
-          ALL_CHANGED_FILES="$(printf '%s\n%s\n%s\n' "$CHANGED_FILES" "$ADDED_FILES" "$DELETED_FILES" | sort -u | sed '/^$/d')"
+          # Show diff summary for Gemini's changes only
+          echo "=== GEMINI DIFF SUMMARY ==="
+          if [ -n "$GEMINI_WORKTREE" ] || [ -n "$GEMINI_STAGED" ]; then
+            # Show diff for modified files (worktree + staged)
+            MODIFIED_FILES="$(printf '%s\n%s\n' "$GEMINI_WORKTREE" "$GEMINI_STAGED" | sort -u | sed '/^$/d')"
+            if [ -n "$MODIFIED_FILES" ]; then
+              git diff --stat $MODIFIED_FILES 2>/dev/null || true
+            fi
+          fi
+          if [ -n "$GEMINI_UNTRACKED" ]; then
+            echo "New untracked files:"
+            printf '%s\n' "$GEMINI_UNTRACKED" | sed 's/^/  /'
+          fi
+          if [ -n "$GEMINI_DELETED" ]; then
+            echo "Deleted files:"
+            printf '%s\n' "$GEMINI_DELETED" | sed 's/^/  /'
+          fi
 
+          # ============================================================
+          # SCOPE CHECK: Verify ALL Gemini changes are within authorized scope
+          # ============================================================
           echo "=== SCOPE CHECK ==="
-          echo "All changed files:"
-          printf '%s\n' "$ALL_CHANGED_FILES"
-
-          # Check each changed file against authorized scope
           UNAUTHORIZED_FILES=""
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             if ! printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
               UNAUTHORIZED_FILES="${UNAUTHORIZED_FILES}${file}\n"
             fi
-          done <<< "$ALL_CHANGED_FILES"
+          done <<< "$ALL_GEMINI_CHANGES"
 
           if [ -n "$UNAUTHORIZED_FILES" ]; then
             echo "==========================================="
@@ -251,25 +331,50 @@ jobs:
             echo "==========================================="
             echo "The following files are NOT in the authorized scope:"
             printf '%s' "$UNAUTHORIZED_FILES"
-            echo "Authorized scope: $AUTHORIZED_FILES"
+            echo "Authorized scope:"
+            printf '%s\n' "$AUTHORIZED_FILES" | sed 's/^/  /'
             echo ""
             echo "STOPPING: No commit, no push."
             exit 1
           fi
 
-          echo "Scope check PASSED: All changed files are authorized."
+          echo "Scope check PASSED: All Gemini changes are within authorized scope."
 
-          # Stage only authorized files (no git add -A)
+          # ============================================================
+          # PRE-EXISTING STAGED FILES CHECK
+          # ============================================================
+          # Ensure no pre-existing staged files (from before Gemini ran) exist
+          # that could be accidentally committed
+          if [ -n "$PRE_STAGED" ]; then
+            echo "==========================================="
+            echo "COMMIT GATE FAILED: Pre-existing staged files detected"
+            echo "==========================================="
+            echo "The following files were already staged BEFORE Gemini ran:"
+            printf '%s\n' "$PRE_STAGED" | sed 's/^/  /'
+            echo "These could contaminate the commit. STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          # ============================================================
+          # STAGE ONLY AUTHORIZED FILES (no git add -A)
+          # ============================================================
+          echo "=== STAGING AUTHORIZED FILES ==="
           for file in $AUTHORIZED_FILES; do
-            if [ -f "$file" ] || git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+            if [ -f "$file" ]; then
               git add "$file"
+              echo "  Staged (modified/new): $file"
+            elif git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+              # File exists in index but may be deleted in worktree
+              git add "$file"
+              echo "  Staged (tracked): $file"
             fi
           done
 
-          # Also stage any authorized files that were deleted
-          for file in $DELETED_FILES; do
+          # Stage authorized deletions
+          for file in $GEMINI_DELETED; do
             if printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
               git rm "$file" 2>/dev/null || true
+              echo "  Staged (deletion): $file"
             fi
           done
 
@@ -278,14 +383,63 @@ jobs:
             exit 1
           fi
 
-          echo "=== FINAL DIFF REVIEW ==="
+          # ============================================================
+          # FINAL CACHED DIFF VERIFICATION GATE
+          # ============================================================
+          echo "=== FINAL CACHED DIFF VERIFICATION ==="
+          echo "Verifying cached diff contains ONLY authorized changes..."
+
+          # Get files in the cached diff
+          CACHED_DIFF_FILES="$(git diff --cached --name-only | sort -u)"
+          CACHED_DIFF_DELETED="$(git diff --cached --name-only --diff-filter=D | sort -u)"
+          ALL_CACHED_FILES="$(printf '%s\n%s\n' "$CACHED_DIFF_FILES" "$CACHED_DIFF_DELETED" | sort -u | sed '/^$/d')"
+
+          # Verify every file in cached diff is authorized
+          CACHED_UNAUTHORIZED=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if ! printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
+              CACHED_UNAUTHORIZED="${CACHED_UNAUTHORIZED}${file}\n"
+            fi
+          done <<< "$ALL_CACHED_FILES"
+
+          if [ -n "$CACHED_UNAUTHORIZED" ]; then
+            echo "==========================================="
+            echo "FINAL GATE FAILED: Unauthorized files in cached diff"
+            echo "==========================================="
+            printf '%s' "$CACHED_UNAUTHORIZED"
+            echo "STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          # Show the final diff for review
+          echo "Final cached diff:"
           git diff --cached --stat
           git diff --cached
 
+          # ============================================================
+          # DIFF CHECK GATE (whitespace, etc.)
+          # ============================================================
+          echo "=== GIT DIFF --CHECK GATE ==="
+          if ! git diff --cached --check; then
+            echo "==========================================="
+            echo "FINAL GATE FAILED: git diff --check reported errors"
+            echo "==========================================="
+            echo "STOPPING: No commit, no push."
+            exit 1
+          fi
+          echo "git diff --check PASSED."
+
+          # ============================================================
+          # COMMIT AND PUSH
+          # ============================================================
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git commit -m "Gemini temporary Codex failover implementation"
+          git commit -m "Gemini temporary Codex failover implementation
+
+Authorized scope: $(printf '%s' "$AUTHORIZED_FILES" | tr '\n' ',' | sed 's/,$//')
+Task: $REQUEST"
 
           git push origin HEAD:${GITHUB_REF_NAME}
 
