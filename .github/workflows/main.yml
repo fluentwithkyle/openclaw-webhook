@@ -130,34 +130,77 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Capture pre-Gemini repository state
+      - name: Capture pre-Gemini repository state (content-based baseline)
         id: pre_state
         shell: bash
         run: |
           set -euo pipefail
 
-          # Capture all pre-existing state to detect ONLY Gemini's changes
+          # Capture content-based baseline for ALL tracked files (not just modified)
+          # This allows detecting additional modifications to files already changed before Gemini
+          PRE_TRACKED_HASHES="$(git ls-files -z | xargs -0 git hash-object 2>/dev/null | paste -d' ' - <(git ls-files) | sort)"
+          
+          # Capture pre-existing staged files
           PRE_STAGED="$(git diff --cached --name-only | sort -u)"
+          # Capture pre-existing staged content hashes
+          PRE_STAGED_HASHES="$(git diff --cached --name-only -z | xargs -0 git hash-object 2>/dev/null | paste -d' ' - <(git diff --cached --name-only) | sort)"
+          
+          # Capture pre-existing untracked files AND their content hashes
           PRE_UNTRACKED="$(git ls-files --others --exclude-standard | sort -u)"
+          PRE_UNTRACKED_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              PRE_UNTRACKED_HASHES="${PRE_UNTRACKED_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$PRE_UNTRACKED"
+          PRE_UNTRACKED_HASHES="$(printf '%s' "$PRE_UNTRACKED_HASHES" | sort)"
+
+          # Capture worktree modifications (tracked files with unstaged changes)
           PRE_WORKTREE="$(git diff --name-only | sort -u)"
+          # Capture worktree content hashes (actual content on disk)
+          PRE_WORKTREE_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              PRE_WORKTREE_HASHES="${PRE_WORKTREE_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$PRE_WORKTREE"
+          PRE_WORKTREE_HASHES="$(printf '%s' "$PRE_WORKTREE_HASHES" | sort)"
+
           PRE_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
 
           {
+            echo 'pre_tracked_hashes<<EOF'
+            printf '%s\n' "$PRE_TRACKED_HASHES"
+            echo 'EOF'
             echo 'pre_staged<<EOF'
             printf '%s\n' "$PRE_STAGED"
+            echo 'EOF'
+            echo 'pre_staged_hashes<<EOF'
+            printf '%s\n' "$PRE_STAGED_HASHES"
             echo 'EOF'
             echo 'pre_untracked<<EOF'
             printf '%s\n' "$PRE_UNTRACKED"
             echo 'EOF'
+            echo 'pre_untracked_hashes<<EOF'
+            printf '%s\n' "$PRE_UNTRACKED_HASHES"
+            echo 'EOF'
             echo 'pre_worktree<<EOF'
             printf '%s\n' "$PRE_WORKTREE"
+            echo 'EOF'
+            echo 'pre_worktree_hashes<<EOF'
+            printf '%s\n' "$PRE_WORKTREE_HASHES"
             echo 'EOF'
             echo 'pre_deleted<<EOF'
             printf '%s\n' "$PRE_DELETED"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-          echo "Pre-Gemini state captured:"
+          echo "Pre-Gemini state captured (content-based):"
+          echo "  Tracked files: $(printf '%s\n' "$PRE_TRACKED_HASHES" | wc -l) files"
           echo "  Staged: $(printf '%s\n' "$PRE_STAGED" | wc -l) files"
           echo "  Untracked: $(printf '%s\n' "$PRE_UNTRACKED" | wc -l) files"
           echo "  Worktree modified: $(printf '%s\n' "$PRE_WORKTREE" | wc -l) files"
@@ -243,9 +286,13 @@ jobs:
         env:
           REQUEST: ${{ steps.request.outputs.request }}
           AUTHORIZED_FILES_INPUT: ${{ github.event.inputs.authorized_files }}
+          PRE_TRACKED_HASHES: ${{ steps.pre_state.outputs.pre_tracked_hashes }}
           PRE_STAGED: ${{ steps.pre_state.outputs.pre_staged }}
+          PRE_STAGED_HASHES: ${{ steps.pre_state.outputs.pre_staged_hashes }}
           PRE_UNTRACKED: ${{ steps.pre_state.outputs.pre_untracked }}
+          PRE_UNTRACKED_HASHES: ${{ steps.pre_state.outputs.pre_untracked_hashes }}
           PRE_WORKTREE: ${{ steps.pre_state.outputs.pre_worktree }}
+          PRE_WORKTREE_HASHES: ${{ steps.pre_state.outputs.pre_worktree_hashes }}
           PRE_DELETED: ${{ steps.pre_state.outputs.pre_deleted }}
         run: |
           set -euo pipefail
@@ -267,55 +314,189 @@ jobs:
           echo "Authorized files:"
           printf '%s\n' "$AUTHORIZED_FILES" | sed 's/^/  /'
 
-          # Capture post-Gemini state
+          # --------------------------------------------------------------------------
+          # CAPTURE POST-GEMINI STATE (CONTENT-BASED)
+          # --------------------------------------------------------------------------
+          POST_TRACKED_HASHES="$(git ls-files -z | xargs -0 git hash-object 2>/dev/null | paste -d' ' - <(git ls-files) | sort)"
           POST_STAGED="$(git diff --cached --name-only | sort -u)"
+          POST_STAGED_HASHES="$(git diff --cached --name-only -z | xargs -0 git hash-object 2>/dev/null | paste -d' ' - <(git diff --cached --name-only) | sort)"
           POST_UNTRACKED="$(git ls-files --others --exclude-standard | sort -u)"
+          POST_UNTRACKED_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              POST_UNTRACKED_HASHES="${POST_UNTRACKED_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$POST_UNTRACKED"
+          POST_UNTRACKED_HASHES="$(printf '%s' "$POST_UNTRACKED_HASHES" | sort)"
+
           POST_WORKTREE="$(git diff --name-only | sort -u)"
+          POST_WORKTREE_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              POST_WORKTREE_HASHES="${POST_WORKTREE_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$POST_WORKTREE"
+          POST_WORKTREE_HASHES="$(printf '%s' "$POST_WORKTREE_HASHES" | sort)"
+
           POST_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
 
-          # Compute ONLY the changes introduced by Gemini (delta from pre-state)
-          # New staged files = post-staged minus pre-staged
-          GEMINI_STAGED="$(comm -13 <(printf '%s\n' "$PRE_STAGED") <(printf '%s\n' "$POST_STAGED"))"
-          # New untracked files = post-untracked minus pre-untracked
-          GEMINI_UNTRACKED="$(comm -13 <(printf '%s\n' "$PRE_UNTRACKED") <(printf '%s\n' "$POST_UNTRACKED"))"
-          # New worktree modifications = post-worktree minus pre-worktree
-          GEMINI_WORKTREE="$(comm -13 <(printf '%s\n' "$PRE_WORKTREE") <(printf '%s\n' "$POST_WORKTREE"))"
-          # New deletions = post-deleted minus pre-deleted
-          GEMINI_DELETED="$(comm -13 <(printf '%s\n' "$PRE_DELETED") <(printf '%s\n' "$POST_DELETED"))"
+          # --------------------------------------------------------------------------
+          # COMPUTE GEMINI'S ACTUAL CHANGES USING CONTENT HASH COMPARISON
+          # --------------------------------------------------------------------------
+          # A file is considered "changed by Gemini" if its content hash differs from pre-state
+          # This catches:
+          # 1. Additional modifications to files already modified before Gemini (pre-worktree)
+          # 2. Modifications to pre-existing untracked files
+          # 3. New files created by Gemini
+          # 4. Deletions
 
-          # All files changed by Gemini (union of all categories)
-          ALL_GEMINI_CHANGES="$(printf '%s\n%s\n%s\n%s\n' "$GEMINI_STAGED" "$GEMINI_UNTRACKED" "$GEMINI_WORKTREE" "$GEMINI_DELETED" | sort -u | sed '/^$/d')"
+          # Build a map of pre-state hashes for all files that existed before
+          # We need to track: tracked files, staged files, untracked files, worktree files
+          
+          # Function to extract hash for a file from a hash list
+          get_hash() {
+            local file="$1"
+            local hash_list="$2"
+            printf '%s\n' "$hash_list" | grep -E "^[a-f0-9]{40} ${file}$" | head -1 | cut -d' ' -f1
+          }
 
-          echo "=== GEMINI CHANGES DETECTED ==="
+          # Collect all files that exist in post-state
+          ALL_POST_FILES="$(printf '%s\n%s\n%s\n' "$(git ls-files)" "$POST_UNTRACKED" "$POST_DELETED" | sort -u | sed '/^$/d')"
+
+          GEMINI_CHANGED_FILES=""
+          GEMINI_NEW_UNTRACKED=""
+          GEMINI_DELETED=""
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            
+            PRE_HASH=""
+            POST_HASH=""
+            
+            # Check if file was tracked before
+            PRE_HASH="$(get_hash "$file" "$PRE_TRACKED_HASHES")"
+            
+            # Check if file was untracked before
+            if [ -z "$PRE_HASH" ]; then
+              PRE_HASH="$(get_hash "$file" "$PRE_UNTRACKED_HASHES")"
+            fi
+            
+            # Check if file is in post tracked
+            POST_HASH="$(get_hash "$file" "$POST_TRACKED_HASHES")"
+            
+            # Check if file is in post untracked
+            if [ -z "$POST_HASH" ]; then
+              POST_HASH="$(get_hash "$file" "$POST_UNTRACKED_HASHES")"
+            fi
+
+            # Determine change type
+            if [ -z "$PRE_HASH" ] && [ -n "$POST_HASH" ]; then
+              # New file (was not tracked or untracked before)
+              GEMINI_NEW_UNTRACKED="${GEMINI_NEW_UNTRACKED}${file}\n"
+            elif [ -n "$PRE_HASH" ] && [ -z "$POST_HASH" ]; then
+              # Deleted file
+              GEMINI_DELETED="${GEMINI_DELETED}${file}\n"
+            elif [ -n "$PRE_HASH" ] && [ -n "$POST_HASH" ] && [ "$PRE_HASH" != "$POST_HASH" ]; then
+              # Content changed (includes additional modifications to pre-modified files)
+              GEMINI_CHANGED_FILES="${GEMINI_CHANGED_FILES}${file}\n"
+            fi
+          done <<< "$ALL_POST_FILES"
+
+          # Also check for deletions that might not be in ALL_POST_FILES (already deleted)
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if ! printf '%s\n' "$PRE_DELETED" | grep -qxF "$file"; then
+              GEMINI_DELETED="${GEMINI_DELETED}${file}\n"
+            fi
+          done <<< "$POST_DELETED"
+
+          GEMINI_CHANGED_FILES="$(printf '%s' "$GEMINI_CHANGED_FILES" | sort -u | sed '/^$/d')"
+          GEMINI_NEW_UNTRACKED="$(printf '%s' "$GEMINI_NEW_UNTRACKED" | sort -u | sed '/^$/d')"
+          GEMINI_DELETED="$(printf '%s' "$GEMINI_DELETED" | sort -u | sed '/^$/d')"
+
+          # All files changed by Gemini (union)
+          ALL_GEMINI_CHANGES="$(printf '%s\n%s\n%s\n' "$GEMINI_CHANGED_FILES" "$GEMINI_NEW_UNTRACKED" "$GEMINI_DELETED" | sort -u | sed '/^$/d')"
+
+          echo "=== GEMINI CHANGES DETECTED (CONTENT-BASED) ==="
           if [ -z "$ALL_GEMINI_CHANGES" ]; then
             echo "ERROR: Gemini completed without producing any repository changes."
             echo "Failover implementation was not persisted."
             exit 1
           fi
 
-          printf '%s\n' "$ALL_GEMINI_CHANGES" | sed 's/^/  /'
+          echo "Modified (content changed):"
+          printf '%s\n' "$GEMINI_CHANGED_FILES" | sed 's/^/  /'
+          echo "New untracked:"
+          printf '%s\n' "$GEMINI_NEW_UNTRACKED" | sed 's/^/  /'
+          echo "Deleted:"
+          printf '%s\n' "$GEMINI_DELETED" | sed 's/^/  /'
 
           # Show diff summary for Gemini's changes only
           echo "=== GEMINI DIFF SUMMARY ==="
-          if [ -n "$GEMINI_WORKTREE" ] || [ -n "$GEMINI_STAGED" ]; then
-            # Show diff for modified files (worktree + staged)
-            MODIFIED_FILES="$(printf '%s\n%s\n' "$GEMINI_WORKTREE" "$GEMINI_STAGED" | sort -u | sed '/^$/d')"
-            if [ -n "$MODIFIED_FILES" ]; then
-              git diff --stat $MODIFIED_FILES 2>/dev/null || true
-            fi
+          if [ -n "$GEMINI_CHANGED_FILES" ]; then
+            git diff --stat $GEMINI_CHANGED_FILES 2>/dev/null || true
           fi
-          if [ -n "$GEMINI_UNTRACKED" ]; then
-            echo "New untracked files:"
-            printf '%s\n' "$GEMINI_UNTRACKED" | sed 's/^/  /'
+          if [ -n "$GEMINI_NEW_UNTRACKED" ]; then
+            echo "New untracked files (content):"
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              echo "  $file ($(wc -c < "$file") bytes)"
+            done <<< "$GEMINI_NEW_UNTRACKED"
           fi
           if [ -n "$GEMINI_DELETED" ]; then
             echo "Deleted files:"
             printf '%s\n' "$GEMINI_DELETED" | sed 's/^/  /'
           fi
 
-          # ============================================================
+          # --------------------------------------------------------------------------
+          # PROTECTION: PRE-EXISTING STAGED FILES
+          # --------------------------------------------------------------------------
+          # Ensure no pre-existing staged files exist that could contaminate the commit
+          if [ -n "$PRE_STAGED" ]; then
+            echo "==========================================="
+            echo "COMMIT GATE FAILED: Pre-existing staged files detected"
+            echo "==========================================="
+            echo "The following files were already staged BEFORE Gemini ran:"
+            printf '%s\n' "$PRE_STAGED" | sed 's/^/  /'
+            echo "These could contaminate the commit. STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          # Also verify pre-staged content hasn't been secretly modified
+          # (though PRE_STAGED check above should catch the presence of any)
+          
+          # --------------------------------------------------------------------------
+          # PROTECTION: PRE-EXISTING UNTRACKED FILES MODIFIED BY GEMINI
+          # --------------------------------------------------------------------------
+          # Check if any pre-existing untracked file was modified (content hash changed)
+          UNTRACKED_MODIFIED=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            PRE_HASH="$(get_hash "$file" "$PRE_UNTRACKED_HASHES")"
+            POST_HASH="$(get_hash "$file" "$POST_UNTRACKED_HASHES")"
+            if [ -n "$PRE_HASH" ] && [ -n "$POST_HASH" ] && [ "$PRE_HASH" != "$POST_HASH" ]; then
+              UNTRACKED_MODIFIED="${UNTRACKED_MODIFIED}${file}\n"
+            fi
+          done <<< "$PRE_UNTRACKED"
+
+          if [ -n "$UNTRACKED_MODIFIED" ]; then
+            echo "==========================================="
+            echo "COMMIT GATE FAILED: Pre-existing untracked files modified by Gemini"
+            echo "==========================================="
+            echo "The following untracked files existed before Gemini and were modified:"
+            printf '%s' "$UNTRACKED_MODIFIED" | sed 's/^/  /'
+            echo "These changes are NOT authorized unless the files are in the authorized list."
+            echo "STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          # --------------------------------------------------------------------------
           # SCOPE CHECK: Verify ALL Gemini changes are within authorized scope
-          # ============================================================
+          # --------------------------------------------------------------------------
           echo "=== SCOPE CHECK ==="
           UNAUTHORIZED_FILES=""
           while IFS= read -r file; do
@@ -340,24 +521,9 @@ jobs:
 
           echo "Scope check PASSED: All Gemini changes are within authorized scope."
 
-          # ============================================================
-          # PRE-EXISTING STAGED FILES CHECK
-          # ============================================================
-          # Ensure no pre-existing staged files (from before Gemini ran) exist
-          # that could be accidentally committed
-          if [ -n "$PRE_STAGED" ]; then
-            echo "==========================================="
-            echo "COMMIT GATE FAILED: Pre-existing staged files detected"
-            echo "==========================================="
-            echo "The following files were already staged BEFORE Gemini ran:"
-            printf '%s\n' "$PRE_STAGED" | sed 's/^/  /'
-            echo "These could contaminate the commit. STOPPING: No commit, no push."
-            exit 1
-          fi
-
-          # ============================================================
+          # --------------------------------------------------------------------------
           # STAGE ONLY AUTHORIZED FILES (no git add -A)
-          # ============================================================
+          # --------------------------------------------------------------------------
           echo "=== STAGING AUTHORIZED FILES ==="
           for file in $AUTHORIZED_FILES; do
             if [ -f "$file" ]; then
@@ -383,9 +549,9 @@ jobs:
             exit 1
           fi
 
-          # ============================================================
+          # --------------------------------------------------------------------------
           # FINAL CACHED DIFF VERIFICATION GATE
-          # ============================================================
+          # --------------------------------------------------------------------------
           echo "=== FINAL CACHED DIFF VERIFICATION ==="
           echo "Verifying cached diff contains ONLY authorized changes..."
 
@@ -417,9 +583,9 @@ jobs:
           git diff --cached --stat
           git diff --cached
 
-          # ============================================================
+          # --------------------------------------------------------------------------
           # DIFF CHECK GATE (whitespace, etc.)
-          # ============================================================
+          # --------------------------------------------------------------------------
           echo "=== GIT DIFF --CHECK GATE ==="
           if ! git diff --cached --check; then
             echo "==========================================="
@@ -430,9 +596,110 @@ jobs:
           fi
           echo "git diff --check PASSED."
 
-          # ============================================================
+          # --------------------------------------------------------------------------
+          # INDEPENDENT REVIEWER GATE
+          # --------------------------------------------------------------------------
+          echo "=== INDEPENDENT REVIEWER GATE ==="
+          echo "Invoking independent reviewer to inspect the actual proposed diff..."
+          
+          # Save the diff for reviewer
+          git diff --cached > /tmp/gemini_failover_diff.patch
+          
+          # Run independent review using Gemini in review-only mode
+          # The reviewer must PASS (exit 0) for commit to proceed
+          # We use a separate Gemini invocation with a review-only prompt
+          REVIEW_PROMPT=$(cat << 'REVIEW_EOF'
+You are an INDEPENDENT REVIEWER for the Fluent with Kyle OpenClaw project.
+You are reviewing changes made by Gemini under TEMPORARY CODEX FAILOVER MODE.
+
+CRITICAL: You are NOT the author of these changes. You are an independent reviewer.
+Your job is to VERIFY the changes, not to approve your own work.
+
+Review the diff provided and assess:
+1. Are all changes within the authorized scope?
+2. Do the changes preserve existing application behavior?
+3. Are there any unintended modifications, secrets, or security issues?
+4. Is the implementation minimal and focused?
+5. Does the diff match what was requested in the task?
+
+Task request: ${REQUEST}
+Authorized files: $(printf '%s\n' "$AUTHORIZED_FILES" | tr '\n' ',' | sed 's/,$//')
+
+You must output exactly one of:
+- REVIEW_PASS: [brief justification]
+- REVIEW_FAIL: [specific reason for failure]
+
+Do not output anything else.
+REVIEW_EOF
+)
+
+          # Write review prompt to file
+          cat > /tmp/review_prompt.txt << EOF
+$REVIEW_PROMPT
+EOF
+
+          # Run independent review - this is a SEPARATE Gemini invocation
+          # We use the google-github-actions/run-gemini-cli action but need to run it inline
+          # For now, we'll use a script-based approach since we can't nest workflow steps
+          # The review will be done by invoking gemini CLI directly with the review prompt
+          
+          echo "Running independent content review..."
+          
+          # Create a review script that uses gemini CLI
+          cat > /tmp/review_script.sh << 'SCRIPT_EOF'
+#!/bin/bash
+set -euo pipefail
+
+DIFF_FILE="/tmp/gemini_failover_diff.patch"
+PROMPT_FILE="/tmp/review_prompt.txt"
+
+if [ ! -s "$DIFF_FILE" ]; then
+  echo "REVIEW_FAIL: No diff to review"
+  exit 1
+fi
+
+# Combine prompt with diff
+FULL_PROMPT="$(cat "$PROMPT_FILE")
+
+--- DIFF START ---
+$(cat "$DIFF_FILE")
+--- DIFF END ---"
+
+# Run gemini CLI in review mode (non-interactive, read-only)
+# We need to ensure this is a DIFFERENT invocation from the failover one
+# Using gemini CLI with the prompt
+echo "$FULL_PROMPT" | gemini --model gemini-3.1-flash-lite --prompt "$(cat)" 2>&1 || true
+SCRIPT_EOF
+          chmod +x /tmp/review_script.sh
+          
+          # Run the review - capture output
+          REVIEW_OUTPUT="$(/tmp/review_script.sh 2>&1 || true)"
+          echo "Reviewer output:"
+          echo "$REVIEW_OUTPUT"
+          
+          # Check review result
+          if echo "$REVIEW_OUTPUT" | grep -q "^REVIEW_PASS:"; then
+            echo "Independent reviewer: PASS"
+          elif echo "$REVIEW_OUTPUT" | grep -q "^REVIEW_FAIL:"; then
+            echo "==========================================="
+            echo "INDEPENDENT REVIEWER GATE FAILED"
+            echo "==========================================="
+            echo "$REVIEW_OUTPUT"
+            echo "STOPPING: No commit, no push."
+            exit 1
+          else
+            echo "==========================================="
+            echo "INDEPENDENT REVIEWER GATE FAILED: No clear PASS/FAIL verdict"
+            echo "==========================================="
+            echo "Reviewer output did not contain REVIEW_PASS or REVIEW_FAIL"
+            echo "$REVIEW_OUTPUT"
+            echo "STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          # --------------------------------------------------------------------------
           # COMMIT AND PUSH
-          # ============================================================
+          # --------------------------------------------------------------------------
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
