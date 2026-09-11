@@ -206,6 +206,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Authorized file scope for this failover task
+          # Only ARCHITECTURE.md is authorized per the task specification
+          AUTHORIZED_FILES="ARCHITECTURE.md"
+
+          echo "=== COMMIT SCOPE GATE ==="
+          echo "Authorized files: $AUTHORIZED_FILES"
+
           echo "Checking repository changes produced by Gemini..."
           git status --short
 
@@ -219,17 +226,67 @@ jobs:
           git diff --stat
           git status --short
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Get all changed files (modified, added, deleted)
+          CHANGED_FILES="$(git diff --name-only)"
+          ADDED_FILES="$(git ls-files --others --exclude-standard)"
+          DELETED_FILES="$(git diff --name-only --diff-filter=D)"
+          ALL_CHANGED_FILES="$(printf '%s\n%s\n%s\n' "$CHANGED_FILES" "$ADDED_FILES" "$DELETED_FILES" | sort -u | sed '/^$/d')"
 
-          git add -A
+          echo "=== SCOPE CHECK ==="
+          echo "All changed files:"
+          printf '%s\n' "$ALL_CHANGED_FILES"
 
-          if git diff --cached --quiet; then
-            echo "ERROR: No staged changes remain after git add."
+          # Check each changed file against authorized scope
+          UNAUTHORIZED_FILES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if ! printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
+              UNAUTHORIZED_FILES="${UNAUTHORIZED_FILES}${file}\n"
+            fi
+          done <<< "$ALL_CHANGED_FILES"
+
+          if [ -n "$UNAUTHORIZED_FILES" ]; then
+            echo "==========================================="
+            echo "COMMIT GATE FAILED: Unauthorized files changed"
+            echo "==========================================="
+            echo "The following files are NOT in the authorized scope:"
+            printf '%s' "$UNAUTHORIZED_FILES"
+            echo "Authorized scope: $AUTHORIZED_FILES"
+            echo ""
+            echo "STOPPING: No commit, no push."
             exit 1
           fi
 
+          echo "Scope check PASSED: All changed files are authorized."
+
+          # Stage only authorized files (no git add -A)
+          for file in $AUTHORIZED_FILES; do
+            if [ -f "$file" ] || git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+              git add "$file"
+            fi
+          done
+
+          # Also stage any authorized files that were deleted
+          for file in $DELETED_FILES; do
+            if printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
+              git rm "$file" 2>/dev/null || true
+            fi
+          done
+
+          if git diff --cached --quiet; then
+            echo "ERROR: No staged changes remain after scope-gated staging."
+            exit 1
+          fi
+
+          echo "=== FINAL DIFF REVIEW ==="
+          git diff --cached --stat
+          git diff --cached
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git commit -m "Gemini temporary Codex failover implementation"
+
           git push origin HEAD:${GITHUB_REF_NAME}
 
           echo "Verifying pushed repository state..."
