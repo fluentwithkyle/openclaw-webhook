@@ -1,11 +1,23 @@
 const { execSync } = require('child_process');
 const path = require('path');
 
-const ALLOWED_PATHS = ['poc/', 'index.js', 'ARCHITECTURE.md', 'AGENTS.md'];
 const ALLOWED_CAPABILITIES = ['read_only'];
+const ALLOWED_BASE_PATH = 'poc/';
+
+function normalizePath(p) {
+    // Normalize to: "poc/"
+    let normalized = p.replace(/\\/g, '/');
+    if (normalized.startsWith('./')) normalized = normalized.substring(2);
+    if (!normalized.endsWith('/')) normalized += '/';
+    if (normalized.startsWith('/')) normalized = normalized.substring(1);
+
+    // Only allow "poc/"
+    if (normalized === 'poc/') return 'poc/';
+    return null;
+}
 
 function validate(command) {
-    // 1. Basic validation
+    // 1. Validate envelope (12 fields)
     const requiredFields = [
         'protocol_version', 'request_id', 'source', 'target', 'task_type',
         'repository', 'base_branch', 'task', 'constraints', 'authorization',
@@ -15,23 +27,23 @@ function validate(command) {
         if (!command[field]) return { status: 'FAILED', error: `Missing field: ${field}` };
     }
 
-    // 2. Authorization
-    if (!command.authorization.capabilities || !Array.isArray(command.authorization.capabilities)) {
-        return { status: 'FAILED', error: 'Missing authorization capabilities' };
-    }
-    for (const cap of command.authorization.capabilities) {
-        if (!ALLOWED_CAPABILITIES.includes(cap)) {
-            return { status: 'BLOCKED', error: `Unauthorized capability: ${cap}` };
-        }
+    // 2. Authorization: exactly ["read_only"]
+    if (!command.authorization.capabilities ||
+        !Array.isArray(command.authorization.capabilities) ||
+        command.authorization.capabilities.length !== 1 ||
+        command.authorization.capabilities[0] !== 'read_only') {
+        return { status: 'BLOCKED', error: 'Invalid or missing authorization. Only ["read_only"] allowed.' };
     }
 
-    // 3. Constraints
+    // 3. Constraints: permitted_paths only `poc/`
     if (!command.constraints.permitted_paths || !Array.isArray(command.constraints.permitted_paths)) {
         return { status: 'FAILED', error: 'Missing permitted_paths' };
     }
+
     for (const p of command.constraints.permitted_paths) {
-        if (!ALLOWED_PATHS.some(allowed => p.startsWith(allowed))) {
-            return { status: 'BLOCKED', error: `Out of scope path: ${p}` };
+        const normalized = normalizePath(p);
+        if (normalized !== 'poc/') {
+            return { status: 'BLOCKED', error: `Unauthorized path: ${p}` };
         }
     }
 
@@ -39,16 +51,25 @@ function validate(command) {
 }
 
 function execute(command) {
+    // MUST validate again internally to fail closed
+    const v = validate(command);
+    if (v.status !== 'SUCCESS') {
+        return {
+            request_id: command.request_id,
+            status: 'BLOCKED',
+            error: `Execution blocked: ${v.error}`
+        };
+    }
+
     try {
-        // Enforce capabilities mechanically: ONLY read_only is permitted.
-        // Perform one explicitly selected read-only repository operation
-        if (command.task === 'inspect-repo') {
-            const output = execSync('git status --short --branch', { encoding: 'utf-8' });
+        if (command.task === 'inspect-poc-files') {
+            // Scoped operation
+            const output = execSync('git ls-files poc/', { encoding: 'utf-8' });
             return {
                 request_id: command.request_id,
                 status: 'SUCCESS',
                 task: command.task,
-                execution: 'git status --short --branch',
+                execution: 'git ls-files poc/',
                 result: output
             };
         }
@@ -58,4 +79,4 @@ function execute(command) {
     }
 }
 
-module.exports = { validate, execute };
+module.exports = { validate, execute, normalizePath };

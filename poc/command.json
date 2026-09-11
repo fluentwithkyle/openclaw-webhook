@@ -1,0 +1,18 @@
+{
+  "protocol_version": "0.1",
+  "request_id": "acp-poc-12345",
+  "source": "Qwen Router",
+  "target": "Kilo Code",
+  "task_type": "read-only-inspection",
+  "repository": "fluentwithkyle/openclaw-webhook",
+  "base_branch": "main",
+  "task": "inspect-poc-files",
+  "constraints": {
+    "permitted_paths": ["poc/"]
+  },
+  "authorization": {
+    "capabilities": ["read_only"]
+  },
+  "verification": "verify read-only execution",
+  "reporting": "structured-json"
+}
