@@ -974,12 +974,44 @@ A proposed ACP command envelope contains these required fields:
 * repository — the repository the task applies to (e.g. fluentwithkyle/openclaw-webhook).
 * base_branch — the branch the task is based on and intended to integrate with.
 * task — the description of the work to be performed. Must not include credentials, tokens, or secrets.
-* constraints — the operational limits or rules the execution lane must respect.
-* authorization — the authorization context indicating what capabilities may be used.
+* constraints — the operational limits or rules the execution lane must respect, including a permitted_paths allow-list that defines the repository paths the execution lane may operate within.
+* authorization — the authorization context defining the explicit capability set the execution lane is permitted to use for this command. Capabilities are explicit permissions, never implied.
 * verification — the expected verification to be performed and reported (e.g. targeted checks, tests).
 * reporting — how the execution report should be delivered back to the orchestrator.
 
 All field values are proposed placeholders until the ACP is reviewed, approved, and implemented.
+
+⸻
+
+Authorization capabilities
+
+The authorization field defines an explicit, machine-readable capability set. Each capability grants permission for a specific class of operation. Capabilities are explicit permissions; they are never implied by one another.
+
+Defined capability types:
+
+* read_only — inspect repository contents and run read-only commands (e.g. ls, cat, grep, git diff).
+* modify_files — create, edit, or delete files within the authorized repository and permitted_paths.
+* run_tests — execute the project's defined test, lint, or typecheck commands.
+* commit — create and amend local commits within the authorized base_branch.
+* push — push commits to the authorized remote/repository and branch.
+
+Authorization principle:
+
+* A command authorized for one capability does not automatically authorize any other capability.
+* For example, modify_files does not authorize commit or push; commit does not authorize push; run_tests does not authorize modify_files.
+* Every capability the execution lane may exercise must be explicitly granted.
+* A valid authorization token or capability set never grants unrestricted repository access beyond the explicitly listed capabilities.
+
+Permitted repository scope
+
+The constraints field must include a permitted_paths allow-list that explicitly defines which paths within the repository the execution lane may operate on. This is the permitted repository scope for the command.
+
+Rules:
+
+* The execution lane may operate only within paths present in the permitted_paths allow-list.
+* A valid authorization token/capability does NOT grant unrestricted repository access.
+* Anything outside the authorized paths or the authorized capabilities is out of scope and must be rejected or reported as blocked.
+* Path scoping and capability scoping are independent controls; both must pass.
 
 ⸻
 
@@ -1013,11 +1045,23 @@ The following is a minimal, non-executable, placeholder-only ACP command envelop
   "repository": "fluentwithkyle/openclaw-webhook-placeholder",
   "base_branch": "main-placeholder",
   "task": "Implement placeholder task description only.",
-  "constraints": [
-    "smallest-change-placeholder",
-    "no-new-dependencies-placeholder"
-  ],
-  "authorization": "placeholder-scoped-capability-token",
+  "constraints": {
+    "permitted_paths": [
+      "src/",
+      "tests/"
+    ],
+    "rules": [
+      "smallest-change-placeholder",
+      "no-new-dependencies-placeholder"
+    ]
+  },
+  "authorization": {
+    "capabilities": [
+      "read_only",
+      "modify_files",
+      "run_tests"
+    ]
+  },
   "verification": "git diff --check and targeted review-placeholder",
   "reporting": "structured execution report placeholder"
 }
@@ -1094,14 +1138,14 @@ The handoff from Qwen to Kilo is mediated exclusively through the ACP command de
 * Qwen → ACP command → Kilo.
 * Section 16.3 remains the canonical ACP protocol.
 * Do not create a second protocol.
-* Authorization must establish originator, target, repository, base branch, task, constraints, verification, and reporting requirements.
+* Authorization must establish originator, target, repository, base branch, task, capabilities, permitted_paths, verification, and reporting requirements.
 
 Repository Safety
 
 Kilo must:
 
 * Inspect before modifying.
-* Stay within authorized scope.
+* Stay within authorized scope (capabilities and permitted_paths).
 * Make the smallest appropriate change.
 * Preserve unrelated functionality.
 * Never expose secrets.
