@@ -1,38 +1,38 @@
 {
-  "session_id": "90176e70-1c37-4e14-ab38-68fad4962ad6",
-  "response": "This implementation was performed under **TEMPORARY CODEX FAILOVER MODE**.\n\n### Implementation Report\n\n*   **Files Changed:**\n    *   `poc/acp-engine.js`: Implemented the ACP validation engine and execution lane.\n    *   `poc/main.js`: Created the standalone POC entry point to run the ACP command.\n    *   `poc/test.js`: Created focused unit tests to verify the ACP contract enforcement.\n*   **POC Behavior Implemented:**\n    *   Created a standalone Node.js execution lane for the Agent Command Protocol (ACP).\n    *   Implemented strict ACP JSON envelope validation (required fields, capability enforcement, path allow-list enforcement).\n    *   Implemented `git status --short --branch` as the explicitly selected read-only inspection operation.\n    *   Produced a structured JSON execution report.\n*   **Tests and Results:**\n    *   Tests covered: valid read-only command, malformed envelope, unauthorized capability, and invalid/out-of-scope permitted paths.\n    *   All tests passed successfully (`PASS: Valid command`, `PASS: Malformed envelope`, `PASS: Unauthorized capability`, `PASS: Invalid permitted paths`).\n*   **POC Execution Result:** The POC successfully validated the command, executed the allowed operation, and produced the expected machine-readable structured report.\n*   **Commit Hash:** `a445ad1`\n*   **Push Confirmation:** Successfully pushed to `origin/main`.\n*   **Clean Working-Tree Confirmation:** `git status --short --branch` confirms a clean working tree.\n*   **Production Integration Confirmation:** Confirmed no Qwen, OpenClaw, LINE, Render, Google Apps Script, GitHub Actions, or production business-logic integration was added.\n\nThe proof of concept is a minimal, standalone Node.js implementation that enforces the ACP read-only architectural contract.",
+  "session_id": "5796fe11-9eef-4e78-9517-5bcd037afeda",
+  "response": "Completed task under TEMPORARY CODEX FAILOVER MODE.\n\n**Files changed:**\n- `poc/acp-engine.js`: Updated to enforce strict validation, authorization check (only `read_only`), and path normalization. Replaced `git status` with `git ls-files poc/` for scoped, read-only inspection.\n- `poc/test.js`: Expanded tests to cover valid/invalid scenarios, path normalization, and execution boundary enforcement.\n- `poc/command.json`: Added new JSON ACP command file.\n\n**Corrections implemented:**\n- Validated complete 12-field ACP envelope.\n- Restricted authorization to exactly `[\"read_only\"]`.\n- Mechanically enforced path constraint to `poc/` (with normalization of equivalent forms).\n- Ensured `execute()` fails closed by re-validating the command internally.\n- Replaced repository-wide read operation with scoped `git ls-files poc/`.\n- Implemented structured JSON reporting.\n\n**Tests passed:**\n- All tests in `poc/test.js` passed, including malformed envelope, unauthorized capabilities, invalid paths, path normalization, and scoped execution.\n\n**Actual POC result:**\n```json\n{\n  \"request_id\": \"acp-poc-12345\",\n  \"status\": \"SUCCESS\",\n  \"task\": \"inspect-poc-files\",\n  \"execution\": \"git ls-files poc/\",\n  \"result\": \"poc/acp-engine.js\\npoc/main.js\\npoc/test.js\\n\"\n}\n```\n\n**Commit hash:** `82e81de`\n**Push confirmation:** Pushed to `origin/main`.\n**Clean working-tree confirmation:** Confirmed clean working tree.",
   "stats": {
     "models": {
       "gemini-3.1-flash-lite": {
         "api": {
-          "totalRequests": 20,
-          "totalErrors": 6,
-          "totalLatencyMs": 67706,
+          "totalRequests": 27,
+          "totalErrors": 4,
+          "totalLatencyMs": 112975,
           "errorsByType": {
-            "ApiError": 6
+            "ApiError": 4
           }
         },
         "tokens": {
-          "input": 147796,
-          "prompt": 371562,
-          "candidates": 2593,
-          "total": 375875,
-          "cached": 223766,
-          "thoughts": 1720,
+          "input": 169167,
+          "prompt": 461176,
+          "candidates": 4219,
+          "total": 466332,
+          "cached": 292009,
+          "thoughts": 937,
           "tool": 0
         },
         "roles": {
           "main": {
-            "totalRequests": 20,
-            "totalErrors": 6,
-            "totalLatencyMs": 67706,
+            "totalRequests": 27,
+            "totalErrors": 4,
+            "totalLatencyMs": 112975,
             "tokens": {
-              "input": 147796,
-              "prompt": 371562,
-              "candidates": 2593,
-              "total": 375875,
-              "cached": 223766,
-              "thoughts": 1720,
+              "input": 169167,
+              "prompt": 461176,
+              "candidates": 4219,
+              "total": 466332,
+              "cached": 292009,
+              "thoughts": 937,
               "tool": 0
             }
           }
@@ -40,24 +40,36 @@
       }
     },
     "tools": {
-      "totalCalls": 16,
-      "totalSuccess": 16,
+      "totalCalls": 22,
+      "totalSuccess": 22,
       "totalFail": 0,
-      "totalDurationMs": 1580,
+      "totalDurationMs": 1562,
       "totalDecisions": {
-        "accept": 16,
+        "accept": 22,
         "reject": 0,
         "modify": 0,
         "auto_accept": 0
       },
       "byName": {
         "update_topic": {
-          "count": 2,
-          "success": 2,
+          "count": 3,
+          "success": 3,
+          "fail": 0,
+          "durationMs": 8,
+          "decisions": {
+            "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "list_directory": {
+          "count": 1,
+          "success": 1,
           "fail": 0,
           "durationMs": 4,
           "decisions": {
-            "accept": 2,
+            "accept": 1,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
@@ -67,33 +79,45 @@
           "count": 3,
           "success": 3,
           "fail": 0,
-          "durationMs": 92,
+          "durationMs": 9,
           "decisions": {
             "accept": 3,
-            "reject": 0,
-            "modify": 0,
-            "auto_accept": 0
-          }
-        },
-        "run_shell_command": {
-          "count": 8,
-          "success": 8,
-          "fail": 0,
-          "durationMs": 1473,
-          "decisions": {
-            "accept": 8,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
           }
         },
         "write_file": {
-          "count": 3,
-          "success": 3,
+          "count": 2,
+          "success": 2,
           "fail": 0,
           "durationMs": 11,
           "decisions": {
-            "accept": 3,
+            "accept": 2,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "replace": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 10,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 12,
+          "success": 12,
+          "fail": 0,
+          "durationMs": 1520,
+          "decisions": {
+            "accept": 12,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
@@ -102,8 +126,8 @@
       }
     },
     "files": {
-      "totalLinesAdded": 136,
-      "totalLinesRemoved": 0
+      "totalLinesAdded": 103,
+      "totalLinesRemoved": 23
     }
   }
 }
