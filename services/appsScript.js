@@ -1,13 +1,26 @@
 const axios = require('axios');
-const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzh7dEtGMxxYhZuiqOxw1LByPjA4xZM6_W8c-PCK_K10tmDazmt4kefFAVMW1r8T47D/exec';
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
+const APPS_SCRIPT_AUTH_SECRET = process.env.APPS_SCRIPT_AUTH_SECRET;
 
 async function triggerAppsScript(payload) {
-   console.log(`[Apps Script OUTBOUND] Action: ${payload.action}`, JSON.stringify(payload, null, 2));
+   if (!APPS_SCRIPT_URL) {
+     console.error('[Apps Script ERROR] APPS_SCRIPT_URL is not configured');
+     return;
+   }
+
+   if (!APPS_SCRIPT_AUTH_SECRET) {
+     console.error('[Apps Script ERROR] APPS_SCRIPT_AUTH_SECRET is not configured');
+     return;
+   }
+
+   const authenticatedPayload = { ...payload, authSecret: APPS_SCRIPT_AUTH_SECRET };
+
+   console.log(`[Apps Script OUTBOUND] Action: ${payload.action}`);
    try {
-     const response = await axios.post(APPS_SCRIPT_URL, payload, {
+     const response = await axios.post(APPS_SCRIPT_URL, authenticatedPayload, {
        headers: { 'Content-Type': 'application/json' }
      });
-     console.log(`[Apps Script INBOUND] Action: ${payload.action} Response:`, JSON.stringify(response.data, null, 2));
+     console.log(`[Apps Script INBOUND] Action: ${payload.action} Status: ${response.status}`);
      return response.data;
    } catch (error) {
      console.error(`[Apps Script ERROR] Action: ${payload.action} Failed:`, error.message);
