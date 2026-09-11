@@ -1,38 +1,38 @@
 {
-  "session_id": "a4a5707f-0649-403a-aeca-535c4acc1817",
-  "response": "I have successfully completed the requested task under **TEMPORARY CODEX FAILOVER MODE**.\n\n### Final Report\n\n1.  **Exact commit SHA:** `60146e1`\n2.  **Confirmation that the SHA exists on `origin/main`:** Confirmed via `git log`.\n3.  **Files changed:**\n    *   `index.js` (modified)\n    *   `test/run-poc-tests.js` (modified)\n    *   `routes/poc.js` (created)\n    *   `services/transport-provider.js` (created)\n4.  **Tests executed and results:** The updated `test/run-poc-tests.js` suite (5 test cases) was executed successfully.\n    *   `Test 1 passed: Missing secret`\n    *   `Test 2 passed: Invalid secret`\n    *   `Test 3 passed: Success`\n    *   `Test 4 passed: ACP blocked`\n    *   `Test 5 passed: Transport failure`\n5.  **Confirmation that the actual `/poc/kilo` route was tested:** Yes, the test suite mounts the `routes/poc.js` router and makes HTTP requests to `/poc/kilo`.\n6.  **Confirmation that the tests do not duplicate the route implementation:** Yes, the test suite now imports the actual production router.\n7.  **Confirmation that production Tally/Cal.com/Apps Script/business logic was untouched:** Confirmed; diff inspection shows only the required POC changes.\n8.  **Confirmation that `KILO_TRIGGER_URL` and `ACP_POC_TRIGGER_SECRET` remain runtime-only:** Yes, they are read from `process.env`.\n9.  **Confirmation that no real Kilo Cloud Agent invocation occurred:** Yes, the transport layer was successfully mocked during testing using the new `services/transport-provider.js`.",
+  "session_id": "ec9c604b-8ea6-4bba-9571-0d9f1d43d536",
+  "response": "UNDER TEMPORARY CODEX FAILOVER MODE\n\n# Security Remediation Roadmap\n\nThis report constitutes the architectural review and remediation roadmap for the `fluentwithkyle/openclaw-webhook` repository. \n\nAs requested, NO files have been modified, NO commits created, and NO changes pushed.\n\n---\n\n## Complete Security Audit Status Summary\n\n| # | Item | Status |\n| :--- | :--- | :--- |\n| 1 | Google Apps Script Authentication | DONE |\n| 2 | Tally Webhook Authentication | NOT DONE |\n| 3 | Cal.com Webhook Authentication | NOT DONE |\n| 4 | Logging Minimization & Privacy | PARTIALLY DONE |\n| 5 | Configuration & Secret Hygiene | PARTIALLY DONE |\n| 6 | Sensitive Information in Artifacts | NOT DONE |\n| 7 | Full Git History Secret Scan | NOT DONE |\n| 8 | Webhook Input Validation | REVIEW REQUIRED |\n| 9 | Apps Script Privilege Review | REVIEW REQUIRED |\n| 10| Deployment/Access Configuration | REVIEW REQUIRED |\n\n---\n\n## Remediation Roadmap\n\n### Priority 1 — Critical / Immediate\n\n#### 1. Tally & Cal.com Webhook Authentication\n*   **Finding:** Webhooks receive unauthenticated requests. An attacker could flood the system with fake intake or booking data, triggering CRM updates and LINE notifications.\n*   **Files Involved:** `index.js`, `services/tally.js`, `services/cal.js`.\n*   **Proposed Approach:** \n    *   **Tally:** Verify if Tally supports signature verification (usually HMAC-SHA256). If yes, implement verification middleware in `index.js` or within `handleTallyWebhook`.\n    *   **Cal.com:** Verify if Cal.com supports signature verification. If yes, implement similar middleware in `index.js` or `handleCalWebhook`.\n*   **Dependencies:** Provider documentation for webhook security mechanisms.\n*   **Configuration:** New Render environment variables for Tally/Cal.com webhook secrets.\n*   **Testing:** Simulate signed and unsigned requests to verify rejection of invalid/missing signatures.\n\n#### 2. Logging Minimization\n*   **Finding:** `index.js` logs the *entire* inbound webhook body for Tally and Cal.com using `JSON.stringify(req.body, null, 2)`. This potentially logs sensitive PII (names, emails, line IDs) and guest information.\n*   **Files Involved:** `index.js`.\n*   **Proposed Approach:** Remove full body logging. Replace with structured, sanitized logging: event type, timestamp, event ID (if available), and action status (success/failure).\n*   **Testing:** Verify via logs (after deployment) that PII is no longer exposed.\n\n---\n\n### Priority 2 — High\n\n#### 3. Configuration Hygiene (Spreadsheet ID)\n*   **Finding:** `google-apps-script/CRM.js` has a hardcoded `SHEET_ID`.\n*   **Files Involved:** `google-apps-script/CRM.js`.\n*   **Proposed Approach:** Move `SHEET_ID` to Google Apps Script Script Properties (`CRM_SHEET_ID`) and update `CRM.js` to retrieve it via `PropertiesService`.\n*   **Manual Config:** Configure `CRM_SHEET_ID` in Apps Script Script Properties.\n*   **Testing:** Verify `getSheet()` still correctly opens the spreadsheet.\n\n#### 4. Webhook Input Validation\n*   **Finding:** Webhook handlers (`services/tally.js`, `services/cal.js`) process payloads with minimal schema validation before acting on them (CRM upserts, email sending).\n*   **Files Involved:** `services/tally.js`, `services/cal.js`.\n*   **Proposed Approach:** Define a required schema for Tally and Cal.com payloads. Reject requests missing mandatory fields before processing begins.\n*   **Testing:** Unit test handlers with malformed/incomplete payloads.\n\n---\n\n### Priority 3 — Medium\n\n#### 5. Apps Script Privilege Review\n*   **Finding:** The Apps Script web app executes as the deploying user with full access to Sheets and Gmail.\n*   **Files Involved:** `google-apps-script/appsscript.json`.\n*   **Proposed Approach:** Audit the manifest for necessary OAuth scopes. Ensure only the absolute minimum required permissions remain.\n*   **Testing:** Ensure functionality remains after scope restriction.\n\n#### 6. Deployment and Access Configuration\n*   **Finding:** Potential for obsolete deployments.\n*   **Proposed Approach:** Ensure only the intended App Script URL is active and known to Render. Rotate secrets if they were exposed in old configurations.\n\n---\n\n### Priority 4 — Low / Cleanup\n\n#### 7. Artifact Cleanup\n*   **Finding:** `gemini-artifacts/` may contain logs with sensitive data.\n*   **Proposed Approach:** Analyze `gemini-artifacts/` content. If sensitive, remove these files from the repository immediately. Add `gemini-artifacts/*.log` to `.gitignore`.\n\n#### 8. Full Git History Secret Scan\n*   **Finding:** Potential historical exposure of secrets.\n*   **Proposed Approach:** Use a tool like `trufflehog` or `git-secrets` to scan the complete repository history locally. If secrets are found: Rotate/Revoke, then remove from history (e.g., via `git filter-repo` or BFG), then force-push.\n*   **Rollback:** This is destructive; have a full backup before history rewriting.\n\n---\n\n## RECOMMENDED EXECUTION ORDER\n\n1.  **Stop full-body logging in `index.js`** (Highest PII impact, easiest to fix).\n2.  **Move `SHEET_ID` to Apps Script Script Properties** (Clean up hardcoded secrets).\n3.  **Implement webhook signature verification** for Tally and Cal.com (Requires provider research and secret management).\n4.  **Implement strict input validation** in `tally.js` and `cal.js`.\n5.  **Audit and clean repository artifacts** (Add to `.gitignore`).\n6.  **Full Git history scan.**\n7.  **Apps Script Privilege/Deployment Review.**\n\n---\n\n## FINAL REPORT SUMMARY\n\n*   **Remediated:** Google Apps Script Shared Secret Authentication (Verified).\n*   **Vulnerable:** Inbound webhook processing (unauthenticated and over-logged), hardcoded Spreadsheet ID, unmanaged logs.\n*   **Next Actionable Task:** Stop logging full webhook bodies in `index.js`.\n*   **Blocker:** Research into Tally/Cal.com signature verification mechanisms is required before implementation.\n*   **Manual Action:** Kyle must configure `CRM_SHEET_ID` in Apps Script Script Properties once the `CRM.js` update is approved.\n\nReport completed under **TEMPORARY CODEX FAILOVER MODE**.",
   "stats": {
     "models": {
       "gemini-3.1-flash-lite": {
         "api": {
-          "totalRequests": 19,
+          "totalRequests": 13,
           "totalErrors": 1,
-          "totalLatencyMs": 86562,
+          "totalLatencyMs": 17468,
           "errorsByType": {
             "ApiError": 1
           }
         },
         "tokens": {
-          "input": 103125,
-          "prompt": 423823,
-          "candidates": 3402,
-          "total": 431024,
-          "cached": 320698,
-          "thoughts": 3799,
+          "input": 59898,
+          "prompt": 308383,
+          "candidates": 1837,
+          "total": 311517,
+          "cached": 248485,
+          "thoughts": 1297,
           "tool": 0
         },
         "roles": {
           "main": {
-            "totalRequests": 19,
+            "totalRequests": 13,
             "totalErrors": 1,
-            "totalLatencyMs": 86562,
+            "totalLatencyMs": 17468,
             "tokens": {
-              "input": 103125,
-              "prompt": 423823,
-              "candidates": 3402,
-              "total": 431024,
-              "cached": 320698,
-              "thoughts": 3799,
+              "input": 59898,
+              "prompt": 308383,
+              "candidates": 1837,
+              "total": 311517,
+              "cached": 248485,
+              "thoughts": 1297,
               "tool": 0
             }
           }
@@ -40,72 +40,48 @@
       }
     },
     "tools": {
-      "totalCalls": 22,
-      "totalSuccess": 22,
+      "totalCalls": 11,
+      "totalSuccess": 11,
       "totalFail": 0,
-      "totalDurationMs": 7839,
+      "totalDurationMs": 40,
       "totalDecisions": {
-        "accept": 22,
+        "accept": 11,
         "reject": 0,
         "modify": 0,
         "auto_accept": 0
       },
       "byName": {
         "update_topic": {
-          "count": 2,
-          "success": 2,
+          "count": 1,
+          "success": 1,
           "fail": 0,
-          "durationMs": 8,
+          "durationMs": 4,
           "decisions": {
-            "accept": 2,
-            "reject": 0,
-            "modify": 0,
-            "auto_accept": 0
-          }
-        },
-        "run_shell_command": {
-          "count": 11,
-          "success": 11,
-          "fail": 0,
-          "durationMs": 7621,
-          "decisions": {
-            "accept": 11,
+            "accept": 1,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
           }
         },
         "read_file": {
-          "count": 4,
-          "success": 4,
+          "count": 7,
+          "success": 7,
           "fail": 0,
-          "durationMs": 182,
+          "durationMs": 28,
           "decisions": {
-            "accept": 4,
+            "accept": 7,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
           }
         },
-        "write_file": {
+        "list_directory": {
           "count": 3,
           "success": 3,
           "fail": 0,
-          "durationMs": 20,
-          "decisions": {
-            "accept": 3,
-            "reject": 0,
-            "modify": 0,
-            "auto_accept": 0
-          }
-        },
-        "replace": {
-          "count": 2,
-          "success": 2,
-          "fail": 0,
           "durationMs": 8,
           "decisions": {
-            "accept": 2,
+            "accept": 3,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
@@ -114,8 +90,8 @@
       }
     },
     "files": {
-      "totalLinesAdded": 103,
-      "totalLinesRemoved": 64
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
     }
   }
 }
