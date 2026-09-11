@@ -1,6 +1,15 @@
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+    const configuredSecret = PropertiesService.getScriptProperties().getProperty('APPS_SCRIPT_AUTH_SECRET');
+
+    if (!configuredSecret || data.authSecret !== configuredSecret) {
+      return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    delete data.authSecret;
+
     const action = data.action;
     let result = {};
 
