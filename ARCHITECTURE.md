@@ -1184,6 +1184,72 @@ The AI development lane must not move production business logic out of Render or
 
 ⸻
 
+16.5 Kilo Cloud Agent HTTP Trigger & Security Boundary
+
+The Kilo Cloud Agent supports external HTTP webhook triggers as a transport mechanism for task execution.
+
+16.5.1 Kilo Trigger Authentication
+
+The Kilo HTTP trigger authenticates/authorizes the external caller to invoke the configured Cloud Agent trigger. The trigger URL and any optional shared-secret authentication material are credentials.
+
+Therefore:
+* never commit them;
+* never place them in source code;
+* never place them in ARCHITECTURE.md;
+* never expose them in GitHub issues/comments;
+* never include them in ordinary execution reports;
+* store them only in the appropriate secret/configuration mechanism.
+
+16.5.2 ACP Task Authorization
+
+Successful invocation of the Kilo trigger does NOT authorize arbitrary repository activity. The ACP command remains the task-level authorization boundary.
+
+The ACP request must explicitly define:
+* permitted repository paths;
+* permitted capabilities;
+* task scope;
+* verification requirements;
+* reporting requirements.
+
+Capabilities remain independent. For example, read_only does not authorize file modification, and modify_files does not authorize commit. No capability may be inferred from another capability. A valid Kilo trigger credential must never be treated as permission to bypass ACP authorization.
+
+16.5.3 Fail-Closed Requirements
+
+The execution lane must fail closed when:
+* the ACP command is malformed;
+* required ACP fields are missing;
+* the request contains unknown/unauthorized capabilities;
+* requested paths fall outside permitted_paths;
+* authorization is inconsistent with the requested task;
+* the task attempts an operation not covered by the granted capabilities;
+* required authentication material is missing or invalid;
+* the execution boundary cannot independently verify the authorization.
+
+16.5.4 POC Security Boundary
+
+The intended first ACP → Kilo POC scope is:
+* read-only only;
+* permitted_paths limited to poc/;
+* no arbitrary shell-command execution supplied by the caller;
+* no file modification, commit, or push;
+* no production-system access;
+* no Qwen dependency;
+* no OpenClaw dependency.
+
+The POC exists to validate the execution boundary and structured reporting before introducing write capabilities.
+
+16.5.5 One-Shot Execution / Auditability
+
+Each Kilo execution must be self-contained. The authorization required for an execution must be present in that individual ACP command; do not rely on permissions being remembered from a previous agent session. Each execution should be traceable through request_id.
+
+The execution result should provide a structured report containing, at minimum, the request identity, status, task, execution/result information, and any relevant verification outcome. Do not expose secrets in the report.
+
+16.5.6 Architectural Status
+
+The Kilo Cloud Agent HTTP webhook trigger is a confirmed Kilo capability. The specific ACP → Kilo integration in this repository remains PROPOSED / TARGET until implemented and validated.
+
+⸻
+
 17. AI specialist roles
 
 17.1 Kilo Code
