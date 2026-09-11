@@ -1,38 +1,38 @@
 {
-  "session_id": "2948e03e-9b84-408d-88ed-c27b54bf862c",
-  "response": "I have completed the task in **TEMPORARY CODEX FAILOVER MODE**.\n\n### Implementation Summary\n- **Files Changed:**\n    - `index.js`: Modified to add `POST /poc/kilo` endpoint with authentication middleware and dispatch logic.\n    - `test/mock-kilo-transport.js`: Added for testing purposes.\n    - `test/run-poc-tests.js`: Added to verify the new endpoint.\n- **POC Endpoint Created:** `POST /poc/kilo`.\n- **Authentication Mechanism:** The endpoint requires the `x-poc-trigger-secret` header, which must match the `ACP_POC_TRIGGER_SECRET` environment variable.\n- **Secrets Management:** `KILO_TRIGGER_URL` and `ACP_POC_TRIGGER_SECRET` are read from runtime environment variables; no secrets were hardcoded, logged, or exposed in the response.\n- **Production Safety:** Production routes (`/webhook/cal`, `/webhook/tally`, etc.) and business logic remain completely unchanged and operational.\n- **Verification:**\n    - Created a test script `test/run-poc-tests.js` which verifies:\n        1. Missing authentication results in 401.\n        2. Invalid authentication results in 401.\n        3. Valid authentication proceeds (mocked Kilo transport).\n    - The implementation ensures the public caller cannot override Kilo URL, command, or other sensitive POC parameters.\n- **Final Commitment:**\n    - The changes were committed with message: \"Wire ACP Kilo POC into Render runtime\"\n    - The changes were successfully pushed to `origin/main` (Commit Hash: `72a4009`).\n- **Real Invocation:** No real Kilo invocation was performed during this task.\n\nNo production code was altered beyond adding the isolated POC route. No GitHub Actions files or `AGENTS.md` were modified.",
+  "session_id": "a4a5707f-0649-403a-aeca-535c4acc1817",
+  "response": "I have successfully completed the requested task under **TEMPORARY CODEX FAILOVER MODE**.\n\n### Final Report\n\n1.  **Exact commit SHA:** `60146e1`\n2.  **Confirmation that the SHA exists on `origin/main`:** Confirmed via `git log`.\n3.  **Files changed:**\n    *   `index.js` (modified)\n    *   `test/run-poc-tests.js` (modified)\n    *   `routes/poc.js` (created)\n    *   `services/transport-provider.js` (created)\n4.  **Tests executed and results:** The updated `test/run-poc-tests.js` suite (5 test cases) was executed successfully.\n    *   `Test 1 passed: Missing secret`\n    *   `Test 2 passed: Invalid secret`\n    *   `Test 3 passed: Success`\n    *   `Test 4 passed: ACP blocked`\n    *   `Test 5 passed: Transport failure`\n5.  **Confirmation that the actual `/poc/kilo` route was tested:** Yes, the test suite mounts the `routes/poc.js` router and makes HTTP requests to `/poc/kilo`.\n6.  **Confirmation that the tests do not duplicate the route implementation:** Yes, the test suite now imports the actual production router.\n7.  **Confirmation that production Tally/Cal.com/Apps Script/business logic was untouched:** Confirmed; diff inspection shows only the required POC changes.\n8.  **Confirmation that `KILO_TRIGGER_URL` and `ACP_POC_TRIGGER_SECRET` remain runtime-only:** Yes, they are read from `process.env`.\n9.  **Confirmation that no real Kilo Cloud Agent invocation occurred:** Yes, the transport layer was successfully mocked during testing using the new `services/transport-provider.js`.",
   "stats": {
     "models": {
       "gemini-3.1-flash-lite": {
         "api": {
-          "totalRequests": 27,
-          "totalErrors": 5,
-          "totalLatencyMs": 90033,
+          "totalRequests": 19,
+          "totalErrors": 1,
+          "totalLatencyMs": 86562,
           "errorsByType": {
-            "ApiError": 5
+            "ApiError": 1
           }
         },
         "tokens": {
-          "input": 357312,
-          "prompt": 780065,
-          "candidates": 5418,
-          "total": 790671,
-          "cached": 422753,
-          "thoughts": 5188,
+          "input": 103125,
+          "prompt": 423823,
+          "candidates": 3402,
+          "total": 431024,
+          "cached": 320698,
+          "thoughts": 3799,
           "tool": 0
         },
         "roles": {
           "main": {
-            "totalRequests": 27,
-            "totalErrors": 5,
-            "totalLatencyMs": 90033,
+            "totalRequests": 19,
+            "totalErrors": 1,
+            "totalLatencyMs": 86562,
             "tokens": {
-              "input": 357312,
-              "prompt": 780065,
-              "candidates": 5418,
-              "total": 790671,
-              "cached": 422753,
-              "thoughts": 5188,
+              "input": 103125,
+              "prompt": 423823,
+              "candidates": 3402,
+              "total": 431024,
+              "cached": 320698,
+              "thoughts": 3799,
               "tool": 0
             }
           }
@@ -40,60 +40,48 @@
       }
     },
     "tools": {
-      "totalCalls": 30,
-      "totalSuccess": 30,
+      "totalCalls": 22,
+      "totalSuccess": 22,
       "totalFail": 0,
-      "totalDurationMs": 1884,
+      "totalDurationMs": 7839,
       "totalDecisions": {
-        "accept": 30,
+        "accept": 22,
         "reject": 0,
         "modify": 0,
         "auto_accept": 0
       },
       "byName": {
         "update_topic": {
-          "count": 6,
-          "success": 6,
+          "count": 2,
+          "success": 2,
           "fail": 0,
-          "durationMs": 16,
+          "durationMs": 8,
           "decisions": {
-            "accept": 6,
-            "reject": 0,
-            "modify": 0,
-            "auto_accept": 0
-          }
-        },
-        "read_file": {
-          "count": 7,
-          "success": 7,
-          "fail": 0,
-          "durationMs": 172,
-          "decisions": {
-            "accept": 7,
-            "reject": 0,
-            "modify": 0,
-            "auto_accept": 0
-          }
-        },
-        "replace": {
-          "count": 1,
-          "success": 1,
-          "fail": 0,
-          "durationMs": 9,
-          "decisions": {
-            "accept": 1,
+            "accept": 2,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
           }
         },
         "run_shell_command": {
-          "count": 13,
-          "success": 13,
+          "count": 11,
+          "success": 11,
           "fail": 0,
-          "durationMs": 1669,
+          "durationMs": 7621,
           "decisions": {
-            "accept": 13,
+            "accept": 11,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 4,
+          "success": 4,
+          "fail": 0,
+          "durationMs": 182,
+          "decisions": {
+            "accept": 4,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
@@ -103,9 +91,21 @@
           "count": 3,
           "success": 3,
           "fail": 0,
-          "durationMs": 18,
+          "durationMs": 20,
           "decisions": {
             "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "replace": {
+          "count": 2,
+          "success": 2,
+          "fail": 0,
+          "durationMs": 8,
+          "decisions": {
+            "accept": 2,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
@@ -114,8 +114,8 @@
       }
     },
     "files": {
-      "totalLinesAdded": 163,
-      "totalLinesRemoved": 23
+      "totalLinesAdded": 103,
+      "totalLinesRemoved": 64
     }
   }
 }

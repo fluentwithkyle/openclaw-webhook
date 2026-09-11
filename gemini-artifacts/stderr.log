@@ -15,28 +15,3 @@ Attempt 1 failed with status 503. Retrying with backoff... _ApiError: {"error":{
     at async Turn.run (file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:331905:24) {
   status: 503
 }
-Attempt 1 failed: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000, model: gemini-3.1-flash-lite
-Please retry in 30.92902688s.
-Suggested retry after 30s.. Retrying after 34938ms...
-Attempt 1 failed: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000, model: gemini-3.1-flash-lite
-Please retry in 34.036697851s.
-Suggested retry after 34s.. Retrying after 38130ms...
-Attempt 1 failed with status 503. Retrying with backoff... _ApiError: {"error":{"message":"{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n","code":503,"status":"Service Unavailable"}}
-    at throwErrorIfNotOK (file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:267315:24)
-    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
-    at async file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:267078:7
-    at async Models.generateContentStream (file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:268174:16)
-    at async file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:310543:19
-    at async file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:287352:23
-    at async retryWithBackoff (file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:307380:23)
-    at async GeminiChat.makeApiCallAndProcessStream (file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:331230:28)
-    at async GeminiChat.streamWithRetries (file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:330983:29)
-    at async Turn.run (file:///usr/local/lib/node_modules/@google/gemini-cli/bundle/chunk-YSBB75DZ.js:331905:24) {
-  status: 503
-}
-Attempt 1 failed: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000, model: gemini-3.1-flash-lite
-Please retry in 34.235075607s.
-Suggested retry after 34s.. Retrying after 39852ms...
