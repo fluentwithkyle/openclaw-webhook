@@ -1043,6 +1043,138 @@ Commit and push do not happen automatically. Pushing requires explicit authoriza
 
 ⸻
 
+16.4 Qwen Router → Kilo Execution Boundary
+
+PROPOSED / TARGET
+
+This section documents the execution boundary between the Qwen Router and the Kilo Code execution lane.
+
+The contract is:
+
+Qwen3 0.6B Router
+↓
+ACP command
+↓
+Kilo Code
+↓
+GitHub repository
+↓
+implementation / verification
+↓
+ACP execution report
+↓
+Qwen Router
+
+Qwen Router
+
+Qwen3 0.6B is the Router.
+
+Qwen routes development requests and constructs an ACP command for Kilo.
+
+Qwen must NOT:
+
+* implement repository changes;
+* redefine architecture;
+* bypass ACP;
+* issue unrestricted shell/Git instructions;
+* provide secrets or credentials;
+* claim successful execution without a Kilo execution report.
+
+Kilo
+
+Kilo is the Builder / Implementer / Tester.
+
+Kilo receives an authorized ACP command and performs:
+
+* repository inspection;
+* implementation;
+* testing;
+* verification;
+* execution reporting.
+
+Kilo follows AGENTS.md, ARCHITECTURE.md, and the constraints contained in the ACP command.
+
+ACP COMMAND BOUNDARY
+
+The boundary is:
+
+Qwen
+↓
+ACP command
+↓
+Kilo
+
+The existing ACP specification in section 16.3 is the canonical command protocol.
+
+Do NOT create a second protocol.
+
+The ACP command must establish:
+
+* originator;
+* target;
+* repository;
+* base branch;
+* authorized task;
+* constraints;
+* verification requirements;
+* reporting requirements.
+
+REPOSITORY SAFETY
+
+Kilo must:
+
+* inspect before modifying;
+* remain within authorized scope;
+* make the smallest appropriate change;
+* preserve unrelated functionality;
+* never expose secrets;
+* never modify AGENTS.md unless explicitly authorized;
+* never modify GitHub Actions merely because Kilo is being used;
+* never commit or push unless explicitly authorized by the ACP command.
+
+EXECUTION REPORT
+
+The return path is:
+
+Kilo
+↓
+ACP execution report
+↓
+Qwen
+
+The execution report must distinguish at minimum:
+
+* success;
+* failure;
+* blocked;
+* changed files;
+* verification results;
+* commit;
+* push;
+* blockers.
+
+Qwen must treat the Kilo execution report, rather than its own assumptions, as the execution result.
+
+OPENCLAW INDEPENDENCE
+
+The Qwen → Kilo boundary does NOT depend on OpenClaw.
+
+OpenClaw may later provide:
+
+* transport;
+* message routing;
+* event orchestration;
+* LINE integration;
+* automated invocation.
+
+These are transport/orchestration concerns and must not alter the ACP command contract.
+
+ARCHITECTURAL BOUNDARY
+
+This development execution lane must not move production business logic out of Render or Google-specific operations out of Google Apps Script.
+
+⸻
+
 17. AI specialist roles
 
 17.1 Kilo Code
