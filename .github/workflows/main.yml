@@ -353,15 +353,34 @@ jobs:
           # 2. Modifications to pre-existing untracked files
           # 3. New files created by Gemini
           # 4. Deletions
+          #
+          # LIMITATION: This state-detection mechanism uses `git hash-object` which computes
+          # the blob hash of file contents as stored in Git's object database. Repositories
+          # with .gitattributes filters (e.g., clean/smudge filters, LFS, git-crypt) or very
+          # large/binary files may produce hashes that do not reflect the working-tree content
+          # directly, requiring additional handling for accurate change detection.
 
           # Build a map of pre-state hashes for all files that existed before
           # We need to track: tracked files, staged files, untracked files, worktree files
 
           # Function to extract hash for a file from a hash list
+          # Uses exact string matching (not regex) to handle filenames with spaces,
+          # regex metacharacters, brackets, parentheses, dots, and other valid Git path characters.
           get_hash() {
             local file="$1"
             local hash_list="$2"
-            printf '%s\n' "$hash_list" | grep -E "^[a-f0-9]{40} ${file}$" | head -1 | cut -d' ' -f1
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              # Each line format: "40-char-hash filename"
+              # Hash is exactly 40 hex chars, followed by a space, then the filename
+              local hash="${line:0:40}"
+              local fname="${line:41}"
+              if [ "$fname" = "$file" ]; then
+                printf '%s\n' "$hash"
+                return 0
+              fi
+            done <<< "$hash_list"
+            return 1
           }
 
           # Collect all files that exist in post-state
