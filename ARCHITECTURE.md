@@ -1890,3 +1890,74 @@ OpenClaw remains initially available as the orchestration/mediation layer but is
 Qwen3 0.6B remains under validation until its routing reliability is demonstrated.
 
 The system evolves incrementally without requiring a wholesale rewrite of the working Fluent with Kyle application.
+
+⸻
+
+## Security & Compliance
+
+The section should establish the architectural security model and provide a living remediation checklist.
+
+### 1. Security Boundary / Trust Model
+Trust boundaries are strictly enforced between external providers (Tally, Cal.com), the Render/Node.js application, the Google Apps Script adapter, Google Sheets/Gmail, the LINE communication channel, AI orchestration components, and GitHub/development tooling. All external inputs, including webhooks, are treated as untrusted until they are authenticated and validated.
+
+### 2. Authentication & Authorization
+Architectural requirements for authentication and authorization include:
+- Apps Script ↔ Render authentication using shared server-side secrets.
+- Tally webhook authentication verification.
+- Cal.com webhook authentication verification.
+- Internal service-to-service authentication.
+- Strict adherence to least-privilege access for all components.
+
+### 3. Secrets & Configuration
+Requirements for secrets and configuration include:
+- All secrets must originate from environment variables or authorized secret stores.
+- Secrets must never be committed to source control.
+- Production configuration must not rely on hard-coded credentials, URLs, IDs, or other environment-specific values.
+- Sensitive credentials must be masked and must never appear in logs.
+
+### 4. Logging & Privacy
+Minimum logging policy requirements include:
+- Never log complete webhook payloads.
+- Never log secrets, authentication material, or sensitive credentials.
+- Minimize unnecessary PII in logs.
+- Utilize minimal structured operational logs for debugging, monitoring, and auditing purposes.
+
+### 5. Input Validation
+All external webhook input must be:
+1. Authenticated where applicable.
+2. Schema-validated to ensure structural integrity.
+3. Constrained to expected fields and data types.
+4. Rejected when required data is missing or malformed.
+
+### 6. Privilege & External Access
+Least privilege must be the foundational architectural principle for:
+- Google Apps Script OAuth scopes.
+- Apps Script deployment and access settings.
+- Gmail sending privileges.
+- Google Sheets access.
+- Render environment configuration.
+- Exposure of external webhooks.
+
+### 7. Repository & Artifact Security
+Requirements for securing the repository and its artifacts include:
+- Securing generated artifacts, logs, and temporary AI-agent output.
+- Ensuring repository history does not contain sensitive information.
+- Mandatory use of secret scanning.
+- Preventing operational or sensitive information from being committed to source control.
+
+### 8. Security Remediation Checklist
+
+1. Google Apps Script Authentication — [x] DONE
+2. Tally Webhook Authentication — [ ] TODO
+3. Cal.com Webhook Authentication — [ ] TODO
+4. Logging Minimization and Privacy — [~] PARTIALLY DONE
+5. Configuration and Secret Hygiene — [~] PARTIALLY DONE
+6. Sensitive Information in Repository Artifacts — [ ] TODO
+7. Full Git History Secret Scan — [ ] TODO
+8. Webhook Input Validation — [?] REVIEW REQUIRED
+9. Apps Script Privilege Review — [?] REVIEW REQUIRED
+10. Deployment and Access Configuration Review — [?] REVIEW REQUIRED
+
+### 9. Security Completion Rule
+
+An item should only move to `[x] DONE` after implementation is complete, relevant tests/verification have passed, and the resulting architecture matches the documented security requirement.
