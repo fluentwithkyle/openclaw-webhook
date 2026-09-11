@@ -936,6 +936,113 @@ It is the next architectural design task after this document is approved.
 
 ⸻
 
+16.3 Proposed Agent Command Protocol (ACP)
+
+PROPOSED / TARGET — DOCUMENTARY ONLY
+
+This section is proposed and documentary only. ACP is not currently implemented. No production code, endpoints, workflows, dependencies, or services are introduced by this specification.
+
+* ACP is proposed/documentary only.
+* Render/OpenClaw remains the production orchestration layer.
+* Kilo Cloud Agent remains an external execution lane.
+* ACP does not execute code by itself.
+* ACP does not replace GitHub Actions, Gemini, or Codex.
+* Credentials, tokens, and secrets must not be included in task content.
+* No production code is changed by this documentation task.
+
+⸻
+
+Purpose
+
+The Agent Command Protocol (ACP) defines a structured envelope for handing an approved task from AI orchestration to an execution lane such as the Kilo Cloud Agent.
+
+The purpose is to make the handoff explicit, auditable, and bounded. ACP carries the intent, repository context, constraints, and verification expectations for a discrete unit of work. It is a description of what should happen, not an executor of it.
+
+The execution lane decides how to perform the task within its own authority and returns a structured execution report.
+
+⸻
+
+Required command fields
+
+A proposed ACP command envelope contains these required fields:
+
+* protocol_version — version of the ACP envelope definition in use.
+* request_id — a unique, client-generated identifier for this command.
+* source — the originating orchestration component (e.g. the AI router or OpenClaw).
+* target — the intended recipient execution lane (e.g. Kilo Cloud Agent).
+* task_type — the category of work being requested (e.g. implementation, remediation, refactoring).
+* repository — the repository the task applies to (e.g. fluentwithkyle/openclaw-webhook).
+* base_branch — the branch the task is based on and intended to integrate with.
+* task — the description of the work to be performed. Must not include credentials, tokens, or secrets.
+* constraints — the operational limits or rules the execution lane must respect.
+* authorization — the authorization context indicating what capabilities may be used.
+* verification — the expected verification to be performed and reported (e.g. targeted checks, tests).
+* reporting — how the execution report should be delivered back to the orchestrator.
+
+All field values are proposed placeholders until the ACP is reviewed, approved, and implemented.
+
+⸻
+
+Execution boundaries
+
+ACP is a structured contract, not an execution engine.
+
+Specific boundaries:
+
+* ACP does not execute code by itself. An explicitly addressed execution lane performs the work.
+* ACP does not replace GitHub Actions, Gemini, or Codex. Each remains an independent agent or execution lane within the target architecture.
+* Render/OpenClaw remains the production orchestration layer. The production webhook and business-logic layer is not relocated into an AI lane.
+* Kilo Cloud Agent remains an external execution lane; it is not folded into the production Render application.
+* ACP does not perform authentication itself. Authentication and authorization are enforced by the addressed execution lane and/or the orchestrating layer before a command is honored.
+* Credentials, tokens, and secrets must not be included in task content. They are supplied and rotated outside the ACP envelope, by the execution lane, scoped to the minimum required capabilities.
+* No production code is changed by this documentation task.
+
+⸻
+
+Illustrative example
+
+The following is a minimal, non-executable, placeholder-only ACP command envelope for a Kilo implementation request. Values are illustrative placeholders and must not be used as live configuration.
+
+```json
+{
+  "protocol_version": "0.1",
+  "request_id": "acp-placeholder-request-id-0000000",
+  "source": "OpenClaw-orchestrator-placeholder",
+  "target": "Kilo Cloud Agent-placeholder",
+  "task_type": "implementation-placeholder",
+  "repository": "fluentwithkyle/openclaw-webhook-placeholder",
+  "base_branch": "main-placeholder",
+  "task": "Implement placeholder task description only.",
+  "constraints": [
+    "smallest-change-placeholder",
+    "no-new-dependencies-placeholder"
+  ],
+  "authorization": "placeholder-scoped-capability-token",
+  "verification": "git diff --check and targeted review-placeholder",
+  "reporting": "structured execution report placeholder"
+}
+```
+
+This example is non-executable. It defines shape, not behavior. No service should parse or act on it.
+
+⸻
+
+Execution report
+
+After the addressed execution lane completes a command, it returns an execution report. A proposed report contains these required fields:
+
+* request_id — the request_id of the command being reported on.
+* status — the outcome (e.g. completed, failed, blocked).
+* changed_files — the list of files modified, if any.
+* verification — the verification actually performed and its result.
+* commit — the commit reference produced, if any (null when none is produced).
+* push — whether a commit was pushed (false by default; pushing requires explicit authorization).
+* blockers — any outstanding issues, failures, or reasons the task could not complete.
+
+Commit and push do not happen automatically. Pushing requires explicit authorization outside the envelope and must never be inferred from the task alone.
+
+⸻
+
 17. AI specialist roles
 
 17.1 Kilo Code
