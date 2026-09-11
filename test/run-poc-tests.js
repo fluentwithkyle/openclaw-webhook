@@ -1,33 +1,17 @@
 const http = require('http');
 const express = require('express');
-const fs = require('fs');
-const { dispatch } = require('../poc/kilo-transport'); // We will mock this
+const { router: pocRouter } = require('../routes/poc');
+const { setDispatcher } = require('../services/transport-provider');
 
 // Start a minimal server for testing
 const app = express();
 app.use(express.json());
 
-// Need to duplicate the route logic from index.js
-const authenticatePoc = (req, res, next) => {
-    const secret = req.headers['x-poc-trigger-secret'];
-    if (!secret || secret !== 'test-secret') {
-        return res.status(401).json({ status: 'authentication blocked' });
-    }
-    next();
-};
+// Set environment for auth
+process.env.ACP_POC_TRIGGER_SECRET = 'test-secret';
 
-app.post('/poc/kilo', authenticatePoc, async (req, res) => {
-    try {
-        const commandData = fs.readFileSync('poc/command.json', 'utf8');
-        const command = JSON.parse(commandData);
-        const result = await dispatch(command);
-        if (result.status === 'SUCCESS') res.status(200).json({ status: 'Kilo dispatch accepted' });
-        else if (result.status === 'BLOCKED') res.status(403).json({ status: 'ACP validation blocked' });
-        else res.status(500).json({ status: 'Kilo transport failure' });
-    } catch (e) {
-        res.status(500).json({ status: 'Kilo transport failure' });
-    }
-});
+// Use the production router
+app.use('/poc', pocRouter);
 
 const server = app.listen(3001);
 
@@ -50,7 +34,7 @@ async function runTests() {
 
     // Test 1: Missing auth
     let res = await makeRequest({ hostname: 'localhost', port: 3001, path: '/poc/kilo', method: 'POST' });
-    if (res.status === 401) console.log('Test 1 passed');
+    if (res.status === 401) console.log('Test 1 passed: Missing secret');
     else console.error('Test 1 failed: Wrong status', res.status);
 
     // Test 2: Invalid auth
@@ -58,16 +42,35 @@ async function runTests() {
         hostname: 'localhost', port: 3001, path: '/poc/kilo', method: 'POST',
         headers: { 'x-poc-trigger-secret': 'wrong' }
     });
-    if (res.status === 401) console.log('Test 2 passed');
+    if (res.status === 401) console.log('Test 2 passed: Invalid secret');
     else console.error('Test 2 failed: Wrong status', res.status);
 
     // Test 3: Valid auth (mock success)
+    setDispatcher(async () => ({ status: 'SUCCESS' }));
     res = await makeRequest({ 
         hostname: 'localhost', port: 3001, path: '/poc/kilo', method: 'POST',
         headers: { 'x-poc-trigger-secret': 'test-secret' }
     });
-    if (res.status === 200) console.log('Test 3 passed');
+    if (res.status === 200) console.log('Test 3 passed: Success');
     else console.error('Test 3 failed: Wrong status', res.status);
+    
+    // Test 4: ACP rejection
+    setDispatcher(async () => ({ status: 'BLOCKED' }));
+    res = await makeRequest({ 
+        hostname: 'localhost', port: 3001, path: '/poc/kilo', method: 'POST',
+        headers: { 'x-poc-trigger-secret': 'test-secret' }
+    });
+    if (res.status === 403) console.log('Test 4 passed: ACP blocked');
+    else console.error('Test 4 failed: Wrong status', res.status);
+    
+    // Test 5: Transport failure
+    setDispatcher(async () => ({ status: 'FAILED' }));
+    res = await makeRequest({ 
+        hostname: 'localhost', port: 3001, path: '/poc/kilo', method: 'POST',
+        headers: { 'x-poc-trigger-secret': 'test-secret' }
+    });
+    if (res.status === 500) console.log('Test 5 passed: Transport failure');
+    else console.error('Test 5 failed: Wrong status', res.status);
 
     server.close();
 }

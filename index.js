@@ -77,45 +77,9 @@ app.post('/webhook/tally', async (req, res) => {
 app.post('/tally-webhook', handleTallyWebhook);
 app.post('/webhook', handleCalWebhook);
 
-// POC Endpoint
-app.post('/poc/kilo', authenticatePoc, async (req, res) => {
-    const requestId = `poc-${Date.now()}`;
-    try {
-        const commandData = fs.readFileSync('poc/command.json', 'utf8');
-        const command = JSON.parse(commandData);
-        command.request_id = requestId; // Ensure unique ID
+const { router: pocRouter } = require('./routes/poc');
 
-        // Dispatch via Kilo Transport
-        const result = await dispatch(command);
-
-        if (result.status === 'SUCCESS') {
-            res.status(200).json({
-                request_id: requestId,
-                status: 'Kilo dispatch accepted',
-                stage: 'completed'
-            });
-        } else if (result.status === 'BLOCKED') {
-            res.status(403).json({
-                request_id: requestId,
-                status: 'ACP validation blocked',
-                stage: 'blocked'
-            });
-        } else {
-            res.status(500).json({
-                request_id: requestId,
-                status: 'Kilo transport failure',
-                stage: 'failed'
-            });
-        }
-    } catch (error) {
-        console.error('Error in /poc/kilo:', error);
-        res.status(500).json({
-            request_id: requestId,
-            status: 'Kilo transport failure',
-            stage: 'failed'
-        });
-    }
-});
+app.use('/poc', pocRouter);
 
 const KEEP_ALIVE_INTERVAL = 14 * 60 * 1000;
 setInterval(() => {
