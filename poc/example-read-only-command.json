@@ -1,0 +1,28 @@
+{
+  "protocol_version": "0.1",
+  "request_id": "acp-poc-readonly-000001",
+  "source": "local-poc-runner",
+  "target": "Kilo Cloud Agent POC",
+  "task_type": "implementation",
+  "repository": "fluentwithkyle/openclaw-webhook",
+  "base_branch": "main",
+  "task": "Inspect repository status within the POC permitted scope as a read-only operation.",
+  "constraints": {
+    "permitted_paths": [
+      "poc/"
+    ],
+    "rules": [
+      "smallest-change",
+      "read-only-only",
+      "no-new-dependencies"
+    ]
+  },
+  "authorization": {
+    "capabilities": [
+      "read_only"
+    ]
+  },
+  "verification": "git diff --check and targeted review",
+  "reporting": "structured execution report",
+  "timestamp": "2026-09-11T08:40:27+00:00"
+}
