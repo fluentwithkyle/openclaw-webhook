@@ -1,36 +1,36 @@
 {
-  "session_id": "d88d1b29-c54f-4ea1-a2b7-c8f074658814",
-  "response": "Based on the architectural review of the proposed Agent Command Protocol (ACP) and Qwen Router → Kilo Execution Boundary (16.3 and 16.4), here is the verdict:\n\n### VERDICT\nThe proposed architecture provides a sound conceptual foundation for formalizing the AI-to-System interaction. The boundaries between agents (Qwen/Router, Kilo/Builder, OpenClaw/Orchestrator) are correctly delineated, and the proposal maintains the existing production boundaries (Render/Business Logic, Google Apps Script/Adapter).\n\nHowever, the protocol lacks sufficient structure to enforce the security and safety constraints required for autonomous task execution.\n\n### REQUIRED CHANGES\n1.  **ACP Authorization Structure (Authorization Scope)**: The `authorization` field (currently a single placeholder token) must be expanded to support **structured capabilities**. The ACP must explicitly include a machine-readable definition of the specific actions allowed for the requested `task` (e.g., `read_only`, `modify_files`, `run_tests`).\n2.  **ACP Constraint Definitions (Permitted Paths / Actions)**: The ACP requires a structured `allowed_scope` or `permitted_paths` field to constrain the Kilo Agent's operation to a specific subset of the repository or allowed tools, preventing unrestricted access even with a valid token.\n\n### RECOMMENDED CHANGES\n1.  **Execution Report Detail**: While the status reporting is adequate, the execution report should explicitly require a `command_audit_log_reference` or similar identifier to link the Kilo action to the originating ACP `request_id` for auditing purposes.\n\n### OPTIONAL CHANGES\n*   No optional changes identified.\n\n### NO CHANGE NEEDED\n*   The overall conceptual design of the ACP (16.3) and Qwen/Kilo boundary (16.4) as documentary/target architecture is correctly identified and does not falsely imply implementation.\n*   The distinction of roles (Router vs. Builder) and preservation of production boundaries (Render, Google Apps Script) is correctly handled.\n\n### SMALLEST NEXT STEP\n*   Update section 16.3 of `ARCHITECTURE.md` to define a structured `capabilities` object for the `authorization` field and an `allowed_scope` field for the `constraints` object, replacing the current \"placeholder-only\" descriptions. This must be done **only** after the structural design of these fields is reviewed and approved by the Director (Kyle).\n\n***\n\n*This review was performed under TEMPORARY CODEX FAILOVER MODE. No files were modified.*",
+  "session_id": "87dd2748-a8af-48c0-9d5e-62c1db521c7f",
+  "response": "VERDICT\n\nThe current ACP contract (sections 16.3 and 16.4) is sufficiently precise to safely implement the proposed read-only POC. The contract structure provides the necessary machine-readable fields (authorization, capabilities, permitted_paths, constraints) to enable unambiguous execution and reporting.\n\nREQUIRED BEFORE POC\n\n* Define a lightweight, local schema validation mechanism to enforce the ACP envelope structure (16.3) at the POC execution lane interface, ensuring the POC strictly conforms to the protocol before any command is honored.\n* Explicitly define the POC-specific `permitted_paths` allow-list to ensure the execution lane is restricted to the necessary, minimal repository surface area for the read-only command.\n\nRECOMMENDED\n\n* Include a minimal `request_id` and `timestamp` in the ACP command envelope for the POC to exercise the correlation and tracking logic proposed in the target architecture.\n* Implement a simple structured parser in the POC execution lane that rejects any command containing unauthorized capabilities (anything other than `read_only` for this POC).\n\nOPTIONAL\n\n* Define a simple local logging mechanism within the POC execution lane to capture the ACP envelope content and the resulting execution report, simulating the auditable system proposed in the target architecture.\n\nNO CHANGE NEEDED\n\n* The core definitions in `ARCHITECTURE.md` (16.3, 16.4) require no changes to support this proof of concept.\n\nSMALLEST SAFE POC\n\n1.  **Command Construction**: Construct a JSON ACP command envelope strictly adhering to the fields in 16.3.\n2.  **Capability Enforcement**: Authorize only the `read_only` capability in the `authorization` field.\n3.  **Path Scoping**: Set `permitted_paths` to a restricted, read-only scope (e.g., `[\"services/\"]`).\n4.  **Kilo Receipt**: Simulate Kilo receipt by loading the JSON command into the execution lane's local context.\n5.  **Execution**: Kilo parses the envelope, validates the capability (`read_only`), enforces the path restriction, and executes a read-only shell command (e.g., `ls` or `git status`).\n6.  **Reporting**: Kilo produces a structured execution report (as defined in 16.3) detailing the outcome, status, verification performed, and any blockers.\n7.  **Isolation**: Ensure the POC runs entirely as a local, stand-alone node script without production dependency access, network calls, or interaction with Qwen/OpenClaw.",
   "stats": {
     "models": {
       "gemini-3.1-flash-lite": {
         "api": {
           "totalRequests": 3,
           "totalErrors": 0,
-          "totalLatencyMs": 7175,
+          "totalLatencyMs": 7961,
           "errorsByType": {}
         },
         "tokens": {
-          "input": 27931,
-          "prompt": 48292,
-          "candidates": 653,
-          "total": 49816,
-          "cached": 20361,
-          "thoughts": 871,
+          "input": 37976,
+          "prompt": 50206,
+          "candidates": 629,
+          "total": 52220,
+          "cached": 12230,
+          "thoughts": 1385,
           "tool": 0
         },
         "roles": {
           "main": {
             "totalRequests": 3,
             "totalErrors": 0,
-            "totalLatencyMs": 7175,
+            "totalLatencyMs": 7961,
             "tokens": {
-              "input": 27931,
-              "prompt": 48292,
-              "candidates": 653,
-              "total": 49816,
-              "cached": 20361,
-              "thoughts": 871,
+              "input": 37976,
+              "prompt": 50206,
+              "candidates": 629,
+              "total": 52220,
+              "cached": 12230,
+              "thoughts": 1385,
               "tool": 0
             }
           }
@@ -38,12 +38,12 @@
       }
     },
     "tools": {
-      "totalCalls": 2,
-      "totalSuccess": 2,
+      "totalCalls": 3,
+      "totalSuccess": 3,
       "totalFail": 0,
-      "totalDurationMs": 10,
+      "totalDurationMs": 14,
       "totalDecisions": {
-        "accept": 2,
+        "accept": 3,
         "reject": 0,
         "modify": 0,
         "auto_accept": 0
@@ -53,7 +53,7 @@
           "count": 1,
           "success": 1,
           "fail": 0,
-          "durationMs": 5,
+          "durationMs": 4,
           "decisions": {
             "accept": 1,
             "reject": 0,
@@ -62,12 +62,12 @@
           }
         },
         "read_file": {
-          "count": 1,
-          "success": 1,
+          "count": 2,
+          "success": 2,
           "fail": 0,
-          "durationMs": 5,
+          "durationMs": 10,
           "decisions": {
-            "accept": 1,
+            "accept": 2,
             "reject": 0,
             "modify": 0,
             "auto_accept": 0
