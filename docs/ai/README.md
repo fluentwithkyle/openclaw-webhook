@@ -13,6 +13,17 @@ This directory (`docs/ai/`) is the persistent, repository-resident memory for AI
 - **Before implementing**: Check `TASK_LOG.md` for recent completed work to avoid duplication.
 - **When uncertain about operating rules**: Re-read this `README.md`.
 
+## Gemini Task Activation
+
+To initiate a single Gemini work task through the repository's established activation procedure:
+
+1. **Issue description**: Put the full task instructions in the GitHub issue body.
+2. **Issue comment**: Post the full task instructions again in an issue comment, beginning with:
+   `@gemini-cli`
+3. The comment is the Gemini activation trigger.
+
+Future AI systems should follow these requirements when preparing and initiating Gemini tasks.
+
 ## File Contents
 
 ### `STATE.md` — Current Live Project State
@@ -74,6 +85,6 @@ Do not introduce a new secret-management mechanism.
 | `docs/ai/STATE.md` | Current AI project state | Live status for AI agents |
 | `docs/ai/ARCH_DECISIONS.md` | Recorded decisions + rationale | Context for AI decision-making |
 | `docs/ai/TASK_LOG.md` | Historical record | Audit trail of completed AI work |
-| `docs/ai/README.md` | Operating rules | How agents use this system |
+| `docs/ai/README.md` | Operating rules | How agents use the system |
 
 **Rule**: Documentation is not proof that proposed functionality is implemented. Always verify against production code.
