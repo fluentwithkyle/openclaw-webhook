@@ -130,11 +130,55 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      - name: Extract authorized files from issue comment
+        id: authorized_files
+        if: github.event_name == 'issue_comment'
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Parse AUTHORIZED_FILES from comment body
+          # Expected format: a line starting with "AUTHORIZED_FILES:" followed by comma-separated paths
+          # Example: AUTHORIZED_FILES: ai-models/, package.json, package-lock.json
+          AUTHORIZED_FILES_RAW="$(printf '%s\n' "$COMMENT_BODY" | grep -i '^AUTHORIZED_FILES:' | head -1 | sed 's/^[^:]*: *//')"
+
+          if [ -z "$AUTHORIZED_FILES_RAW" ]; then
+            echo "==========================================="
+            echo "FAILOVER CONFIGURATION ERROR: Missing AUTHORIZED_FILES declaration"
+            echo "==========================================="
+            echo "Issue-comment failover requires an explicit AUTHORIZED_FILES line in the comment."
+            echo "Format: AUTHORIZED_FILES: path1, path2, path3"
+            echo "Example: AUTHORIZED_FILES: ai-models/, package.json, package-lock.json"
+            echo ""
+            echo "Directory prefixes (ending with /) and exact files are supported."
+            echo "STOPPING: No failover execution without authorized scope."
+            exit 1
+          fi
+
+          # Split comma-separated, trim whitespace, deduplicate
+          AUTHORIZED_FILES="$(printf '%s\n' "$AUTHORIZED_FILES_RAW" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sed '/^$/d' | sort -u)"
+
+          echo "Authorized files from comment:"
+          printf '%s\n' "$AUTHORIZED_FILES" | sed 's/^/  /'
+
+          {
+            echo 'authorized_files<<EOF'
+            printf '%s\n' "$AUTHORIZED_FILES"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Capture pre-Gemini repository state (content-based baseline)
         id: pre_state
         shell: bash
         run: |
           set -euo pipefail
+
+          # Capture Git history baseline
+          PRE_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          PRE_HEAD_SHA="$(git rev-parse HEAD)"
+          PRE_REF_NAME="${GITHUB_REF_NAME}"
 
           # Capture content-based baseline for ALL tracked files (not just modified)
           # This allows detecting additional modifications to files already changed before Gemini
@@ -173,6 +217,15 @@ jobs:
           PRE_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
 
           {
+            echo 'pre_branch<<EOF'
+            printf '%s\n' "$PRE_BRANCH"
+            echo 'EOF'
+            echo 'pre_head_sha<<EOF'
+            printf '%s\n' "$PRE_HEAD_SHA"
+            echo 'EOF'
+            echo 'pre_ref_name<<EOF'
+            printf '%s\n' "$PRE_REF_NAME"
+            echo 'EOF'
             echo 'pre_tracked_hashes<<EOF'
             printf '%s\n' "$PRE_TRACKED_HASHES"
             echo 'EOF'
@@ -200,6 +253,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           echo "Pre-Gemini state captured (content-based):"
+          echo "  Branch: $PRE_BRANCH"
+          echo "  HEAD SHA: $PRE_HEAD_SHA"
+          echo "  Ref: $PRE_REF_NAME"
           echo "  Tracked files: $(printf '%s\n' "$PRE_TRACKED_HASHES" | wc -l) files"
           echo "  Staged: $(printf '%s\n' "$PRE_STAGED" | wc -l) files"
           echo "  Untracked: $(printf '%s\n' "$PRE_UNTRACKED" | wc -l) files"
@@ -239,14 +295,20 @@ jobs:
             your normal Gemini role.
 
             In this mode you may:
-            - modify repository files;
-            - implement approved changes;
+            - inspect files;
+            - modify authorized files;
             - run tests and validation;
-            - debug implementation issues;
-            - create commits;
-            - push changes;
-            - create pull requests;
-            - perform implementation work required to continue the project.
+            - debug implementation issues.
+
+            You must NOT:
+            - commit;
+            - push;
+            - create branches;
+            - create or merge pull requests;
+            - alter Git history;
+            - move or reset refs.
+
+            The workflow, not Gemini, owns repository persistence.
 
             You retain your normal Architect and Reviewer responsibilities.
 
@@ -286,6 +348,10 @@ jobs:
         env:
           REQUEST: ${{ steps.request.outputs.request }}
           AUTHORIZED_FILES_INPUT: ${{ github.event.inputs.authorized_files }}
+          AUTHORIZED_FILES_COMMENT: ${{ steps.authorized_files.outputs.authorized_files }}
+          PRE_BRANCH: ${{ steps.pre_state.outputs.pre_branch }}
+          PRE_HEAD_SHA: ${{ steps.pre_state.outputs.pre_head_sha }}
+          PRE_REF_NAME: ${{ steps.pre_state.outputs.pre_ref_name }}
           PRE_TRACKED_HASHES: ${{ steps.pre_state.outputs.pre_tracked_hashes }}
           PRE_STAGED: ${{ steps.pre_state.outputs.pre_staged }}
           PRE_STAGED_HASHES: ${{ steps.pre_state.outputs.pre_staged_hashes }}
@@ -298,16 +364,84 @@ jobs:
           set -euo pipefail
 
           # ============================================================
+          # GIT HISTORY PROTECTION - Verify no commits or ref changes
+          # ============================================================
+          echo "=== GIT HISTORY PROTECTION GATE ==="
+          POST_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          POST_HEAD_SHA="$(git rev-parse HEAD)"
+          POST_REF_NAME="${GITHUB_REF_NAME}"
+
+          if [ "$PRE_BRANCH" != "$POST_BRANCH" ]; then
+            echo "==========================================="
+            echo "HISTORY PROTECTION FAILED: Branch changed"
+            echo "==========================================="
+            echo "Pre-Gemini branch:  $PRE_BRANCH"
+            echo "Post-Gemini branch: $POST_BRANCH"
+            echo "STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          if [ "$PRE_HEAD_SHA" != "$POST_HEAD_SHA" ]; then
+            echo "==========================================="
+            echo "HISTORY PROTECTION FAILED: HEAD SHA changed (commits created)"
+            echo "==========================================="
+            echo "Pre-Gemini HEAD:  $PRE_HEAD_SHA"
+            echo "Post-Gemini HEAD: $POST_HEAD_SHA"
+            echo "Gemini created commits - this is not permitted."
+            echo "STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          if [ "$PRE_REF_NAME" != "$POST_REF_NAME" ]; then
+            echo "==========================================="
+            echo "HISTORY PROTECTION FAILED: Ref name changed"
+            echo "==========================================="
+            echo "Pre-Gemini ref:  $PRE_REF_NAME"
+            echo "Post-Gemini ref: $POST_REF_NAME"
+            echo "STOPPING: No commit, no push."
+            exit 1
+          fi
+
+          echo "Git history protection PASSED: Branch, HEAD, and ref unchanged."
+
+          # ============================================================
           # COMMIT BOUNDARY HARDENING - GEMINI FAILOVER SCOPE GATE
           # ============================================================
 
-          # Parse authorized files from workflow input (comma-separated)
-          # Falls back to ARCHITECTURE.md if not provided (backward compatibility)
-          if [ -n "$AUTHORIZED_FILES_INPUT" ]; then
-            # Split comma-separated input into newline-separated list
-            AUTHORIZED_FILES="$(printf '%s\n' "$AUTHORIZED_FILES_INPUT" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sed '/^$/d' | sort -u)"
+          # Parse authorized files based on trigger type
+          # workflow_dispatch: uses AUTHORIZED_FILES_INPUT (comma-separated)
+          # issue_comment: uses AUTHORIZED_FILES_COMMENT (newline-separated from extraction step)
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -n "$AUTHORIZED_FILES_INPUT" ]; then
+              # Split comma-separated input into newline-separated list
+              AUTHORIZED_FILES="$(printf '%s\n' "$AUTHORIZED_FILES_INPUT" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sed '/^$/d' | sort -u)"
+            else
+              echo "==========================================="
+              echo "FAILOVER CONFIGURATION ERROR: Missing authorized_files input"
+              echo "==========================================="
+              echo "workflow_dispatch failover requires the authorized_files input."
+              echo "STOPPING: No commit, no push."
+              exit 1
+            fi
+          elif [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
+            if [ -n "$AUTHORIZED_FILES_COMMENT" ]; then
+              # Already newline-separated and deduplicated from extraction step
+              AUTHORIZED_FILES="$AUTHORIZED_FILES_COMMENT"
+            else
+              echo "==========================================="
+              echo "FAILOVER CONFIGURATION ERROR: Missing authorized_files from comment"
+              echo "==========================================="
+              echo "issue_comment failover requires AUTHORIZED_FILES in the comment."
+              echo "STOPPING: No commit, no push."
+              exit 1
+            fi
           else
-            AUTHORIZED_FILES="ARCHITECTURE.md"
+            echo "==========================================="
+            echo "FAILOVER CONFIGURATION ERROR: Unknown event type"
+            echo "==========================================="
+            echo "Event: $GITHUB_EVENT_NAME"
+            echo "STOPPING: No commit, no push."
+            exit 1
           fi
 
           echo "=== COMMIT SCOPE GATE ==="
@@ -519,10 +653,31 @@ jobs:
           # SCOPE CHECK: Verify ALL Gemini changes are within authorized scope
           # --------------------------------------------------------------------------
           echo "=== SCOPE CHECK ==="
+
+          # Function to check if a file is authorized
+          # Supports exact file matches and directory prefixes (ending with /)
+          is_authorized() {
+            local file="$1"
+            local auth_list="$2"
+            while IFS= read -r auth; do
+              [ -z "$auth" ] && continue
+              # Directory prefix match (ends with /)
+              if [ "${auth: -1}" = "/" ]; then
+                if [[ "$file" == "$auth"* ]]; then
+                  return 0
+                fi
+              # Exact file match
+              elif [ "$auth" = "$file" ]; then
+                return 0
+              fi
+            done <<< "$auth_list"
+            return 1
+          }
+
           UNAUTHORIZED_FILES=""
           while IFS= read -r file; do
             [ -z "$file" ] && continue
-            if ! printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
+            if ! is_authorized "$file" "$AUTHORIZED_FILES"; then
               UNAUTHORIZED_FILES="${UNAUTHORIZED_FILES}${file}\n"
             fi
           done <<< "$ALL_GEMINI_CHANGES"
@@ -546,27 +701,35 @@ jobs:
           # STAGE ONLY AUTHORIZED FILES (no git add -A)
           # --------------------------------------------------------------------------
           echo "=== STAGING AUTHORIZED FILES ==="
-          # Use array to handle filenames with spaces
-          mapfile -t authorized_array <<< "$AUTHORIZED_FILES"
-          for file in "${authorized_array[@]}"; do
-            if [ -f "$file" ]; then
-              git add "$file"
-              echo "  Staged (modified/new): $file"
-            elif git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
-              # File exists in index but may be deleted in worktree
-              git add "$file"
-              echo "  Staged (tracked): $file"
+
+          # Stage all modified/new files that are within authorized scope
+          # This includes both exact matches and directory prefix matches
+          ALL_POST_TRACKED="$(git ls-files | sort -u)"
+          ALL_POST_UNTRACKED="$(git ls-files --others --exclude-standard | sort -u)"
+          ALL_POST_FILES_STAGE="$(printf '%s\n%s\n' "$ALL_POST_TRACKED" "$ALL_POST_UNTRACKED" | sort -u | sed '/^$/d')"
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if is_authorized "$file" "$AUTHORIZED_FILES"; then
+              if [ -f "$file" ]; then
+                git add "$file"
+                echo "  Staged (modified/new): $file"
+              elif git ls-files --error-unmatch "$file" >/dev/null 2>&1; then
+                # File exists in index but may be deleted in worktree
+                git add "$file"
+                echo "  Staged (tracked): $file"
+              fi
             fi
-          done
+          done <<< "$ALL_POST_FILES_STAGE"
 
           # Stage authorized deletions
-          mapfile -t deleted_array <<< "$GEMINI_DELETED"
-          for file in "${deleted_array[@]}"; do
-            if printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if is_authorized "$file" "$AUTHORIZED_FILES"; then
               git rm "$file" 2>/dev/null || true
               echo "  Staged (deletion): $file"
             fi
-          done
+          done <<< "$GEMINI_DELETED"
 
           if git diff --cached --quiet; then
             echo "ERROR: No staged changes remain after scope-gated staging."
@@ -584,11 +747,11 @@ jobs:
           CACHED_DIFF_DELETED="$(git diff --cached --name-only --diff-filter=D | sort -u)"
           ALL_CACHED_FILES="$(printf '%s\n%s\n' "$CACHED_DIFF_FILES" "$CACHED_DIFF_DELETED" | sort -u | sed '/^$/d')"
 
-          # Verify every file in cached diff is authorized
+          # Verify every file in cached diff is authorized (supports dir prefixes)
           CACHED_UNAUTHORIZED=""
           while IFS= read -r file; do
             [ -z "$file" ] && continue
-            if ! printf '%s\n' "$AUTHORIZED_FILES" | grep -qxF "$file"; then
+            if ! is_authorized "$file" "$AUTHORIZED_FILES"; then
               CACHED_UNAUTHORIZED="${CACHED_UNAUTHORIZED}${file}\n"
             fi
           done <<< "$ALL_CACHED_FILES"
@@ -676,10 +839,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git commit -m "Gemini temporary Codex failover implementation
-
-Authorized scope: $(printf '%s' "$AUTHORIZED_FILES" | tr '\n' ',' | sed 's/,$//')
-Task: $REQUEST"
+          # Build commit message (avoid multi-line string in YAML literal block)
+          COMMIT_MSG="Gemini temporary Codex failover implementation\n\nAuthorized scope: $(printf '%s' "$AUTHORIZED_FILES" | tr '\n' ',' | sed 's/,$//')\nTask: $REQUEST"
+          printf '%b' "$COMMIT_MSG" > /tmp/commit_msg.txt
+          git commit -F /tmp/commit_msg.txt
 
           git push origin HEAD:${GITHUB_REF_NAME}
 
