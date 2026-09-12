@@ -17,7 +17,7 @@ This directory (`docs/ai/`) is the persistent, repository-resident memory for AI
 
 To initiate a single Gemini work task through the repository's established activation procedure:
 
-1. **Issue description**: Put the full task instructions in the GitHub issue body.
+1. **Issue description**: Put the full task instructions in the GitHub issue body, conforming to `docs/ai/TASK_STANDARD.md`.
 2. **Issue comment**: Post the full task instructions again in an issue comment, beginning with:
    `@gemini-cli`
 3. The comment is the Gemini activation trigger.
@@ -37,6 +37,11 @@ Future AI systems should follow these requirements when preparing and initiating
 - Structure: Title, Status, Context, Decision, Rationale, Consequences.
 - `ARCHITECTURE.md` remains authoritative for overall architecture.
 - This file records decisions for persistent AI project context.
+
+### `TASK_STANDARD.md` — Canonical AI Task Request Standard
+- Mandatory, canonical format for all AI task requests initiated by the Director.
+- Defines the Task Request Envelope, authorization requirements, instruction precedence, and relationship with ACP.
+- All agents must conform to this standard when preparing and initiating tasks.
 
 ### `TASK_LOG.md` — Historical Task Record
 - **Append-only** historical record of completed AI development tasks.

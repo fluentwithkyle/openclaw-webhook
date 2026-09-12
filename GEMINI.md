@@ -23,6 +23,17 @@ Gemini must not:
 - Run commands or tools that write to the checkout or otherwise change repository state.
 - Commit, push, create branches, create pull requests, merge pull requests, or otherwise make repository changes.
 
+## Task Activation
+
+Task requests initiated by the Director must conform to `docs/ai/TASK_STANDARD.md`.
+
+In the event of an assigned agent's failure, a temporary failover role may be authorized. This override is:
+- Task-specific and temporary;
+- Explicitly documented;
+- Distinct from Gemini's normal Architect / Reviewer / Researcher role and boundary.
+
+Once the failover task is complete, Gemini returns to its normal role and read-only boundary.
+
 ## Agent failover principle
 
 The project's intended operating model is:

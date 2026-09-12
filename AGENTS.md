@@ -45,6 +45,7 @@ authorizes a change.
 ## 5. Change Discipline
 
 - Make the smallest change that satisfies the task.
+- Task requests initiated by the Director must conform to `docs/ai/TASK_STANDARD.md`.
 - No unrelated refactors.
 - Do not invent missing architecture.
 - Do not claim proposed functionality is implemented.
