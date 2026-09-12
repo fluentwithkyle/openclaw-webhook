@@ -169,3 +169,28 @@
 - Execution report must identify which AI executed, whether failover occurred, why, what changed, verification, commit/push state, blockers.
 - Clearly distinguish implemented vs proposed failover.
 - No failover implementation during this task.
+
+---
+
+## ADR-013: Security Specialist Architectural Foundation
+
+**Status**: ACCEPTED — ARCHITECTURAL FOUNDATION ESTABLISHED (PROPOSED / TARGET)
+**Date**: 2026-09-12
+**Context**: Gemini's architectural investigation (Issue #35) established the need for a dedicated Security Specialist AI lane as an independent specialist for security analysis and security-focused work. The architectural foundation must be documented, the lane registered, ACP schemas extended, and persistent AI state updated — while preserving all of Gemini's research findings and maintaining accurate CURRENT/IMPLEMENTED vs PROPOSED/TARGET distinctions.
+**Decision**:
+1. Register the Security Specialist as an independent specialist lane in `AGENTS.md` Section 4 and `ARCHITECTURE.md` Sections 12.7 and 17.2.
+2. Expand `ARCHITECTURE.md` Section 12.7 with Activation Model (Mandatory/Conditional/Advisory tiers), Authority Model (Advisory/Gatekeeping/No Implementation), Risk-Based Activation Criteria table, and three Open Architectural Decisions.
+3. Extend ACP schema in `ARCHITECTURE.md` Section 16.3 with optional fields `security_review_required` (boolean) and `security_audit_context` (object) to support risk-based activation.
+4. Update `docs/ai/STATE.md`: Security Specialist status to PROPOSED/TARGET (architectural foundation established); add Open Architectural Decisions section documenting three remaining open decisions; update verification requirements.
+5. Add ADR-013 to `docs/ai/ARCH_DECISIONS.md` recording this decision.
+6. Log completed task in `docs/ai/TASK_LOG.md` with commit reference.
+7. Demonstrate ACP schema extension in `poc/command.json` with the new optional security fields.
+8. Add test cases in `poc/test.js` verifying ACP commands with security fields (false/null, true/object, absent) all pass validation.
+**Rationale**: Establishes the documented architectural foundation for the Security Specialist lane per Gemini's completed investigation, without claiming implementation of the execution system. Preserves all research findings. Maintains clear PROPOSED/TARGET status for the lane itself and the three open decisions. Extends ACP in a backward-compatible, optional manner. Keeps production boundaries intact (Render/Apps Script unchanged).
+**Consequences**:
+- Security Specialist is now a registered lane with documented architecture, but remains PROPOSED/TARGET — no production execution system exists.
+- ACP commands may optionally include security fields; absence does not break validation.
+- Three open decisions explicitly documented and preserved: (1) Qwen Router Trigger Logic Refinement, (2) Security Audit Report Persistence Mechanism, (3) Security Specialist Callback Mechanism to Orchestrator.
+- These open decisions will be resolved through future authorized architectural work.
+- No production code modified; Render/Apps Script boundaries preserved.
+- Kilo remains Builder/Implementer/Tester; Gemini remains Architect/Reviewer; Security Specialist is independent specialist lane.

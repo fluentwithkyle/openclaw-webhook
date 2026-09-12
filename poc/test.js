@@ -83,4 +83,43 @@ const blockedResult = execute(invalidCommand);
 assert.strictEqual(blockedResult.status, 'BLOCKED');
 console.log('PASS: Blocked execution test (fail closed)');
 
+// 8. Security fields: absent (backward compatibility)
+runTest('Security fields absent', {
+  "protocol_version": "0.1", "request_id": "test-sec-1",
+  "source": "Q", "target": "K", "task_type": "T", "repository": "R", "base_branch": "B",
+  "task": "inspect-poc-files",
+  "constraints": { "permitted_paths": ["poc/"] },
+  "authorization": { "capabilities": ["read_only"] },
+  "verification": "V", "reporting": "R"
+}, 'SUCCESS');
+
+// 9. Security fields: security_review_required=false, security_audit_context=null
+runTest('Security fields false/null', {
+  "protocol_version": "0.1", "request_id": "test-sec-2",
+  "source": "Q", "target": "K", "task_type": "T", "repository": "R", "base_branch": "B",
+  "task": "inspect-poc-files",
+  "constraints": { "permitted_paths": ["poc/"] },
+  "authorization": { "capabilities": ["read_only"] },
+  "verification": "V", "reporting": "R",
+  "security_review_required": false,
+  "security_audit_context": null
+}, 'SUCCESS');
+
+// 10. Security fields: security_review_required=true, security_audit_context=object
+runTest('Security fields true/object', {
+  "protocol_version": "0.1", "request_id": "test-sec-3",
+  "source": "Q", "target": "K", "task_type": "T", "repository": "R", "base_branch": "B",
+  "task": "inspect-poc-files",
+  "constraints": { "permitted_paths": ["poc/"] },
+  "authorization": { "capabilities": ["read_only"] },
+  "verification": "V", "reporting": "R",
+  "security_review_required": true,
+  "security_audit_context": {
+    "touch_points": ["auth-boundary"],
+    "risk_indicators": ["credential-handling"],
+    "requested_focus": ["secrets-exposure"],
+    "prior_audit_ref": "audit-001"
+  }
+}, 'SUCCESS');
+
 console.log("All tests passed.");

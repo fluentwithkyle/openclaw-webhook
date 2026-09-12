@@ -14,5 +14,12 @@
     "capabilities": ["read_only"]
   },
   "verification": "verify read-only execution",
-  "reporting": "structured-json"
+  "reporting": "structured-json",
+  "security_review_required": false,
+  "security_audit_context": {
+    "touch_points": ["webhook-endpoint"],
+    "risk_indicators": [],
+    "requested_focus": [],
+    "prior_audit_ref": null
+  }
 }

@@ -828,6 +828,51 @@ The Security AI should remain conceptually independent from the AI that designs 
 
 Do not invent a specific security product, model, endpoint, integration, or implementation unless one already exists in the repository.
 
+Activation Model
+
+The Security Specialist is activated based on risk classification of the task or code change under review. Three risk tiers govern activation:
+
+* Mandatory — Security Specialist review is required before the task may proceed to implementation. Applies to: authentication/authorization changes, credential handling, secrets management, cross-system trust boundaries, cryptographic operations, security-critical infrastructure changes, and any task explicitly flagged with security_review_required: true in the ACP command.
+* Conditional — Security Specialist review is triggered when the task touches areas with elevated security surface area. Applies to: webhook endpoint modifications, API contract changes, data persistence layer changes, dependency updates, CI/CD pipeline modifications, and any task where security_audit_context indicates relevant security concerns.
+* Advisory — Security Specialist may be consulted at the discretion of the routing layer (Qwen) or the Architect (Gemini) for general security hygiene, best-practice validation, or when the task author requests a security perspective.
+
+Authority Model
+
+The Security Specialist operates as an advisory and gatekeeping authority, not an implementation authority.
+
+* Advisory Authority — The Security Specialist produces a Security Audit Report containing findings, risk ratings, and recommendations. This report informs the Architect (Gemini) and the Director (Kyle) but does not itself authorize or block commits.
+* Gatekeeping Authority — For Mandatory-tier tasks, the Security Specialist must complete its review and produce a Security Audit Report before the ACP command for implementation may be issued to Kilo. The Orchestrator (or routing layer) enforces this gate by requiring the Security Audit Report as a precondition for the implementation ACP command.
+* No Implementation Authority — The Security Specialist does not write production code, modify files, or execute implementation tasks. Its output is a structured Security Audit Report consumed by the Architect and the Orchestrator.
+
+Risk-Based Activation Criteria (Mandatory / Conditional / Advisory)
+
+| Tier | Trigger | Examples | Gate |
+|------|---------|----------|------|
+| Mandatory | security_review_required: true in ACP command; auth/credential/secrets changes; cross-system trust boundary modifications; cryptographic operations | Apps Script authentication hardening (ADR-004), ACP authorization changes, webhook secret handling, encryption/decryption logic | Implementation ACP command blocked until Security Audit Report produced |
+| Conditional | security_audit_context indicates relevant concerns; webhook/API/persistence/CI/CD changes; dependency updates | New webhook endpoint, Cal.com/Tally event handling changes, CRM schema migration, GitHub Actions workflow modifications, npm dependency upgrades | Implementation ACP command may proceed with Security Specialist consultation; report produced in parallel |
+| Advisory | General security hygiene requests; best-practice validation; routing layer or Architect discretion | Documentation security review, utility script review, low-risk refactoring | No gate; Security Specialist consulted optionally |
+
+Open Architectural Decisions (Security Specialist)
+
+The following three decisions remain OPEN and are not resolved by this architectural foundation. They are documented here to preserve the open state and prevent premature closure.
+
+1. Qwen Router Trigger Logic Refinement
+   - The exact logic by which the Qwen Router determines Security Specialist activation (Mandatory/Conditional/Advisory) is not yet finalized.
+   - Current approach: risk classification based on ACP fields (security_review_required, security_audit_context) and task-type heuristics.
+   - Open questions: Should Qwen use a rule engine, a model-based classifier, or a hybrid? How are false positives/negatives handled? Who owns the rule set?
+
+2. Security Audit Report Persistence Mechanism
+   - The format, storage location, and retrieval mechanism for Security Audit Reports within `docs/ai/` is not yet defined.
+   - Candidates: dedicated `docs/ai/security-audits/` directory with structured JSON/Markdown reports; integration into `STATE.md` or `ARCH_DECISIONS.md`; external artifact store with references in `docs/ai/`.
+   - Open questions: Report schema, versioning, retention, searchability, and correlation with ACP request_id.
+
+3. Security Specialist Callback Mechanism to Orchestrator
+   - The mechanism by which the Security Specialist returns its Security Audit Report to the Orchestrator (or routing layer) and signals gate completion is not yet defined.
+   - Candidates: ACP execution report extension; dedicated webhook/callback endpoint; polling-based status check; file-based signal in `docs/ai/`.
+   - Open questions: Synchronous vs asynchronous callback; timeout and retry semantics; how the Orchestrator correlates the report with the pending implementation ACP command.
+
+These open decisions are explicitly PROPOSED / TARGET. Do not claim they are implemented. They will be resolved through future authorized architectural work.
+
 ⸻
 
 12.8 Utility AI — General Utility Specialist
@@ -1234,6 +1279,21 @@ All field values are proposed placeholders until the ACP is reviewed, approved, 
 
 ⸻
 
+Optional Security Fields
+
+The following optional fields extend the ACP command envelope to support the Security Specialist activation model (Section 12.7). They are not required for all commands but enable risk-based security review routing when present.
+
+* security_review_required (boolean, optional) — When true, explicitly signals that the task requires Mandatory-tier Security Specialist review before implementation may proceed. This field directly maps to the Mandatory activation tier. Default: false / absent. When true, the Orchestrator must enforce the gate: the implementation ACP command must not be issued until a Security Audit Report is produced and available.
+* security_audit_context (object, optional) — Provides structured context to guide Conditional-tier Security Specialist activation. Contains zero or more of the following properties:
+  - touch_points: array of strings identifying architectural surfaces affected (e.g., "webhook-endpoint", "auth-boundary", "data-persistence", "ci-cd-pipeline", "dependency-update", "api-contract").
+  - risk_indicators: array of strings describing specific security concerns (e.g., "credential-handling", "cross-system-trust", "cryptographic-operation", "input-validation", "authorization-logic").
+  - requested_focus: array of strings requesting specific Security Specialist focus areas (e.g., "secrets-exposure", "auth-review", "dependency-audit", "vulnerability-scan").
+  - prior_audit_ref: string referencing a prior Security Audit Report request_id for incremental review.
+
+These fields are optional. Their absence does not imply a security review is unnecessary; the routing layer (Qwen) may still classify a task as Conditional or Advisory based on task_type, target paths, or heuristics. The presence of security_review_required: true creates a hard gate; the presence of security_audit_context creates a Conditional trigger; the absence of both leaves activation to routing-layer discretion (Advisory).
+
+⸻
+
 Authorization capabilities
 
 The authorization field defines an explicit, machine-readable capability set. Each capability grants permission for a specific class of operation. Capabilities are explicit permissions; they are never implied by one another.
@@ -1556,6 +1616,29 @@ Responsibilities may include:
 The Security AI should remain conceptually independent from the AI that designs the implementation.
 
 Do not invent a specific security product, model, endpoint, integration, or implementation unless one already exists in the repository.
+
+Activation Model
+
+The Security Specialist is activated based on risk classification of the task or code change under review. Three risk tiers govern activation (detailed in Section 12.7):
+
+* Mandatory — Security Specialist review required before implementation may proceed. Triggered by security_review_required: true in ACP command, or auth/credential/secrets/trust-boundary/cryptographic changes.
+* Conditional — Security Specialist review triggered when task touches elevated security surface area. Triggered by security_audit_context indicating relevant concerns, or webhook/API/persistence/CI/CD/dependency changes.
+* Advisory — Security Specialist consulted at discretion of routing layer (Qwen) or Architect (Gemini) for general security hygiene.
+
+Authority Model
+
+The Security Specialist operates as an advisory and gatekeeping authority, not an implementation authority.
+
+* Advisory Authority — Produces a Security Audit Report with findings, risk ratings, and recommendations. Informs Architect (Gemini) and Director (Kyle) but does not authorize or block commits directly.
+* Gatekeeping Authority — For Mandatory-tier tasks, the Security Specialist must complete review and produce a Security Audit Report before the implementation ACP command may be issued to Kilo. The Orchestrator enforces this gate.
+* No Implementation Authority — Does not write production code, modify files, or execute implementation tasks. Output is a structured Security Audit Report.
+
+Open Architectural Decisions
+
+Three open decisions remain (detailed in Section 12.7):
+1. Qwen Router Trigger Logic Refinement
+2. Security Audit Report Persistence Mechanism
+3. Security Specialist Callback Mechanism to Orchestrator
 
 Typical delegation:
 

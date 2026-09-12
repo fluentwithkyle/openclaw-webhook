@@ -39,6 +39,7 @@ authorizes a change.
 
 - Kilo Cloud Agent is the primary Builder / Implementer / Tester.
 - Gemini remains the Architect / Planner / Reviewer / Researcher lane.
+- Security Specialist — Independent specialist lane for dedicated security analysis and security-focused work (PROPOSED / TARGET).
 - Do not replace, disable, or rewrite Gemini workflows unless
   explicitly authorized.
 

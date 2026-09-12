@@ -6,11 +6,32 @@
 
 ---
 
+## 2026-09-12 | Implement Security Specialist Architectural Foundation
+
+**Task**: Implement the documented architectural foundation for a dedicated Security Specialist AI lane, based on Gemini's completed architectural investigation (Issue #35). Preserve all of Gemini's research findings; register the Security Specialist as an independent specialist lane; extend ACP schemas with optional security fields; update persistent AI project state; maintain CURRENT/IMPLEMENTED vs PROPOSED/TARGET distinctions; leave open decisions (Qwen trigger logic, Security Audit Report persistence, Security Specialist callback mechanism) documented as open.
+
+**Summary**:
+- Updated `AGENTS.md` Section 4: Registered Security Specialist as independent specialist lane (PROPOSED / TARGET)
+- Expanded `ARCHITECTURE.md` Section 12.7: Added Activation Model (Mandatory/Conditional/Advisory), Authority Model (Advisory/Gatekeeping/No Implementation), Risk-Based Activation Criteria table, and three Open Architectural Decisions
+- Extended `ARCHITECTURE.md` Section 16.3: Added optional ACP fields `security_review_required` (boolean) and `security_audit_context` (object) for risk-based security review routing
+- Updated `ARCHITECTURE.md` Section 17.2: Aligned with expanded Section 12.7, including activation model, authority model, and open decisions references
+- Updated `docs/ai/STATE.md`: Security Specialist status to PROPOSED/TARGET (architectural foundation established); added Open Architectural Decisions section documenting three remaining open decisions; updated verification requirements
+- Added ADR-013 to `docs/ai/ARCH_DECISIONS.md`: Documents the Security Specialist architectural foundation decision
+- Added completed task entry to `docs/ai/TASK_LOG.md` with commit reference
+- Updated `poc/command.json`: Added optional `security_review_required` and `security_audit_context` fields demonstrating ACP schema extension
+- Updated `poc/test.js`: Added 3 test cases verifying ACP commands with security fields (false/null, true/object, absent) all pass validation
+
+**Outcome**: SUCCESS — Architectural foundation implemented, registered, documented, and tested. Three open decisions explicitly preserved as PROPOSED/TARGET. No production code modified. Render/Apps Script boundaries intact. All CURRENT/IMPLEMENTED vs PROPOSED/TARGET distinctions maintained.
+
+**Commit Reference**: `ae9b708`
+
+---
+
 ## 2026-09-12 | Implement Persistent AI Project State System
 
 **Task**: Create `docs/ai/` project-state system and integrate into `AGENTS.md` per Gemini's approved design (Issue #26).
 
-**Summary**: 
+**Summary**:
 - Created `docs/ai/` directory with four files:
   - `README.md` — Operating instructions for the AI project-state system (when to read, file purposes, update rules, security requirements, authoritative vs historical distinctions)
   - `STATE.md` — Current live project state (status, active tasks, blockers, backlog, agent roles, repository structure, architectural boundaries)
@@ -32,7 +53,7 @@
 
 **Task**: Initial repository setup for `fluentwithkyle/openclaw-webhook`.
 
-**Summary**: 
+**Summary**:
 - Created Node.js/Express webhook listener on Render
 - Implemented Tally and Cal.com webhook routes
 - Built Google Apps Script adapter for Sheets/Gmail

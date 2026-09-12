@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-12
-**Updated By**: Kilo — tracked architectural standardization audit items from Gemini audit (Issue #35)
+**Updated By**: Kilo — implemented Security Specialist architectural foundation per Issue #38
 
 ---
 
@@ -25,6 +25,7 @@
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
 | Email template ownership migration | **BACKLOG** | — | Move template selection to Render, retain Gmail delivery in Apps Script |
 | Automated testing infrastructure | **BACKLOG** | — | Tests, fixtures, contract tests, formal test script |
+| Security Specialist architectural foundation | **IMPLEMENTED** | Kilo | Registered lane, extended ACP schemas, updated persistent state, documented open decisions (Issue #38) |
 
 ---
 
@@ -73,9 +74,23 @@ represent implemented functionality.
 - Kilo ↔ Gemini orchestration backbone implementation — PROPOSED / TARGET; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
-- Security AI lane definition (PROPOSED / TARGET)
+- Security AI lane definition (PROPOSED / TARGET) — **architectural foundation implemented (Issue #38)**
 - Utility AI lane definition (PROPOSED / TARGET)
 - ACP protocol implementation (PROPOSED / TARGET)
+
+---
+
+## Open Architectural Decisions (Security Specialist)
+
+The following three decisions remain OPEN as of the Security Specialist architectural foundation implementation (Issue #38). They are explicitly PROPOSED / TARGET and not implemented.
+
+| # | Decision | Status | Notes |
+|---|----------|--------|-------|
+| 1 | Qwen Router Trigger Logic Refinement | **OPEN** | Exact logic for Mandatory/Conditional/Advisory classification not finalized. Rule engine vs model-based classifier vs hybrid undecided. Ownership of rule set TBD. |
+| 2 | Security Audit Report Persistence Mechanism | **OPEN** | Format, storage location, retrieval mechanism in `docs/ai/` not defined. Candidates: dedicated directory, `STATE.md`/`ARCH_DECISIONS.md` integration, external artifact store. Schema, versioning, retention, searchability, ACP correlation open. |
+| 3 | Security Specialist Callback Mechanism to Orchestrator | **OPEN** | Mechanism for returning Security Audit Report and signaling gate completion not defined. Candidates: ACP report extension, webhook/callback, polling, file-based signal. Sync vs async, timeout/retry, correlation with pending ACP command open. |
+
+These decisions are documented to preserve open state and prevent premature closure. They will be resolved through future authorized architectural work.
 
 ---
 
@@ -87,7 +102,7 @@ represent implemented functionality.
 | Primary Builder / Implementer / Tester | Kilo | **ACTIVE** |
 | Architect / Planner / Reviewer | Gemini | **ACTIVE** |
 | Router | Qwen | **PLANNED** (UNDER VALIDATION) |
-| Security Specialist | — | **PROPOSED** |
+| Security Specialist | — | **PROPOSED / TARGET** (architectural foundation established) |
 | Utility Specialist | — | **PROPOSED** |
 | Orchestrator (optional) | OpenClaw | **PROPOSED** |
 
@@ -140,3 +155,14 @@ openclaw-webhook/
 - No secrets in new documentation
 - `AGENTS.md` clearly references `docs/ai/` system
 - Distinction between CURRENT/IMPLEMENTED and PROPOSED/TARGET maintained
+- Security Specialist registered in `AGENTS.md` Section 4
+- Security Specialist architecture expanded in `ARCHITECTURE.md` Sections 12.7, 16.3, 17.2
+- ACP schema extended with optional `security_review_required` and `security_audit_context` fields
+- `docs/ai/STATE.md` reflects Security Specialist as PROPOSED/TARGET with architectural foundation established
+- Three open architectural decisions documented in `STATE.md` and `ARCHITECTURE.md`
+- ADR-013 added to `docs/ai/ARCH_DECISIONS.md`
+- Task logged in `docs/ai/TASK_LOG.md`
+- POC command.json demonstrates ACP security field extension
+- POC tests verify ACP commands with security fields pass validation
+- Render/Apps Script production boundaries remain intact
+- No production code modified
