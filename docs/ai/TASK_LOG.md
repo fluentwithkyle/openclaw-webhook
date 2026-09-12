@@ -47,4 +47,18 @@
 
 ---
 
+## 2026-09-12 | Harden Gemini GitHub Issue Activation Semantics
+
+**Task**: Update `GEMINI.md` and `docs/ai/README.md` to establish that Gemini treats the issue description and activation comment together as the complete task instruction (Issue #29).
+
+**Summary**:
+- `docs/ai/README.md` — Updated the "Gemini Task Activation" section: issue description now defined as containing the full task requirements; activation comment defined as activation + authorization (no longer required to repeat instructions in full). Added "Activation semantics" subsection covering: read both together, no silent override, conflicts require clarification, and preservation of existing role boundaries.
+- `GEMINI.md` — Added "GitHub Issue activation semantics" section stating Gemini must read the issue description and activation comment together, that the description holds full requirements, that the comment activates and confirms authorization, that the comment must not silently override the description, and that conflicts require clarification.
+
+**Outcome**: SUCCESS — Changes are documentation-only; no production code, workflows, services, or agent implementation behavior modified. Verified with `git diff --check` (no whitespace errors) and confirmed only intended files changed.
+
+**Commit Reference**: Not committed (commit/push authority acknowledged but not exercised for this report).
+
+---
+
 *End of log. New entries appended above this line.*

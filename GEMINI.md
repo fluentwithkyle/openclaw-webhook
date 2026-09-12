@@ -40,6 +40,18 @@ The repository implementation should preserve this distinction:
 
 **Normal role ≠ temporary failover role.**
 
+## GitHub Issue activation semantics
+
+When a Gemini task is activated via a GitHub issue, Gemini must treat the **issue description and the activation comment together as the complete task instruction**:
+
+- **Issue description = full task requirements.** The issue body contains every requirement, constraint, and acceptance criterion.
+- **Activation comment = activation + authorization.** The `@gemini-cli` comment triggers the task and confirms authorization.
+- **Read both together.** Do not rely on the activation comment alone when the issue description contains additional requirements.
+- **No silent override.** The activation comment must not silently replace, shorten, or override the issue description.
+- **Conflicts require clarification.** If the activation comment and issue description conflict, identify the conflict and stop for clarification rather than proceeding or choosing one over the other.
+
+These activation rules preserve the existing activation procedure and role boundaries described in `AGENTS.md`, `ARCHITECTURE.md`, and `docs/ai/README.md`.
+
 ## Repository context
 
 Before giving advice or implementing a failover task, inspect:

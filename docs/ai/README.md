@@ -17,10 +17,23 @@ This directory (`docs/ai/`) is the persistent, repository-resident memory for AI
 
 To initiate a single Gemini work task through the repository's established activation procedure:
 
-1. **Issue description**: Put the full task instructions in the GitHub issue body.
-2. **Issue comment**: Post the full task instructions again in an issue comment, beginning with:
+1. **Issue description**: Put the full task requirements in the GitHub issue body. The issue description contains the complete task requirements — not merely a summary.
+2. **Activation comment**: Post an activation comment, beginning with:
    `@gemini-cli`
-3. The comment is the Gemini activation trigger.
+   The activation comment activates the task and confirms authorization. It does not need to repeat the issue description in full.
+3. The activation comment is the Gemini activation trigger.
+
+### Activation semantics
+
+Gemini must treat the **issue description and the activation comment together as the complete task instruction**.
+
+- **Issue description = full task requirements.** The issue body contains every requirement, constraint, and acceptance criterion for the task.
+- **Activation comment = activation + authorization.** The `@gemini-cli` comment triggers the task and confirms that Kyle has authorized Gemini to proceed.
+- **Read both together.** Gemini must read the issue description and the activation comment as a combined instruction set. Do not rely on the activation comment alone when the issue description contains additional requirements.
+- **No silent override.** The activation comment must not silently replace, shorten, or override the issue description. Gemini must not discard or ignore requirements stated in the issue description merely because they are absent or abbreviated in the activation comment.
+- **Conflicts require clarification.** If the activation comment and the issue description conflict, Gemini must identify the conflict and stop for clarification rather than proceeding or choosing one over the other.
+
+These rules preserve the existing activation procedure and role boundaries. The role boundaries defined in `GEMINI.md`, `AGENTS.md`, and `ARCHITECTURE.md` remain authoritative and are not altered by this rule.
 
 Future AI systems should follow these requirements when preparing and initiating Gemini tasks.
 
