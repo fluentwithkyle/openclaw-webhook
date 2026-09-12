@@ -1,0 +1,367 @@
+name: Kilo → Gemini POC
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_task:
+        description: 'Test task for Gemini to execute in isolated POC mode'
+        required: true
+        type: string
+      verify_persistence:
+        description: 'Verify no repository changes outside disposable POC area'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: kilo-gemini-poc-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create disposable POC output directory
+        run: mkdir -p poc/test-output
+
+      - name: Capture pre-Gemini repository state
+        id: pre_state
+        if: ${{ inputs.verify_persistence }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Capture content hashes for all tracked files
+          PRE_TRACKED_HASHES="$(git ls-files -z | xargs -0 git hash-object 2>/dev/null | paste -d' ' - <(git ls-files) | sort)"
+
+          # Capture untracked files and their content hashes
+          PRE_UNTRACKED="$(git ls-files --others --exclude-standard | sort -u)"
+          PRE_UNTRACKED_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              PRE_UNTRACKED_HASHES="${PRE_UNTRACKED_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$PRE_UNTRACKED"
+          PRE_UNTRACKED_HASHES="$(printf '%s' "$PRE_UNTRACKED_HASHES" | sort)"
+
+          # Capture worktree modifications (tracked files with unstaged changes)
+          PRE_WORKTREE="$(git diff --name-only | sort -u)"
+          PRE_WORKTREE_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              PRE_WORKTREE_HASHES="${PRE_WORKTREE_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$PRE_WORKTREE"
+          PRE_WORKTREE_HASHES="$(printf '%s' "$PRE_WORKTREE_HASHES" | sort)"
+
+          PRE_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
+
+          {
+            echo 'pre_tracked_hashes<<EOF'
+            printf '%s\n' "$PRE_TRACKED_HASHES"
+            echo 'EOF'
+            echo 'pre_untracked<<EOF'
+            printf '%s\n' "$PRE_UNTRACKED"
+            echo 'EOF'
+            echo 'pre_untracked_hashes<<EOF'
+            printf '%s\n' "$PRE_UNTRACKED_HASHES"
+            echo 'EOF'
+            echo 'pre_worktree<<EOF'
+            printf '%s\n' "$PRE_WORKTREE"
+            echo 'EOF'
+            echo 'pre_worktree_hashes<<EOF'
+            printf '%s\n' "$PRE_WORKTREE_HASHES"
+            echo 'EOF'
+            echo 'pre_deleted<<EOF'
+            printf '%s\n' "$PRE_DELETED"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Pre-Gemini state captured:"
+          echo "  Tracked files: $(printf '%s\n' "$PRE_TRACKED_HASHES" | wc -l) files"
+          echo "  Untracked: $(printf '%s\n' "$PRE_UNTRACKED" | wc -l) files"
+          echo "  Worktree modified: $(printf '%s\n' "$PRE_WORKTREE" | wc -l) files"
+          echo "  Deleted: $(printf '%s\n' "$PRE_DELETED" | wc -l) files"
+
+      - name: Run Gemini in POC mode
+        id: gemini
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: gemini-3.1-flash-lite
+          prompt: |
+            You are Gemini, running in an ISOLATED PROOF-OF-CONCEPT mode for the Fluent with Kyle OpenClaw project.
+
+            MODE: KILO → GEMINI POC MODE
+
+            This is a disposable test execution to verify the Kilo → GitHub Actions → Gemini execution boundary.
+            This is NOT the production failover system.
+
+            BOUNDARIES:
+            - You may ONLY operate within the disposable POC area: poc/test-output/
+            - You must write your result to: poc/test-output/result.json
+            - You must NEVER modify existing repository files
+            - You must NEVER modify GitHub workflows (.github/workflows/*)
+            - You must NEVER modify architecture files (ARCHITECTURE.md, GEMINI.md, AGENTS.md)
+            - You must NEVER modify production application code (index.js, routes/*, services/*, etc.)
+            - You must NEVER commit, push, create branches, or create PRs
+            - You must NEVER modify Git history or refs
+            - You must NEVER create or modify credentials or secrets
+
+            The test task is provided below. Execute it and write a structured JSON result to poc/test-output/result.json.
+
+            The result.json MUST contain these fields:
+            {
+              "status": "success" | "failure",
+              "task": "description of the task executed",
+              "execution_completed": true | false,
+              "files_modified": ["list", "of", "files", "created", "or", "modified", "in", "poc/test-output/"],
+              "result": "any structured result data from the task execution"
+            }
+
+            --- TEST TASK START ---
+            ${{ github.event.inputs.test_task }}
+            --- TEST TASK END ---
+
+            Execute the test task now and write the result to poc/test-output/result.json.
+
+      - name: Verify result.json exists and is valid JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RESULT_FILE="poc/test-output/result.json"
+
+          if [ ! -f "$RESULT_FILE" ]; then
+            echo "ERROR: $RESULT_FILE does not exist"
+            exit 1
+          fi
+
+          if ! jq empty "$RESULT_FILE" 2>/dev/null; then
+            echo "ERROR: $RESULT_FILE is not valid JSON"
+            cat "$RESULT_FILE"
+            exit 1
+          fi
+
+          # Verify required fields
+          REQUIRED_FIELDS=("status" "task" "execution_completed" "files_modified" "result")
+          for field in "${REQUIRED_FIELDS[@]}"; do
+            if ! jq -e ".$field" "$RESULT_FILE" >/dev/null; then
+              echo "ERROR: Required field '$field' missing from result.json"
+              exit 1
+            fi
+          done
+
+          # Verify execution completed successfully
+          EXEC_COMPLETED=$(jq -r '.execution_completed' "$RESULT_FILE")
+          if [ "$EXEC_COMPLETED" != "true" ]; then
+            echo "ERROR: execution_completed is not true"
+            exit 1
+          fi
+
+          STATUS=$(jq -r '.status' "$RESULT_FILE")
+          if [ "$STATUS" != "success" ]; then
+            echo "ERROR: status is not 'success'"
+            exit 1
+          fi
+
+          echo "result.json validation PASSED"
+          echo "Status: $STATUS"
+          echo "Task: $(jq -r '.task' "$RESULT_FILE")"
+          echo "Files modified: $(jq -r '.files_modified | join(", ")' "$RESULT_FILE")"
+
+      - name: Verify repository changes (persistence gate)
+        if: ${{ inputs.verify_persistence }}
+        id: verify_changes
+        shell: bash
+        env:
+          PRE_TRACKED_HASHES: ${{ steps.pre_state.outputs.pre_tracked_hashes }}
+          PRE_UNTRACKED: ${{ steps.pre_state.outputs.pre_untracked }}
+          PRE_UNTRACKED_HASHES: ${{ steps.pre_state.outputs.pre_untracked_hashes }}
+          PRE_WORKTREE: ${{ steps.pre_state.outputs.pre_worktree }}
+          PRE_WORKTREE_HASHES: ${{ steps.pre_state.outputs.pre_worktree_hashes }}
+          PRE_DELETED: ${{ steps.pre_state.outputs.pre_deleted }}
+        run: |
+          set -euo pipefail
+
+          # Capture post-Gemini state
+          POST_TRACKED_HASHES="$(git ls-files -z | xargs -0 git hash-object 2>/dev/null | paste -d' ' - <(git ls-files) | sort)"
+          POST_UNTRACKED="$(git ls-files --others --exclude-standard | sort -u)"
+          POST_UNTRACKED_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              POST_UNTRACKED_HASHES="${POST_UNTRACKED_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$POST_UNTRACKED"
+          POST_UNTRACKED_HASHES="$(printf '%s' "$POST_UNTRACKED_HASHES" | sort)"
+
+          POST_WORKTREE="$(git diff --name-only | sort -u)"
+          POST_WORKTREE_HASHES=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ -f "$file" ]; then
+              HASH="$(git hash-object "$file")"
+              POST_WORKTREE_HASHES="${POST_WORKTREE_HASHES}${HASH} ${file}\n"
+            fi
+          done <<< "$POST_WORKTREE"
+          POST_WORKTREE_HASHES="$(printf '%s' "$POST_WORKTREE_HASHES" | sort)"
+
+          POST_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
+
+          # Function to extract hash for a file from a hash list
+          get_hash() {
+            local file="$1"
+            local hash_list="$2"
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              local hash="${line:0:40}"
+              local fname="${line:41}"
+              if [ "$fname" = "$file" ]; then
+                printf '%s\n' "$hash"
+                return 0
+              fi
+            done <<< "$hash_list"
+            return 1
+          }
+
+          # Collect all files that exist in post-state
+          ALL_POST_FILES="$(printf '%s\n%s\n%s\n' "$(git ls-files)" "$POST_UNTRACKED" "$POST_DELETED" | sort -u | sed '/^$/d')"
+
+          CHANGED_OUTSIDE_POC=""
+          NEW_UNTRACKED_OUTSIDE_POC=""
+          DELETED_OUTSIDE_POC=""
+          MODIFIED_PRE_EXISTING_UNTRACKED=""
+
+          # Check all post-state files for changes outside POC area
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            # Skip files in the disposable POC area
+            if [[ "$file" == poc/test-output/* ]]; then
+              continue
+            fi
+
+            PRE_HASH=""
+            POST_HASH=""
+
+            # Check if file was tracked before
+            PRE_HASH="$(get_hash "$file" "$PRE_TRACKED_HASHES")"
+
+            # Check if file was untracked before
+            if [ -z "$PRE_HASH" ]; then
+              PRE_HASH="$(get_hash "$file" "$PRE_UNTRACKED_HASHES")"
+            fi
+
+            # Check if file is in post tracked
+            POST_HASH="$(get_hash "$file" "$POST_TRACKED_HASHES")"
+
+            # Check if file is in post untracked
+            if [ -z "$POST_HASH" ]; then
+              POST_HASH="$(get_hash "$file" "$POST_UNTRACKED_HASHES")"
+            fi
+
+            # Determine change type
+            if [ -z "$PRE_HASH" ] && [ -n "$POST_HASH" ]; then
+              # New file outside POC area
+              NEW_UNTRACKED_OUTSIDE_POC="${NEW_UNTRACKED_OUTSIDE_POC}${file}\n"
+            elif [ -n "$PRE_HASH" ] && [ -z "$POST_HASH" ]; then
+              # Deleted file outside POC area
+              DELETED_OUTSIDE_POC="${DELETED_OUTSIDE_POC}${file}\n"
+            elif [ -n "$PRE_HASH" ] && [ -n "$POST_HASH" ] && [ "$PRE_HASH" != "$POST_HASH" ]; then
+              # Content changed outside POC area
+              CHANGED_OUTSIDE_POC="${CHANGED_OUTSIDE_POC}${file}\n"
+            fi
+          done <<< "$ALL_POST_FILES"
+
+          # Also check for deletions not in ALL_POST_FILES
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [[ "$file" == poc/test-output/* ]]; then
+              continue
+            fi
+            if ! printf '%s\n' "$PRE_DELETED" | grep -qxF "$file"; then
+              DELETED_OUTSIDE_POC="${DELETED_OUTSIDE_POC}${file}\n"
+            fi
+          done <<< "$POST_DELETED"
+
+          # Check if any pre-existing untracked file was modified
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [[ "$file" == poc/test-output/* ]]; then
+              continue
+            fi
+            PRE_HASH="$(get_hash "$file" "$PRE_UNTRACKED_HASHES")"
+            POST_HASH="$(get_hash "$file" "$POST_UNTRACKED_HASHES")"
+            if [ -n "$PRE_HASH" ] && [ -n "$POST_HASH" ] && [ "$PRE_HASH" != "$POST_HASH" ]; then
+              MODIFIED_PRE_EXISTING_UNTRACKED="${MODIFIED_PRE_EXISTING_UNTRACKED}${file}\n"
+            fi
+          done <<< "$PRE_UNTRACKED"
+
+          CHANGED_OUTSIDE_POC="$(printf '%s' "$CHANGED_OUTSIDE_POC" | sort -u | sed '/^$/d')"
+          NEW_UNTRACKED_OUTSIDE_POC="$(printf '%s' "$NEW_UNTRACKED_OUTSIDE_POC" | sort -u | sed '/^$/d')"
+          DELETED_OUTSIDE_POC="$(printf '%s' "$DELETED_OUTSIDE_POC" | sort -u | sed '/^$/d')"
+          MODIFIED_PRE_EXISTING_UNTRACKED="$(printf '%s' "$MODIFIED_PRE_EXISTING_UNTRACKED" | sort -u | sed '/^$/d')"
+
+          ANY_VIOLATION=""
+          if [ -n "$CHANGED_OUTSIDE_POC" ]; then
+            ANY_VIOLATION="true"
+            echo "VIOLATION: Tracked files modified outside POC area:"
+            printf '%s' "$CHANGED_OUTSIDE_POC" | sed 's/^/  /'
+          fi
+          if [ -n "$NEW_UNTRACKED_OUTSIDE_POC" ]; then
+            ANY_VIOLATION="true"
+            echo "VIOLATION: New untracked files created outside POC area:"
+            printf '%s' "$NEW_UNTRACKED_OUTSIDE_POC" | sed 's/^/  /'
+          fi
+          if [ -n "$DELETED_OUTSIDE_POC" ]; then
+            ANY_VIOLATION="true"
+            echo "VIOLATION: Files deleted outside POC area:"
+            printf '%s' "$DELETED_OUTSIDE_POC" | sed 's/^/  /'
+          fi
+          if [ -n "$MODIFIED_PRE_EXISTING_UNTRACKED" ]; then
+            ANY_VIOLATION="true"
+            echo "VIOLATION: Pre-existing untracked files modified outside POC area:"
+            printf '%s' "$MODIFIED_PRE_EXISTING_UNTRACKED" | sed 's/^/  /'
+          fi
+
+          if [ -n "$ANY_VIOLATION" ]; then
+            echo "==========================================="
+            echo "PERSISTENCE GATE FAILED: Repository changes detected outside disposable POC area"
+            echo "==========================================="
+            echo "Only poc/test-output/ is allowed to change."
+            echo "STOPPING: Workflow failed."
+            exit 1
+          fi
+
+          echo "Persistence gate PASSED: No repository changes outside poc/test-output/"
+
+      - name: Upload POC result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kilo-gemini-poc-result
+          path: poc/test-output/result.json
+          retention-days: 7
+
+      - name: Display result summary
+        shell: bash
+        run: |
+          cat poc/test-output/result.json | jq .
