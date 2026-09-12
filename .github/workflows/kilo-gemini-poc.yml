@@ -1,20 +1,11 @@
 name: Kilo → Gemini POC
 
 on:
-  workflow_dispatch:
-    inputs:
-      test_task:
-        description: 'Test task for Gemini to execute in isolated POC mode'
-        required: true
-        type: string
-      verify_persistence:
-        description: 'Verify no repository changes outside disposable POC area'
-        required: false
-        type: boolean
-        default: true
+  issue_comment:
+    types: [created]
 
 concurrency:
-  group: kilo-gemini-poc-${{ github.ref }}-${{ github.run_id }}
+  group: kilo-gemini-poc-${{ github.event.issue.number }}-${{ github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -26,6 +17,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+    if: startsWith(github.event.comment.body, '@kilo-gemini-poc')
 
     steps:
       - name: Check out repository
@@ -36,7 +28,6 @@ jobs:
 
       - name: Capture pre-Gemini repository state
         id: pre_state
-        if: ${{ inputs.verify_persistence }}
         shell: bash
         run: |
           set -euo pipefail
@@ -137,7 +128,7 @@ jobs:
             }
 
             --- TEST TASK START ---
-            ${{ github.event.inputs.test_task }}
+            ${{ github.event.comment.body | replace('@kilo-gemini-poc', '') | trim }}
             --- TEST TASK END ---
 
             Execute the test task now and write the result to poc/test-output/result.json.
@@ -188,7 +179,6 @@ jobs:
           echo "Files modified: $(jq -r '.files_modified | join(", ")' "$RESULT_FILE")"
 
       - name: Verify repository changes (persistence gate)
-        if: ${{ inputs.verify_persistence }}
         id: verify_changes
         shell: bash
         env:
