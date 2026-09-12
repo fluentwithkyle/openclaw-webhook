@@ -37,10 +37,9 @@ authorizes a change.
 
 ## 4. Existing AI Lanes
 
-- Gemini remains the Architect / Reviewer / Researcher lane.
-- Codex remains the existing builder / failover lane.
-- Kilo Cloud Agent is a separate implementation / execution lane.
-- Do not replace, disable, or rewrite Gemini or Codex workflows unless
+- Kilo Cloud Agent is the primary Builder / Implementer / Tester.
+- Gemini remains the Architect / Planner / Reviewer / Researcher lane.
+- Do not replace, disable, or rewrite Gemini workflows unless
   explicitly authorized.
 
 ## 5. Change Discipline

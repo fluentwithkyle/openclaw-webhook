@@ -1197,7 +1197,7 @@ This section is proposed and documentary only. ACP is not currently implemented.
 * Render/OpenClaw remains the production orchestration layer.
 * Kilo Cloud Agent remains an external execution lane.
 * ACP does not execute code by itself.
-* ACP does not replace GitHub Actions, Gemini, or Codex.
+* ACP does not replace GitHub Actions or Gemini.
 * Credentials, tokens, and secrets must not be included in task content.
 * No production code is changed by this documentation task.
 
@@ -1273,7 +1273,7 @@ ACP is a structured contract, not an execution engine.
 Specific boundaries:
 
 * ACP does not execute code by itself. An explicitly addressed execution lane performs the work.
-* ACP does not replace GitHub Actions, Gemini, or Codex. Each remains an independent agent or execution lane within the target architecture.
+* ACP does not replace GitHub Actions or Gemini. Each remains an independent agent or execution lane within the target architecture.
 * Render/OpenClaw remains the production orchestration layer. The production webhook and business-logic layer is not relocated into an AI lane.
 * Kilo Cloud Agent remains an external execution lane; it is not folded into the production Render application.
 * ACP does not perform authentication itself. Authentication and authorization are enforced by the addressed execution lane and/or the orchestrating layer before a command is honored.
@@ -1741,14 +1741,6 @@ ARCHITECT / PLANNER FAILOVER
 
 Gemini is currently the Architect / Planner / Reviewer.
 
-Codex is currently unavailable and must not be represented as an active operational Builder.
-
-Codex may remain documented as a future/optional failover capability where appropriate, but the architecture must clearly distinguish this from current operational status.
-
-The existing Gemini/Codex failover implementation requires a separate status review against the revised architecture.
-
-Do not redesign or implement that failover mechanism during this task.
-
 FAILOVER SAFETY
 
 Failover must preserve:
@@ -1917,24 +1909,6 @@ Long-running orchestration must account for:
 * failure recovery.
 
 These are PROPOSED / TARGET concerns.
-
-20. Codex
-
-PROPOSED / TARGET
-
-Document Codex as currently unavailable / optional.
-
-Do not describe Codex as the active primary Builder.
-
-Do not implement or redesign the existing failover system during this task.
-
-Codex may remain documented as a future/optional failover capability where appropriate, but the architecture must clearly distinguish this from current operational status.
-
-The existing Gemini/Codex failover implementation requires a separate status review against the revised architecture.
-
-⸻
-
-⸻
 
 20. Production boundaries that do not change
 
