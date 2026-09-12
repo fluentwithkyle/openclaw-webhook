@@ -621,110 +621,357 @@ Automated tests, event fixtures, contract tests, and a formal test script remain
 
 AI agents operate around the production system.
 
-They do not replace the production system’s business-logic boundaries.
+They do not replace the production system's business-logic boundaries.
 
-The AI development system consists of:
+The AI development system consists of the following proposed/target architecture:
 
-Qwen3 0.6B — Router
+PROPOSED / TARGET
 
-CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
+Kyle
+↓
+ChatGPT
+↓
+Qwen Router
+↓
+ACP
+↓
+Specialist AI Lane
+↓
+Kilo
+↓
+GitHub / CI
+↓
+Verification / Persistence
+↓
+Execution Report
+↓
+ChatGPT
+↓
+Kyle
 
-Qwen3 0.6B acts as the Router, directing requests to the appropriate AI specialist. It is not responsible for architecture, reasoning, or implementation.
+The specialist layer contains three distinct lanes:
+
+* Gemini — Architect / Planner / Reviewer
+* Security AI — Security Specialist
+* Utility AI — General Utility Specialist
+
+Kilo remains the primary Builder / Implementer / Tester.
+
+Label this entire multi-agent architecture:
+
+PROPOSED / TARGET
+
+Do not describe unimplemented components as currently operational.
 
 ⸻
 
-NVIDIA Nemotron 3 Ultra — Architect / Reasoning / Research / Reviewer
+12.2 Kyle — Director / Final Authority
 
-CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
+PROPOSED / TARGET
 
-NVIDIA Nemotron 3 Ultra is responsible for:
+Kyle is the final human authority.
+
+AI agents operate within explicitly defined roles and explicitly authorized boundaries.
+
+No AI may independently redefine the overall architecture or expand its own authority.
+
+⸻
+
+12.3 ChatGPT — Control / Human-Facing Interface
+
+PROPOSED / TARGET
+
+ChatGPT is the primary human-facing development control/interface.
+
+Responsibilities include:
+
+* receiving Kyle's requests;
+* understanding the overall system;
+* coordinating specialist AI lanes;
+* initiating authorized development workflows;
+* interacting with connected development infrastructure when explicitly authorized;
+* interpreting verified execution reports;
+* presenting results and decisions to Kyle.
+
+ChatGPT is NOT the architecture authority.
+
+Gemini holds the Architect / Planner / Reviewer role.
+
+ChatGPT must rely on verified execution results rather than claiming successful execution based on assumptions.
+
+Future requirement: a dedicated hardcoded ChatGPT AI control/operating policy defining:
+
+* role;
+* authority;
+* limitations;
+* execution boundaries;
+* escalation to Gemini;
+* use of Kilo;
+* security-review requirements;
+* secret handling;
+* verification requirements;
+* reliance on execution reports;
+* Kyle's final authority.
+
+Do not create that policy file during this task unless it already exists.
+
+⸻
+
+12.4 Qwen — Router
+
+PROPOSED / TARGET
+
+Qwen is the lightweight Router / task dispatcher.
+
+Qwen's purpose is to classify incoming development requests and determine the appropriate specialist lane.
+
+Qwen may route requests toward:
+
+* Gemini;
+* Security AI;
+* Utility AI.
+
+For execution work, Qwen uses the existing ACP command structure.
+
+Qwen is NOT:
+
+* the primary implementer;
+* the architecture authority;
+* the security authority;
+* a replacement for Gemini;
+* a replacement for Kilo.
+
+Qwen must not bypass ACP or issue unrestricted shell/Git instructions.
+
+The Qwen model-size decision remains:
+
+UNDER VALIDATION
+
+Do not claim that a larger Qwen model has been implemented unless verified.
+
+⸻
+
+12.5 ACP — Formal Command Boundary
+
+PROPOSED / TARGET
+
+The existing ACP specification (Section 16.3) remains the canonical command protocol.
+
+Do not invent a second competing protocol.
+
+The formal boundary is:
+
+Qwen
+↓
+ACP command
+↓
+Authorized specialist / execution lane
+
+The ACP command must establish the authorized context, including as applicable:
+
+* originator;
+* intended target;
+* repository;
+* base branch;
+* permitted task;
+* constraints;
+* verification requirements;
+* reporting requirements.
+
+Anything outside the authorized ACP command is out of scope.
+
+⸻
+
+12.6 Gemini — Architect / Planner / Reviewer
+
+PROPOSED / TARGET
+
+Gemini replaces the previously proposed NVIDIA Nemotron role.
+
+Gemini is the higher-reasoning architectural and planning specialist.
+
+Responsibilities include:
 
 * architecture;
-* large-context repository analysis;
-* planning;
-* reasoning about system-wide changes;
-* dependency mapping;
-* Google-specific integration analysis;
-* GitHub-specific analysis;
-* architectural review;
-* integration review.
+* system design;
+* implementation planning;
+* complex technical reasoning;
+* difficult debugging analysis;
+* research;
+* reviewing proposed implementations;
+* technical review.
 
-NVIDIA Nemotron 3 Ultra should analyze the repository and produce implementation plans.
+Gemini provides architectural/technical direction.
 
-⸻
-
-Kilo Code — Builder / Implementer / Tester
-
-CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
-
-Kilo Code is responsible for:
-
-* primary implementation;
-* debugging;
-* multi-file changes;
-* tests;
-* refactoring;
-* verification;
-* final corrections;
-* maintaining production code.
-
-Kilo Code implements an approved plan and should make the smallest appropriate change.
+Gemini does not replace Kilo as the primary repository Builder / Implementer / Tester.
 
 ⸻
 
-Utility / Free / Local Models — Utility Specialists
+12.7 Security AI — Security Specialist
 
-CURRENT / PROPOSED
+PROPOSED / TARGET
 
-Use lower-cost models for:
+Define an independent Security AI lane.
 
-* quick technical questions;
-* boilerplate;
+Its purpose is dedicated security analysis and security-focused work.
+
+Responsibilities may include:
+
+* vulnerability analysis;
+* secrets and credential exposure review;
+* authentication/authorization review;
+* dependency/security review;
+* security-focused implementation;
+* security verification.
+
+The Security AI should remain conceptually independent from the AI that designs the implementation.
+
+Do not invent a specific security product, model, endpoint, integration, or implementation unless one already exists in the repository.
+
+⸻
+
+12.8 Utility AI — General Utility Specialist
+
+PROPOSED / TARGET
+
+Add a General Utility Specialist lane.
+
+Its purpose is to handle low-complexity, repetitive, or routine tasks without unnecessarily consuming the resources of a higher-reasoning model.
+
+Examples include:
+
+* documentation cleanup;
+* formatting;
 * simple transformations;
-* text transformations;
-* high-volume low-complexity iterations;
-* utility tasks.
+* extraction;
+* boilerplate;
+* repetitive maintenance;
+* straightforward data manipulation;
+* other low-complexity utility work.
 
-These models must not independently redefine the system architecture.
+The Utility AI should be described as a ROLE, not tied to a specific model yet.
+
+Its existence allows Qwen to route simple work away from Gemini when advanced architectural reasoning is unnecessary.
+
+Do not give Utility AI architectural authority.
+
+Do not give Utility AI unrestricted repository authority.
 
 ⸻
 
-Local Goose — Local Execution Support
+12.9 Kilo — Builder / Implementer / Tester
 
-CURRENT / PROPOSED
+CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE + PROPOSED / TARGET EXTENSIONS
 
-Goose may be used for:
+Kilo is the primary execution agent.
 
-* repetitive work;
-* background processing;
-* large batches of low-risk tasks;
-* local experimentation;
-* unlimited local iteration.
+Kilo is responsible for:
 
-Goose operates within the architectural boundaries defined by this document.
+* repository inspection;
+* implementation;
+* testing;
+* verification;
+* reporting execution results.
+
+Kilo must obey:
+
+* AGENTS.md;
+* existing architecture;
+* the authorized ACP command;
+* task constraints.
+
+Kilo must:
+
+* inspect before modifying;
+* make the smallest appropriate change;
+* preserve unrelated functionality;
+* protect credentials and secrets;
+* stay within authorized scope.
+
+Kilo must not independently redefine architecture.
+
+Kilo must not modify AGENTS.md unless explicitly authorized by a future task.
+
+Kilo must not modify protected architectural components without authorization.
+
+Kilo must not modify GitHub Actions merely because an agent task involves execution.
+
+Kilo may commit and push only when the ACP command explicitly authorizes it.
+
+⸻
+
+12.10 GitHub / CI — Source of Truth
+
+PROPOSED / TARGET
+
+GitHub remains the persistent source of truth for repository state.
+
+AI sessions may be temporary, but repository state, commits, diffs, and CI results provide persistent verification.
+
+Document GitHub / CI as the persistence and mechanical verification layer.
+
+⸻
+
+12.11 Execution Report
+
+PROPOSED / TARGET
+
+The normal execution return path is:
+
+Kilo
+↓
+ACP execution report
+↓
+Qwen
+↓
+ChatGPT
+↓
+Kyle
+
+The execution report, rather than an AI's assumption, is the authoritative execution result.
+
+The report must distinguish at minimum:
+
+* success;
+* failure;
+* blocked;
+* changed files;
+* verification results;
+* commit;
+* push;
+* blockers.
 
 ⸻
 
 13. Standard development loop
 
-CURRENT / IMPLEMENTED OPERATING MODEL
+PROPOSED / TARGET
 
-Major development work follows:
+Normal development follows:
 
-Qwen Router
-  ↓
-NVIDIA Nemotron architecture/reasoning
-  ↓
-Kilo implementation
-  ↓
-tests/debugging
-  ↓
-NVIDIA Nemotron review
-  ↓
-Kilo corrections
+Qwen
+↓
+ACP
+↓
+Appropriate Specialist
+↓
+Kilo
+↓
+GitHub / CI
+↓
+Verification
+↓
+Execution Report
 
-NVIDIA Nemotron is the architect/reviewer. Kilo Code is the primary builder.
+Kilo is the primary Builder / Implementer / Tester.
 
+Specialist routing:
+
+* Gemini — Architect / Planner / Reviewer (architecture, planning, review)
+* Security AI — Security Specialist (vulnerability analysis, secrets review, auth review)
+* Utility AI — General Utility Specialist (documentation, formatting, boilerplate, simple transformations)
+
+Qwen routes to the appropriate specialist. For implementation tasks, the flow proceeds through ACP to Kilo.
 
 ⸻
 
@@ -747,9 +994,13 @@ Examples:
 Kyle should not need to manually move between:
 
 * LINE;
-* NVIDIA Nemotron 3 Ultra = Architect / Reasoning / Research / Reviewer;
-* Kilo Code = Builder / Implementer / Tester;
-* GitHub;
+* ChatGPT — Control / Human-Facing Interface;
+* Qwen — Router;
+* Gemini — Architect / Planner / Reviewer;
+* Security AI — Security Specialist;
+* Utility AI — General Utility Specialist;
+* Kilo — Builder / Implementer / Tester;
+* GitHub / CI — Source of Truth;
 * Render;
 * Google Apps Script;
 * other AI tools.
@@ -760,87 +1011,85 @@ The underlying agents and services should operate behind the LINE interface.
 
 14.2 Target architecture
 
-                          KYLE
-                            ↓
-                          LINE
-                            ↓
-                     Render / Node.js
-                            ↓
-                  AI Orchestration Layer
-                            ↓
-                     Agent Command
-                     Protocol (ACP)
-                            ↓
-           ┌────────────────┼─────────────────┐
-           ↓                ↓                 ↓
-        Kilo Code        NVIDIA Nemotron   Utility Models
-           ↓                ↓                 ↓
-        GitHub          Research /          Utility
-        / Code           Review              Tasks
-           └────────────────┼─────────────────┘
-                            ↓
-                  Authorized Capabilities
+Kyle
+↓
+ChatGPT
+↓
+Qwen Router
+↓
+ACP
+↓
+Specialist AI Lane
+↓
+Kilo
+↓
+GitHub / CI
+↓
+Verification / Persistence
+↓
+Execution Report
+↓
+ChatGPT
+↓
+Kyle
 
-                           ↓
-              ┌────────────┴────────────┐
-              ↓                         ↓
-       Render application        Google Apps Script
-       / business logic          / Google operations
-              ↓                         ↓
-       Existing workflows       Sheets / Gmail
-              └────────────┬────────────┘
-                           ↓
-                         LINE
-                           ↓
-                          KYLE
+The specialist layer contains three distinct lanes:
+
+* Gemini — Architect / Planner / Reviewer
+* Security AI — Security Specialist
+* Utility AI — General Utility Specialist
+
+Kilo remains the primary Builder / Implementer / Tester.
 
 GitHub Actions may serve as an ephemeral AI execution plane within this architecture.
 
 It does not replace Render as the production application server.
 
+Render / Node.js remains the production business-logic layer.
+Google Apps Script remains the Google-specific adapter.
+Existing workflows → Sheets / Gmail.
+
 ⸻
 
-15. LINE as the control interface
+15. LINE
 
 15.1 Role
 
 PROPOSED / TARGET
 
-LINE becomes Kyle’s natural-language control interface.
+LINE is a notification channel.
 
-The intended experience is:
+Existing operational notifications may continue.
 
-Kyle → LINE
-     → request received
-     → system understands request
-     → appropriate capability/agent selected
-     → task executed
-     → result returned
-     → LINE
+Future notification types may be added.
 
-LINE itself does not make business decisions.
+LINE is not the primary AI development control channel and is not required for the AI development architecture to operate.
 
-Render remains responsible for production business rules.
+ChatGPT is the primary human-facing development control/interface (see Section 12.3).
 
 ⸻
 
 15.2 Synchronous tasks
 
+PROPOSED / TARGET
+
 Simple requests may eventually follow:
 
-LINE
- ↓
-Render
- ↓
-AI Router
- ↓
+ChatGPT
+↓
+Qwen Router
+↓
+ACP
+↓
 Approved read capability
- ↓
+↓
 Existing production system
- ↓
+↓
 Result
- ↓
-LINE
+↓
+ChatGPT
+↓
+LINE (notification)
 
 Example:
 
@@ -850,25 +1099,29 @@ Example:
 
 15.3 Asynchronous tasks
 
+PROPOSED / TARGET
+
 Longer tasks should follow:
 
-LINE
- ↓
-Render
- ↓
-Create task
- ↓
-AI execution plane
- ↓
-Orchestration
- ↓
-Specialist / capability
- ↓
-Task result
- ↓
-Render
- ↓
-LINE
+ChatGPT
+↓
+Qwen Router
+↓
+ACP
+↓
+Specialist AI Lane
+↓
+Kilo
+↓
+GitHub / CI
+↓
+Verification
+↓
+Execution Report
+↓
+ChatGPT
+↓
+LINE (notification)
 
 The architecture must eventually account for:
 
@@ -883,9 +1136,7 @@ The architecture must eventually account for:
 
 These mechanisms are PROPOSED / TARGET, not claims of current implementation.
 
-⸻
-
-16. Agent Command Protocol
+⸻16. Agent Command Protocol
 
 16.1 Role
 
@@ -1091,30 +1342,34 @@ Commit and push do not happen automatically. Pushing requires explicit authoriza
 
 PROPOSED / TARGET
 
-This section defines the execution boundary between the Qwen Router and Kilo Code. It is documentary only; no production code, endpoints, workflows, dependencies, or services are introduced by this addition.
+This section defines the execution boundary between the Qwen Router and Kilo. It is documentary only; no production code, endpoints, workflows, dependencies, or services are introduced by this addition.
 
 The boundary flow:
 
-Qwen3 0.6B Router
+Qwen Router
 ↓
 ACP command
 ↓
-Kilo Code
+Kilo
 ↓
-GitHub repository
+GitHub / CI
 ↓
-implementation / verification
+Verification / Persistence
 ↓
 ACP execution report
 ↓
 Qwen Router
+↓
+ChatGPT
+↓
+Kyle
 
 Qwen Router
 
 The Qwen Router is the request-routing layer only.
 
-* Routes development requests.
-* Constructs an ACP command for Kilo.
+* Routes development requests to the appropriate specialist lane (Gemini, Security AI, Utility AI).
+* For execution work, constructs an ACP command for Kilo.
 * Does not implement repository changes.
 * Does not redefine architecture.
 * Does not bypass ACP.
@@ -1124,7 +1379,7 @@ The Qwen Router is the request-routing layer only.
 
 Kilo
 
-Kilo Code is the builder / implementer / tester.
+Kilo is the Builder / Implementer / Tester.
 
 * Builder / Implementer / Tester.
 * Receives an authorized ACP command.
@@ -1157,7 +1412,7 @@ Execution Report
 
 Kilo returns the execution result through the ACP execution report back to the Qwen Router.
 
-Kilo → ACP execution report → Qwen.
+Kilo → ACP execution report → Qwen Router → ChatGPT → Kyle.
 
 The report must distinguish:
 
@@ -1182,9 +1437,7 @@ Production Boundary
 
 The AI development lane must not move production business logic out of Render or Google-specific operations out of Google Apps Script.
 
-⸻
-
-16.5 Kilo Cloud Agent HTTP Trigger & Security Boundary
+⸻16.5 Kilo Cloud Agent HTTP Trigger & Security Boundary
 
 The Kilo Cloud Agent supports external HTTP webhook triggers as a transport mechanism for task execution.
 
@@ -1252,26 +1505,26 @@ The Kilo Cloud Agent HTTP webhook trigger is a confirmed Kilo capability. The sp
 
 17. AI specialist roles
 
-17.1 Kilo Code
+17.1 Gemini — Architect / Planner / Reviewer
 
 PROPOSED / TARGET
 
-Kilo Code remains the primary implementation/build/debug/test specialist.
+Gemini is the higher-reasoning architectural and planning specialist.
 
-Typical delegation:
+Responsibilities include:
 
-"Implement this feature."
-"Fix this bug."
-"Run the tests and resolve the failure."
-"Update the CRM workflow."
+* architecture;
+* system design;
+* implementation planning;
+* complex technical reasoning;
+* difficult debugging analysis;
+* research;
+* reviewing proposed implementations;
+* technical review.
 
-⸻
+Gemini provides architectural/technical direction.
 
-17.2 NVIDIA Nemotron 3 Ultra
-
-PROPOSED / TARGET
-
-NVIDIA Nemotron 3 Ultra remains the architecture, research, planning, and review specialist.
+Gemini does not replace Kilo as the primary repository Builder / Implementer / Tester.
 
 Typical delegation:
 
@@ -1283,53 +1536,286 @@ Typical delegation:
 
 ⸻
 
-17.3 Qwen3 0.6B
+17.2 Security AI — Security Specialist
 
-UNDER VALIDATION
+PROPOSED / TARGET
 
-Qwen3 0.6B is a candidate low-cost router/orchestrator.
+Define an independent Security AI lane.
 
-It must not initially be treated as a fully autonomous reasoning or coding agent.
+Its purpose is dedicated security analysis and security-focused work.
 
-The preferred constrained problem is:
+Responsibilities may include:
 
-Natural language
-      ↓
-Structured intent
-      ↓
-Approved command
+* vulnerability analysis;
+* secrets and credential exposure review;
+* authentication/authorization review;
+* dependency/security review;
+* security-focused implementation;
+* security verification.
 
-Example:
+The Security AI should remain conceptually independent from the AI that designs the implementation.
 
-"Give me this week's bookings."
-      ↓
-GET_BOOKINGS
+Do not invent a specific security product, model, endpoint, integration, or implementation unless one already exists in the repository.
 
-or:
+Typical delegation:
 
-"Add this feature to the CRM."
-↓
-CODE_CHANGE_REQUEST
-↓
-Kilo Code
-
-Qwen3 0.6B must be benchmarked before becoming a production-critical router.
-
-If it cannot reliably perform the required routing task, a stronger or different router may be used.
-
-The architecture should not become permanently dependent on a specific small model.
+"Review this code for vulnerabilities."
+"Analyze secrets exposure risk."
+"Audit authentication implementation."
+"Check dependency security."
 
 ⸻
 
-18. OpenClaw’s architectural role
+17.3 Utility AI — General Utility Specialist
 
-18.1 Status
+PROPOSED / TARGET
+
+Add a General Utility Specialist lane.
+
+Its purpose is to handle low-complexity, repetitive, or routine tasks without unnecessarily consuming the resources of a higher-reasoning model.
+
+Examples include:
+
+* documentation cleanup;
+* formatting;
+* simple transformations;
+* extraction;
+* boilerplate;
+* repetitive maintenance;
+* straightforward data manipulation;
+* other low-complexity utility work.
+
+The Utility AI should be described as a ROLE, not tied to a specific model yet.
+
+Its existence allows Qwen to route simple work away from Gemini when advanced architectural reasoning is unnecessary.
+
+Do not give Utility AI architectural authority.
+
+Do not give Utility AI unrestricted repository authority.
+
+Typical delegation:
+
+"Clean up this documentation."
+"Format these files."
+"Extract data from this file."
+"Generate boilerplate code."
+
+⸻
+
+17.4 Kilo — Builder / Implementer / Tester
+
+CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE + PROPOSED / TARGET EXTENSIONS
+
+Kilo is the primary execution agent.
+
+Kilo is responsible for:
+
+* repository inspection;
+* implementation;
+* testing;
+* verification;
+* reporting execution results.
+
+Kilo must obey:
+
+* AGENTS.md;
+* existing architecture;
+* the authorized ACP command;
+* task constraints.
+
+Kilo must:
+
+* inspect before modifying;
+* make the smallest appropriate change;
+* preserve unrelated functionality;
+* protect credentials and secrets;
+* stay within authorized scope.
+
+Kilo must not independently redefine architecture.
+
+Kilo must not modify AGENTS.md unless explicitly authorized by a future task.
+
+Kilo must not modify protected architectural components without authorization.
+
+Kilo must not modify GitHub Actions merely because an agent task involves execution.
+
+Kilo may commit and push only when the ACP command explicitly authorizes it.
+
+Typical delegation:
+
+"Implement this feature."
+"Fix this bug."
+"Run the tests and resolve the failure."
+"Update the CRM workflow."
+
+⸻
+
+17.5 Qwen — Router
+
+UNDER VALIDATION
+
+Qwen is a candidate low-cost router/task dispatcher.
+
+It must not initially be treated as a fully autonomous reasoning or coding agent.
+
+Qwen's purpose is to classify incoming development requests and determine the appropriate specialist lane.
+
+Qwen may route requests toward:
+
+* Gemini;
+* Security AI;
+* Utility AI.
+
+For execution work, Qwen uses the existing ACP command structure.
+
+Qwen is NOT:
+
+* the primary implementer;
+* the architecture authority;
+* the security authority;
+* a replacement for Gemini;
+* a replacement for Kilo.
+
+Qwen must not bypass ACP or issue unrestricted shell/Git instructions.
+
+The Qwen model-size decision remains:
+
+UNDER VALIDATION
+
+Do not claim that a larger Qwen model has been implemented unless verified.
+
+18. Failover Architecture
+
+PROPOSED / TARGET
+
+Document failover as an explicit architectural concept.
+
+The purpose of failover is to provide a controlled alternative when an authorized specialist or execution component is unavailable.
+
+Failover must preserve the same ACP command contract and authorization boundaries.
+
+NORMAL EXECUTION
+
+Normal development follows:
+
+Qwen
+↓
+ACP
+↓
+Appropriate Specialist
+↓
+Kilo
+↓
+GitHub / CI
+↓
+Verification
+↓
+Execution Report
+
+Kilo is the primary Builder / Implementer / Tester.
+
+SPECIALIST FAILOVER
+
+If a specialist AI is unavailable or fails, another AI must not silently inherit that specialist's authority.
+
+Any replacement specialist must have an explicitly defined role and must receive an appropriately authorized ACP command.
+
+A specialist failure must produce a clear failure or blocked result when an authorized replacement is unavailable.
+
+BUILDER FAILOVER
+
+Kilo is the primary Builder / Implementer / Tester.
+
+If Kilo is unavailable, fails, or becomes blocked, the system must distinguish:
+
+* Kilo unavailable;
+* Kilo execution failure;
+* Kilo blocked;
+* task requiring human intervention.
+
+A failed execution must never be represented as successful.
+
+Any future alternate Builder must be explicitly defined and authorized rather than implicitly assumed.
+
+ARCHITECT / PLANNER FAILOVER
+
+Gemini is currently the Architect / Planner / Reviewer.
+
+Codex is currently unavailable and must not be represented as an active operational Builder.
+
+Codex may remain documented as a future/optional failover capability where appropriate, but the architecture must clearly distinguish this from current operational status.
+
+The existing Gemini/Codex failover implementation requires a separate status review against the revised architecture.
+
+Do not redesign or implement that failover mechanism during this task.
+
+FAILOVER SAFETY
+
+Failover must preserve:
+
+* original task;
+* authorized scope;
+* repository;
+* target branch;
+* ACP authorization;
+* verification requirements;
+* reporting requirements.
+
+Failover must never:
+
+* silently expand permissions;
+* bypass ACP;
+* grant architecture authority to a Builder;
+* grant implementation authority to a Router;
+* expose credentials;
+* modify protected architecture without authorization;
+* claim success without a verified execution report.
+
+NO SILENT FALLBACK
+
+The system must identify when failover occurred.
+
+The execution report must identify:
+
+* which AI actually executed the task;
+* whether failover occurred;
+* why failover occurred;
+* what changed;
+* verification results;
+* commit/push state;
+* blockers.
+
+HUMAN ESCALATION
+
+If the authorized execution path and defined failover options are unavailable, the result is:
+
+BLOCKED
+
+The system reports the blocker to ChatGPT / Kyle rather than inventing an alternate execution path.
+
+CURRENT STATUS
+
+Clearly distinguish:
+
+* currently implemented failover;
+* proposed failover;
+* unavailable components.
+
+Do not describe proposed failover paths as operational.
+
+Do not modify failover implementation during this task.
+
+⸻
+
+⸻19. OpenClaw's architectural role
+
+19.1 Status
 
 PROPOSED / TARGET
 
 OpenClaw is initially retained as the orchestration/mediation capability.
 
-Its value is not defined merely as “being the server.”
+Its value is not defined merely as "being the server."
 
 Its potentially valuable responsibilities include:
 
@@ -1343,7 +1829,7 @@ Its potentially valuable responsibilities include:
 
 ⸻
 
-18.2 Replaceability
+19.2 Replaceability
 
 OpenClaw should be treated as a replaceable/pluggable orchestration layer.
 
@@ -1368,7 +1854,25 @@ without requiring a redesign of the production business system.
 
 ⸻
 
-19. GitHub Actions as AI execution plane
+19.3 Independence from Qwen → ACP → Specialist Boundary
+
+PROPOSED / TARGET
+
+Explicitly state that the Qwen → ACP → specialist execution boundary does NOT depend on OpenClaw.
+
+OpenClaw may eventually provide:
+
+* transport;
+* message routing;
+* event orchestration;
+* LINE integration;
+* automated invocation.
+
+These are transport/orchestration concerns.
+
+OpenClaw must not alter the ACP command contract or become a prerequisite for the Qwen → specialist boundary.
+
+⸻19. GitHub Actions as AI execution plane
 
 19.1 Role
 
@@ -1414,6 +1918,22 @@ Long-running orchestration must account for:
 
 These are PROPOSED / TARGET concerns.
 
+20. Codex
+
+PROPOSED / TARGET
+
+Document Codex as currently unavailable / optional.
+
+Do not describe Codex as the active primary Builder.
+
+Do not implement or redesign the existing failover system during this task.
+
+Codex may remain documented as a future/optional failover capability where appropriate, but the architecture must clearly distinguish this from current operational status.
+
+The existing Gemini/Codex failover implementation requires a separate status review against the revised architecture.
+
+⸻
+
 ⸻
 
 20. Production boundaries that do not change
@@ -1446,7 +1966,11 @@ Gmail remains the email delivery channel.
 
 LINE
 
-LINE remains the communication channel and becomes the intended natural-language control interface for Kyle.
+LINE remains the communication channel and notification channel.
+
+LINE is not the primary AI development control channel and is not required for the AI development architecture to operate.
+
+ChatGPT is the primary human-facing development control interface (see Section 12.3).
 
 GitHub
 
@@ -1670,33 +2194,40 @@ PROPOSED / TARGET
 Enable complex tasks involving:
 
 * OpenClaw;
-* Kilo Code;
-* NVIDIA Nemotron 3 Ultra;
-* Qwen or another router;
+* ChatGPT — Control / Human-Facing Interface;
+* Qwen — Router;
+* Gemini — Architect / Planner / Reviewer;
+* Security AI — Security Specialist;
+* Utility AI — General Utility Specialist;
+* Kilo — Builder / Implementer / Tester;
 * GitHub Actions;
 * approved production capabilities.
 
 Example:
 
 Kyle
- ↓
-LINE
- ↓
-Router / OpenClaw
- ↓
-NVIDIA Nemotron architecture analysis
- ↓
-Kilo Code implementation
- ↓
+↓
+ChatGPT
+↓
+Qwen Router
+↓
+Gemini (architecture analysis)
+↓
+Kilo (implementation)
+↓
 Tests
- ↓
-NVIDIA Nemotron review
- ↓
-Kilo Code corrections
- ↓
-Result
- ↓
-LINE
+↓
+Gemini (review)
+↓
+Kilo (corrections)
+↓
+Execution Report
+↓
+ChatGPT
+↓
+Kyle
+↓
+LINE (notification)
 
 The exact orchestration implementation should be determined from the validated ACP and proof-of-concept results.
 
@@ -1776,8 +2307,12 @@ The ACP design must identify:
 * correlation IDs;
 * logging;
 * LINE integration points;
-* Kilo Code integration points;
-* NVIDIA Nemotron 3 Ultra integration points;
+* Kilo integration points;
+* ChatGPT integration points;
+* Qwen Router integration points;
+* Gemini integration points;
+* Security AI integration points;
+* Utility AI integration points;
 * OpenClaw integration points;
 * GitHub Actions execution boundaries.
 
@@ -1837,43 +2372,42 @@ When a requested change conflicts with the documented architecture, identify the
 
 The intended end state is a reliable, incremental automation system in which:
 
-                    KYLE
-                      ↓
-                    LINE
-                      ↓
-             Natural-language request
-                      ↓
-             Render / control boundary
-                      ↓
-          AI orchestration / OpenClaw
-                      ↓
-                    ACP
-                      ↓
-        ┌─────────────┼─────────────┐
-        ↓             ↓             ↓
-      Kilo Code     NVIDIA Nemotron 3 Ultra  Utilities
-        ↓             ↓             ↓
-     GitHub        Research      Low-cost
-      / Code        / Review      operations
-        └─────────────┼─────────────┘
-                      ↓
-             Approved capabilities
-                      ↓
+                     KYLE
+                       ↓
+                     ChatGPT
+                       ↓
+                     Qwen Router
+                       ↓
+                     ACP
+                       ↓
+         ┌─────────────┼─────────────┐
+         ↓             ↓             ↓
+       Kilo          Gemini        Utility AI
+       GitHub        Research      Low-cost
+       / Code        / Review      operations
+         └─────────────┼─────────────┘
+                       ↓
+              Verification / Persistence
+                       ↓
+              Approved capabilities
+                       ↓
           ┌───────────┴───────────┐
           ↓                       ↓
        Render              Apps Script
    Business logic         Google operations
           ↓                       ↓
        Workflows            Sheets / Gmail
-          └───────────┬───────────┘
-                      ↓
-                    LINE
-                      ↓
-                     KYLE
+          └─────────────┬───────────┘
+                       ↓
+                     LINE
+                       ↓
+                     ChatGPT
+                       ↓
+                      KYLE
 
 The key invariant remains:
 
-AI can orchestrate the system, but AI does not become the system’s business-logic owner.
+AI can orchestrate the system, but AI does not become the system's business-logic owner.
 
 Render remains the production business-logic layer.
 
@@ -1881,13 +2415,17 @@ Google Apps Script remains the Google-specific adapter.
 
 GitHub remains the source of truth.
 
-LINE becomes the intended human control interface.
+LINE is a notification channel, not the primary AI development control channel.
+
+ChatGPT is the primary human-facing development control interface.
 
 ACP becomes the controlled interface between AI orchestration and production capabilities.
 
 OpenClaw remains initially available as the orchestration/mediation layer but is deliberately kept replaceable.
 
-Qwen3 0.6B remains under validation until its routing reliability is demonstrated.
+Qwen remains under validation until its routing reliability is demonstrated.
+
+Security AI operates as an independent specialist lane.
 
 The system evolves incrementally without requiring a wholesale rewrite of the working Fluent with Kyle application.
 
