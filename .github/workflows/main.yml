@@ -130,11 +130,17 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Capture pre-Gemini repository state (content-based baseline)
+      - name: Capture pre-Gemini repository state (content-based baseline + Git refs)
         id: pre_state
         shell: bash
         run: |
           set -euo pipefail
+
+          # Capture pre-Gemini Git state for history/ref protection
+          PRE_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          PRE_HEAD_SHA="$(git rev-parse HEAD)"
+          PRE_REFS="$(git for-each-ref --format='%(refname) %(objectname)' refs/heads/ refs/tags/ | sort)"
+          PRE_REMOTE_REFS="$(git ls-remote --heads --tags origin | sort)"
 
           # Capture content-based baseline for ALL tracked files (not just modified)
           # This allows detecting additional modifications to files already changed before Gemini
@@ -173,6 +179,18 @@ jobs:
           PRE_DELETED="$(git diff --name-only --diff-filter=D | sort -u)"
 
           {
+            echo 'pre_branch<<EOF'
+            printf '%s\n' "$PRE_BRANCH"
+            echo 'EOF'
+            echo 'pre_head_sha<<EOF'
+            printf '%s\n' "$PRE_HEAD_SHA"
+            echo 'EOF'
+            echo 'pre_refs<<EOF'
+            printf '%s\n' "$PRE_REFS"
+            echo 'EOF'
+            echo 'pre_remote_refs<<EOF'
+            printf '%s\n' "$PRE_REMOTE_REFS"
+            echo 'EOF'
             echo 'pre_tracked_hashes<<EOF'
             printf '%s\n' "$PRE_TRACKED_HASHES"
             echo 'EOF'
@@ -199,7 +217,9 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-          echo "Pre-Gemini state captured (content-based):"
+          echo "Pre-Gemini state captured (content-based + Git refs):"
+          echo "  Branch: $PRE_BRANCH"
+          echo "  HEAD SHA: $PRE_HEAD_SHA"
           echo "  Tracked files: $(printf '%s\n' "$PRE_TRACKED_HASHES" | wc -l) files"
           echo "  Staged: $(printf '%s\n' "$PRE_STAGED" | wc -l) files"
           echo "  Untracked: $(printf '%s\n' "$PRE_UNTRACKED" | wc -l) files"
@@ -243,10 +263,17 @@ jobs:
             - implement approved changes;
             - run tests and validation;
             - debug implementation issues;
-            - create commits;
-            - push changes;
-            - create pull requests;
-            - perform implementation work required to continue the project.
+            - create files within the authorized scope.
+
+            You must NOT:
+            - commit or push changes;
+            - create branches;
+            - create or merge pull requests;
+            - alter Git history;
+            - move or reset refs.
+
+            The workflow, not you, owns repository persistence.
+            The workflow will verify and persist your changes after this step.
 
             You retain your normal Architect and Reviewer responsibilities.
 
