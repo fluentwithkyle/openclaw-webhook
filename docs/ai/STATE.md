@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-12
-**Updated By**: Kilo (implementation of persistent AI project state system)
+**Updated By**: Kyle — documented proposed Kilo ↔ Gemini orchestration backbone plan
 
 ---
 
@@ -18,7 +18,8 @@
 
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
-| Persistent AI project state system | **IN PROGRESS** | Kilo | Creating `docs/ai/` directory and files; updating `AGENTS.md` |
+| Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
+| Kilo ↔ Gemini orchestration backbone | **PROPOSED / PENDING KYLE APPROVAL** | — | Implementation plan: `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`; this document does not authorize implementation |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -48,6 +49,7 @@
 - Build automated testing infrastructure
 
 ### Lower Priority / Architectural
+- Kilo ↔ Gemini orchestration backbone implementation — PROPOSED / TARGET; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
 - Security AI lane definition (PROPOSED / TARGET)
