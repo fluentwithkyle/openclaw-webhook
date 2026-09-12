@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-12
-**Updated By**: Kyle — documented proposed Kilo ↔ Gemini orchestration backbone plan
+**Updated By**: Kilo — tracked architectural standardization audit items from Gemini audit (Issue #35)
 
 ---
 
@@ -25,6 +25,27 @@
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
 | Email template ownership migration | **BACKLOG** | — | Move template selection to Render, retain Gmail delivery in Apps Script |
 | Automated testing infrastructure | **BACKLOG** | — | Tests, fixtures, contract tests, formal test script |
+
+---
+
+## Architectural Standardization Audit Items
+
+Items identified by the latest Gemini audit. These are architectural/project-tracking
+items, **not** authorization to implement the architecture. None of these items
+represent implemented functionality.
+
+| # | Item | Classification | Owner | Notes |
+|---|------|----------------|-------|-------|
+| 1 | ACP Protocol Standardization | **PROPOSED / TARGET** | — | Formalize the ACP schema; establish the authoritative ACP specification; transition the existing POC toward a standardized protocol. See `ARCHITECTURE.md` Section 16.3. |
+| 2 | ACP Router / Dispatcher | **PROPOSED / TARGET** | — | Build the structured ACP command parser and dispatcher; establish routing of authorized tasks to specialist/execution lanes. |
+| 3 | Structured AI Task Reporting | **PROPOSED / TARGET** | — | Define a standardized machine-readable task completion/reporting format suitable for automated parsing and orchestration. See `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md` Section 6. |
+| 4 | Capability-Based Authorization | **PROPOSED / TARGET** | — | Standardize explicit capabilities and permitted paths for ACP commands; establish authorization requirements for agent-to-agent task handoffs. |
+| 5 | AI Project State Automation | **PROPOSED / TARGET** | — | Establish a structured, machine-readable mechanism for maintaining project/task state. `docs/ai/STATE.md` remains the human-readable authoritative project-state view unless the architecture establishes a more appropriate authoritative source. |
+| 6 | Agent Activation / Trigger Architecture | **PROPOSED / TARGET** | — | Define standardized triggering events for agent activation and handoffs; track the mechanism by which one agent determines that another agent should be activated. |
+| 7 | Agent Communication / Transport Layer | **PROPOSED / TARGET** | — | Define the standardized transport mechanism for agent-to-agent communication. Accounts for the existing Kilo HTTP trigger POC and the planned Qwen → ACP → specialist flow. |
+| 8 | Asynchronous / Long-Running Task Handling | **PROPOSED / TARGET** | — | Define how tasks exceeding normal HTTP request lifetimes are represented, persisted, resumed, and reported. See `ARCHITECTURE.md` Section 15.3. |
+| 9 | Failover Authorization | **PROPOSED / TARGET** | — | Define how ACP authorization remains valid and controlled during agent failover scenarios. See `ARCHITECTURE.md` Section 18. |
+| 10 | Kilo HTTP Trigger Secret Rotation | **PROPOSED / TARGET** | — | Define the mechanism and lifecycle for rotating shared secrets used by the Kilo HTTP trigger. Rotation must not be performed during this task. |
 
 ---
 
