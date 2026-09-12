@@ -72,6 +72,33 @@ and report a blocker rather than improvising an architectural workaround.
 - Existing production code is authoritative for implemented behavior.
 - Documentation is not proof that proposed functionality is implemented.
 
+## 8. Persistent AI Project State (`docs/ai/`)
+
+The repository maintains a durable AI project-state system in `docs/ai/`. All agents working in this repository must consult the relevant files before planning or implementing work.
+
+**Files and Purpose:**
+
+- `docs/ai/README.md` — Operating instructions for the AI project-state directory. Defines when agents read the directory, what each file contains, update rules, security/secrecy requirements, and authoritative vs historical information.
+- `docs/ai/STATE.md` — Current live project state (mutable). Contains current status, active tasks, blockers, upcoming/backlog items, current agent roles/state.
+- `docs/ai/ARCH_DECISIONS.md` — Significant architectural decisions and rationale in ADR-style format (Title, Status, Context, Decision, Rationale, Consequences). `ARCHITECTURE.md` remains authoritative for overall architecture; this file records decisions for persistent AI context.
+- `docs/ai/TASK_LOG.md` — Append-only historical record of completed AI development tasks. Records task, date, summary, outcome, and commit reference. Not a current-state file.
+
+**Source of Truth Hierarchy (Updated):**
+
+- `ARCHITECTURE.md` — Authoritative for intended architecture.
+- Production code — Authoritative for implemented behavior.
+- `docs/ai/STATE.md` — Current AI project state.
+- `docs/ai/ARCH_DECISIONS.md` — Recorded architectural decisions and rationale.
+- `docs/ai/TASK_LOG.md` — Historical completed-task records.
+- `docs/ai/README.md` — Defines how agents use and maintain the system.
+
+**Agent Requirements:**
+
+- Agents should read the relevant `docs/ai/` state before planning work.
+- Kilo should update the appropriate state/history files after authorized completed work.
+- Do not weaken or replace the existing Source of Truth rules.
+- Never include secrets, credentials, or sensitive production values in any `docs/ai/` file.
+
 ## Operating conventions
 
 - Follow the code style and patterns already present in the repository.
