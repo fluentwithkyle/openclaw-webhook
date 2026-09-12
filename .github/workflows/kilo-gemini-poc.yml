@@ -1,17 +1,8 @@
 name: Kilo → Gemini POC
 
 on:
-  workflow_dispatch:
-    inputs:
-      test_task:
-        description: 'Test task for Gemini to execute in isolated POC mode'
-        required: true
-        type: string
-      verify_persistence:
-        description: 'Verify no repository changes outside disposable POC area'
-        required: false
-        type: boolean
-        default: true
+  issue_comment:
+    types: [created]
 
 concurrency:
   group: kilo-gemini-poc-${{ github.ref }}-${{ github.run_id }}
@@ -22,6 +13,7 @@ permissions:
 
 jobs:
   poc:
+    if: startsWith(github.event.comment.body, '@kilo-gemini-poc')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,7 +28,7 @@ jobs:
 
       - name: Capture pre-Gemini repository state
         id: pre_state
-        if: ${{ inputs.verify_persistence }}
+        if: true
         shell: bash
         run: |
           set -euo pipefail
@@ -97,6 +89,18 @@ jobs:
           echo "  Worktree modified: $(printf '%s\n' "$PRE_WORKTREE" | wc -l) files"
           echo "  Deleted: $(printf '%s\n' "$PRE_DELETED" | wc -l) files"
 
+      - name: Extract POC task from comment
+        id: extract_task
+        shell: bash
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          # Remove the trigger prefix and trim whitespace
+          TASK="${COMMENT#@kilo-gemini-poc}"
+          TASK="$(echo "$TASK" | sed 's/^[[:space:]]*//')"
+          echo "task<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TASK" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Run Gemini in POC mode
         id: gemini
         uses: google-github-actions/run-gemini-cli@v0
@@ -137,7 +141,7 @@ jobs:
             }
 
             --- TEST TASK START ---
-            ${{ github.event.inputs.test_task }}
+            ${{ steps.extract_task.outputs.task }}
             --- TEST TASK END ---
 
             Execute the test task now and write the result to poc/test-output/result.json.
@@ -188,7 +192,7 @@ jobs:
           echo "Files modified: $(jq -r '.files_modified | join(", ")' "$RESULT_FILE")"
 
       - name: Verify repository changes (persistence gate)
-        if: ${{ inputs.verify_persistence }}
+        if: true
         id: verify_changes
         shell: bash
         env:
