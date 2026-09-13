@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-13
-**Updated By**: Kilo — registered Gemini's ChatGPT Control Gate architectural research as a pending/proposed future project (Issue #39)
+**Last Updated**: 2026-09-14
+**Updated By**: ChatGPT — Director-authorized documentation reconciliation for Gemini's Kilo delivery-verification research (TASK-LOG-GEMINI-KILO-VERIFICATION-RESEARCH-001)
 
 ---
 
@@ -21,6 +21,7 @@
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
 | Kilo ↔ Gemini orchestration backbone | **PROPOSED / PENDING KYLE APPROVAL** | — | Implementation plan: `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`; this document does not authorize implementation |
+| Automated Kilo delivery verification | **RESEARCH COMPLETE / PROPOSED / PENDING IMPLEMENTATION** | Gemini (research) | Gemini research is reconciled into the existing AI architecture. Future implementation must independently verify GitHub delivery rather than trust Kilo's self-report. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -47,6 +48,7 @@ represent implemented functionality.
 | 8 | Asynchronous / Long-Running Task Handling | **PROPOSED / TARGET** | — | Define how tasks exceeding normal HTTP request lifetimes are represented, persisted, resumed, and reported. See `ARCHITECTURE.md` Section 15.3. |
 | 9 | Failover Authorization | **PROPOSED / TARGET** | — | Define how ACP authorization remains valid and controlled during agent failover scenarios. See `ARCHITECTURE.md` Section 18. |
 | 10 | Kilo HTTP Trigger Secret Rotation | **PROPOSED / TARGET** | — | Define the mechanism and lifecycle for rotating shared secrets used by the Kilo HTTP trigger. Rotation must not be performed during this task. |
+| 11 | Automated Kilo Delivery Verification | **PROPOSED / TARGET** | Gemini (research) | Extend the existing orchestration/project-state architecture with an independent GitHub delivery-verification lane. Kilo's self-report is execution evidence, not independent delivery proof. Preserve `request_id`, verify the actual delivered ref/commit and changed files, apply declared verification requirements where supported, produce machine-readable evidence, and make processing idempotent. Future implementation only; no verifier is implemented by this documentation task. |
 
 ---
 
@@ -72,6 +74,7 @@ represent implemented functionality.
 
 ### Lower Priority / Architectural
 - Kilo ↔ Gemini orchestration backbone implementation — PROPOSED / TARGET; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`
+- Automated Kilo delivery verification implementation — **PROPOSED / TARGET / PENDING**; future implementation must extend the existing orchestration/project-state architecture rather than create a second task system. See implementation task #49.
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
 - Security AI lane definition (PROPOSED / TARGET)
