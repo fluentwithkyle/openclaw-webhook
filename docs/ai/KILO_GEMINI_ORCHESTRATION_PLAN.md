@@ -331,7 +331,123 @@ The implementation is acceptable when:
 11. `git diff --check` passes and the final diff contains only authorized changes.
 12. Commit and push occur only when explicitly authorized by the implementation task.
 
-## 15. Future Architectural Extensions
+## 15. Gemini Findings — Project Registry + Director Selection/Execution Contract
+
+These findings from Gemini incorporate the Project Registry and Director Selection/Execution Contract into the existing plan.
+
+### 15.1 Recommended Registry Design [PROPOSED / TARGET]
+
+The Registry should be machine-readable, version-controlled, and discoverable by the Director (Render).
+
+Location:
+
+/data/projects/registry.json
+
+Structure:
+
+A JSON array of project definitions.
+
+Minimum metadata:
+
+* id — Unique project ID, e.g. PRJ-003
+* name — Human-readable name
+* status — Current lifecycle state
+* description — High-level purpose
+* requirements — Technical/business prerequisites
+* work_scope — Gemini, Kilo, or Both
+* correlation_id — Maps project state to execution logs
+
+### 15.2 Director Contract [PROPOSED / TARGET]
+
+The Director (Render) acts as the controller.
+
+list_pending
+
+* Input: Optional filter
+* Output: Projects with status PENDING
+
+inspect_project
+
+* Input: Project ID
+* Output: Full project definition and metadata
+
+select_project
+
+* Input: Project ID
+* Output: Transitions project to SELECTED
+
+generate_plan
+
+* Input: Project definition
+* Output: Structured ACP-ready orchestration plan
+
+assign_work
+
+* Input: Orchestration plan
+* Output: Dispatches tasks through ACP
+
+start_execution
+
+* Input: Task ID
+* Output: Triggers Kilo/Gemini through transport
+
+update_state
+
+* Input: Correlation ID/result
+* Output: Updates project status
+
+### 15.3 Kilo/Gemini Assignment Contract [PROPOSED / TARGET]
+
+Assignments should be mediated through ACP.
+
+ACP input envelope:
+
+* task — Clear description of the work
+* authorization — Explicit capabilities such as read_only or modify_files
+* constraints — Permitted paths/directories
+* verification — Required testing/validation
+
+Structured execution result:
+
+* status — success, failure, or blocked
+* changed_files — Modified files
+* verification_results — Tests/checks performed
+* blockers — Issues encountered
+
+### 15.4 State Machine [PROPOSED / TARGET]
+
+PENDING → SELECTED → PLANNED → EXECUTING → VERIFIED → COMPLETE
+
+Failures transition to BLOCKED for human intervention.
+
+The Director manages state transitions based on structured Kilo/Gemini results.
+
+### 15.5 Existing POC Integration [CURRENT ARCHITECTURE/DESIGN]
+
+The following existing POC components form the foundation for the Director implementation, with communication governed by ACP:
+
+* `poc/task-registry.js` — Evolves into the Registry Accessor used by the Director
+* `poc/orchestrator.js` — Director Controller logic
+* `poc/acp-engine.js` — Canonical ACP implementation for task handoff
+* `poc/gemini-trigger.js` — Potential transport for directing work to Gemini
+
+### 15.6 Open Questions Requiring Kyle's Decision [OPEN DECISIONS]
+
+The following questions remain unresolved and require Kyle's decision:
+
+1. Single registry.json versus individual project-XXX.json files
+2. Timeout policy for asynchronous execution when no result is received
+3. Dynamic project registration through LINE versus Git-committed registration
+
+### 15.7 Implementation Recommendation [PROPOSED / TARGET]
+
+1. Formalize the JSON schema for project definitions.
+2. Implement a read-only Registry Service in Render for list/inspect.
+3. Add simple in-memory or Sheets-backed state management.
+4. Build a narrow read-only POC where the Director selects a project, triggers a Kilo read-only ACP task, verifies the structured result, and updates state.
+5. Keep write capabilities outside the system until read-only orchestration and structured state updates are validated.
+
+## 16. Future Architectural Extensions
 
 These are outside the initial backbone implementation:
 
