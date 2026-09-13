@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-12
-**Updated By**: Kilo — tracked architectural standardization audit items from Gemini audit (Issue #35)
+**Last Updated**: 2026-09-13
+**Updated By**: Kilo — registered Gemini's ChatGPT Control Gate architectural research as a pending/proposed future project (Issue #39)
 
 ---
 
@@ -19,6 +19,7 @@
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
+| ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
 | Kilo ↔ Gemini orchestration backbone | **PROPOSED / PENDING KYLE APPROVAL** | — | Implementation plan: `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`; this document does not authorize implementation |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
@@ -76,6 +77,7 @@ represent implemented functionality.
 - Security AI lane definition (PROPOSED / TARGET)
 - Utility AI lane definition (PROPOSED / TARGET)
 - ACP protocol implementation (PROPOSED / TARGET)
+- **ChatGPT Control Gate** — RESEARCH COMPLETE / PROPOSED / PENDING FUTURE EXECUTION. Full architectural research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Research covers: Control Gate layer between ChatGPT and execution backbone, policy/architecture/authorization enforcement model, GitHub enforcement (CODEOWNERS, branch protection, status checks), fail-closed blocking states, implementation phases, security considerations, and acceptance criteria. **No implementation authorized or performed.**
 
 ---
 
