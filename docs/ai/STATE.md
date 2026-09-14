@@ -21,7 +21,7 @@
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
 | Kilo ↔ Gemini orchestration backbone | **PROPOSED / PENDING KYLE APPROVAL** | — | Implementation plan: `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`; this document does not authorize implementation |
-| Automated Kilo delivery verification | **RESEARCH COMPLETE / PROPOSED / PENDING IMPLEMENTATION** | Gemini (research) | Gemini research is reconciled into the existing AI architecture. Future implementation must independently verify GitHub delivery rather than trust Kilo's self-report. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
+| Automated Kilo delivery verification | **PARTIAL IMPLEMENTATION / PROPOSED / PENDING** | Gemini (research) | A persistence gate exists in `.github/workflows/kilo-gemini-poc.yml` (verifies no repo changes outside `poc/test-output/`). Full independent verification — verifying actual delivered ref/commit and changed files — remains PROPOSED / TARGET. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -42,13 +42,13 @@ represent implemented functionality.
 | 2 | ACP Router / Dispatcher | **PROPOSED / TARGET** | — | Build the structured ACP command parser and dispatcher; establish routing of authorized tasks to specialist/execution lanes. |
 | 3 | Structured AI Task Reporting | **PROPOSED / TARGET** | — | Define a standardized machine-readable task completion/reporting format suitable for automated parsing and orchestration. See `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md` Section 6. |
 | 4 | Capability-Based Authorization | **PROPOSED / TARGET** | — | Standardize explicit capabilities and permitted paths for ACP commands; establish authorization requirements for agent-to-agent task handoffs. |
-| 5 | AI Project State Automation | **PROPOSED / TARGET** | — | Establish a structured, machine-readable mechanism for maintaining project/task state. `docs/ai/STATE.md` remains the human-readable authoritative project-state view unless the architecture establishes a more appropriate authoritative source. |
-| 6 | Agent Activation / Trigger Architecture | **PROPOSED / TARGET** | — | Define standardized triggering events for agent activation and handoffs; track the mechanism by which one agent determines that another agent should be activated. |
+| 5 | AI Project State Automation | **CURRENT / IMPLEMENTED** | — | The `docs/ai/` system (STATE.md, ARCH_DECISIONS.md, TASK_LOG.md, README.md) is created, functional, and integrated into AGENTS.md. `STATE.md` remains the human-readable authoritative project-state view unless the architecture establishes a more appropriate authoritative source. |
+| 6 | Agent Activation / Trigger Architecture | **CURRENT / IMPLEMENTED** | — | Kilo activation is a confirmed Kilo Cloud Agent capability (ARCHITECTURE.md Section 16.5.6). Activation mechanism: Kilo-provider-controlled HTTP webhook trigger, dispatched from repository via `/poc/kilo` endpoint and `poc/kilo-transport.js`. The exact provider completion/callback mechanism remains an implementation dependency to verify. Do not infer activation from GitHub workflow existence alone. |
 | 7 | Agent Communication / Transport Layer | **PROPOSED / TARGET** | — | Define the standardized transport mechanism for agent-to-agent communication. Accounts for the existing Kilo HTTP trigger POC and the planned Qwen → ACP → specialist flow. |
 | 8 | Asynchronous / Long-Running Task Handling | **PROPOSED / TARGET** | — | Define how tasks exceeding normal HTTP request lifetimes are represented, persisted, resumed, and reported. See `ARCHITECTURE.md` Section 15.3. |
 | 9 | Failover Authorization | **PROPOSED / TARGET** | — | Define how ACP authorization remains valid and controlled during agent failover scenarios. See `ARCHITECTURE.md` Section 18. |
 | 10 | Kilo HTTP Trigger Secret Rotation | **PROPOSED / TARGET** | — | Define the mechanism and lifecycle for rotating shared secrets used by the Kilo HTTP trigger. Rotation must not be performed during this task. |
-| 11 | Automated Kilo Delivery Verification | **PROPOSED / TARGET** | Gemini (research) | Extend the existing orchestration/project-state architecture with an independent GitHub delivery-verification lane. Kilo's self-report is execution evidence, not independent delivery proof. Preserve `request_id`, verify the actual delivered ref/commit and changed files, apply declared verification requirements where supported, produce machine-readable evidence, and make processing idempotent. Future implementation only; no verifier is implemented by this documentation task. |
+| 11 | Automated Kilo Delivery Verification | **PARTIAL IMPLEMENTATION / PROPOSED / TARGET** | Gemini (research) | A basic persistence gate is implemented in `.github/workflows/kilo-gemini-poc.yml` (verifies no repository changes outside `poc/test-output/` after Gemini POC execution). Independent verification of actual delivered ref/commit and changed files, request_id correlation across the full delivery chain, and machine-readable evidence remain PROPOSED / TARGET. Kilo's self-report is execution evidence, not independent delivery proof. See implementation task #49. |
 
 ---
 
@@ -74,7 +74,7 @@ represent implemented functionality.
 
 ### Lower Priority / Architectural
 - Kilo ↔ Gemini orchestration backbone implementation — PROPOSED / TARGET; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`
-- Automated Kilo delivery verification implementation — **PROPOSED / TARGET / PENDING**; future implementation must extend the existing orchestration/project-state architecture rather than create a second task system. See implementation task #49.
+- Automated Kilo delivery verification implementation — **PARTIAL IMPLEMENTATION / PROPOSED / PENDING**; a persistence gate exists in `.github/workflows/kilo-gemini-poc.yml`, but full independent verification (delivered ref/commit, changed files, request_id correlation) remains PROPOSED / TARGET. Future implementation must extend the existing orchestration/project-state architecture rather than create a second task system. See implementation task #49.
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
 - Security AI lane definition (PROPOSED / TARGET)

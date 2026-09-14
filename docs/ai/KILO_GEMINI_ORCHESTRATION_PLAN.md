@@ -265,7 +265,12 @@ The implementation should explicitly document the persistence limitations rather
 
 ## 11. Known Dependency / Unknown
 
-The principal external dependency is the supported mechanism for receiving a Kilo completion event. Public Kilo Cloud documentation clearly supports inbound webhook triggers, while a customer-configurable outbound completion webhook is not established as a documented capability. The implementation must therefore verify the actual available Kilo completion path before selecting the final callback transport.
+The principal external dependency is the supported mechanism for receiving a Kilo completion event. Public Kilo Cloud documentation clearly supports inbound webhook triggers (a confirmed Kilo capability per `ARCHITECTURE.md` Section 16.5.6), while a customer-configurable outbound completion webhook is not established as a documented capability. The implementation must therefore verify the actual available Kilo completion path before selecting the final callback transport.
+
+**Distinction — Inbound vs Outbound:**
+
+- **Kilo inbound trigger (CURRENT / IMPLEMENTED as capability)**: Kilo Cloud Agent supports external HTTP webhook triggers. The repository dispatches authorized ACP commands to Kilo via `poc/kilo-transport.js` → `KILO_TRIGGER_URL`. Activation is Kilo-provider-controlled, not repository-controlled. See `ARCHITECTURE.md` Section 16.5.6 and `routes/poc.js` `/poc/kilo` endpoint.
+- **Kilo outbound completion callback (PROPOSED / TARGET)**: A configurable Kilo completion/callback mechanism is not established as a documented capability. The `POST /poc/kilo/callback` endpoint in the orchestration plan is PROPOSED and requires verification of the actual provider-supported transport during implementation. Do not invent a provider feature.
 
 The Gemini trigger path is more concrete: GitHub Actions `workflow_dispatch` can provide the execution boundary without introducing a continuously running Gemini service.
 

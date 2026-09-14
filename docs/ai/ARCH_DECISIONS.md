@@ -169,3 +169,22 @@
 - Execution report must identify which AI executed, whether failover occurred, why, what changed, verification, commit/push state, blockers.
 - Clearly distinguish implemented vs proposed failover.
 - No failover implementation during this task.
+
+---
+
+## ADR-013: Kilo Activation Mechanism — Provider-Controlled HTTP Webhook Trigger
+
+**Status**: CURRENT / IMPLEMENTED (capability) / PROPOSED / TARGET (completion callback)
+**Date**: 2026-09-14
+**Context**: Kilo is an external Cloud Agent. For automatic activation to have a clear architectural home, the activation mechanism must be verified and distinguished from execution, delivery, verification, orchestration, and transport.
+**Decision**: Kilo activation is a confirmed Kilo Cloud Agent HTTP webhook trigger capability (`ARCHITECTURE.md` Section 16.5.6). The repository dispatches authorized ACP commands to Kilo via the `/poc/kilo` Express endpoint (`routes/poc.js`) reading `poc/command.json` and dispatching through `poc/kilo-transport.js` to the `KILO_TRIGGER_URL` configured endpoint. Activation is Kilo-provider-controlled, not repository-controlled or Kilo-execution-controlled.
+**Rationale**:
+- Kilo activation must have an explicit architectural home that is distinct from execution (Kilo performing the task), delivery (Kilo producing repository changes via commit/push), verification (independent mechanisms verifying delivered state), orchestration (determining authorized subsequent actions), and transport (carrying task or result between components).
+- The repository controls when a dispatch request is made (via `/poc/kilo`), but Kilo's actual activation is controlled by the Kilo Cloud Agent provider via its HTTP webhook trigger capability.
+- The Kilo completion/callback path (Kilo → repository) is PROPOSED / TARGET. A customer-configurable outbound completion webhook is not established as a documented capability. The orchestration plan's `POST /poc/kilo/callback` endpoint is PROPOSED and must be verified during implementation.
+**Consequences**:
+- Activation, execution, delivery, verification, orchestration, and transport are architecturally distinct functions.
+- Kilo self-report is execution evidence, not independent delivery proof.
+- No repository event (issue, commit, workflow run) automatically activates Kilo; activation requires an explicit authorized ACP command dispatched to the Kilo trigger URL.
+- The Kilo trigger URL and shared-secret authentication material are credentials and must not be committed, logged, or exposed in documentation or issues.
+- AI sessions may be temporary; repository state (commits, diffs, CI results) provides persistent verification independent of Kilo's report.

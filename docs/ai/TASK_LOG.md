@@ -38,6 +38,39 @@
 
 ---
 
+## 2026-09-14 | Reconcile AI Project-State Architecture (TASK-AI-PROJECT-ACTIVATION-RECONCILE-001)
+
+**Task**: Reconcile the existing AI project-state architecture so automatic Kilo activation has a clear architectural home and is accurately separated from execution, delivery, verification, orchestration, and transport.
+
+**Summary**:
+- Inspected and verified the Kilo activation mechanism from repository evidence:
+  - Kilo activation is a confirmed Kilo Cloud Agent HTTP webhook trigger capability (ARCHITECTURE.md Section 16.5.6)
+  - Repository dispatches authorized ACP commands via /poc/kilo (routes/poc.js) → poc/kilo-transport.js → KILO_TRIGGER_URL
+  - Activation is Kilo-provider-controlled, not repository-controlled or Kilo-execution-controlled
+  - Kilo completion/callback path is PROPOSED / TARGET (not established as documented capability)
+  - Activation is distinct from execution (Kilo performing task), delivery (commit/push), verification (independent checks), orchestration (next-action determination), and transport (message carrying)
+- Updated docs/ai/STATE.md:
+  - Agent Activation / Trigger Architecture: corrected from PROPOSED / TARGET to CURRENT / IMPLEMENTED (verified capability with provider-controlled HTTP webhook trigger)
+  - AI Project State Automation: corrected from PROPOSED / TARGET to CURRENT / IMPLEMENTED (docs/ai/ system is functional)
+  - Automated Kilo Delivery Verification: updated to PARTIAL IMPLEMENTATION / PROPOSED / TARGET (persistence gate exists in .github/workflows/kilo-gemini-poc.yml; full independent verification remains PROPOSED / TARGET)
+  - Updated "Updated By" attribution for this reconciliation
+- Updated docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md:
+  - Section 11 expanded to distinguish Kilo inbound trigger (confirmed capability) from Kilo outbound completion callback (PROPOSED / TARGET)
+  - Added explicit warning not to invent provider completion features
+- Added docs/ai/ARCH_DECISIONS.md ADR-013: Kilo Activation Mechanism — Provider-Controlled HTTP Webhook Trigger
+  - Documents the verified activation architecture
+  - Distinguishes confirmed inbound trigger from proposed outbound completion callback
+  - Records that activation is architecturally distinct from execution, delivery, verification, orchestration, and transport
+- No repository code, workflow logic, or production application changes were made
+- No secrets, credentials, or sensitive production values introduced
+- No duplicate project registry, task-management system, or competing orchestration system introduced
+
+**Outcome**: SUCCESS — AI project-state architecture reconciled; Kilo activation has explicit architectural home; activation/execution/delivery/verification/orchestration/transport distinction documented; STATE and orchestration plan accurately reflect verified reality.
+
+**Commit Reference**: (pending)
+
+---
+
 ## 2026-09-12 | Implement Persistent AI Project State System
 
 **Task**: Create `docs/ai/` project-state system and integrate into `AGENTS.md` per Gemini's approved design (Issue #26).
