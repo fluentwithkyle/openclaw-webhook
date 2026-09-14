@@ -483,3 +483,94 @@ configuration explicitly supplied.
 | `GEMINI.md` | Gemini operating instructions |
 
 ---
+
+## 12. Kilo Activation Boundary & External Execution Status (Recorded 2026-09-14)
+
+This section records verified repository-side findings from the recent Kilo
+activation boundary investigation (TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001,
+Issue #74). It is documentation only. No application runtime behavior, Kilo
+external configuration, or production code was modified.
+
+### 12.1 Kilo Activation Boundary (Verified)
+
+1. **Kilo is NOT activated by a repository GitHub Actions workflow.**
+   Kilo is an external Kilo Cloud Agent. Its activation boundary is external.
+
+2. **The repository documents Kilo as an external Kilo Cloud Agent** with an
+   externally configured HTTP webhook trigger. This document and
+   `ARCHITECTURE.md` Section 16.5 define the integration contract.
+
+3. **`.github/workflows/main.yml` is the Gemini Architect and Reviewer
+   workflow.** It responds to `@gemini-cli` comments and is unrelated to Kilo
+   activation.
+
+4. **`.github/workflows/kilo-gemini-poc.yml` is a disposable POC** that listens
+   for `@kilo-gemini-poc`. It is NOT the real Kilo activation mechanism.
+
+5. **The repository must not invent a new `@kilo` GitHub Actions workflow** to
+   compensate for an external Kilo activation/execution timeout. Kilo's
+   external execution boundary remains external (AGENTS.md Sections 3, 10;
+   ARCHITECTURE.md Sections 12.9, 16.5).
+
+### 12.2 Issue #69 Task Construction (Verified)
+
+6. **Issue #69 was constructed as a complete ACP-aligned Kilo task**:
+   - title: PART 2.1b — Gemini Workflow Dispatch — ACP-Aligned Kilo Execution
+   - request_id: TASK-KILO-GEMINI-ORCHESTRATION-PART-2.1B-GEMINI-DISPATCH-003
+   - target agent: Kilo
+   - Full TASK_STANDARD fields are present.
+   - Permitted paths, authorization, implementation requirements, verification
+     requirements, acceptance criteria, and final ACP execution-report
+     requirements are present.
+   - The issue body begins with `@kilo`.
+
+7. **A new Issue #69 comment was also posted** beginning with `@kilo` and
+   containing the complete task, because Kilo does not have continuity between
+   the issue description and a separate comment.
+
+8. **The Issue #69 activation comment was successfully created**, but **no Kilo
+   execution report was subsequently produced**. The observed timeout therefore
+   occurred at the external Kilo activation/execution boundary rather than
+   because the repository lacked an `@kilo` GitHub Actions workflow.
+
+### 12.3 Part 2.1b — Gemini Workflow Dispatch Status (Verified)
+
+9. **The repository currently contains no `services/gemini-transport.js`.**
+   Verified by repository inspection.
+
+10. **`poc/orchestrator.js` currently handles Kilo completion** and can
+    determine that Gemini should be triggered after successful Kilo
+    completion, but **it does not itself dispatch Gemini**. Gemini dispatch
+    remains unimplemented.
+
+11. **Part 2.1b — Gemini Workflow Dispatch therefore remains
+    UNIMPLEMENTED.** The recent investigation did not produce evidence that
+    Part 2.1b code exists or that a Gemini dispatch adapter has been
+    implemented.
+
+12. **The repository-side investigation is complete.** The remaining
+    activation/execution issue is at the external Kilo provider boundary,
+    whose private trigger configuration and delivery/execution logs are
+    outside the repository.
+
+### 12.4 External Boundary Statement
+
+13. **External Kilo trigger configuration is outside the repository.**
+    This document identifies the Kilo webhook URL, trigger credentials, and
+    related secrets as external configuration rather than repository data.
+    These values are not stored in any repository file.
+
+14. **Accuracy requirement**: This section does not claim that the external
+    Kilo provider dashboard, webhook delivery logs, trigger health,
+    credentials, or private configuration were directly inspected. It
+    distinguishes repository-verified facts from externally documented
+    configuration.
+
+15. **No contradictory status statements** are present. Part 2.1b remains
+    PROPOSED / TARGET, consistent with `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`
+    and `ARCHITECTURE.md` Section 16.5.6.
+
+16. **The ACP contract remains fail-closed.** Commit and push authority remain
+    explicit and independent. See Sections 6.4, 6.5, and 8.4.
+
+---

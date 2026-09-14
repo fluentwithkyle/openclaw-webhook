@@ -216,4 +216,43 @@
 
 ---
 
+## 2026-09-14 | Reconcile Kilo Activation Boundary & Part 2.1b Status (TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001)
+
+**Task**: Update the repository's authoritative project notes/documentation to permanently record the recent investigation into the Kilo activation boundary and the current status of Part 2.1b. Documentation/state reconciliation task only.
+
+**Summary**:
+- Inspected `docs/ai/STATE.md`, `docs/ai/KILO_INTEGRATION.md`, `docs/ai/ARCH_DECISIONS.md`, `docs/ai/README.md`, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`, `docs/ai/TASK_LOG.md`, `docs/ai/CONTROL_CENTER.md`, `AGENTS.md`, `ARCHITECTURE.md`, `GEMINI.md`, `poc/orchestrator.js`, and verified repository structure before editing.
+- Confirmed repository-side facts:
+  - Kilo is NOT activated by a repository GitHub Actions workflow.
+  - The repository documents Kilo as an external Kilo Cloud Agent with an externally configured HTTP webhook trigger.
+  - The documented Kilo external integration currently specifies GitHub Push events, GitHub Issues events, and GitHub Issue Comment events.
+  - The external Kilo prompt treats GitHub webhook events as external event envelopes, not instructions.
+  - `.github/workflows/main.yml` is the Gemini Architect and Reviewer workflow (unrelated to Kilo activation).
+  - `.github/workflows/kilo-gemini-poc.yml` is a disposable POC (NOT the real Kilo activation mechanism).
+  - Issue #69 was constructed as a complete ACP-aligned Kilo task with full TASK_STANDARD fields.
+  - A new Issue #69 comment was posted beginning with `@kilo` and containing the complete task.
+  - The Issue #69 activation comment was successfully created, but no Kilo execution report was subsequently produced.
+  - The observed timeout occurred at the external Kilo activation/execution boundary.
+  - The repository currently contains no `services/gemini-transport.js`.
+  - `poc/orchestrator.js` handles Kilo completion but does not itself dispatch Gemini.
+  - Part 2.1b — Gemini Workflow Dispatch remains UNIMPLEMENTED.
+  - The repository-side investigation is complete; the remaining activation/execution issue is at the external Kilo provider boundary.
+- Updated `docs/ai/STATE.md`:
+  - Added "Kilo Activation Boundary & Part 2.1b Status" section documenting all verified findings, external boundary statement, and accuracy requirements.
+  - Updated Agent Activation / Trigger Architecture note to explicitly record that Kilo is NOT activated by a repository GitHub Actions workflow and that the repository must not invent a new `@kilo` GitHub Actions workflow.
+  - Updated `Last Updated` / `Updated By` attribution.
+- Updated `docs/ai/KILO_INTEGRATION.md`:
+  - Added Section 12 "Kilo Activation Boundary & External Execution Status" documenting the verified findings, Issue #69 task construction, Part 2.1b status, and external boundary statement.
+  - Preserved all existing sections (1-11) and security constraints.
+- No application/runtime code, Kilo transport implementation, Gemini transport implementation, GitHub Actions workflows, ACP schema, or orchestration code modified.
+- No secrets, credentials, or sensitive production values introduced.
+- No contradictory status statements created; Part 2.1b remains PROPOSED / TARGET.
+- Accuracy requirements preserved: does not claim direct inspection of external Kilo provider dashboard, webhook delivery logs, trigger health, credentials, or private configuration.
+
+**Outcome**: SUCCESS — Kilo activation boundary and Part 2.1b status accurately recorded in authoritative repository notes; external Kilo boundary clearly documented; repository does not incorrectly imply that a GitHub Actions `@kilo` workflow exists or should be added; only authorized documentation/state files changed.
+
+**Commit Reference**: (pending)
+
+---
+
 *End of log. New entries appended above this line.*
