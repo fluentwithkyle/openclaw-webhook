@@ -36,7 +36,34 @@ This standard provides the human-readable envelope for task delegation. The Agen
 
 ---
 
-## 5. Concrete Example
+## 5. Control Center
+
+`docs/ai/CONTROL_CENTER.md` is a **derived human-facing presentation layer** for Kyle.
+
+- **docs/ai/STATE.md remains the authoritative current project-state source.**
+- CONTROL_CENTER.md is a presentation layer containing concise summaries and actionable information.
+- CONTROL_CENTER.md does not duplicate large portions of STATE.md or TASK_LOG.md.
+- CONTROL_CENTER.md is not authoritative for project state.
+
+### Refresh Trigger
+
+An authorized implementation task shall cause CONTROL_CENTER.md to be refreshed when:
+
+- The task changes active task status, blockers, or project status in STATE.md.
+- The task completes a task listed in CONTROL_CENTER.md.
+- A new task is authorized that Kyle must be aware of.
+
+Kilo refreshes CONTROL_CENTER.md as part of the task verification step, only when the task scope includes `docs/ai/CONTROL_CENTER.md` in permitted_paths or when STATE.md content reflected in CONTROL_CENTER.md has materially changed.
+
+### Authority Boundary
+
+- Kilo may update CONTROL_CENTER.md only as a side effect of an authorized implementation task.
+- Kilo may not independently create or modify CONTROL_CENTER.md outside of an authorized task.
+- CONTROL_CENTER.md updates must preserve least-privilege and fail-closed requirements.
+- No automated synchronization of CONTROL_CENTER.md is introduced by this standard.
+- CONTROL_CENTER.md must never grant Kilo unrestricted authority over project-state documentation.
+
+## 6. Concrete Example
 
 ```json
 {
