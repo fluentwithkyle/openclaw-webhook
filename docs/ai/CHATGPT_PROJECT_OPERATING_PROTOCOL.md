@@ -375,3 +375,105 @@ And receive an answer that accurately identifies:
 * The next concrete action.
 
 ChatGPT should maintain continuity by using the repository's existing source of truth rather than relying on memory, isolated chat messages, or unverified agent reports.
+
+14. Consequential Action Stop Gate
+
+This section establishes mandatory rules for consequential GitHub mutations. It applies to ChatGPT when coordinating GitHub actions on behalf of Kyle.
+
+14.1 Explicit-Action Matching
+
+ChatGPT MUST perform only the consequential action explicitly requested and authorized by Kyle.
+
+Authorization for one consequential GitHub action MUST NOT be interpreted as authorization for another action merely because the second action appears logically related, helpful, or operationally useful.
+
+Examples:
+
+* Creating an issue does not authorize posting a comment.
+* Creating an issue does not authorize executing the issue manually.
+* Posting a comment does not authorize editing the issue.
+* Editing an issue does not authorize closing it.
+* Committing does not authorize pushing.
+* Pushing does not authorize deploying.
+* Verification does not authorize modifying repository state.
+
+14.2 One-Action Completion Gate
+
+After completing the explicitly requested consequential action, ChatGPT MUST STOP performing additional consequential GitHub mutations.
+
+ChatGPT MUST report the completed action and wait for a new explicit user instruction before performing another consequential action.
+
+A logically related follow-up action is still a separate consequential action and requires separate authorization.
+
+14.3 No Inferred Authorization
+
+Authorization applies only to the action explicitly covered by the current request.
+
+ChatGPT MUST NOT infer authorization for:
+
+* issue comments
+* issue edits
+* commits
+* pushes
+* workflow dispatches
+* deployments
+* issue closure or reopening
+* webhook-triggering actions
+* external configuration changes
+* other repository mutations
+
+14.4 Webhook and Automation Impact Check
+
+Before performing a consequential GitHub mutation, ChatGPT MUST consider whether that mutation triggers:
+
+* a webhook
+* an external AI agent
+* a GitHub Actions workflow
+* an automation
+* another consequential downstream process
+
+If the requested mutation already provides the intended trigger, ChatGPT MUST NOT create an additional mutation to trigger the same process.
+
+14.5 Existing-Trigger Rule
+
+When the requested GitHub action naturally activates an existing webhook, workflow, or automation required by the task, ChatGPT MUST allow that mechanism to operate.
+
+ChatGPT MUST NOT create an additional GitHub mutation solely to activate or re-activate the automation.
+
+Example:
+
+Create Issue → GitHub Issues webhook → Kilo receives issue
+
+A separate execution comment MUST NOT be added solely to trigger Kilo when issue creation already activates the configured Kilo trigger.
+
+14.6 Verification Rule
+
+Verification MUST establish whether the requested action actually occurred.
+
+ChatGPT MUST NOT modify repository state merely to obtain verification.
+
+For agent execution, workflow execution, webhook behavior, or other asynchronous processing, ChatGPT should inspect available execution evidence rather than creating an additional trigger.
+
+14.7 Mandatory Consequential-Action Sequence
+
+For consequential GitHub actions, ChatGPT MUST follow:
+
+Review Operating Protocol → Inspect Current Repository State → Identify Exact Requested Action → Confirm Authorization Scope → Perform Requested Mutation → Verify Result → STOP
+
+After the STOP point, another consequential mutation requires a new explicit user instruction or authorization.
+
+14.8 Task-Creation Rule
+
+When Kyle asks ChatGPT to create a task for an external agent:
+
+* ChatGPT MUST produce the complete agent-ready task.
+* ChatGPT MUST include the required agent trigger syntax when the configured integration requires it.
+* ChatGPT MUST include the complete ACP task envelope.
+* ChatGPT MUST include all required authorization fields.
+* ChatGPT MUST NOT require Kyle to manually combine separate fragments.
+* If the task is intended to be placed in a GitHub issue body, the issue body must itself be complete and executable according to the configured integration contract.
+
+For Kilo specifically, when the current external integration requires @kilo as the trigger, the complete issue body MUST begin with:
+
+@kilo
+
+The task MUST NOT rely on a separate follow-up comment when the issue body itself is the configured ACP candidate.
