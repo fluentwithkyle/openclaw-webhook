@@ -188,3 +188,29 @@
 - No repository event (issue, commit, workflow run) automatically activates Kilo; activation requires an explicit authorized ACP command dispatched to the Kilo trigger URL.
 - The Kilo trigger URL and shared-secret authentication material are credentials and must not be committed, logged, or exposed in documentation or issues.
 - AI sessions may be temporary; repository state (commits, diffs, CI results) provides persistent verification independent of Kilo's report.
+
+---
+
+## ADR-014: Kilo Activation Boundary Investigation — Issue #73 Findings
+
+**Status**: ACCEPTED — DOCUMENTED
+**Date**: 2026-09-14
+**Context**: On 2026-09-14, Issue #73 (TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001) was executed as an ACP-aligned documentation task to reconcile findings about the Kilo activation boundary and Part 2.1b status. An ACP-aligned activation comment was successfully posted to Issue #69 targeting Kilo, but no Kilo execution report was received.
+**Decision**: The following findings are recorded as authoritative project state:
+
+1. Kilo is NOT activated by a repository GitHub Actions workflow.
+2. The repository documents Kilo as an external Kilo Cloud Agent with an externally configured HTTP webhook trigger.
+3. The documented Kilo external integration specifies GitHub Push events, GitHub Issues events, and GitHub Issue Comment events. Issue comments are part of the intended Kilo activation path.
+4. The external Kilo prompt treats incoming webhook events as external event envelopes, not instructions. `issue.body` is the sole candidate ACP request. GitHub event metadata is context only.
+5. Issue #69 was constructed as a complete ACP-aligned Kilo task with all required TASK_STANDARD fields present. An activation comment beginning with `@kilo` was successfully posted.
+6. No Kilo execution report was produced after the activation comment. The timeout occurred at the external Kilo activation/execution boundary, not because the repository lacked a `@kilo` GitHub Actions workflow.
+7. `.github/workflows/main.yml` is the Gemini Architect and Reviewer workflow and is unrelated to Kilo activation.
+8. `.github/workflows/kilo-gemini-poc.yml` is a disposable POC, not the production Kilo activation mechanism.
+9. No repository-side `@kilo` workflow should be invented to compensate for the external timeout; Kilo's external execution boundary should remain external.
+10. Part 2.1b (Gemini Workflow Dispatch after Kilo completion) remains UNIMPLEMENTED. No `services/gemini-transport.js` exists. `poc/orchestrator.js` can determine Gemini should be triggered but does not dispatch Gemini.
+**Rationale**: These findings preserve the distinction between the external Kilo activation boundary and repository-side behavior. They prevent future agents from misdiagnosing the external timeout as a repository-side workflow gap and from inventing a `@kilo` GitHub Actions workflow.
+**Consequences**:
+- Future tasks referencing the Kilo activation timeout must distinguish external boundary failure from repository-side failure.
+- Part 2.1b remains explicitly documented as unimplemented.
+- No repository-side `@kilo` workflow should be created to compensate for external timeout.
+- The documentation in `docs/ai/STATE.md` and `docs/ai/KILO_INTEGRATION.md` must remain consistent with these findings.

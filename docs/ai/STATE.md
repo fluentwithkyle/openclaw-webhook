@@ -44,7 +44,7 @@ represent implemented functionality.
 | 3 | Structured AI Task Reporting | **CURRENT / IMPLEMENTED (Foundation)** | Kilo | Machine-readable execution report validation implemented in `poc/schemas/acp-schema.js`. Canonical report shape validated for both Kilo and Gemini. |
 | 4 | Capability-Based Authorization | **CURRENT / IMPLEMENTED (Foundation)** | Kilo | ACP command validation enforces explicit capabilities and permitted paths in `poc/schemas/acp-schema.js` and `poc/acp-engine.js`. |
 | 5 | AI Project State Automation | **CURRENT / IMPLEMENTED** | — | The `docs/ai/` system (STATE.md, ARCH_DECISIONS.md, TASK_LOG.md, README.md) is created, functional, and integrated into AGENTS.md. `STATE.md` remains the human-readable authoritative project-state view unless the architecture establishes a more appropriate authoritative source. |
-| 6 | Agent Activation / Trigger Architecture | **CURRENT / IMPLEMENTED** | — | Kilo activation is a confirmed Kilo Cloud Agent capability (ARCHITECTURE.md Section 16.5.6). Activation mechanism: Kilo-provider-controlled HTTP webhook trigger, dispatched from repository via `/poc/kilo` endpoint and `poc/kilo-transport.js`. The exact provider completion/callback mechanism remains an implementation dependency to verify. Do not infer activation from GitHub workflow existence alone. |
+| 6 | Agent Activation / Trigger Architecture | **CURRENT / IMPLEMENTED** | — | Kilo activation is a confirmed Kilo Cloud Agent capability (ARCHITECTURE.md Section 16.5.6). Activation mechanism: Kilo-provider-controlled HTTP webhook trigger, dispatched from repository via `/poc/kilo` endpoint and `poc/kilo-transport.js`. The exact provider completion/callback mechanism remains an implementation dependency to verify. Do not infer activation from GitHub workflow existence alone. See Issue #73 findings for the 2026-09-14 activation boundary investigation. |
 | 7 | Agent Communication / Transport Layer | **PROPOSED / TARGET** | — | Define the standardized transport mechanism for agent-to-agent communication. Accounts for the existing Kilo HTTP trigger POC and the planned Qwen → ACP → specialist flow. |
 | 8 | Asynchronous / Long-Running Task Handling | **CURRENT / IMPLEMENTED (Foundation)** | Kilo | TaskRegistry in `poc/task-registry.js` provides persistent correlation state with request_id, supporting async execution across Kilo and Gemini lanes. |
 | 9 | Failover Authorization | **PROPOSED / TARGET** | — | Define how ACP authorization remains valid and controlled during agent failover scenarios. See `ARCHITECTURE.md` Section 18. |
@@ -74,7 +74,7 @@ represent implemented functionality.
 - Build automated testing infrastructure
 
 ### Lower Priority / Architectural
-- Kilo ↔ Gemini orchestration backbone implementation — **Part 1 Foundation IMPLEMENTED**; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`. Part 2 (Gemini triggering and callback integration) remains PROPOSED / TARGET.
+- Kilo ↔ Gemini orchestration backbone implementation — **Part 1 Foundation IMPLEMENTED**; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`. Part 2 (Gemini triggering and callback integration) remains PROPOSED / TARGET. As of Issue #73 (2026-09-14), an ACP-aligned activation comment was successfully posted to Issue #69 targeting Kilo, but no Kilo execution report was received. The timeout occurred at the external Kilo activation/execution boundary, not at a repository-side workflow gap. Part 2.1b (Gemini workflow dispatch after Kilo completion) remains unimplemented. Do not invent a repository-side `@kilo` GitHub Actions workflow to compensate for the external timeout; the external Kilo trigger configuration is outside the repository.
 - Automated Kilo delivery verification implementation — **PARTIAL IMPLEMENTATION / PROPOSED / PENDING**; a persistence gate exists in `.github/workflows/kilo-gemini-poc.yml`, but full independent verification (delivered ref/commit, changed files, request_id correlation) remains PROPOSED / TARGET. Future implementation must extend the existing orchestration/project-state architecture rather than create a second task system. See implementation task #49.
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
@@ -82,6 +82,55 @@ represent implemented functionality.
 - Utility AI lane definition (PROPOSED / TARGET)
 - ACP protocol implementation — **Foundation IMPLEMENTED**; schema validation and execution report validation complete. Full protocol implementation remains PROPOSED / TARGET.
 - **ChatGPT Control Gate** — RESEARCH COMPLETE / PROPOSED / PENDING FUTURE EXECUTION. Full architectural research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Research covers: Control Gate layer between ChatGPT and execution backbone, policy/architecture/authorization enforcement model, GitHub enforcement (CODEOWNERS, branch protection, status checks), fail-closed blocking states, implementation phases, security considerations, and acceptance criteria. **No implementation authorized or performed.**
+
+---
+
+## Kilo Activation Boundary Investigation (Issue #73)
+
+**Date**: 2026-09-14
+**Originator**: Kyle Allen
+**Target Agent**: Kilo
+**Task Mode**: EXECUTE
+**Task**: Update repository authoritative project notes to record findings into the Kilo activation boundary and the current status of Part 2.1b.
+
+### Findings
+
+1. **Kilo is NOT activated by a repository GitHub Actions workflow.** No repository-side `@kilo` workflow exists or should exist.
+2. **The repository documents Kilo as an external Kilo Cloud Agent** with an externally configured HTTP webhook trigger (see `docs/ai/KILO_INTEGRATION.md`).
+3. **The documented Kilo external integration specifies** GitHub Push events, GitHub Issues events, and GitHub Issue Comment events. Issue comments are therefore part of the intended Kilo activation path.
+4. **The external Kilo prompt** (externally configured, see `docs/ai/KILO_INTEGRATION.md` Section 7) treats incoming webhook events as external event envelopes, not instructions. If `issue.body` exists, it is treated as the candidate ACP request. GitHub event metadata is context only.
+5. **Issue #69 was constructed as a complete ACP-aligned Kilo task** with full TASK_STANDARD fields present (originator, target, repository, base branch, permitted task, authorized files, commit authority, push authority, verification requirements). The issue body begins with `@kilo`.
+6. **A new Issue #69 comment was also posted** beginning with `@kilo` and containing the complete task, because Kilo does not have continuity between the issue description and a separate comment.
+7. **No Kilo execution report was produced** after the activation comment. The observed timeout occurred at the external Kilo activation/execution boundary, not because the repository lacked an `@kilo` GitHub Actions workflow.
+8. **`.github/workflows/main.yml`** is the Gemini Architect and Reviewer workflow (responds to `@gemini-cli` comments) and is unrelated to Kilo activation.
+9. **`.github/workflows/kilo-gemini-poc.yml`** is a disposable POC that listens for `@kilo-gemini-poc`. It is NOT the production/real Kilo activation mechanism.
+10. **AGENTS.md** explicitly states Kilo is an external development execution lane and should not be introduced as a GitHub Actions workflow.
+11. **ARCHITECTURE.md** confirms Kilo's HTTP webhook trigger is an external capability and the specific ACP → Kilo integration remains PROPOSED / TARGET.
+12. **`docs/ai/KILO_INTEGRATION.md`** identifies Kilo webhook URL, trigger credentials, and related secrets as external configuration.
+13. **No `services/gemini-transport.js` exists** and no implementation automatically dispatches Gemini after successful Kilo completion. Part 2.1b therefore remains unimplemented.
+14. **`poc/orchestrator.js`** currently handles Kilo completion and can determine that Gemini should be triggered after successful Kilo completion, but does not itself dispatch Gemini.
+
+### Boundary Distinctions
+
+| Concern | Status |
+|---------|--------|
+| Kilo external activation boundary | External — Kilo-provider-controlled HTTP webhook trigger; outside repository |
+| Repository-side GitHub Actions behavior | `.github/workflows/main.yml` = Gemini (not Kilo); `.github/workflows/kilo-gemini-poc.yml` = disposable POC only |
+| Disposable Kilo/Gemini POC | `poc/` directory; not production activation |
+| Issue #69 task construction | Complete ACP-aligned task with all required fields; body begins with `@kilo`; activation comment successfully created |
+| Kilo execution report received | **No** — timeout at external boundary |
+| Part 2.1b status | **UNIMPLEMENTED** — no Gemini dispatch after Kilo completion; `services/gemini-transport.js` does not exist |
+| External Kilo trigger configuration | Outside repository; not to be modified by repository tasks |
+| Repository-side `@kilo` workflow | **Must NOT be invented** to compensate for external timeout |
+
+### Issue #69 Task Reference
+
+- **Issue**: #69
+- **Title**: PART 2.1b — Gemini Workflow Dispatch — ACP-Aligned Kilo Execution
+- **Request ID**: TASK-KILO-GEMINI-ORCHESTRATION-PART-2.1B-GEMINI-DISPATCH-003
+- **Target Agent**: Kilo
+- **Task Mode**: EXECUTE
+- **Status**: Blocked — no Kilo execution report received; timeout at external activation boundary
 
 ---
 

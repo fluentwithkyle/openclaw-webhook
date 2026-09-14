@@ -216,4 +216,32 @@
 
 ---
 
+## 2026-09-14 | Kilo Activation Boundary Investigation and Part 2.1b Status Reconciliation (TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001)
+
+**Task**: Update the repository's authoritative project notes to record findings into the Kilo activation boundary and the current status of Part 2.1b. This is a documentation/state-reconciliation task. Do not implement a new Kilo trigger or modify the application architecture.
+
+**Summary**:
+
+- Inspected `docs/ai/STATE.md`, `docs/ai/KILO_INTEGRATION.md`, `docs/ai/ARCH_DECISIONS.md`, `docs/ai/TASK_LOG.md`, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`, `docs/ai/README.md`, `AGENTS.md`, `ARCHITECTURE.md`, and `GEMINI.md` before editing.
+- Recorded the following findings in `docs/ai/STATE.md`:
+  - Added a new "Kilo Activation Boundary Investigation (Issue #73)" section documenting all 14 verified findings
+  - Updated Agent Activation / Trigger Architecture audit item to reference Issue #73 findings
+  - Updated Lower Priority backlog entry for Kilo ↔ Gemini orchestration backbone to reflect Issue #69 activation attempt, timeout, and Part 2.1b unimplemented status
+  - Clearly distinguished: Kilo external activation boundary, repository-side GitHub Actions behavior, disposable Kilo/Gemini POC, Issue #69 task construction, activation comment success, no Kilo execution report received, Part 2.1b status, external trigger configuration outside repository, no repository-side `@kilo` workflow should be invented
+- Recorded the following findings in `docs/ai/KILO_INTEGRATION.md`:
+  - Added Section 11 "Kilo Activation Boundary Investigation (Issue #73)" documenting Issue #69 task construction, activation outcome, 11 key findings, Part 2.1b unimplemented status, boundary distinctions table, and explicit directive not to invent a repository-side `@kilo` workflow
+  - Renumbered Related Documents section from Section 10 to Section 12
+- No repository code, workflow logic, or production application changes were made
+- No GitHub Actions workflows were added or modified
+- No secrets, credentials, or sensitive production values introduced
+- No application/runtime code was changed
+- Preserved existing authoritative information in all affected files
+- No duplicate or contradictory status statements introduced
+
+**Outcome**: SUCCESS — Documentation updated to preserve Kilo activation boundary investigation findings and Part 2.1b status; all affected files verified for internal consistency; no code or workflow changes; no secrets introduced; only authorized documentation paths changed.
+
+**Commit Reference**: (pending)
+
+---
+
 *End of log. New entries appended above this line.*
