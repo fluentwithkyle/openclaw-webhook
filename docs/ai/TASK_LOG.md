@@ -159,4 +159,31 @@
 
 ---
 
+## 2026-09-14 | Document Kilo External Integration Contract (TASK-KILO-EXTERNAL-INTEGRATION-DOCS-001)
+
+**Task**: Create an authoritative repository document describing the external Kilo integration boundary: GitHub webhook trigger configuration, currently selected events, Kilo trigger behavior, and the exact Kilo API/webhook prompt used after a task is received.
+
+**Summary**:
+- Created `docs/ai/KILO_INTEGRATION.md`:
+  - **GitHub webhook configuration**: individual event selection mechanism; current selection recorded as **Pushes only**; Issue comments explicitly recorded as currently **not selected**; Issues vs Issue comments clearly distinguished; known available GitHub event categories listed with reference to authoritative GitHub docs; configuration mismatch relevant to the `@kilo` issue-comment workflow documented.
+  - **External Kilo trigger configuration**: trigger type (Webhook — HTTP request received); repository binding; available payload/template variables (`{{body}}`, `{{bodyJson}}`, `{{headers}}`, `{{method}}`, `{{path}}`, `{{query}}`, `{{ip}}`, `{{timestamp}}`); shared-secret authentication boundary; explicit statement that actual URL and credentials are external secrets not stored in the repository.
+  - **Kilo task-ingestion contract**: external event envelope is not authorization; `issue.body` is the sole candidate ACP request; GitHub event metadata is context only; required ACP authorization fields listed; fail-closed behavior when authorization is missing/ambiguous documented; capability independence and one-shot execution/auditability documented.
+  - **Exact current Kilo prompt**: verbatim copy of the prompt supplied by Kyle preserved, including the `{{bodyJson}}` injection point; identified as externally configured and subject to external configuration changes.
+  - **Repository relationship**: repository-controlled vs externally controlled responsibilities clearly separated; configuration mismatch documented.
+  - **Current-state status**: all external configuration marked **CURRENT / EXTERNAL CONFIGURATION** with verification date 2026-09-14.
+  - **Security constraints**: no webhook URL, secrets, API keys, trigger IDs, or profile-secret values included.
+- Updated `docs/ai/STATE.md`:
+  - Added Kilo External Integration Contract documentation as **IMPLEMENTED** in Active Tasks
+  - Updated `Last Updated` / `Updated By` attribution
+  - Added `docs/ai/KILO_INTEGRATION.md` to Repository Structure
+- No application runtime behavior, Kilo external configuration, or production code modified
+- No secrets, credentials, or sensitive production values introduced
+- Only authorized documentation scope changed (`docs/ai/KILO_INTEGRATION.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`)
+
+**Outcome**: SUCCESS — Authoritative Kilo external integration document exists under `docs/ai/`; all 11 acceptance criteria met; repository-controlled vs externally controlled responsibilities clearly separated; exact current Kilo prompt reproduced accurately without credential values; no secrets committed; only authorized documentation scope changed.
+
+**Commit Reference**: (pending)
+
+---
+
 *End of log. New entries appended above this line.*

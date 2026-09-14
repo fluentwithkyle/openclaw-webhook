@@ -34,6 +34,7 @@ Designed for Kyle checking the project from a phone.
 | Task | Status | Owner |
 |------|--------|-------|
 | Persistent AI project state system | IMPLEMENTED | Kilo |
+| Kilo External Integration Contract documentation | IMPLEMENTED | Kilo |
 | Kilo ↔ Gemini orchestration backbone | PROPOSED | — |
 | Automated Kilo delivery verification | PARTIAL / PROPOSED | Gemini |
 | ChatGPT Control Gate architecture | PROPOSED / PENDING | Gemini |

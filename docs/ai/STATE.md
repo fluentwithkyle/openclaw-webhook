@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-14
-**Updated By**: Kilo — Part 1 Kilo ↔ Gemini Orchestration Foundation implementation (TASK-KILO-GEMINI-ORCHESTRATION-PART-1-FOUNDATION-001)
+**Updated By**: Kilo — Kilo External Integration Contract documentation (TASK-KILO-EXTERNAL-INTEGRATION-DOCS-001)
 
 ---
 
@@ -19,6 +19,7 @@
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
+| Kilo External Integration Contract documentation | **IMPLEMENTED** | Kilo | `docs/ai/KILO_INTEGRATION.md` created. Documents GitHub webhook (Pushes only), external Kilo trigger, ACP task-ingestion contract, and exact current Kilo prompt. No secrets committed. |
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
 | Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | **IMPLEMENTED** | Kilo | TaskRegistry, Orchestrator, ACP Schema, and focused tests implemented in `poc/` and `test/`. See commit `TBD`. |
 | Automated Kilo delivery verification | **PARTIAL IMPLEMENTATION / PROPOSED / PENDING** | Gemini (research) | A persistence gate exists in `.github/workflows/kilo-gemini-poc.yml` (verifies no repo changes outside `poc/test-output/`). Full independent verification — verifying actual delivered ref/commit and changed files — remains PROPOSED / TARGET. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
@@ -148,6 +149,16 @@ openclaw-webhook/
 │   └── run-poc-tests.js
 ├── docs/
 │   ├── ai/                       # AI project state (THIS DIRECTORY)
+│   │   ├── README.md             # Operating instructions for the AI project-state system
+│   │   ├── STATE.md              # Current live project state (mutable)
+│   │   ├── ARCH_DECISIONS.md     # Architectural decisions (ADR-style)
+│   │   ├── TASK_LOG.md           # Append-only historical task record
+│   │   ├── TASK_STANDARD.md      # Canonical AI task request standard
+│   │   ├── KILO_INTEGRATION.md   # Kilo external integration contract (GitHub webhook + trigger + ACP)
+│   │   ├── KILO_GEMINI_ORCHESTRATION_PLAN.md  # Kilo/Gemini orchestration backbone plan
+│   │   ├── CHATGPT_CONTROL_GATE_RESEARCH.md  # ChatGPT Control Gate research (PROPOSED)
+│   │   ├── CHATGPT_PROJECT_OPERATING_PROTOCOL.md  # ChatGPT operating protocol
+│   │   └── CONTROL_CENTER.md     # Derived human-facing presentation layer
 │   └── openclaw-codex-phase-1.md
 ├── ARCHITECTURE.md               # Authoritative architecture
 ├── AGENTS.md                     # Kilo operating instructions
