@@ -55,7 +55,7 @@ const validKiloReport = {
   task: 'test-task',
   changed_files: ['file1.js'],
   verification: ['test passed'],
-  result: { key: 'value' },
+  result: { execution_metadata: { invocation_id: 'inv-1', run_id: 'run-1' } },
   commit: 'abc123',
   push: true,
   blockers: []
@@ -68,7 +68,7 @@ const validGeminiReport = {
   task: 'test-task',
   changed_files: [],
   verification: ['review passed'],
-  result: { review: 'approved' },
+  result: { execution_metadata: { invocation_id: 'inv-2', run_id: 'run-2' } },
   commit: null,
   push: false,
   blockers: []

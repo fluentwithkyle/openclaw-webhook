@@ -57,7 +57,7 @@ const validReport = {
   task: 'test-task',
   changed_files: ['file1.js'],
   verification: ['test passed'],
-  result: { key: 'value' },
+  result: { key: 'value', execution_metadata: { invocation_id: 'inv-1', run_id: 'run-1' } },
   commit: 'abc123',
   push: true,
   blockers: []
@@ -137,6 +137,57 @@ test('Null commit is valid', () => {
   const report = { ...validReport, commit: null };
   const result = validateExecutionReport(report);
   assertEqual(result.valid, true);
+});
+
+test('Valid report with invocation_id passes', () => {
+  const report = {
+    ...validReport,
+    result: { execution_metadata: { invocation_id: 'inv-123', run_id: 'run-456' } }
+  };
+  const result = validateExecutionReport(report);
+  assertEqual(result.valid, true);
+});
+
+test('Missing invocation_id fails', () => {
+  const report = {
+    ...validReport,
+    result: { execution_metadata: { run_id: 'run-456' } }
+  };
+  const result = validateExecutionReport(report);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('invocation_id'));
+});
+
+test('Missing execution_metadata fails', () => {
+  const report = {
+    ...validReport,
+    result: { key: 'value' }
+  };
+  const result = validateExecutionReport(report);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('execution_metadata'));
+});
+
+test('invocation_id and run_id are distinct fields', () => {
+  const report = {
+    request_id: 'test-distinct',
+    agent: 'Kilo',
+    status: 'success',
+    task: 'test',
+    changed_files: [],
+    verification: [],
+    result: { execution_metadata: { invocation_id: 'inv-1', run_id: 'run-1' } },
+    commit: null,
+    push: false,
+    blockers: []
+  };
+  const result = validateExecutionReport(report);
+  assertEqual(result.valid, true);
+  assertEqual(report.result.execution_metadata.invocation_id, 'inv-1');
+  assertEqual(report.result.execution_metadata.run_id, 'run-1');
+  if (report.result.execution_metadata.invocation_id === report.result.execution_metadata.run_id) {
+    throw new Error('invocation_id and run_id must be distinct');
+  }
 });
 
 test('Valid task registry entry passes', () => {

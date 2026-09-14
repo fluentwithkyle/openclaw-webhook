@@ -125,6 +125,18 @@ function validateExecutionReport(report) {
     return { valid: false, error: 'result must be an object' };
   }
 
+  if (!report.result.execution_metadata || typeof report.result.execution_metadata !== 'object') {
+    return { valid: false, error: 'result.execution_metadata must be an object' };
+  }
+
+  if (!report.result.execution_metadata.invocation_id || typeof report.result.execution_metadata.invocation_id !== 'string') {
+    return { valid: false, error: 'result.execution_metadata.invocation_id is required and must be a string' };
+  }
+
+  if (report.result.execution_metadata.run_id !== undefined && typeof report.result.execution_metadata.run_id !== 'string') {
+    return { valid: false, error: 'result.execution_metadata.run_id must be a string' };
+  }
+
   return { valid: true };
 }
 

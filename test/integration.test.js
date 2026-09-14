@@ -56,7 +56,7 @@ const kiloReport = {
   task: 'full-orchestration-test',
   changed_files: ['poc/new-file.js'],
   verification: ['unit tests passed', 'lint passed'],
-  result: { implementation: 'complete' },
+  result: { implementation: 'complete', execution_metadata: { invocation_id: 'inv-int-1', run_id: 'run-int-1' } },
   commit: 'abc123def',
   push: true,
   blockers: []
@@ -69,7 +69,7 @@ const geminiReport = {
   task: 'full-orchestration-test',
   changed_files: [],
   verification: ['architecture review passed', 'security review passed'],
-  result: { review: 'approved', notes: 'Ready for deployment' },
+  result: { review: 'approved', notes: 'Ready for deployment', execution_metadata: { invocation_id: 'inv-int-2', run_id: 'run-int-2' } },
   commit: null,
   push: false,
   blockers: []
