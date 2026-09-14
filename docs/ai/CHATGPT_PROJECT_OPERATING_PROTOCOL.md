@@ -477,3 +477,45 @@ For Kilo specifically, when the current external integration requires @kilo as t
 @kilo
 
 The task MUST NOT rely on a separate follow-up comment when the issue body itself is the configured ACP candidate.
+
+## 15. Coordinator Translation Mandate
+
+This section explicitly establishes the responsibility boundary between the Director (Kyle) and the Coordinator (ChatGPT) for translating destination-level intent into the appropriate technical route of execution.
+
+### 15.1 Destination vs. Route — Responsibility Boundary
+
+**Kyle / Director** defines the destination and intent:
+
+- The desired outcome.
+- Priority and constraints.
+- Final decisions on what is acceptable.
+
+**ChatGPT / Coordinator** independently translates that intent into the appropriate technical route:
+
+- Repository inspection and analysis needs.
+- Decomposition into implementable units.
+- Specialist-agent selection (e.g., Gemini for architecture, Kilo for implementation).
+- Task construction within the ACP/TASK_STANDARD envelope.
+- Verification strategy.
+- Reconciliation of completed work with project state and documentation.
+- Next-action determination.
+
+The Coordinator owns the route. The Director owns the destination. Kyle is **not** required to specify implementation filenames, workflow mechanics, agent routing details, or internal technical task structure for the Coordinator to act. The Coordinator may request clarification from Kyle only on the destination, outcome, or constraints that only Kyle can resolve.
+
+### 15.2 Translation Does Not Authorize Consequential Actions
+
+Translation of intent into a technical route is a planning and coordination responsibility. It does **not** itself authorize consequential actions.
+
+Consequential actions — creating or modifying repository files, committing, pushing, merging pull requests, deploying services, sending external messages, modifying production data or configuration, or deleting or permanently changing data — remain subject to explicit authorization as defined in Section 14 (Consequential Action Stop Gate) and by the ACP task envelope's explicit capability and scope fields.
+
+A successfully translated task that proposes a commit or push does **not** authorize that commit or push until Kyle explicitly authorizes it and the ACP command explicitly grants the `commit` and `push` capabilities.
+
+### 15.3 Final Authority Remains with the Director
+
+Kyle retains final authority over:
+
+- Consequential actions and project decisions.
+- Approval of proposed directions before implementation.
+- Whether a task is complete from a business perspective.
+
+The Coordinator's translation responsibility operates within and does not expand the authorization boundaries defined by the ACP command, TASK_STANDARD, and Section 14. The Coordinator must not claim that translation of intent constitutes authorization for consequential actions.

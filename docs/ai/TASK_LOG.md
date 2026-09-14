@@ -255,4 +255,27 @@
 
 ---
 
+## 2026-09-14 | Make Coordinator Translation Mandate Explicit (TASK-KILO-COORDINATOR-TRANSLATION-MANDATE-001)
+
+**Task**: Make the Coordinator Translation Mandate explicit in the project's governing documentation so that Kyle's role is clearly defined as setting destination/intent and ChatGPT's role is clearly defined as translating that intent into the appropriate technical route, decomposition, agent selection, authorization preparation, verification, and reconciliation workflow.
+
+**Summary**:
+- Inspected all required governing documentation before modifying anything: AGENTS.md, ARCHITECTURE.md, GEMINI.md, docs/ai/README.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, docs/ai/TASK_STANDARD.md, docs/ai/STATE.md, docs/ai/TASK_LOG.md, docs/ai/CONTROL_CENTER.md, docs/ai/KILO_INTEGRATION.md, docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md, docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md, and docs/ai/ARCH_DECISIONS.md.
+- Identified that CHATGPT_PROJECT_OPERATING_PROTOCOL.md referenced ChatGPT "Translating Kyle's goals into organized project actions" (Section 2) but lacked an explicit, named Coordinator Translation Mandate establishing the destination-vs-route boundary.
+- Added Section 15 "Coordinator Translation Mandate" to docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md establishing:
+  - **Destination vs. Route boundary**: Kyle / Director defines the desired outcome, priority, constraints, and final decisions; ChatGPT / Coordinator independently translates that intent into the appropriate technical route (repository inspection, decomposition, specialist-agent selection, task construction, verification strategy, reconciliation, next-action determination).
+  - **Kyle is not required to specify implementation details**: Kyle is not required to specify implementation filenames, workflow mechanics, agent routing details, or internal technical task structure for the Coordinator to act; the Coordinator owns the route/decomposition work.
+  - **Translation does not authorize consequential actions**: Translation of intent is a planning responsibility, not an authorization; commit, push, and other consequential actions remain subject to Section 14 (Consequential Action Stop Gate) and the ACP task envelope's explicit capability and scope fields.
+  - **Final authority remains with the Director**: Kyle retains final authority over consequential actions and project decisions; the Coordinator's translation responsibility operates within, not beyond, existing authorization boundaries.
+- Determined that TASK_STANDARD.md needed no changes: it already defines the canonical task envelope with explicit capabilities and fail-closed authorization, consistent with the Coordinator Translation Mandate; its canonical envelope and fail-closed authorization model were preserved.
+- No changes made to STATE.md or CONTROL_CENTER.md: this task does not alter active project state, blockers, or backlog status, so no material state reconciliation was required.
+- No changes made to application code, workflows, AGENTS.md, GEMINI.md, ARCHITECTURE.md, Kilo external configuration, GitHub webhook configuration, secrets, credentials, or environment configuration.
+- Only authorized documentation paths modified: docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md (primary permitted path) and docs/ai/TASK_LOG.md (this entry).
+
+**Outcome**: SUCCESS — Coordinator Translation Mandate is now explicit in the governing protocol; Director destination/intent vs Coordinator route/decomposition boundary is established; translation responsibility is clearly distinct from authorization authority; Kyle remains final authority; consequential-action stop gates remain intact; TASK_STANDARD remains canonical and consistent; no competing protocol introduced; only authorized documentation files changed.
+
+**Commit Reference**: (pending)
+
+---
+
 *End of log. New entries appended above this line.*
