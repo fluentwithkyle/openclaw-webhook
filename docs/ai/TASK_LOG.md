@@ -112,4 +112,51 @@
 
 ---
 
+## 2026-09-14 | Kilo ↔ Gemini Orchestration Foundation Part 1 (TASK-KILO-GEMINI-ORCHESTRATION-PART-1-FOUNDATION-001)
+
+**Task**: Implement Part 1 of the Kilo ↔ Gemini orchestration backbone — minimal provider-independent foundation for correlating execution state, validating structured agent results, preserving authorization boundaries, and safely persisting orchestration state.
+
+**Summary**:
+- Created `poc/schemas/acp-schema.js`:
+  - ACP command envelope validation (12 required fields)
+  - Execution report validation (canonical shape for Kilo and Gemini)
+  - Task registry entry validation
+  - State transition validation (PENDING → SELECTED → PLANNED → EXECUTING → VERIFIED → COMPLETE, with BLOCKED/FAILED)
+  - Initial task registry entry factory
+- Created `poc/task-registry.js`:
+  - File-backed JSON persistence with atomic writes (backup + rename)
+  - In-memory cache for active tasks
+  - CRUD operations: createTask, getTask, updateTaskStatus, updateAgentResult, setNextAction, getAllTasks, getTasksByStatus, deleteTask
+  - Duplicate request_id detection and rejection (idempotency)
+  - Persistence recovery via loadFromFile
+- Created `poc/orchestrator.js`:
+  - Provider-independent orchestration policy (no Gemini-specific transport)
+  - handleKiloCompletion: validates report, updates registry, determines next_action (trigger_gemini | human_review)
+  - handleGeminiCompletion: validates report, updates registry, determines next_action (complete | human_review)
+  - Repository/branch context validation
+  - Agent identity validation
+  - Idempotency protection for duplicate results
+  - Authorization boundary preservation (reports are evidence, not authorization)
+  - canTriggerGemini, getOrchestrationState, determineNextAction helpers
+- Added focused tests:
+  - `test/schema.test.js` (16 tests): ACP command, execution report, task registry entry, state transitions
+  - `test/task-registry.test.js` (17 tests): CRUD, persistence, atomic writes, duplicate handling, state transitions
+  - `test/orchestrator.test.js` (18 tests): Kilo/Gemini completion handling, validation, idempotency, context checks
+  - `test/integration.test.js` (10 tests): End-to-end flows, correlation, failure/blocked handling, malformed reports
+- All existing POC tests continue to pass
+- Updated `docs/ai/STATE.md`:
+  - Kilo ↔ Gemini orchestration backbone Part 1: **IMPLEMENTED**
+  - Architectural audit items 1, 3, 4, 8 updated to CURRENT / IMPLEMENTED (Foundation)
+  - Repository structure updated with new poc/ and test/ files
+- No production code, workflows, AGENTS.md, GEMINI.md, or ARCHITECTURE.md modified
+- No secrets, credentials, or sensitive production values introduced
+- No competing project registry, task system, or ACP contract created
+- POC task-name mismatch (inspect-repo vs inspect-poc-files) documented as known mismatch; not resolved as not directly required by foundation
+
+**Outcome**: SUCCESS — Minimal TaskRegistry exists; orchestration policy separated from provider transport; execution results validated and correlated; duplicate/malformed results handled safely; persistence safe within documented POC boundaries; focused tests pass; documentation reflects actual implementation status; no Gemini trigger or unsupported Kilo callback mechanism fabricated; only authorized paths changed.
+
+**Commit Reference**: TBD
+
+---
+
 *End of log. New entries appended above this line.*

@@ -1,11 +1,66 @@
 # Kilo ↔ Gemini Orchestration Backbone — Implementation Plan
 
-**Status**: PROPOSED / PENDING KYLE APPROVAL
+**Status**: Part 1 Foundation — IMPLEMENTED (2026-09-14) | Part 2+ — PROPOSED / PENDING KYLE APPROVAL
 **Repository**: `fluentwithkyle/openclaw-webhook`
 **Base branch**: `main`
 **Purpose**: Define the smallest viable machine-to-machine orchestration backbone connecting Kilo completion → orchestration state → Gemini execution → structured Gemini result → subsequent agent/action determination.
 
 This is a planning artifact only. It does not authorize implementation, file modification, commit, push, pull request, or deployment.
+
+## Part 1 Implementation Summary (VERIFIED)
+
+Part 1 (Foundation) has been implemented and verified as of 2026-09-14 (TASK-KILO-GEMINI-ORCHESTRATION-PART-1-FOUNDATION-001).
+
+### Implemented Components
+
+- `poc/schemas/acp-schema.js` — Versioned ACP/task contract validation:
+  - ACP command envelope validation (12 required fields)
+  - Execution report validation (canonical shape for Kilo and Gemini)
+  - Task registry entry validation
+  - State transition validation (PENDING → SELECTED → PLANNED → EXECUTING → VERIFIED → COMPLETE, with BLOCKED/FAILED)
+  - Initial task registry entry factory
+
+- `poc/task-registry.js` — Correlated task state persistence:
+  - File-backed JSON persistence with atomic writes (backup + rename)
+  - In-memory cache for active tasks
+  - CRUD operations: createTask, getTask, updateTaskStatus, updateAgentResult, setNextAction, getAllTasks, getTasksByStatus, deleteTask
+  - Duplicate request_id detection and rejection (idempotency)
+  - Persistence recovery via loadFromFile
+
+- `poc/orchestrator.js` — Provider-independent orchestration policy:
+  - handleKiloCompletion: validates report, updates registry, determines next_action (trigger_gemini | human_review)
+  - handleGeminiCompletion: validates report, updates registry, determines next_action (complete | human_review)
+  - Repository/branch context validation
+  - Agent identity validation
+  - Idempotency protection for duplicate results
+  - Authorization boundary preservation (reports are evidence, not authorization)
+  - canTriggerGemini, getOrchestrationState, determineNextAction helpers
+
+- Focused tests (all passing):
+  - `test/schema.test.js` (16 tests): ACP command, execution report, task registry entry, state transitions
+  - `test/task-registry.test.js` (17 tests): CRUD, persistence, atomic writes, duplicate handling, state transitions
+  - `test/orchestrator.test.js` (18 tests): Kilo/Gemini completion handling, validation, idempotency, context checks
+  - `test/integration.test.js` (10 tests): End-to-end flows, correlation, failure/blocked handling, malformed reports
+
+### Not Implemented in Part 1 (Deferred to Part 2+)
+
+- `poc/gemini-trigger.js` — GitHub Actions workflow_dispatch integration
+- `routes/poc.js` callback endpoints — `/poc/kilo/callback` and `/poc/gemini/callback`
+- Authenticated callback endpoints with shared-secret validation
+- End-to-end Kilo → Gemini → Kilo execution loop
+
+### Verified Architecture Decisions
+
+- TaskRegistry uses file-backed JSON with atomic writes (documented as POC limitation)
+- Orchestrator is provider-independent — no Gemini-specific transport code
+- Execution reports are validated against canonical schema before state mutation
+- Duplicate/malformed reports are rejected safely (idempotency)
+- State transitions strictly enforced via VALID_STATE_TRANSITIONS
+- Authorization remains in ACP command; execution reports are evidence only
+- No secrets in source, state, or reports
+- POC task-name mismatch (inspect-repo vs inspect-poc-files) documented; not resolved as not required by foundation
+
+---
 
 ## 1. Scope and Architectural Position
 
@@ -70,37 +125,46 @@ The actual Kilo Cloud completion callback mechanism must remain an implementatio
 
 ## 4. Proposed Components and Files
 
-### New files
+### New files (Part 1 — IMPLEMENTED)
 
-- `poc/task-registry.js`
-  - Correlation and lifecycle state for orchestration tasks.
-  - File-backed JSON persistence for the proof of concept.
-  - In-memory cache for active tasks.
-  - Atomic writes to reduce corruption risk.
-  - Designed so the persistence layer can later migrate to a database without changing the orchestration contract.
+- `poc/schemas/acp-schema.js` — Versioned ACP/task contract validation:
+  - ACP command envelope validation (12 required fields)
+  - Execution report validation (canonical shape for Kilo and Gemini)
+  - Task registry entry validation
+  - State transition validation (PENDING → SELECTED → PLANNED → EXECUTING → VERIFIED → COMPLETE, with BLOCKED/FAILED)
+  - Initial task registry entry factory
 
-- `poc/orchestrator.js`
-  - Receives execution reports.
-  - Updates TaskRegistry.
-  - Determines the next authorized action.
-  - Coordinates Gemini triggering and future Kilo continuation.
-  - Contains orchestration policy rather than provider-specific transport code.
+- `poc/task-registry.js` — Correlated task state persistence:
+  - File-backed JSON persistence with atomic writes (backup + rename)
+  - In-memory cache for active tasks
+  - CRUD operations: createTask, getTask, updateTaskStatus, updateAgentResult, setNextAction, getAllTasks, getTasksByStatus, deleteTask
+  - Duplicate request_id detection and rejection (idempotency)
+  - Persistence recovery via loadFromFile
+
+- `poc/orchestrator.js` — Provider-independent orchestration policy:
+  - handleKiloCompletion: validates report, updates registry, determines next_action (trigger_gemini | human_review)
+  - handleGeminiCompletion: validates report, updates registry, determines next_action (complete | human_review)
+  - Repository/branch context validation
+  - Agent identity validation
+  - Idempotency protection for duplicate results
+  - Authorization boundary preservation (reports are evidence, not authorization)
+  - canTriggerGemini, getOrchestrationState, determineNextAction helpers
+
+- Focused tests (all passing):
+  - `test/schema.test.js` (16 tests): ACP command, execution report, task registry entry, state transitions
+  - `test/task-registry.test.js` (17 tests): CRUD, persistence, atomic writes, duplicate handling, state transitions
+  - `test/orchestrator.test.js` (18 tests): Kilo/Gemini completion handling, validation, idempotency, context checks
+  - `test/integration.test.js` (10 tests): End-to-end flows, correlation, failure/blocked handling, malformed reports
+
+### New files (Part 2+ — PROPOSED / TARGET)
 
 - `poc/gemini-trigger.js`
   - Encapsulates triggering Gemini through the existing GitHub Actions execution plane.
   - Prefer `workflow_dispatch` over issue comments or polling.
   - Passes only the minimum task/context identifiers required for the Gemini execution.
+  - `test/gemini-trigger.test.js`
 
-- `poc/schemas/acp-schema.js`
-  - Versioned ACP/task contract validation shared by the orchestration path.
-  - Reuses existing ACP validation boundaries rather than creating a second incompatible contract.
-
-- `test/task-registry.test.js`
-- `test/orchestrator.test.js`
-- `test/gemini-trigger.test.js`
-- `test/integration.test.js`
-
-### Existing files to modify later
+### Existing files to modify later (Part 2+ — PROPOSED / TARGET)
 
 - `routes/poc.js` — add Kilo completion and Gemini callback endpoints and wire orchestration calls.
 - `index.js` — register any new routes or initialization required by the orchestration layer.
