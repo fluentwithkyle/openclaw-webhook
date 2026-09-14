@@ -64,13 +64,14 @@ selecting "All events" or using a wildcard.
 
 **CURRENT / EXTERNAL CONFIGURATION** (verified 2026-09-14):
 
-- **Currently selected**: **Pushes only**
-- **Currently not selected**: Issue comments, Issues, and all other GitHub
-  webhook event categories
+- **Currently selected**: **Pushes + Issues + Issue comments**
+- **Currently not selected**: All other GitHub webhook event categories
+  (pull_request, pull_request_review, commit_comment, create, delete,
+  deployment, release, etc.)
 
 ### 4.3 Issue Comments Status
 
-**Issue comments is currently NOT selected.**
+**Issue comments is currently selected.**
 
 GitHub provides an `Issue comments` event defined as: issue comment created,
 edited, or deleted. This is a distinct event category from the `Issues`
@@ -80,11 +81,11 @@ event.
 
 | Event | Definition | Current Status |
 |-------|-----------|----------------|
-| `issues` | Issue opened, edited, deleted, transferred, closed, reopened, assigned, unassigned, labeled, unlabeled, milestone added/removed, etc. | **Not selected** |
-| `issue_comment` | Issue comment created, edited, deleted | **Not selected** |
+| `issues` | Issue opened, edited, deleted, transferred, closed, reopened, assigned, unassigned, labeled, unlabeled, milestone added/removed, etc. | **Selected** |
+| `issue_comment` | Issue comment created, edited, deleted | **Selected** |
 
 These are separate GitHub webhook event categories. Selecting one does not
-imply selection of the other.
+imply selection of the other. Both are currently selected.
 
 ### 4.5 Known Available GitHub Event Categories
 
@@ -125,17 +126,19 @@ For the authoritative and complete current list of available GitHub webhook
 events, consult the GitHub webhook events documentation at
 https://docs.github.com/en/webhooks/webhook-events-and-payloads.
 
-### 4.6 Configuration Mismatch Relevant to `@kilo` Issue-Comment Workflow
+### 4.6 Issue / Issue-Comment Activation Path
 
-The intended `@kilo` issue-comment workflow requires the `issue_comment`
-event to be delivered to Kilo. The current GitHub webhook selection is
-**Pushes only**. This means:
+The intended `@kilo` issue/issue-comment activation path requires both the
+`issues` and `issue_comment` GitHub webhook events to be delivered to Kilo.
+The current GitHub webhook selection is **Pushes + Issues + Issue comments**.
+This means:
 
-- Issue comments are **not** currently delivered to Kilo through this webhook.
-- To enable the `@kilo` issue-comment workflow, the GitHub webhook event
-  selection must be changed to include `issue_comment`.
-- This change is a GitHub/external configuration change and is **not** part
-  of this repository's application code.
+- Issue-open events are **currently** delivered to Kilo through this webhook.
+- Issue comments are **currently** delivered to Kilo through this webhook.
+- The GitHub webhook event selection is consistent with the intended
+  `@kilo` issue/issue-comment activation path.
+- This is a GitHub/external configuration state and is **not** part of this
+  repository's application code.
 
 ---
 
@@ -399,12 +402,15 @@ tasks.
 | Kilo trigger configuration | Receives and authenticates inbound events | Kilo provider (external) |
 | Production application code | Implements webhook listener and business logic | Repository |
 
-### 8.2 Configuration Mismatch
+### 8.2 Configuration Consistency
 
-The intended `@kilo` issue-comment workflow requires the `issue_comment`
-GitHub webhook event to be delivered to Kilo. The current GitHub webhook
-selection is **Pushes only**. This mismatch is documented in Section 4.6 and
-is an external configuration matter, not a repository code change.
+The intended `@kilo` issue/issue-comment workflow requires the `issues` and
+`issue_comment` GitHub webhook events to be delivered to Kilo. The current
+GitHub webhook selection is **Pushes + Issues + Issue comments**. This is
+consistent with the intended activation path. See Section 4.6.
+
+No configuration mismatch currently exists between the GitHub webhook event
+selection and the intended `@kilo` issue/issue-comment activation path.
 
 ### 8.3 Kilo as External Execution Lane
 
@@ -436,9 +442,9 @@ configuration explicitly supplied.
 
 | Configuration Item | Status |
 |--------------------|--------|
-| GitHub webhook event selection | Pushes only |
-| Issue comments event | Not selected |
-| Issues event | Not selected |
+| GitHub webhook event selection | Pushes + Issues + Issue comments |
+| Issue comments event | Selected |
+| Issues event | Selected |
 | Kilo external trigger | Active (Webhook type) |
 | Kilo trigger authentication | Shared-secret mechanism (external) |
 | Kilo API/webhook prompt | Configured (external) |

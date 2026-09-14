@@ -165,7 +165,7 @@
 
 **Summary**:
 - Created `docs/ai/KILO_INTEGRATION.md`:
-  - **GitHub webhook configuration**: individual event selection mechanism; current selection recorded as **Pushes only**; Issue comments explicitly recorded as currently **not selected**; Issues vs Issue comments clearly distinguished; known available GitHub event categories listed with reference to authoritative GitHub docs; configuration mismatch relevant to the `@kilo` issue-comment workflow documented.
+    - **GitHub webhook configuration**: individual event selection mechanism; current selection recorded as **Pushes + Issues + Issue comments**; Issue comments explicitly recorded as currently **selected**; Issues explicitly recorded as currently **selected**; Issues vs Issue comments clearly distinguished; known available GitHub event categories listed with reference to authoritative GitHub docs; issue/issue-comment activation path documented as consistent with the current configuration.
   - **External Kilo trigger configuration**: trigger type (Webhook — HTTP request received); repository binding; available payload/template variables (`{{body}}`, `{{bodyJson}}`, `{{headers}}`, `{{method}}`, `{{path}}`, `{{query}}`, `{{ip}}`, `{{timestamp}}`); shared-secret authentication boundary; explicit statement that actual URL and credentials are external secrets not stored in the repository.
   - **Kilo task-ingestion contract**: external event envelope is not authorization; `issue.body` is the sole candidate ACP request; GitHub event metadata is context only; required ACP authorization fields listed; fail-closed behavior when authorization is missing/ambiguous documented; capability independence and one-shot execution/auditability documented.
   - **Exact current Kilo prompt**: verbatim copy of the prompt supplied by Kyle preserved, including the `{{bodyJson}}` injection point; identified as externally configured and subject to external configuration changes.
@@ -181,6 +181,36 @@
 - Only authorized documentation scope changed (`docs/ai/KILO_INTEGRATION.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`)
 
 **Outcome**: SUCCESS — Authoritative Kilo external integration document exists under `docs/ai/`; all 11 acceptance criteria met; repository-controlled vs externally controlled responsibilities clearly separated; exact current Kilo prompt reproduced accurately without credential values; no secrets committed; only authorized documentation scope changed.
+
+**Commit Reference**: (pending)
+
+---
+
+## 2026-09-14 | Reconcile Kilo Integration Documentation with Current Webhook Configuration (TASK-KILO-INTEGRATION-COMPLIANCE-RECTIFY-001)
+
+**Task**: Rectify the documented Kilo integration discrepancy so the repository's authoritative integration documentation accurately reflects the current GitHub webhook configuration (Pushes + Issues + Issue comments) and the explicit ACP authorization required for Kilo to commit and push.
+
+**Summary**:
+- Inspected `docs/ai/KILO_INTEGRATION.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`, `docs/ai/CONTROL_CENTER.md`, `AGENTS.md`, `ARCHITECTURE.md`, and `GEMINI.md` before editing.
+- Confirmed the documented discrepancy: `docs/ai/KILO_INTEGRATION.md` recorded the GitHub webhook as `Pushes only`, while the current external GitHub configuration is `Pushes + Issues + Issue comments`.
+- Updated `docs/ai/KILO_INTEGRATION.md`:
+  - Section 4.2: current selection corrected from **Pushes only** to **Pushes + Issues + Issue comments**; other categories explicitly recorded as not selected.
+  - Section 4.3: Issue comments status corrected from **NOT selected** to **selected**.
+  - Section 4.4: `issues` and `issue_comment` status corrected from **Not selected** to **Selected**.
+  - Section 4.6: replaced the "Configuration Mismatch" section with an "Issue / Issue-Comment Activation Path" section documenting that the current webhook selection is consistent with the intended `@kilo` activation path.
+  - Section 8.2: replaced the "Configuration Mismatch" section with a "Configuration Consistency" section.
+  - Section 9 (Current-State Status Summary table): GitHub webhook event selection, Issue comments event, and Issues event all corrected to reflect Pushes + Issues + Issue comments with `issues` and `issue_comment` selected.
+- Updated `docs/ai/STATE.md`: Active Tasks note for Kilo External Integration Contract documentation corrected from "Pushes only" to "Pushes + Issues + Issue comments".
+- Updated `docs/ai/TASK_LOG.md`: historical record of the original KILO_INTEGRATION.md creation corrected to reflect Pushes + Issues + Issue comments and selected status for `issues` and `issue_comment`.
+- Appended this task log entry.
+- Preserved the distinction between repository-controlled ACP authorization, GitHub webhook event selection, and external Kilo trigger configuration.
+- Preserved the existing fail-closed ACP requirements (Section 6.4).
+- Preserved the requirement that Kilo may commit and push only when those capabilities are explicitly authorized by the individual ACP task (Sections 6.5 and 8.4).
+- No Kilo webhook URL, trigger ID, shared secret, API key, or other credentials introduced or exposed.
+- No application runtime code, GitHub Actions workflows, AGENTS.md, GEMINI.md, or ARCHITECTURE.md modified.
+- Only authorized documentation paths changed (`docs/ai/KILO_INTEGRATION.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`).
+
+**Outcome**: SUCCESS — Kilo integration documentation reconciled with current GitHub webhook configuration; `Pushes only` no longer reported; `Pushes + Issues + Issue comments` documented consistently across all current-state sections; `issues` and `issue_comment` explicitly recorded as selected; ACP contract remains fail-closed; commit and push authority remain explicit; no secrets introduced; only authorized documentation paths changed.
 
 **Commit Reference**: (pending)
 
