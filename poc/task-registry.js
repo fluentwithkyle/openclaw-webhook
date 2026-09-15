@@ -182,5 +182,6 @@ module.exports = {
   deleteTask,
   resetRegistry,
   loadFromFile,
+  persistCache,
   REGISTRY_FILE
 };

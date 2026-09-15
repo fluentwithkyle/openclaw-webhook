@@ -5,6 +5,7 @@ const {
   VALID_STATE_TRANSITIONS
 } = require('./schemas/acp-schema');
 const taskRegistry = require('./task-registry');
+const { dispatchGeminiWorkflow } = require('./gemini-trigger');
 
 function validateRepositoryContext(report, expectedRepository, expectedBaseBranch) {
   if (report.repository && report.repository !== expectedRepository) {
@@ -16,7 +17,7 @@ function validateRepositoryContext(report, expectedRepository, expectedBaseBranc
   return { valid: true };
 }
 
-function handleKiloCompletion(requestId, report) {
+async function handleKiloCompletion(requestId, report) {
   const validation = validateExecutionReport(report);
   if (!validation.valid) {
     return { success: false, error: `Invalid execution report: ${validation.error}`, stage: 'validation' };
@@ -71,10 +72,41 @@ function handleKiloCompletion(requestId, report) {
 
   taskRegistry.setNextAction(requestId, nextAction);
 
+  let geminiDispatchResult = null;
+  if (report.status === 'success') {
+    const canTrigger = canTriggerGemini(requestId);
+    if (canTrigger.canTrigger) {
+      const taskForDispatch = taskRegistry.getTask(requestId);
+      geminiDispatchResult = await dispatchGeminiWorkflow(requestId, {
+        repository: taskForDispatch.repository,
+        base_branch: taskForDispatch.base_branch,
+        task: taskForDispatch.task,
+        kilo_execution_id: report.execution_id || null
+      });
+
+      if (geminiDispatchResult.status !== 'SUCCESS') {
+        taskRegistry.setNextAction(requestId, 'human_review');
+        return {
+          success: false,
+          error: `Gemini dispatch failed: ${geminiDispatchResult.error}`,
+          stage: 'gemini_dispatch',
+          task: taskRegistry.getTask(requestId)
+        };
+      }
+
+      // Record dispatch in registry without changing Gemini status
+      const taskAfterDispatch = taskRegistry.getTask(requestId);
+      taskAfterDispatch.gemini.execution_id = 'dispatched';
+      taskAfterDispatch.gemini.dispatch_info = geminiDispatchResult;
+      taskRegistry.persistCache();
+    }
+  }
+
   return {
     success: true,
     task: taskRegistry.getTask(requestId),
     next_action: nextAction,
+    gemini_dispatch: geminiDispatchResult,
     message: `Kilo completion recorded. Next: ${nextAction}`
   };
 }
@@ -168,6 +200,10 @@ function canTriggerGemini(requestId) {
 
   if (task.gemini.status !== 'pending') {
     return { canTrigger: false, reason: `Gemini already ${task.gemini.status}` };
+  }
+
+  if (task.gemini.execution_id) {
+    return { canTrigger: false, reason: 'Gemini already dispatched' };
   }
 
   if (task.status !== 'EXECUTING') {
