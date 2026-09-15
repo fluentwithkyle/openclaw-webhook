@@ -181,29 +181,41 @@ jobs:
           STATUS="success"
           BLOCKERS="[]"
 
-          # Build ACP execution report
+          # Build ACP execution report using jq for JSON-safe serialization
           INVOCATION_ID="gemini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           RUN_ID="${GITHUB_RUN_ID}"
 
-          cat > callback_payload.json <<EOF
-{
-  "request_id": "$REQUEST_ID",
-  "agent": "Gemini",
-  "status": "$STATUS",
-  "task": "$TASK",
-  "changed_files": [],
-  "verification": ["advisory review completed"],
-  "result": {
-    "execution_metadata": {
-      "invocation_id": "$INVOCATION_ID",
-      "run_id": "$RUN_ID"
-    }
-  },
-  "commit": null,
-  "push": false,
-  "blockers": $BLOCKERS
-}
-EOF
+          jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg agent "Gemini" \
+            --arg status "$STATUS" \
+            --arg task "$TASK" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            --arg gemini_output "$GEMINI_OUTPUT" \
+            --arg invocation_id "$INVOCATION_ID" \
+            --arg run_id "$RUN_ID" \
+            --argjson blockers "$BLOCKERS" \
+            '{
+              request_id: $request_id,
+              agent: $agent,
+              status: $status,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              changed_files: [],
+              verification: ["advisory review completed"],
+              result: {
+                execution_metadata: {
+                  invocation_id: $invocation_id,
+                  run_id: $run_id
+                },
+                gemini_output: $gemini_output
+              },
+              commit: null,
+              push: false,
+              blockers: $blockers
+            }' > callback_payload.json
 
           cat callback_payload.json
 
