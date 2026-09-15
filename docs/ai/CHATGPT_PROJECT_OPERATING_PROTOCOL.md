@@ -402,6 +402,8 @@ ChatGPT should maintain continuity by using the repository's existing source of 
 
 This section establishes mandatory rules for consequential GitHub mutations. It applies to ChatGPT when coordinating GitHub actions on behalf of Kyle.
 
+Section 14 is the authoritative authorization boundary for consequential GitHub actions. It overrides any broader coordination, completion-loop, reconciliation, or helpfulness language elsewhere in this protocol whenever those sections could otherwise be interpreted as authorizing an additional consequential action. Sections 12, 15, and 16 do not independently authorize consequential mutations.
+
 14.1 Explicit-Action Matching
 
 ChatGPT MUST perform only the consequential action explicitly requested and authorized by Kyle.
@@ -443,7 +445,39 @@ ChatGPT MUST NOT infer authorization for:
 * external configuration changes
 * other repository mutations
 
-14.4 Webhook and Automation Impact Check
+14.4 Optional GitHub Fields Are Opt-In
+
+Only fields explicitly authorized by Kyle or explicitly required by the requested operation may be populated. All optional fields default to unset.
+
+GitHub metadata such as labels, assignees, milestones, projects, metadata fields, and other optional issue/PR attributes are consequential when their modification can affect repository state or automation.
+
+Authorization to create an issue does not authorize adding a label unless the label was explicitly requested or is strictly required by the requested operation.
+
+14.5 Documentation Reconciliation Requires Explicit Authorization
+
+Documentation reconciliation is itself a consequential repository mutation.
+
+Completion of an implementation task does not independently authorize ChatGPT to modify STATE.md, TASK_LOG.md, CONTROL_CENTER.md, or other repository documentation.
+
+If reconciliation requires a repository mutation, that mutation requires explicit authorization.
+
+This remains true even where Sections 12 or 15 describe reconciliation as part of the normal completion loop.
+
+14.6 Self-Correction Requires Fresh Authorization
+
+Any consequential action resulting from ChatGPT discovering an error, correction, clarification, or adjustment to a previously performed action is a new consequential action.
+
+It requires separate explicit authorization.
+
+ChatGPT MUST NOT create, edit, relabel, comment on, or otherwise modify an already-created GitHub object merely because the additional action would correct or improve its previous action.
+
+14.7 Minimal-Action Language Creates a Hard Boundary
+
+When Kyle uses scope-limiting language such as "just", "only", "then leave it", "stop", or equivalent minimal-action phrasing, ChatGPT MUST interpret it as an explicit completion boundary.
+
+ChatGPT MUST perform only the minimum authorized consequential action before stopping.
+
+14.8 Webhook and Automation Impact Check
 
 Before performing a consequential GitHub mutation, ChatGPT MUST consider whether that mutation triggers:
 
@@ -455,7 +489,7 @@ Before performing a consequential GitHub mutation, ChatGPT MUST consider whether
 
 If the requested mutation already provides the intended trigger, ChatGPT MUST NOT create an additional mutation to trigger the same process.
 
-14.5 Existing-Trigger Rule
+14.9 Existing-Trigger Rule
 
 When the requested GitHub action naturally activates an existing webhook, workflow, or automation required by the task, ChatGPT MUST allow that mechanism to operate.
 
@@ -467,7 +501,13 @@ Create Issue → GitHub Issues webhook → Kilo receives issue
 
 A separate execution comment MUST NOT be added solely to trigger Kilo when issue creation already activates the configured Kilo trigger.
 
-14.6 Verification Rule
+14.10 Downstream Automation Does Not Create Permission for Additional Mutations
+
+ChatGPT MUST NOT add an additional mutation merely to influence, retrigger, classify, or improve an automation unless that additional mutation itself was explicitly authorized.
+
+Automation triggers, webhook behaviors, or workflow side effects do not expand the authorization boundary established in this section.
+
+14.11 Verification Rule
 
 Verification MUST establish whether the requested action actually occurred.
 
@@ -475,7 +515,7 @@ ChatGPT MUST NOT modify repository state merely to obtain verification.
 
 For agent execution, workflow execution, webhook behavior, or other asynchronous processing, ChatGPT should inspect available execution evidence rather than creating an additional trigger.
 
-14.7 Mandatory Consequential-Action Sequence
+14.12 Mandatory Consequential-Action Sequence
 
 For consequential GitHub actions, ChatGPT MUST follow:
 
@@ -483,7 +523,7 @@ Review Operating Protocol → Inspect Current Repository State → Identify Exac
 
 After the STOP point, another consequential mutation requires a new explicit user instruction or authorization.
 
-14.8 Task-Creation Rule
+14.13 Task-Creation Rule
 
 When Kyle asks ChatGPT to create a task for an external agent:
 
