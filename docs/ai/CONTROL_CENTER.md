@@ -16,16 +16,15 @@ Designed for Kyle checking the project from a phone.
 | **Branch** | main |
 | **Deploy** | Render (Node.js/Express) |
 | **Google Adapter** | Google Apps Script |
-| **Last Updated** | 2026-09-14 |
+| **Last Updated** | 2026-09-15 |
 
 ---
 
 ## Requires Kyle's Attention
 
-1. **Kilo ↔ Gemini orchestration backbone** — PROPOSED / PENDING KYLE APPROVAL. Implementation plan: `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`. Not authorized until you approve.
-2. **ChatGPT Control Gate** — Research complete. No implementation authorized or performed. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
-3. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
-4. **No automated test suite** — Changes verified by manual review only.
+1. **ChatGPT Control Gate** — Research complete. No implementation authorized or performed. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
+2. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
+3. **No automated test suite** — Changes verified by manual review only.
 
 ---
 
@@ -35,7 +34,8 @@ Designed for Kyle checking the project from a phone.
 |------|--------|-------|
 | Persistent AI project state system | IMPLEMENTED | Kilo |
 | Kilo External Integration Contract documentation | IMPLEMENTED | Kilo |
-| Kilo ↔ Gemini orchestration backbone | PROPOSED | — |
+| Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | IMPLEMENTED | Kilo |
+| Kilo ↔ Gemini orchestration backbone — Part 2.1b (workflow-dispatch handoff) | **IMPLEMENTED / GITHUB-VERIFIED** | Kilo |
 | Automated Kilo delivery verification | PARTIAL / PROPOSED | Gemini |
 | ChatGPT Control Gate architecture | PROPOSED / PENDING | Gemini |
 
@@ -51,7 +51,7 @@ Designed for Kyle checking the project from a phone.
 
 ## Next Action
 
-Decide whether to approve the Kilo ↔ Gemini orchestration backbone for implementation.
+Decide whether to approve **Part 2.2** (Gemini result collection/return integration) for implementation. Part 2.1b is complete and verified.
 
 ---
 

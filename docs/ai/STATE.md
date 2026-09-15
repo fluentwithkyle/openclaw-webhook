@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-14
-**Updated By**: Kilo — Kilo Activation Boundary & Part 2.1b Status Reconciliation (TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001)
+**Last Updated**: 2026-09-15
+**Updated By**: Kilo — Part 2.1b Documentation Reconciliation (TASK-KILO-DOC-RECONCILE-PART-2-1B-001)
 
 ---
 
@@ -21,7 +21,8 @@
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
 | Kilo External Integration Contract documentation | **IMPLEMENTED** | Kilo | `docs/ai/KILO_INTEGRATION.md` created. Documents GitHub webhook (Pushes + Issues + Issue comments), external Kilo trigger, ACP task-ingestion contract, and exact current Kilo prompt. No secrets committed. |
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
-| Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | **IMPLEMENTED** | Kilo | TaskRegistry, Orchestrator, ACP Schema, and focused tests implemented in `poc/` and `test/`. See commit `TBD`. |
+| Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | **IMPLEMENTED** | Kilo | TaskRegistry, Orchestrator, ACP Schema, and focused tests implemented in `poc/` and `test/`. See commit `9407470`. |
+| Kilo ↔ Gemini orchestration backbone — **Part 2.1b (workflow-dispatch handoff)** | **IMPLEMENTED / GITHUB-VERIFIED** | Kilo | `poc/gemini-trigger.js`, `poc/orchestrator.js` triggerGemini(), `.github/workflows/main.yml` workflow_dispatch inputs, `test/gemini-trigger.test.js` (12 tests). Commit `b5e27de`. Request_id correlation, idempotency, duplicate-dispatch protection, dispatch failure → human_review preserved. Execution_id uses documented dispatch sentinel (workflow_dispatch returns 204, no run_id). |
 | Automated Kilo delivery verification | **PARTIAL IMPLEMENTATION / PROPOSED / PENDING** | Gemini (research) | A persistence gate exists in `.github/workflows/kilo-gemini-poc.yml` (verifies no repo changes outside `poc/test-output/`). Full independent verification — verifying actual delivered ref/commit and changed files — remains PROPOSED / TARGET. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
@@ -74,7 +75,9 @@ represent implemented functionality.
 - Build automated testing infrastructure
 
 ### Lower Priority / Architectural
-- Kilo ↔ Gemini orchestration backbone implementation — **Part 1 Foundation IMPLEMENTED**; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`. Part 2 (Gemini triggering and callback integration) remains PROPOSED / TARGET.
+- **Kilo ↔ Gemini orchestration backbone — Part 1 Foundation**: **IMPLEMENTED** (commit `9407470`).
+- **Kilo ↔ Gemini orchestration backbone — Part 2.1b (workflow-dispatch handoff)**: **IMPLEMENTED / GITHUB-VERIFIED** (commit `b5e27de`). Includes `poc/gemini-trigger.js`, `poc/orchestrator.js` triggerGemini(), workflow_dispatch inputs, 12 focused tests, request_id correlation, idempotency, duplicate-dispatch protection, failure → human_review.
+- **Kilo ↔ Gemini orchestration backbone — Part 2.2 (Gemini result collection/return integration)**: **SEPARATE / NOT IMPLEMENTED**. Callback endpoints, result persistence, next-action determination from Gemini result remain PROPOSED / TARGET.
 - Automated Kilo delivery verification implementation — **PARTIAL IMPLEMENTATION / PROPOSED / PENDING**; a persistence gate exists in `.github/workflows/kilo-gemini-poc.yml`, but full independent verification (delivered ref/commit, changed files, request_id correlation) remains PROPOSED / TARGET. Future implementation must extend the existing orchestration/project-state architecture rather than create a second task system. See implementation task #49.
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
@@ -179,18 +182,14 @@ openclaw-webhook/
 
 ---
 
-## Kilo Activation Boundary & Part 2.1b Status (Recorded 2026-09-14)
+## Kilo Activation Boundary & Part 2.1b Status (Recorded 2026-09-15)
 
-**Task**: TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001 (Issue #74)
+**Task**: TASK-KILO-DOC-RECONCILE-PART-2-1B-001 (Issue #80)
 **Updated By**: Kilo
 
-This section records the verified repository-side findings from the recent Kilo
-activation boundary investigation. It is a documentation/state reconciliation
-task only. No application/runtime code, Kilo transport implementation, Gemini
-transport implementation, GitHub Actions workflows, ACP schema, or orchestration
-code was modified.
+This section records the verified repository-side completion of Part 2.1b — Kilo → Gemini workflow-dispatch handoff, implemented in commit `b5e27dee0f0c7a89b9f1350948bf1d99fafb18f3`. It replaces the prior investigation-only status (recorded 2026-09-14 under TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001) with the confirmed implementation status.
 
-### Kilo Activation Boundary (Verified)
+### Kilo Activation Boundary (Verified — Unchanged)
 
 1. **Kilo is NOT activated by a repository GitHub Actions workflow.**
    Kilo is an external Kilo Cloud Agent. Its activation boundary is external.
@@ -225,60 +224,106 @@ code was modified.
    external execution boundary remains external (AGENTS.md Section 3, 10;
    ARCHITECTURE.md Section 12.9, 16.5).
 
-### Issue #69 Task Construction (Verified)
+### Part 2.1b — Gemini Workflow Dispatch Status (IMPLEMENTED / GITHUB-VERIFIED)
 
-8. **Issue #69 was constructed as a complete ACP-aligned Kilo task**:
-   - title: PART 2.1b — Gemini Workflow Dispatch — ACP-Aligned Kilo Execution
-   - request_id: TASK-KILO-GEMINI-ORCHESTRATION-PART-2.1B-GEMINI-DISPATCH-003
-   - target agent: Kilo
-   - Full TASK_STANDARD fields are present.
-   - Permitted paths, authorization, implementation requirements, verification
-     requirements, acceptance criteria, and final ACP execution-report
-     requirements are present.
-   - The issue body begins with `@kilo`.
+**Commit**: `b5e27dee0f0c7a89b9f1350948bf1d99fafb18f3` (Part 2.1b: Correct Kilo → Gemini workflow-dispatch handoff)
 
-9. **A new Issue #69 comment was also posted** beginning with `@kilo` and
-   containing the complete task, because Kilo does not have continuity between
-   the issue description and a separate comment.
+The following components are **implemented and verified** in the repository:
 
-10. **The Issue #69 activation comment was successfully created**, but **no Kilo
-    execution report was subsequently produced**. The observed timeout therefore
-    occurred at the external Kilo activation/execution boundary rather than
-    because the repository lacked an `@kilo` GitHub Actions workflow.
+1. **`poc/gemini-trigger.js`** — GitHub Actions `workflow_dispatch` integration module:
+   - `dispatchGemini(requestId, task, repository, baseBranch, kiloExecutionId, githubToken)` — dispatches Gemini workflow
+   - `validateDispatchInputs(inputs)` — validates all 5 required inputs: `request_id`, `task`, `repository`, `base_branch`, `kilo_execution_id`
+   - Uses GitHub REST API to POST to `/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches`
+   - Returns structured result with `success`, `message`, `status_code` (204 on success)
+   - Handles authentication errors, network errors, and API errors gracefully
 
-### Part 2.1b — Gemini Workflow Dispatch Status (Verified)
+2. **`poc/orchestrator.js` — `triggerGemini(requestId, githubToken)` function**:
+   - Precondition validation via `canTriggerGemini(requestId)` — ensures Kilo status is `success`, Gemini status is `pending`, task status is `EXECUTING`
+   - Retrieves `kilo_execution_id` from `task.kilo.execution_id` or falls back to `task.kilo.report?.result?.execution_metadata?.invocation_id` or `'unknown'`
+   - Calls `geminiTrigger.dispatchGemini()` with all 5 required inputs
+   - On dispatch success: updates Gemini status to `running`, sets `execution_id` to sentinel `dispatched-${Date.now()}`, sets `next_action` to `waiting_gemini_callback`
+   - On dispatch failure: returns error with stage `dispatch`, preserves task state for human_review
 
-11. **The repository currently contains no `services/gemini-transport.js`.**
-    Verified by repository inspection.
+3. **`poc/orchestrator.js` — `canTriggerGemini(requestId)` function**:
+   - Validates all preconditions before dispatch
+   - Returns `{ canTrigger: true }` or `{ canTrigger: false, reason: string }`
+   - Idempotency: prevents duplicate dispatch if Gemini already triggered/completed
 
-12. **`poc/orchestrator.js` currently handles Kilo completion** and can
-    determine that Gemini should be triggered after successful Kilo
-    completion, but **it does not itself dispatch Gemini**. Gemini dispatch
-    remains unimplemented.
+4. **`.github/workflows/main.yml` — workflow_dispatch inputs**:
+   ```yaml
+   workflow_dispatch:
+     inputs:
+       request_id:
+         description: 'Correlation request ID for Kilo->Gemini orchestration'
+         required: true
+         type: string
+       task:
+         description: 'Task description for Gemini execution'
+         required: true
+         type: string
+       repository:
+         description: 'Repository name (owner/repo)'
+         required: true
+         type: string
+       base_branch:
+         description: 'Base branch for the task'
+         required: true
+         type: string
+       kilo_execution_id:
+         description: 'Kilo execution identifier from completed Kilo run'
+         required: true
+         type: string
+   ```
 
-13. **Part 2.1b — Gemini Workflow Dispatch therefore remains
-    UNIMPLEMENTED.** The recent investigation did not produce evidence that
-    Part 2.1b code exists or that a Gemini dispatch adapter has been
-    implemented.
+5. **`.github/workflows/main.yml` — orchestration context step**:
+   - `Prepare orchestration context (workflow_dispatch)` step extracts all 5 inputs
+   - Exposes them as environment variables to the Gemini step:
+     - `ORCHESTRATION_REQUEST_ID`
+     - `ORCHESTRATION_TASK`
+     - `ORCHESTRATION_REPOSITORY`
+     - `ORCHESTRATION_BASE_BRANCH`
+     - `ORCHESTRATION_KILO_EXECUTION_ID`
+   - Conditionally includes orchestration context in the Gemini prompt when `ORCHESTRATION_REQUEST_ID` is present
 
-14. **The repository-side investigation is complete.** The remaining
-    activation/execution issue is at the external Kilo provider boundary,
-    whose private trigger configuration and delivery/execution logs are
-    outside the repository.
+6. **`test/gemini-trigger.test.js` — 12 focused tests**:
+   - `validateDispatchInputs` — 6 tests covering valid inputs and each missing required field
+   - `dispatchGemini` — 2 tests: missing token, network/API error handling
+   - `canTriggerGemini` — 2 tests: true after Kilo success, false when Kilo not success
+   - `triggerGemini` — 2 tests: fails when preconditions not met, dispatches when preconditions met (mocked)
+
+7. **Request_id correlation preserved**: All workflow_dispatch inputs include `request_id`; Gemini execution receives it via `ORCHESTRATION_REQUEST_ID` environment variable.
+
+8. **Duplicate-dispatch protection preserved**: `canTriggerGemini()` returns `false` if `task.gemini.status !== 'pending'` or `task.kilo.status !== 'success'` or `task.status !== 'EXECUTING'`.
+
+9. **Gemini dispatch failure → human_review preserved**: `triggerGemini()` returns error with stage `dispatch`; orchestration layer can route to `human_review` next action.
+
+10. **Execution_id currently uses a documented dispatch sentinel**: GitHub API `workflow_dispatch` returns 204 No Content with no run ID in the response. The implementation records `execution_id: \`dispatched-\${Date.now()}\`` as a documented sentinel value. Actual Gemini Actions run ID retrieval remains an identified limitation/follow-up (Part 2.2 scope), not represented as completed.
+
+### Part 2.2 — Gemini Result Collection/Return Integration (SEPARATE / NOT IMPLEMENTED)
+
+The following remain **unimplemented** and are explicitly **not** part of Part 2.1b:
+
+- `POST /poc/gemini/callback` endpoint (or equivalent)
+- Authenticated Gemini callback handling with shared-secret validation
+- `orchestrator.handleGeminiCompletion()` integration with callback
+- TaskRegistry persistence of Gemini execution result
+- Next-action determination from Gemini result (`complete` | `human_review`)
+- Actual Gemini Actions run ID retrieval (currently uses dispatch sentinel)
 
 ### External Boundary Statement
 
-15. **External Kilo trigger configuration is outside the repository.**
+11. **External Kilo trigger configuration is outside the repository.**
     `docs/ai/KILO_INTEGRATION.md` identifies the Kilo webhook URL, trigger
     credentials, and related secrets as external configuration rather than
     repository data. These values are not stored in any repository file.
 
-16. **Accuracy requirement**: This section does not claim that the external
+12. **Accuracy requirement**: This section does not claim that the external
     Kilo provider dashboard, webhook delivery logs, trigger health,
     credentials, or private configuration were directly inspected. It
     distinguishes repository-verified facts from externally documented
     configuration.
 
-17. **No contradictory status statements** are present. Part 2.1b remains
-    PROPOSED / TARGET, consistent with `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`
-    and `ARCHITECTURE.md` Section 16.5.6.
+13. **No contradictory status statements** are present. Part 2.1b is now
+    IMPLEMENTED / GITHUB-VERIFIED, consistent with commit `b5e27de`.
+    Part 2.2 remains PROPOSED / TARGET, consistent with
+    `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md` and `ARCHITECTURE.md` Section 16.5.6.

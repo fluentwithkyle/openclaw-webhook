@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-09-15 | Reconcile Project Documentation with Verified Part 2.1b Completion (TASK-KILO-DOC-RECONCILE-PART-2-1B-001)
+
+**Task**: Update authoritative project documentation (`docs/ai/CONTROL_CENTER.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`) to accurately reflect the GitHub-verified completion of Part 2.1b — Kilo → Gemini workflow-dispatch handoff (commit `b5e27dee0f0c7a89b9f1350948bf1d99fafb18f3`).
+
+**Summary**:
+- Verified commit `b5e27de` exists and contains the complete Part 2.1b implementation:
+  - `poc/gemini-trigger.js` — GitHub Actions `workflow_dispatch` integration module with `dispatchGemini()` and `validateDispatchInputs()`
+  - `poc/orchestrator.js` — Added `triggerGemini(requestId, githubToken)` and `canTriggerGemini(requestId)` functions
+  - `.github/workflows/main.yml` — Added `workflow_dispatch` inputs (request_id, task, repository, base_branch, kilo_execution_id) and orchestration context step exposing dispatched values to Gemini execution
+  - `test/gemini-trigger.test.js` — 12 focused tests covering dispatch contract, validation, preconditions, and idempotency
+- Confirmed implementation details against actual GitHub diff:
+  - Request_id correlation preserved across workflow_dispatch inputs and Gemini environment variables
+  - Duplicate-dispatch protection via `canTriggerGemini()` preconditions (Kilo success, Gemini pending, task EXECUTING)
+  - Dispatch failure → human_review path preserved (returns error with stage 'dispatch')
+  - Execution_id uses documented dispatch sentinel (`dispatched-${Date.now()}`) because workflow_dispatch returns 204 No Content without run_id
+- Updated `docs/ai/CONTROL_CENTER.md`:
+  - Removed "Kilo ↔ Gemini orchestration backbone" from "Requires Kyle's Attention" (no longer pending approval)
+  - Updated Active Work table: Part 2.1b shown as **IMPLEMENTED / GITHUB-VERIFIED** with owner Kilo
+  - Updated Next Action to focus on Part 2.2 approval decision
+  - Updated Last Updated to 2026-09-15
+- Updated `docs/ai/STATE.md`:
+  - Updated Last Updated / Updated By to 2026-09-15 / TASK-KILO-DOC-RECONCILE-PART-2-1B-001
+  - Active Tasks table: Added Part 2.1b row as **IMPLEMENTED / GITHUB-VERIFIED** with commit reference and implementation details
+  - Upcoming/Backlog: Clearly separated Part 2.1b (IMPLEMENTED) from Part 2.2 (SEPARATE / NOT IMPLEMENTED)
+  - Replaced prior investigation-only "Kilo Activation Boundary & Part 2.1b Status" section with verified implementation status, preserving Kilo activation boundary findings and documenting all Part 2.1b components, implementation details, and explicit Part 2.2 distinction
+- No implementation files modified — documentation reconciliation only
+- No secrets, credentials, or sensitive production values introduced
+- Part 2.2 (Gemini result collection/return integration) explicitly preserved as separate and not implemented
+
+**Outcome**: SUCCESS — Project documentation reconciled with verified Part 2.1b implementation; new AI session can accurately understand Part 2.1b is implemented and GitHub-verified while Part 2.2 remains separate and unimplemented.
+
+**Commit Reference**: `b5e27de` (implementation) + this reconciliation commit
+
+---
+
 ## 2026-09-13 | Register ChatGPT Control Gate Architectural Research as Pending Project
 
 **Task**: Persist Gemini's complete ChatGPT Control Gate architectural research into the repository's AI project-state system as a pending/proposed future project (Issue #39).
