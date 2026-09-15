@@ -340,425 +340,85 @@ async function main() {
     assert(yaml.includes('GEMINI_CALLBACK_SECRET'));
   });
 
-  // Test 16: Regression - jq-based JSON construction handles double quotes
-  await runTest('Regression - callback payload handles double quotes in task', async () => {
-    const result = spawnSync('bash', ['-c', `
-      set -euo pipefail
-      TASK='Task with "double quotes" inside'
-      REQUEST_ID='test-req-1'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT='Output with "quotes"'
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
+  // Helper: run jq test with given task and gemini_output values
+  function runJqSerializationTest(task, geminiOutput) {
+    return async () => {
+      const jqFilter = `
+{
+  request_id: $request_id,
+  agent: $agent,
+  status: $status,
+  task: $task,
+  repository: $repository,
+  base_branch: $base_branch,
+  changed_files: [],
+  verification: ["advisory review completed"],
+  result: {
+    execution_metadata: {
+      invocation_id: $invocation_id,
+      run_id: $run_id
+    },
+    gemini_output: $gemini_output
+  },
+  commit: null,
+  push: false,
+  blockers: $blockers
+}`;
+      const result = spawnSync('jq', [
+        '-n',
+        '--arg', 'request_id', 'test-req',
+        '--arg', 'agent', 'Gemini',
+        '--arg', 'status', 'success',
+        '--arg', 'task', task,
+        '--arg', 'repository', 'owner/repo',
+        '--arg', 'base_branch', 'main',
+        '--arg', 'gemini_output', geminiOutput,
+        '--arg', 'invocation_id', 'gemini-123-1',
+        '--arg', 'run_id', '123',
+        '--argjson', 'blockers', '[]',
+        jqFilter
+      ], { encoding: 'utf8' });
       
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'
-    `], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
-    assertEqual(payload.task, 'Task with "double quotes" inside');
-    assertEqual(payload.result.gemini_output, 'Output with "quotes"');
-    assertEqual(payload.repository, 'owner/repo');
-    assertEqual(payload.base_branch, 'main');
-  });
+      if (result.status !== 0) {
+        throw new Error(`jq failed with status ${result.status}: ${result.stderr}`);
+      }
+      const payload = JSON.parse(result.stdout);
+      if (payload.task !== task) {
+        throw new Error(`task mismatch: expected ${JSON.stringify(task)}, got ${JSON.stringify(payload.task)}`);
+      }
+      if (payload.result.gemini_output !== geminiOutput) {
+        throw new Error(`gemini_output mismatch: expected ${JSON.stringify(geminiOutput)}, got ${JSON.stringify(payload.result.gemini_output)}`);
+      }
+      if (payload.repository !== 'owner/repo') throw new Error('repository mismatch');
+      if (payload.base_branch !== 'main') throw new Error('base_branch mismatch');
+      return payload;
+    };
+  }
+
+  // Test 16: Regression - jq-based JSON construction handles double quotes
+  await runTest('Regression - callback payload handles double quotes in task', runJqSerializationTest('Task with "double quotes" inside', 'Output with "quotes"'));
 
   // Test 17: Regression - jq-based JSON construction handles single quotes
-  await runTest('Regression - callback payload handles single quotes', async () => {
-    const result = spawnSync('bash', ['-c', `
-      set -euo pipefail
-      TASK="Task with 'single quotes' inside"
-      REQUEST_ID='test-req-2'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT="Output with 'single quotes'"
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
-      
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'
-    `], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
-    assertEqual(payload.task, "Task with 'single quotes' inside");
-    assertEqual(payload.result.gemini_output, "Output with 'single quotes'");
-  });
+  await runTest('Regression - callback payload handles single quotes', runJqSerializationTest("Task with 'single quotes' inside", "Output with 'single quotes'"));
 
   // Test 18: Regression - jq-based JSON construction handles backslashes
-  await runTest('Regression - callback payload handles backslashes', async () => {
-    const result = spawnSync('bash', ['-c', `
-      set -euo pipefail
-      TASK='Path: C:\\Users\\Test\\file.txt'
-      REQUEST_ID='test-req-3'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT='Escaped: \\n \\t \\" \\\\'
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
-      
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'
-    `], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
-    assertEqual(payload.task, 'Path: C:\\Users\\Test\\file.txt');
-    assertEqual(payload.result.gemini_output, 'Escaped: \\n \\t \\" \\\\');
-  });
+  await runTest('Regression - callback payload handles backslashes', runJqSerializationTest('Path: C:\\Users\\Test\\file.txt', 'Escaped: \\n \\t \\" \\\\'));
 
   // Test 19: Regression - jq-based JSON construction handles newlines
-  await runTest('Regression - callback payload handles newlines', async () => {
-    const result = spawnSync('bash', ['-c', '
-      set -euo pipefail
-      TASK=$'"'Line1\nLine2\nLine3'"
-      REQUEST_ID='test-req-4'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT=$'"'Output\nwith\nnewlines'"
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
-      
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '"'"'{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'"'"'
-    '], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
-    assert(payload.task.includes('\n'));
-    assert(payload.result.gemini_output.includes('\n'));
-  });
+  await runTest('Regression - callback payload handles newlines', runJqSerializationTest('Line1\nLine2\nLine3', 'Output\nwith\nnewlines'));
 
   // Test 20: Regression - jq-based JSON construction handles tabs
-  await runTest('Regression - callback payload handles tabs', async () => {
-    const result = spawnSync('bash', ['-c', '
-      set -euo pipefail
-      TASK=$'"'Col1\tCol2\tCol3'"
-      REQUEST_ID='test-req-5'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT=$'"'Tab\tseparated\tvalues'"
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
-      
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '"'"'{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'"'"'
-    '], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
-    assert(payload.task.includes('\t'));
-    assert(payload.result.gemini_output.includes('\t'));
-  });
+  await runTest('Regression - callback payload handles tabs', runJqSerializationTest('Col1\tCol2\tCol3', 'Tab\tseparated\tvalues'));
 
   // Test 21: Regression - jq-based JSON construction handles JSON-like content
-  await runTest('Regression - callback payload handles JSON-like content', async () => {
-    const result = spawnSync('bash', ['-c', '
-      set -euo pipefail
-      TASK='"'"'Review {"key": "value", "nested": {"arr": [1,2,3]}}'"'"'
-      REQUEST_ID='test-req-6'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT='"'"'Result: {"status": "ok", "data": [1,2,3]}'"'"'
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
-      
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '"'"'{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'"'"'
-    '], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
-    assert(payload.task.includes('{"key": "value"'));
-    assert(payload.result.gemini_output.includes('{"status": "ok"'));
-  });
+  await runTest('Regression - callback payload handles JSON-like content', runJqSerializationTest('Review {"key": "value", "nested": {"arr": [1,2,3]}}', 'Result: {"status": "ok", "data": [1,2,3]}'));
 
   // Test 22: Regression - jq-based JSON construction handles all special chars combined
-  await runTest('Regression - callback payload handles combined special characters', async () => {
-    const result = spawnSync('bash', ['-c', '
-      set -euo pipefail
-      TASK='"'"'Complex: "quotes" '\''single'\'' \\backslash\nnewline\ttab{"json": true}'"'"'
-      REQUEST_ID='test-req-7'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT='"'"'Output: "quotes" '\''single'\'' \\backslash\nnewline\ttab{"json": true}'"'"'
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
-      
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '"'"'{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'"'"'
-    '], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
-    assert(payload.task.includes('"quotes"'));
-    assert(payload.task.includes("'single'"));
-    assert(payload.task.includes('\\backslash'));
-    assert(payload.task.includes('\n'));
-    assert(payload.task.includes('\t'));
-    assert(payload.task.includes('{"json": true}'));
-    assert(payload.result.gemini_output.includes('{"json": true}'));
-  });
+  await runTest('Regression - callback payload handles combined special characters', runJqSerializationTest('Complex: "quotes" \'single\' \\backslash\nnewline\ttab{"json": true}', 'Output: "quotes" \'single\' \\backslash\nnewline\ttab{"json": true}'));
 
   // Test 23: Verify required ACP fields are present in generated payload
   await runTest('Regression - all required ACP fields present in payload', async () => {
-    const result = spawnSync('bash', ['-c', `
-      set -euo pipefail
-      TASK='test task'
-      REQUEST_ID='test-req-8'
-      REPOSITORY='owner/repo'
-      BASE_BRANCH='main'
-      GEMINI_OUTPUT='test output'
-      INVOCATION_ID='gemini-123-1'
-      RUN_ID='123'
-      BLOCKERS='[]'
-      
-      jq -n \
-        --arg request_id "$REQUEST_ID" \
-        --arg agent "Gemini" \
-        --arg status "success" \
-        --arg task "$TASK" \
-        --arg repository "$REPOSITORY" \
-        --arg base_branch "$BASE_BRANCH" \
-        --arg gemini_output "$GEMINI_OUTPUT" \
-        --arg invocation_id "$INVOCATION_ID" \
-        --arg run_id "$RUN_ID" \
-        --argjson blockers "$BLOCKERS" \
-        '"'"'{
-          request_id: $request_id,
-          agent: $agent,
-          status: $status,
-          task: $task,
-          repository: $repository,
-          base_branch: $base_branch,
-          changed_files: [],
-          verification: ["advisory review completed"],
-          result: {
-            execution_metadata: {
-              invocation_id: $invocation_id,
-              run_id: $run_id
-            },
-            gemini_output: $gemini_output
-          },
-          commit: null,
-          push: false,
-          blockers: $blockers
-        }'"'"'
-    `], { encoding: 'utf8' });
-    
-    assertEqual(result.status, 0, 'jq command should succeed');
-    const payload = JSON.parse(result.stdout);
+    const payload = await runJqSerializationTest('test task', 'test output')();
     
     // Verify all required fields per ACP contract
     assert(payload.hasOwnProperty('request_id'));
