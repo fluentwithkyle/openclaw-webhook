@@ -5,6 +5,7 @@ const {
   VALID_STATE_TRANSITIONS
 } = require('./schemas/acp-schema');
 const taskRegistry = require('./task-registry');
+const geminiTrigger = require('./gemini-trigger');
 
 function validateRepositoryContext(report, expectedRepository, expectedBaseBranch) {
   if (report.repository && report.repository !== expectedRepository) {
@@ -177,6 +178,57 @@ function canTriggerGemini(requestId) {
   return { canTrigger: true };
 }
 
+async function triggerGemini(requestId, githubToken) {
+  const canTriggerResult = canTriggerGemini(requestId);
+  if (!canTriggerResult.canTrigger) {
+    return { success: false, error: canTriggerResult.reason, stage: 'precondition' };
+  }
+
+  const task = taskRegistry.getTask(requestId);
+  if (!task) {
+    return { success: false, error: 'Task not found', stage: 'registry' };
+  }
+
+  const kiloExecutionId = task.kilo.execution_id || task.kilo.report?.result?.execution_metadata?.invocation_id || 'unknown';
+
+  const dispatchResult = await geminiTrigger.dispatchGemini(
+    task.request_id,
+    task.task,
+    task.repository,
+    task.base_branch,
+    kiloExecutionId,
+    githubToken
+  );
+
+  if (!dispatchResult.success) {
+    return {
+      success: false,
+      error: dispatchResult.error,
+      stage: 'dispatch',
+      details: dispatchResult.details
+    };
+  }
+
+  const updateResult = taskRegistry.updateAgentResult(requestId, 'Gemini', {
+    status: 'running',
+    execution_id: `dispatched-${Date.now()}`,
+    report: null
+  });
+
+  if (!updateResult.success) {
+    return { success: false, error: updateResult.error, stage: 'update' };
+  }
+
+  taskRegistry.setNextAction(requestId, 'waiting_gemini_callback');
+
+  return {
+    success: true,
+    message: 'Gemini workflow dispatched',
+    dispatch_result: dispatchResult,
+    task: taskRegistry.getTask(requestId)
+  };
+}
+
 function getOrchestrationState(requestId) {
   const task = taskRegistry.getTask(requestId);
   if (!task) {
@@ -206,6 +258,7 @@ module.exports = {
   handleGeminiCompletion,
   determineNextAction,
   canTriggerGemini,
+  triggerGemini,
   getOrchestrationState,
   SUPPORTED_TRANSITIONS,
   validateRepositoryContext
