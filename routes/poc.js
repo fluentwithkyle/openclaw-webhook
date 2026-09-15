@@ -85,6 +85,25 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
         });
     }
 
+    // Validate required correlation fields
+    if (!req.body.repository) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing required field: repository'
+        });
+    }
+
+    if (!req.body.base_branch) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing required field: base_branch'
+        });
+    }
+
     // Validate the complete ACP execution report
     const validation = validateExecutionReport(req.body);
     if (!validation.valid) {
@@ -117,8 +136,8 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
         });
     }
 
-    // Validate repository matches
-    if (req.body.repository && req.body.repository !== task.repository) {
+    // Validate repository matches (required for correlation)
+    if (req.body.repository !== task.repository) {
         return res.status(400).json({
             request_id: requestId,
             status: 'validation blocked',
@@ -127,8 +146,8 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
         });
     }
 
-    // Validate base_branch matches
-    if (req.body.base_branch && req.body.base_branch !== task.base_branch) {
+    // Validate base_branch matches (required for correlation)
+    if (req.body.base_branch !== task.base_branch) {
         return res.status(400).json({
             request_id: requestId,
             status: 'validation blocked',

@@ -91,6 +91,7 @@ jobs:
       - name: Run Gemini in advisory mode
         id: gemini_run
         uses: google-github-actions/run-gemini-cli@v0
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_CLI_TRUST_WORKSPACE: "true"
@@ -175,11 +176,22 @@ jobs:
 
           # Capture Gemini output (stdout from run-gemini-cli)
           GEMINI_OUTPUT="${{ steps.gemini_run.outputs.result }}"
+          GEMINI_OUTCOME="${{ steps.gemini_run.outcome }}"
 
-          # Determine status based on Gemini execution
-          # For advisory mode, we treat completion as success unless there's an error
-          STATUS="success"
-          BLOCKERS="[]"
+          # Determine status based on Gemini execution outcome
+          if [ "$GEMINI_OUTCOME" = "success" ]; then
+            STATUS="success"
+            BLOCKERS="[]"
+          elif [ "$GEMINI_OUTCOME" = "failure" ]; then
+            STATUS="failure"
+            BLOCKERS='["Gemini execution failed"]'
+          elif [ "$GEMINI_OUTCOME" = "cancelled" ]; then
+            STATUS="blocked"
+            BLOCKERS='["Gemini execution cancelled"]'
+          else
+            STATUS="blocked"
+            BLOCKERS='["Gemini execution outcome unknown"]'
+          fi
 
           # Build ACP execution report
           INVOCATION_ID="gemini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -191,13 +203,16 @@ jobs:
   "agent": "Gemini",
   "status": "$STATUS",
   "task": "$TASK",
+  "repository": "$REPOSITORY",
+  "base_branch": "$BASE_BRANCH",
   "changed_files": [],
   "verification": ["advisory review completed"],
   "result": {
     "execution_metadata": {
       "invocation_id": "$INVOCATION_ID",
       "run_id": "$RUN_ID"
-    }
+    },
+    "gemini_output": "$GEMINI_OUTPUT"
   },
   "commit": null,
   "push": false,
@@ -217,10 +232,14 @@ EOF
         run: |
           set -euo pipefail
 
-          if [ -z "$CALLBACK_URL" ] || [ -z "$CALLBACK_SECRET" ]; then
-            echo "::warning::Callback URL or secret not configured, skipping callback"
-            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ -z "$CALLBACK_URL" ]; then
+            echo "::error::RENDER_GEMINI_CALLBACK_URL secret is not configured"
+            exit 1
+          fi
+
+          if [ -z "$CALLBACK_SECRET" ]; then
+            echo "::error::GEMINI_CALLBACK_SECRET secret is not configured"
+            exit 1
           fi
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \

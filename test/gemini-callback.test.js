@@ -78,6 +78,8 @@ function makeGeminiReport(requestId, task = 'test-task', status = 'success') {
     agent: 'Gemini',
     status: status,
     task: task,
+    repository: 'fluentwithkyle/openclaw-webhook',
+    base_branch: 'main',
     changed_files: [],
     verification: ['review passed'],
     result: { execution_metadata: { invocation_id: 'inv-gemini-1', run_id: 'run-gemini-1' } },
@@ -163,7 +165,7 @@ async function main() {
     const res = await makeRequest({
       hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-gemini-callback-secret': 'test-gemini-secret' }
-    }, { request_id: 'test-1', agent: 'Gemini' }); // missing status, task, etc.
+    }, { request_id: 'test-1', agent: 'Gemini', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main' }); // missing status, task, etc.
     assertEqual(res.status, 400);
     assertEqual(res.body.status, 'validation blocked');
     assert(res.body.error.includes('Invalid execution report'));
@@ -220,7 +222,35 @@ async function main() {
     assert(res.body.error.includes('Base branch mismatch'));
   });
 
-  // Test 9: Gemini success callback
+  // Test 9: Missing repository field
+  await runTest('Callback - missing repository returns 400', async () => {
+    setupTask('test-missing-repo-1');
+    const report = { ...makeGeminiReport('test-missing-repo-1') };
+    delete report.repository;
+    const res = await makeRequest({
+      hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-gemini-callback-secret': 'test-gemini-secret' }
+    }, report);
+    assertEqual(res.status, 400);
+    assertEqual(res.body.status, 'validation blocked');
+    assert(res.body.error.includes('Missing required field: repository'));
+  });
+
+  // Test 10: Missing base_branch field
+  await runTest('Callback - missing base_branch returns 400', async () => {
+    setupTask('test-missing-branch-1');
+    const report = { ...makeGeminiReport('test-missing-branch-1') };
+    delete report.base_branch;
+    const res = await makeRequest({
+      hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-gemini-callback-secret': 'test-gemini-secret' }
+    }, report);
+    assertEqual(res.status, 400);
+    assertEqual(res.body.status, 'validation blocked');
+    assert(res.body.error.includes('Missing required field: base_branch'));
+  });
+
+  // Test 11: Gemini success callback
   await runTest('Callback - Gemini success transitions to VERIFIED', async () => {
     setupTask('test-success-1');
     const report = makeGeminiReport('test-success-1', 'test-task', 'success');
@@ -328,7 +358,7 @@ async function main() {
     assert(yaml.includes('required: true'));
   });
 
-  // Test 15: Verify callback payload construction in workflow
+  // Test 17: Verify callback payload construction in workflow
   await runTest('Workflow - callback payload includes required ACP fields', async () => {
     const yaml = fs.readFileSync('.github/workflows/main.yml', 'utf8');
     assert(yaml.includes('callback_payload'));
@@ -337,6 +367,11 @@ async function main() {
     assert(yaml.includes('x-gemini-callback-secret'));
     assert(yaml.includes('RENDER_GEMINI_CALLBACK_URL'));
     assert(yaml.includes('GEMINI_CALLBACK_SECRET'));
+    assert(yaml.includes('repository:'));
+    assert(yaml.includes('base_branch:'));
+    assert(yaml.includes('gemini_output'));
+    assert(yaml.includes('continue-on-error: true'));
+    assert(yaml.includes('steps.gemini_run.outcome'));
   });
 
   server.close();
