@@ -574,3 +574,93 @@ external configuration, or production code was modified.
     explicit and independent. See Sections 6.4, 6.5, and 8.4.
 
 ---
+
+## 13. Kilo External Agent Operating Model (Documented 2026-09-15)
+
+This section establishes the operating model, lifecycle boundaries, and durable-state requirements for Kilo as an external cloud-based implementation agent. These principles are derived from the Gemini research task TASK-GEMINI-EXTERNAL-KILO-OPERATING-MODEL-RESEARCH-001 and the documented behavior of the Kilo Cloud Agent integration.
+
+### 13.1 Kilo as an External/Cloud Execution Agent
+
+Kilo is an external Cloud Agent execution lane. It is **not** the production application and does not replace any existing architectural lane. Kilo runs in a sandboxed cloud container managed by the Kilo provider, with an ephemeral filesystem that does not persist after the session ends.
+
+Key characteristics:
+- **External execution**: Kilo executes outside the repository's production infrastructure (Render/Node.js).
+- **Provider-managed**: The Kilo trigger, authentication, and execution environment are configured and managed externally through the Kilo provider's dashboard.
+- **Webhook-triggered**: Kilo is invoked via an HTTP webhook trigger configured by the Kilo provider, dispatched from the repository's `/poc/kilo` endpoint.
+- **No production access**: Kilo has no direct access to production secrets, credentials, or runtime environment beyond what is explicitly provided in the ACP task.
+
+### 13.2 Ephemeral Session Boundaries
+
+Each Kilo execution session is **ephemeral**:
+
+- The cloud container, filesystem, and in-memory state are created for the execution and destroyed upon completion.
+- No session state, conversation history, or working memory persists between Kilo invocations.
+- A new Kilo execution starts with a clean environment every time.
+- **Cross-chat/session continuity must not be assumed**. Each execution is independent.
+
+### 13.3 No Assumed Continuity Between Kilo Sessions or Chats
+
+- Kilo does not retain context from previous executions, issue comments, or conversations.
+- An ACP task delivered via an issue body and an ACP task delivered via a separate issue comment are treated as **completely independent executions**.
+- The repository must not rely on Kilo "remembering" prior work, decisions, or partial progress.
+- Each execution must be self-contained and authorized independently.
+
+### 13.4 GitHub as the Durable Source of Implementation State
+
+- **GitHub is the single durable repository** for implementation state.
+- All meaningful implementation work (code changes, documentation, configuration) must be **committed and pushed to GitHub during the same authorized Kilo execution** that produces it.
+- Do not rely on a future Kilo session to commit, push, or complete work started in a previous session.
+- The `request_id` in the ACP task provides traceability from task authorization to delivered commits.
+
+### 13.5 TaskRegistry as Durable Orchestration/Task State
+
+- The `poc/task-registry.js` TaskRegistry provides persistent correlation state keyed by `request_id`.
+- It supports async execution tracking across Kilo and Gemini lanes.
+- TaskRegistry entries survive individual agent executions and provide the durable orchestration backbone.
+- However, TaskRegistry does **not** replace GitHub as the source of truth for implemented code and documentation.
+
+### 13.6 Same-Execution Persistence Expectations
+
+- An authorized Kilo execution with `commit` and `push` capabilities **must complete all persistence** (commits, pushes, verification) within that single execution.
+- Tasks must be sized so they can be completed, verified, committed, and pushed in one execution.
+- If a task is too large for one execution, it must be divided into **independently durable units/checkpoints**, each with its own ACP authorization and GitHub deliverable.
+
+### 13.7 Atomic Task Sizing
+
+- Implementation tasks should be scoped to **atomic, independently deliverable units**.
+- Each task should produce a verifiable, commit-ready change set.
+- Large features must be decomposed into a sequence of authorized tasks, each leaving the repository in a consistent, verified state.
+
+### 13.8 Checkpointing for Larger Work
+
+- For work requiring multiple Kilo executions:
+  1. Each execution must deliver a complete, tested, and committed increment.
+  2. Intermediate state is preserved in GitHub (commits on `main` or feature branches as authorized).
+  3. TaskRegistry tracks the `request_id` chain for orchestration correlation.
+  4. The next task's ACP authorization explicitly references prior deliverables.
+- No "work in progress" state is held in Kilo's ephemeral session memory.
+
+### 13.9 Recovery and State Reconstruction from GitHub
+
+- If a Kilo execution fails, times out, or is interrupted, recovery is performed by:
+  1. Inspecting the current GitHub state (commits, branches, files).
+  2. Consulting TaskRegistry for `request_id` correlation and execution history.
+  3. Authorizing a new ACP task with the appropriate `base_branch` and scope.
+- Kilo session memory is **never** a recovery mechanism.
+- The repository state on GitHub is the authoritative ground truth.
+
+### 13.10 Authority Boundaries (Preserved)
+
+This operating model preserves the existing authority boundaries:
+
+| Role | Agent | Authority |
+|------|-------|-----------|
+| Director / Final Authorization | Kyle | **ACTIVE** — Sole authorization authority |
+| Coordinator / Verification Layer | ChatGPT | **ACTIVE** — Task construction, verification, gating |
+| Builder / Implementer / Tester | Kilo | **ACTIVE** — Authorized implementation execution |
+| Architect / Planner / Reviewer | Gemini | **ACTIVE** — Research, architecture, review |
+| Durable Repository Source of Truth | GitHub | **ACTIVE** — Commits, issues, project state |
+
+No new parallel tracking system is introduced. The existing `docs/ai/` project-state system (STATE.md, ARCH_DECISIONS.md, TASK_LOG.md, TASK_STANDARD.md) and GitHub remain the durable state mechanisms.
+
+---

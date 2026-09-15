@@ -109,6 +109,30 @@ represent implemented functionality.
 
 ---
 
+## Agent Session Operating Principle (Established 2026-09-15)
+
+**Agent session memory is ephemeral. Durable project state resides in GitHub and the appropriate persistent orchestration state.**
+
+This principle applies to all AI agents operating in this repository (Kilo, Gemini, and any future agents):
+
+- **Ephemeral execution**: Each agent execution session (Kilo cloud container, GitHub Actions workflow run, etc.) is independent and transient. No session state, conversation history, or working memory persists between executions.
+- **No cross-session continuity**: Agents do not retain context from prior executions, issue comments, or conversations. Each task invocation starts with a clean environment.
+- **GitHub as durable source of truth**: All meaningful implementation work (code, documentation, configuration) must be committed and pushed to GitHub during the same authorized execution that produces it. Do not rely on future agent sessions to complete persistence.
+- **TaskRegistry for orchestration correlation**: The `poc/task-registry.js` TaskRegistry provides durable `request_id`-keyed state for tracking async execution across agent lanes. It supplements but does not replace GitHub as the source of truth for implemented artifacts.
+- **Same-execution persistence**: Implementation tasks must be sized to complete, verify, commit, and push in one execution. Larger work must be decomposed into independently durable checkpointed tasks.
+- **Recovery from GitHub**: If an execution fails or times out, recovery is performed by inspecting the current GitHub state and TaskRegistry, not by resuming an agent session.
+
+This principle is documented in detail in `docs/ai/KILO_INTEGRATION.md` Section 13 (Kilo External Agent Operating Model) and enforced through `docs/ai/TASK_STANDARD.md` Section 5 (Persistence Expectations for Implementation Tasks).
+
+Authority boundaries remain unchanged:
+- Kyle — Director / Final Authorization Authority
+- ChatGPT — Coordinator / Verification Layer
+- Kilo — Builder / Implementer / Tester
+- Gemini — Architect / Planner / Reviewer
+- GitHub — Durable Repository Source of Truth
+
+---
+
 ## Repository Structure (Current)
 
 ```
