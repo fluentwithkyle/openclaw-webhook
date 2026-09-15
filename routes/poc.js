@@ -1,6 +1,9 @@
 const express = require('express');
 const fs = require('fs');
 const { getDispatcher } = require('../services/transport-provider');
+const orchestrator = require('../poc/orchestrator');
+const { validateExecutionReport } = require('../poc/schemas/acp-schema');
+const taskRegistry = require('../poc/task-registry');
 
 const router = express.Router();
 
@@ -12,6 +15,20 @@ const authenticatePoc = (req, res, next) => {
             request_id: 'unknown',
             status: 'authentication blocked',
             stage: 'authentication blocked'
+        });
+    }
+    next();
+};
+
+// Gemini Callback Authentication Middleware
+const authenticateGeminiCallback = (req, res, next) => {
+    const secret = req.headers['x-gemini-callback-secret'];
+    if (!secret || secret !== process.env.GEMINI_CALLBACK_SECRET) {
+        return res.status(401).json({
+            request_id: req.body?.request_id || 'unknown',
+            status: 'authentication blocked',
+            stage: 'authentication blocked',
+            error: 'Invalid or missing callback secret'
         });
     }
     next();
@@ -54,6 +71,94 @@ router.post('/kilo', authenticatePoc, async (req, res) => {
             stage: 'failed'
         });
     }
+});
+
+router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => {
+    const requestId = req.body?.request_id;
+
+    if (!requestId) {
+        return res.status(400).json({
+            request_id: 'unknown',
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing request_id in callback body'
+        });
+    }
+
+    // Validate the complete ACP execution report
+    const validation = validateExecutionReport(req.body);
+    if (!validation.valid) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Invalid execution report: ${validation.error}`
+        });
+    }
+
+    // Validate agent is Gemini
+    if (req.body.agent !== 'Gemini') {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Expected Gemini report, got ${req.body.agent}`
+        });
+    }
+
+    // Validate request_id exists in TaskRegistry
+    const task = taskRegistry.getTask(requestId);
+    if (!task) {
+        return res.status(404).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Unknown request_id'
+        });
+    }
+
+    // Validate repository matches
+    if (req.body.repository && req.body.repository !== task.repository) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Repository mismatch: expected ${task.repository}, got ${req.body.repository}`
+        });
+    }
+
+    // Validate base_branch matches
+    if (req.body.base_branch && req.body.base_branch !== task.base_branch) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Base branch mismatch: expected ${task.base_branch}, got ${req.body.base_branch}`
+        });
+    }
+
+    // Process through orchestrator (handles idempotency and state transitions)
+    const result = orchestrator.handleGeminiCompletion(requestId, req.body);
+
+    if (!result.success) {
+        const httpStatus = result.duplicate ? 409 : 400;
+        return res.status(httpStatus).json({
+            request_id: requestId,
+            status: result.duplicate ? 'duplicate' : 'validation blocked',
+            stage: result.stage,
+            error: result.error,
+            duplicate: result.duplicate || false
+        });
+    }
+
+    res.status(200).json({
+        request_id: requestId,
+        status: 'Gemini completion recorded',
+        stage: 'completed',
+        next_action: result.next_action,
+        task_status: result.task.status,
+        gemini_status: result.task.gemini.status
+    });
 });
 
 module.exports = { router };
