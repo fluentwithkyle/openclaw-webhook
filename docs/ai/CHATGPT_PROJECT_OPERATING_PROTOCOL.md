@@ -136,43 +136,65 @@ The purpose of this flow is to prevent Kyle from repeatedly performing repositor
 
 4. Project Status Procedure
 
-When Kyle asks for the current project status, ChatGPT should inspect the repository before answering.
+When Kyle asks for the current project status, ChatGPT MUST inspect the repository before answering. Repository review is mandatory; memory, chat history, isolated agent reports, and task descriptions are NOT substitutes for repository verification.
 
-The review should include, when relevant:
+### 4.1 Mandatory Primary Review Sources (In Order)
 
-* docs/ai/STATE.md
-* docs/ai/TASK_LOG.md
-* docs/ai/ARCH_DECISIONS.md
-* ARCHITECTURE.md
+ChatGPT MUST review the following four primary sources in this exact order:
+
+1. **docs/ai/CONTROL_CENTER.md** — Derived human-facing dashboard; provides concise project status, active work, blockers, and next action.
+2. **docs/ai/STATE.md** — Authoritative current project state (mutable); contains active tasks, blockers, backlog, agent roles, architectural boundaries, repository structure, and verification requirements.
+3. **docs/ai/TASK_LOG.md** — Append-only historical record of completed AI development tasks; records task, date, summary, outcome, and commit reference.
+4. **ARCHITECTURE.md** — Authoritative for intended architecture; defines production architecture, AI development system, status labels, and development discipline.
+
+### 4.2 Conditional Verification Sources
+
+The following sources are CONDITIONAL verification sources. They are used ONLY when the primary review (Section 4.1) identifies ambiguity, blockers, or inconsistencies that require deeper investigation:
+
 * Open and recently closed GitHub issues.
 * Open and recently merged pull requests.
 * Recent commits.
 * Recent agent completion reports.
 * Relevant implementation files.
+* Specialized documentation (e.g., `docs/ai/ARCH_DECISIONS.md`, `docs/ai/KILO_INTEGRATION.md`, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`, `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`).
 
-ChatGPT should determine:
+### 4.3 Synthesis Requirement
 
-* What is implemented and verified.
-* What is actively being worked on.
-* What is proposed.
+After completing the primary review (and any conditional verification), ChatGPT MUST synthesize the gap between the project's goal (as defined by Kyle's priorities and the authoritative architecture) and the current verified state. The synthesis must explicitly identify:
+
+* What is implemented and verified (CURRENT / IMPLEMENTED).
+* What is actively being worked on (ACTIVE).
+* What is proposed but not yet authorized (PROPOSED / TARGET).
 * What is pending authorization.
-* What is blocked.
+* What is blocked and why.
 * What decisions Kyle must make.
 * What the next concrete action is.
 
-Status should be reported in a compact format:
+### 4.4 Status Reporting Structure
 
-Current status
+Status MUST be reported using the protocol's defined result-oriented response structure (Section 16.3):
 
-Completed and verified
+| Component | Purpose |
+|-----------|---------|
+| **Bottom Line** | What is true right now? (Verified facts only) |
+| **Goal Alignment** | How does the current state relate to the desired project outcome? |
+| **Gap** | What specific technical or logical gap prevents the desired result from being true? |
+| **Next Result** | What tangible outcome needs to become true next? |
+| **Machine Translation** | Only when a technical task is actually ready to be prepared or authorized. |
 
-Active
+The compact format (Current status, Completed and verified, Active, Pending decisions, Blocked, Next action) may be used as a supplementary summary within the result-oriented structure, but the result-oriented structure is the mandatory reporting format.
 
-Pending decisions
+### 4.5 Unverified Reports Must Remain Distinguished
 
-Blocked
+ChatGPT MUST explicitly distinguish between:
 
-Next action
+* **Reported complete** — Agent claims completion.
+* **GitHub verified** — Changes confirmed in repository (commits, diffs, CI results).
+* **Documentation reconciled** — Project state and documentation updated to reflect actual result.
+* **Still requiring validation** — Awaiting independent verification.
+* **Blocked or uncertain** — Cannot be verified or requires decision.
+
+Unverified agent reports, chat messages, and task descriptions remain supporting evidence until verified against GitHub. They must never be presented as verified fact.
 
 5. Completion Verification
 
