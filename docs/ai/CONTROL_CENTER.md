@@ -16,7 +16,7 @@ Designed for Kyle checking the project from a phone.
 | **Branch** | main |
 | **Deploy** | Render (Node.js/Express) |
 | **Google Adapter** | Google Apps Script |
-| **Last Updated** | 2026-09-14 |
+| **Last Updated** | 2026-09-15 |
 
 ---
 
@@ -35,6 +35,7 @@ Designed for Kyle checking the project from a phone.
 |------|--------|-------|
 | Persistent AI project state system | IMPLEMENTED | Kilo |
 | Kilo External Integration Contract documentation | IMPLEMENTED | Kilo |
+| ChatGPT consequential-action stop gate hardening | IMPLEMENTED | ChatGPT | Verified in commit `3ce42ac159dd8c73d7e043d7bc57692f6c5ecde` |
 | Kilo ↔ Gemini orchestration backbone | PROPOSED | — |
 | Automated Kilo delivery verification | PARTIAL / PROPOSED | Gemini |
 | ChatGPT Control Gate architecture | PROPOSED / PENDING | Gemini |
