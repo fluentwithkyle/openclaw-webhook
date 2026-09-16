@@ -160,7 +160,19 @@ jobs:
             Distinguish observations from recommendations.
             Return a concrete, actionable response for the project.
 
-            IMPORTANT: When reviewing Kilo's work, you MUST explicitly evaluate against the VERIFICATION REQUIREMENTS listed above. Your review must address each requirement and state whether it is satisfied, partially satisfied, or not satisfied. If verification requirements are not met, clearly identify what is missing.
+      - name: Persist Gemini result as artifact
+        id: gemini_artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "${{ steps.gemini_run.outputs.result }}" > gemini-acp-report.json
+
+      - name: Upload Gemini result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-acp-report
+          path: gemini-acp-report.json
+          retention-days: 7
 
       - name: Prepare callback payload (workflow_dispatch only)
         id: callback_payload
