@@ -40,7 +40,7 @@ Designed for Kyle checking the project from a phone.
 | Automated Kilo delivery verification | PARTIAL / PROPOSED | Gemini |
 | ChatGPT Control Gate architecture | PROPOSED / PENDING | Gemini |
 | Gemini verification requirements propagation | IMPLEMENTED | Kilo | Verified in commits `736ae3f`, `748ba91`, `53f1a3f`; Gemini independently verified functional |
-| Gemini result artifact observability | DOCUMENTED | Kilo | Artifact persistence + ChatGPT retrieval IMPLEMENTED/VERIFIED; non-empty capture UNVERIFIED |
+| Gemini result artifact observability | IMPLEMENTED / VERIFIED | Kilo | Artifact persistence + ChatGPT retrieval + non-empty capture VERIFIED (run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`) |
 
 ---
 
@@ -56,6 +56,7 @@ Designed for Kyle checking the project from a phone.
 
 Decide whether to approve the Kilo ↔ Gemini orchestration backbone for implementation.
 Gemini verification requirements propagation is IMPLEMENTED and independently verified — no further action required.
+Gemini result artifact observability is IMPLEMENTED and VERIFIED — ChatGPT retrieves Gemini results from GitHub Actions artifact `gemini-acp-report` / `gemini-acp-report.json` after completed runs; no copy/paste required.
 
 ---
 

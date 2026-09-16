@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-16
-**Updated By**: Kilo — Gemini Verification Documentation Reconciliation (TASK-KILO-GEMINI-VERIFICATION-DOCS-RECONCILE-001)
+**Updated By**: Kilo — Gemini Artifact Observability Documentation Reconciliation (TASK-KILO-GEMINI-ARTIFACT-OBSERVABILITY-DOCS-RECONCILE-001)
 
 ---
 
@@ -224,13 +224,22 @@ This section records the documented observability capability for Gemini research
 
 2. **ChatGPT can retrieve the GitHub artifact directly** — ChatGPT's GitHub integration has successfully retrieved and downloaded the `gemini-acp-report` artifact from a completed Gemini workflow run.
 
-### Current Verification Boundary
-
-3. **Non-empty Gemini result capture remains UNVERIFIED** — A previous retrieval test produced the artifact successfully, but the downloaded `gemini-acp-report.json` was 0 bytes. Therefore, successful non-empty end-to-end capture of Gemini's actual research result is NOT currently verified.
+3. **Non-empty Gemini result capture is VERIFIED** — Live GitHub Actions verification has confirmed:
+   - Workflow: Gemini Architect and Reviewer
+   - Run: 35090491295
+   - Conclusion: success
+   - Artifact: `gemini-acp-report`
+   - Artifact file: `gemini-acp-report.json`
+   - Artifact ID: 10444246441
+   - Artifact size: 1120 bytes
+   - Artifact contents successfully retrieved
+   - Artifact contents match the Gemini result produced by the run
+   - Implementation commit: `793d083919a8227a19c9d4c4e219773ded698e69` (short: `793d083`)
+   - 7-day artifact retention remains part of the current configuration
 
 This distinction must be preserved:
-- **IMPLEMENTED / VERIFIED**: Artifact persistence mechanism; ChatGPT artifact retrieval capability
-- **UNVERIFIED**: Successful non-empty capture of Gemini's actual research result
+- **IMPLEMENTED / VERIFIED**: Artifact persistence mechanism; ChatGPT artifact retrieval capability; non-empty Gemini result capture (live verification run 35090491295)
+- **Clearly distinguished from merely reported agent output**: The artifact is the durable retrieval mechanism for completed Gemini results; ChatGPT retrieves and inspects the artifact directly rather than relying on copy/paste
 
 ### Operational Capability for Future ChatGPT Sessions
 

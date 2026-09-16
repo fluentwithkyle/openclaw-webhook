@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-09-16 | Reconcile Gemini Artifact Observability Documentation (TASK-KILO-GEMINI-ARTIFACT-OBSERVABILITY-DOCS-RECONCILE-001)
+
+**Task**: Reconcile the project documentation with the now-verified Gemini artifact observability implementation. The Gemini artifact-output fix was implemented on main in commit `793d083919a8227a19c9d4c4e219773ded698e69`. Live GitHub Actions verification has confirmed: workflow Gemini Architect and Reviewer, run 35090491295, conclusion success, artifact `gemini-acp-report`, artifact file `gemini-acp-report.json`, artifact ID 10444246441, artifact size 1120 bytes, artifact contents successfully retrieved, artifact contents match the Gemini result produced by the run.
+
+**Summary**:
+- Verified implementation commit: `793d083919a8227a19c9d4c4e219773ded698e69` (artifact-output fix persisting `steps.gemini_run.outputs.summary`)
+- Confirmed live verification run: 35090491295 (Gemini Architect and Reviewer workflow, success)
+- Confirmed artifact: `gemini-acp-report` / `gemini-acp-report.json` (ID 10444246441, 1120 bytes, non-empty, contents match Gemini result)
+- Updated `docs/ai/STATE.md`:
+  - Updated "Gemini Result Artifact Observability" section: non-empty Gemini result capture changed from UNVERIFIED to **VERIFIED**
+  - Documented live verification run 35090491295, artifact ID 10444246441, size 1120 bytes, implementation commit `793d083`
+  - Clearly distinguished verified artifact retrieval from merely reported agent output
+  - Updated `Last Updated` / `Updated By` attribution
+- Updated `docs/ai/CONTROL_CENTER.md`:
+  - Active Work table: "Gemini result artifact observability" status changed from "DOCUMENTED / non-empty capture UNVERIFIED" to **IMPLEMENTED / VERIFIED** with verification details
+  - Next Action updated: explicit rule that ChatGPT retrieves Gemini results from GitHub Actions artifact after completed runs
+- Updated `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`:
+  - Added explicit rule under verification/documentation section: when Gemini executes through the repository GitHub Actions workflow, ChatGPT must treat the GitHub Actions artifact `gemini-acp-report` / `gemini-acp-report.json` as the durable Gemini-result retrieval path
+  - Rule preserves existing distinction between: reported complete; GitHub verified; documentation reconciled; still requiring validation; blocked or uncertain
+- Appended this historical completion entry to `docs/ai/TASK_LOG.md`
+- Preserved all existing historical information and structure
+- Clearly distinguished:
+  - Kilo implementation task (commit `793d083`)
+  - Live GitHub Actions verification (run 35090491295, artifact 10444246441)
+  - Documentation reconciliation (this task)
+- No application/runtime code, workflows, AGENTS.md, GEMINI.md, ARCHITECTURE.md, or production files modified
+- No secrets, credentials, or sensitive production values introduced
+- Only authorized documentation paths changed (`docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md`, `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`)
+
+**Outcome**: SUCCESS — Documentation reconciled with verified live artifact observability; STATE.md and CONTROL_CENTER.md accurately reflect IMPLEMENTED / VERIFIED status with live verification evidence; CHATGPT_PROJECT_OPERATING_PROTOCOL.md explicitly directs future ChatGPT sessions to retrieve Gemini results from the GitHub Actions artifact; TASK_LOG.md contains append-only completion entry; only authorized files changed; all verification requirements met.
+
+**Commit Reference**: (pending)
+
+---
+
 ## 2026-09-16 | Document Gemini Result Artifact Observability (TASK-KILO-DOCUMENT-GEMINI-RESULT-OBSERVABILITY-001)
 
 **Task**: Update the durable AI project-state documentation so that future ChatGPT sessions know that completed Gemini research results can be persisted to GitHub as workflow artifacts and retrieved/read directly by ChatGPT through the GitHub integration.

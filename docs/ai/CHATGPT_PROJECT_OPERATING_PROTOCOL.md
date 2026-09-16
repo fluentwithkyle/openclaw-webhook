@@ -198,6 +198,24 @@ Unverified agent reports, chat messages, and task descriptions remain supporting
 
 5. Completion Verification
 
+### 5.1 Gemini Result Artifact Retrieval Rule
+
+When Gemini is executed through the repository GitHub Actions workflow (`.github/workflows/main.yml`), ChatGPT MUST treat the GitHub Actions artifact `gemini-acp-report` / `gemini-acp-report.json` as the durable Gemini-result retrieval path.
+
+After a completed Gemini run, ChatGPT SHOULD retrieve and inspect that artifact directly when verification or result access is required.
+
+ChatGPT SHOULD NOT require Kyle to copy/paste the Gemini response when the artifact is available.
+
+This rule preserves the existing distinction between:
+
+* **Reported complete** — Agent claims completion.
+* **GitHub verified** — Changes confirmed in repository (commits, diffs, CI results).
+* **Documentation reconciled** — Project state and documentation updated to reflect actual result.
+* **Still requiring validation** — Awaiting independent verification.
+* **Blocked or uncertain** — Cannot be verified or requires decision.
+
+The artifact retrieval capability is verified (live verification run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`). This rule does not create a new parallel tracking system; it operates within the existing verification hierarchy defined in Sections 4, 5, and 6.
+
 An agent's completion report is not sufficient evidence by itself.
 
 After an agent reports completion, ChatGPT should verify:
