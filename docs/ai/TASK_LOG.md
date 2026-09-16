@@ -41,6 +41,52 @@
 
 ---
 
+## 2026-09-16 | Reconcile Render Control Gate Documentation into Current Main (TASK-KILO-RECONCILE-RENDER-CONTROL-GATEKEEPER-ARCHITECTURE-003)
+
+**Task**: Integrate the existing Render Control Gate / Gatekeeper architectural documentation into the current `main` documentation state. This is a documentation-only reconciliation task. The Render Control Gate is a FUTURE architectural direction. It is NOT currently implemented or active.
+
+**Summary**:
+- Retrieved completed Render documentation from branch `kilo/wintry-cell-nsq` commit `dd4db6613f82110a36fb8aefe76cfba48317974f`
+- Reconciled Render Control Gate / Gatekeeper documentation into current `main` state (commit `ee8216e` and subsequent), preserving all valid newer changes including Gemini artifact observability reconciliation
+- Updated `docs/ai/STATE.md`:
+  - Added "Render Control Gatekeeper documentation reconciliation" as **IMPLEMENTED** in Active Tasks
+  - Added explicit "Render Control Gate / Gatekeeper" entry in Lower Priority / Architectural backlog documenting PROPOSED / TARGET status
+  - Added comprehensive "Render Control Gate / Gatekeeper — Architectural Target (PROPOSED / TARGET)" section documenting:
+    - Future execution boundary: ChatGPT → Render Control Gate → Validated/Authorized Existing Orchestration Boundary → Existing ACP/TaskRegistry/Orchestrator → Existing Kilo/Gemini Activation → Execution → Existing Callbacks/Results/Delivery Verification
+    - Control Gate responsibilities: policy compliance, architectural alignment, explicit Kyle authorization, target existence/authorization, permitted paths/scope, permitted capabilities, ACP schema validity, fail-closed handling, request correlation/auditability via `request_id`, prevention of execution outside authorized ACP scope, secret/credential exclusion, preservation of repository/GitHub safeguards
+    - Two-Layer Sequence: Layer 1 (existing Kilo↔Gemini orchestration stabilization/hardening) as PREREQUISITE; Layer 2 (Render Control Gate introduction) as FUTURE WORK after Layer 1
+    - Critical Architectural Protection: existing Kilo/Gemini architecture (activation paths, GitHub Actions integration, ACP, TaskRegistry, Orchestrator, Kilo transport, Gemini trigger, callback paths, `request_id`, Part 2.2 return path, delivery verification) must be preserved — NOT redesigned, replaced, migrated, or reinterpreted
+    - `workflow_dispatch` not promoted as new architectural requirement; documented only as verified current implementation-specific behavior if present
+    - Status summary: Control Gate research COMPLETE; architecture PROPOSED/TARGET; implementation NOT IMPLEMENTED; enforcement NOT CURRENTLY ACTIVE; Layer 1 PREREQUISITE; Layer 2 FUTURE WORK; Kilo/Gemini architecture PROTECTED
+  - Updated `Last Updated` / `Updated By` attribution
+- Updated `docs/ai/CONTROL_CENTER.md`:
+  - Added "Render Control Gate / Gatekeeper" to Requires Kyle's Attention
+  - Added "Render Control Gatekeeper documentation reconciliation" as IMPLEMENTED in Active Work table
+  - Updated Next Action to reflect Layer 1 stabilization/hardening as next concrete action
+- Updated `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`:
+  - Added "Render Control Gate / Gatekeeper — Future Architecture Context (PROPOSED / TARGET)" section at top documenting future execution boundary, critical sequencing (Layer 1 → Layer 2), Control Gate responsibilities, architectural protection requirements, and status summary
+  - Preserved all existing Part 1 implementation summary, scope, architecture flow, integration points, components, data models, reports, event sequences, security boundaries, persistence strategy, testing strategy, dependencies, POC issues, implementation phases, acceptance criteria, Gemini findings, and future extensions
+- Appended this historical completion entry to `docs/ai/TASK_LOG.md`
+- Preserved all existing historical information and structure across all four files
+- Clearly distinguished:
+  - Documentation-only nature of this task (no implementation performed)
+  - Research basis from `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`
+  - Layer 1 → Layer 2 sequence with Layer 1 as prerequisite
+  - Protection of Kilo/Gemini machinery (activation paths, ACP, TaskRegistry, Orchestrator, transport, callbacks, `request_id`, Part 2.2 return path, delivery verification)
+  - Current vs proposed mechanisms clearly distinguished
+  - `workflow_dispatch` not promoted into new architectural requirement
+  - Control Gate remains PROPOSED / TARGET
+  - No false implementation claims
+- No application/runtime code, workflows, AGENTS.md, GEMINI.md, ARCHITECTURE.md, or production files modified
+- No secrets, credentials, or sensitive production values introduced
+- Only authorized documentation paths changed (`docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md`, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`)
+
+**Outcome**: SUCCESS — Documentation reconciled to explicitly and consistently record Render as future technical Control Gate/gatekeeper; machine-enforced boundary described; Control Gate responsibilities recorded; Layer 1 → Layer 2 sequencing explicit; Layer 1 identified as prerequisite; Kilo/Gemini architecture explicitly protected; current vs proposed mechanisms clearly distinguished; `workflow_dispatch` not promoted into new architectural requirement; Control Gate remains PROPOSED / TARGET; no false implementation claims; only authorized files changed; all verification requirements met.
+
+**Commit Reference**: (pending)
+
+---
+
 ## 2026-09-16 | Document Gemini Result Artifact Observability (TASK-KILO-DOCUMENT-GEMINI-RESULT-OBSERVABILITY-001)
 
 **Task**: Update the durable AI project-state documentation so that future ChatGPT sessions know that completed Gemini research results can be persisted to GitHub as workflow artifacts and retrieved/read directly by ChatGPT through the GitHub integration.
