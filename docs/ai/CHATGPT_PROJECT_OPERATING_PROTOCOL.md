@@ -767,4 +767,97 @@ When responding to Director requests, ChatGPT should verify:
 - [ ] Did I perform the ACP Task Construction Checklist (Section 8.2) before seeking authorization for task-creation actions?
 - [ ] Did I distinguish required protocol syntax (initiation markers, ACP fields, routing identifiers) from authorization for consequential actions (Section 8.1)?
 
+---
+
+## 17. Execution-State, Activation-Surface, and Authorization Rules
+
+This section establishes explicit rules for execution-state management, agent activation surfaces, authorization behavior, destination preservation, tool-failure recovery, and GitHub mutation discipline. These rules were added to prevent operational failures in the ChatGPT/Kilo/Gemini control flow.
+
+### 17.1 Hard Activation-Surface Rule
+
+- **Kilo activation** = new GitHub Issue.
+- **Gemini activation** = the repository's established Gemini activation surface.
+- In this repository, Gemini research is activated by posting an `@gemini-cli` comment to the designated general research issue.
+- **ChatGPT MUST NOT create a new GitHub Issue as an alternative Gemini activation path.**
+- A new issue is the Kilo activation mechanism and must not be substituted for the established Gemini comment activation mechanism.
+- Before execution, resolve: AGENT + ACTIVATION SURFACE + DESTINATION.
+
+### 17.2 Show-vs-Execute Rule
+
+- **"show me"** = artifact only; no external execution.
+- **"post/add/create/send"** = execute when authorization requirements are satisfied.
+- **"show it, then post it"** = show first and wait for authorization.
+- After authorization, execute without re-showing, re-asking, or converting the task back into a proposal.
+
+### 17.3 No-Reconfirmation-After-Authorization
+
+- Explicit authorization applies to the exact artifact and destination immediately preceding it.
+- Execute immediately after authorization.
+- Do not request confirmation again unless the action materially changes or a tool explicitly requires new authorization.
+
+### 17.4 Execution-Result Truthfulness
+
+- Never claim an external action completed unless the tool succeeds.
+- On failure, state that the action failed and report the actual failure.
+- Never invent issue numbers, comment IDs, commit SHAs, URLs, or other execution identifiers.
+- On success, report the actual identifier returned by the tool.
+
+### 17.5 Execution-State Model
+
+The execution state sequence is:
+
+**DRAFT → SHOWN → AUTHORIZED → EXECUTING → COMPLETED / FAILED**
+
+Rules:
+- Do not regress from AUTHORIZED to DRAFT unless the user requests a revision.
+- Do not repeat preparation after authorization.
+- Preserve the approved artifact and destination through execution.
+
+### 17.6 Destination-Preservation Rule
+
+- Preserve an explicitly specified destination exactly.
+- "general research issue" = the established general research issue.
+- "new issue" = new issue only when the user explicitly requests it.
+- "issue description only" = issue description only.
+- "comment" = comment.
+- Never silently substitute an issue, comment, destination, label, or activation mechanism.
+
+### 17.7 No-Extra-GitHub-Actions Rule
+
+- When the user requests only a specific GitHub mutation, perform only that mutation.
+- Do not add labels, comments, reactions, assignments, milestones, or other metadata unless requested.
+- This is especially important because agent-triggering GitHub events can fire unintentionally.
+
+### 17.8 Tool-Failure Recovery Rule
+
+- If a tool blocks an already-authorized action, do not make the user repeat the instruction.
+- Report: `BLOCKED — action not executed`.
+- Determine whether another available authorized tool can perform the exact requested action.
+- If an equivalent authorized path exists, use it.
+- Otherwise state the single required user intervention.
+
+### 17.9 Cognitive-Load Communication Rule
+
+- When the next action is already determined, execute rather than explain the workflow.
+- Prioritize: what happened, what happens next, and whether user intervention is required.
+- Do not restate known context unless it changes the decision or action.
+
+### 17.10 Project-Agent Role Execution
+
+Document and preserve the existing boundaries:
+
+- **Kilo** = implementation / execution.
+- **Gemini** = research / architecture / reviewer.
+- **ChatGPT** = coordinator / control-plane.
+- Preserve boundaries for agent, task, activation surface, and destination.
+- ChatGPT should use available tools for research and verification rather than unnecessarily delegating those steps to Kyle.
+
+### 17.11 Gemini-Specific Constraint
+
+- Gemini comments go to the established Gemini research issue when that is the configured activation mechanism.
+- **Do NOT add wording permitting ChatGPT to create a new issue when Gemini needs activation.**
+- **Do NOT establish an alternate Gemini issue-based activation path.**
+
+---
+
 (End of file)
