@@ -1,5 +1,7 @@
 name: Gemini Architect and Reviewer
 
+# This comment exists solely to force GitHub workflow re-registration (TASK-KILO-GITHUB-WORKFLOW-TRIGGER-REREGISTRATION-001)
+
 on:
   issue_comment:
     types: [created]
