@@ -1,7 +1,7 @@
 # Kilo External Integration Contract
 
 **Status**: CURRENT / EXTERNAL CONFIGURATION
-**Verification Date**: 2026-09-14
+**Verification Date**: 2026-09-16
 **Repository**: `fluentwithkyle/openclaw-webhook`
 **Base Branch**: `main`
 
@@ -62,16 +62,17 @@ selecting "All events" or using a wildcard.
 
 ### 4.2 Current Kilo Selection
 
-**CURRENT / EXTERNAL CONFIGURATION** (verified 2026-09-14):
+**CURRENT / EXTERNAL CONFIGURATION** (verified 2026-09-16):
 
-- **Currently selected**: **Pushes + Issues + Issue comments**
+- **Currently selected**: **Pushes + Issues**
+- **Currently not selected**: **Issue comments** (disabled for Kilo triggering)
 - **Currently not selected**: All other GitHub webhook event categories
   (pull_request, pull_request_review, commit_comment, create, delete,
   deployment, release, etc.)
 
 ### 4.3 Issue Comments Status
 
-**Issue comments is currently selected.**
+**Issue comments is currently disabled for Kilo triggering.**
 
 GitHub provides an `Issue comments` event defined as: issue comment created,
 edited, or deleted. This is a distinct event category from the `Issues`
@@ -82,10 +83,10 @@ event.
 | Event | Definition | Current Status |
 |-------|-----------|----------------|
 | `issues` | Issue opened, edited, deleted, transferred, closed, reopened, assigned, unassigned, labeled, unlabeled, milestone added/removed, etc. | **Selected** |
-| `issue_comment` | Issue comment created, edited, deleted | **Selected** |
+| `issue_comment` | Issue comment created, edited, deleted | **Not Selected (Disabled for Kilo triggering)** |
 
 These are separate GitHub webhook event categories. Selecting one does not
-imply selection of the other. Both are currently selected.
+imply selection of the other. **Issue comments is currently not selected.**
 
 ### 4.5 Known Available GitHub Event Categories
 
@@ -130,13 +131,16 @@ https://docs.github.com/en/webhooks/webhook-events-and-payloads.
 
 The intended `@kilo` issue/issue-comment activation path requires both the
 `issues` and `issue_comment` GitHub webhook events to be delivered to Kilo.
-The current GitHub webhook selection is **Pushes + Issues + Issue comments**.
-This means:
+The current GitHub webhook selection is **Pushes + Issues** (issue comments
+disabled). This means:
 
 - Issue-open events are **currently** delivered to Kilo through this webhook.
-- Issue comments are **currently** delivered to Kilo through this webhook.
-- The GitHub webhook event selection is consistent with the intended
-  `@kilo` issue/issue-comment activation path.
+- Issue comments are **NOT currently** delivered to Kilo through this webhook.
+- The GitHub webhook event selection is **NOT consistent** with the intended
+  `@kilo` issue/issue-comment activation path because issue comments are disabled.
+- The **active Kilo repository-controlled dispatch path** is the explicit ACP
+  dispatch through `/poc/kilo` to the `KILO_TRIGGER_URL` endpoint.
+- The external Kilo webhook remains an external/provider-controlled configuration boundary.
 - This is a GitHub/external configuration state and is **not** part of this
   repository's application code.
 
@@ -406,11 +410,14 @@ tasks.
 
 The intended `@kilo` issue/issue-comment workflow requires the `issues` and
 `issue_comment` GitHub webhook events to be delivered to Kilo. The current
-GitHub webhook selection is **Pushes + Issues + Issue comments**. This is
-consistent with the intended activation path. See Section 4.6.
+GitHub webhook selection is **Pushes + Issues** (issue comments disabled). This
+is **NOT consistent** with the intended `@kilo` issue/issue-comment activation
+path. The active Kilo activation mechanism is the repository-controlled
+explicit ACP dispatch through `/poc/kilo` to `KILO_TRIGGER_URL`. See
+Section 4.6 and `ARCHITECTURE.md` Section 16.5.
 
 No configuration mismatch currently exists between the GitHub webhook event
-selection and the intended `@kilo` issue/issue-comment activation path.
+selection and the active Kilo HTTP dispatch path.
 
 ### 8.3 Kilo as External Execution Lane
 
@@ -431,7 +438,7 @@ commit and push only when the ACP command explicitly authorizes it. See
 All external configuration documented in this file is marked
 **CURRENT / EXTERNAL CONFIGURATION**.
 
-**Verification date**: 2026-09-14
+**Verification date**: 2026-09-16
 
 **Verification scope**: This document records external configuration supplied
 by Kyle (Director) for the GitHub -> Kilo integration path. It does not
@@ -442,8 +449,8 @@ configuration explicitly supplied.
 
 | Configuration Item | Status |
 |--------------------|--------|
-| GitHub webhook event selection | Pushes + Issues + Issue comments |
-| Issue comments event | Selected |
+| GitHub webhook event selection | Pushes + Issues (issue comments disabled) |
+| Issue comments event | Not Selected (Disabled for Kilo triggering) |
 | Issues event | Selected |
 | Kilo external trigger | Active (Webhook type) |
 | Kilo trigger authentication | Shared-secret mechanism (external) |
