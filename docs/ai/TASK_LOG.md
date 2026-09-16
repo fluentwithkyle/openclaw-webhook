@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-09-16 | Document Gemini Workflow Registration Incident (TASK-KILO-DOCUMENT-GEMINI-WORKFLOW-REGISTRATION-INCIDENT-001)
+
+**Task**: Create the complete durable historical record of the Gemini GitHub Actions workflow registration/trigger incident, including the investigation, confirmed root cause, remediation, and final operational verification.
+
+**Summary**:
+- Created `docs/ai/GEMINI_WORKFLOW_REGISTRATION_INCIDENT_2026-09-16.md` documenting the full causal timeline:
+  1. Initial Gemini failure after Part 2.2 orchestration work
+  2. Initial stale-registration hypothesis (marked as **INFERENCE**)
+  3. Issue #96: disable → enable attempt; later corrected — no `workflow_dispatch` run created; API returned HTTP 422 (workflow lacked the trigger)
+  4. Issue #97: semantic-neutral change to force re-registration; continued failure
+  5. Issue #99: controlled parse isolation eliminated `&&/||`, job-level `if`, `github.event.pull_request.number`, prompt complexity
+  6. Issue #99 confirmed root cause: callback-payload step contained shell heredoc (`cat > callback_payload.json <<EOF` ... `EOF`) — marked **CONFIRMED**
+  7. Defect introduced in commit `cf7cc97` (replaced `jq` from `43cdd7f` with heredoc)
+  8. Issue #100 remediation: restore `jq`-based construction preserving callback contract, triggers, permissions, orchestration behavior
+  9. Final implementation commit: `4ea1f22b2c49d76abd696d16fb57a7b65c331d97`
+  10. Implementation verification: YAML valid, 15/15 callback tests pass, 12/12 trigger tests pass, no heredoc remains, `workflow_dispatch` and `issue_comment` present, `contents: read` unchanged, `git diff --check` clean, pushed to origin/main with matching remote SHA
+  11. Final operator verification: repository owner posted actual `@gemini-cli` issue comment and confirmed successful activation — **OPERATOR-CONFIRMED / OPERATIONALLY VERIFIED**
+  12. Final causal chain clearly stated: GitHub could not parse/register workflow with heredoc; isolation identified construct; `jq` replacement restored registration; operator testing confirmed issue-comment path works
+- Updated `docs/ai/STATE.md`:
+  - Added Gemini workflow registration incident resolution to Active Tasks / resolution section
+  - Updated `Last Updated` / `Updated By` attribution
+- Updated `docs/ai/CONTROL_CENTER.md`: minor timestamp update, Gemini status reflected as operational
+- Preserved four distinct status states: REPORTED COMPLETE, GITHUB-VERIFIED, DOCUMENTATION RECONCILED, OPERATOR-CONFIRMED / OPERATIONALLY VERIFIED
+- Distinguished valid `$GITHUB_OUTPUT` heredocs from defective callback-payload heredoc
+- No implementation/workflow files modified; only authorized documentation paths changed
+
+**Outcome**: SUCCESS — Complete incident record created; STATE.md reflects Gemini operationally restored; CONTROL_CENTER.md updated; TASK_LOG.md append-only entry added; all verification requirements met.
+
+**Commit Reference**: (pending)
+
+---
+
 ## 2026-09-15 | Reconcile Protocol-Hardening STATE.md and TASK_LOG.md (TASK-KILO-RECONCILE-PROTOCOL-HARDENING-STATE-LOG-001)
 
 **Task**: Reconcile the remaining authoritative project-state and task-history documentation to reflect the verified completion of TASK-KILO-CHATGPT-PROTOCOL-STOP-GATE-HARDENING-001.

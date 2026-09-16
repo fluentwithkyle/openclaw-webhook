@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-15
-**Updated By**: Kilo — Protocol-Hardening Documentation Reconciliation (TASK-KILO-RECONCILE-PROTOCOL-HARDENING-STATE-LOG-001)
+**Last Updated**: 2026-09-16
+**Updated By**: Kilo — Gemini Workflow Registration Incident Documentation (TASK-KILO-DOCUMENT-GEMINI-WORKFLOW-REGISTRATION-INCIDENT-001)
 
 ---
 
@@ -364,3 +364,53 @@ ChatGPT Protocol Stop Gate hardening (Section 14) implementation.
    - Remaining proposed/pending project work (Control Gate architecture, etc.)
 
 ---
+
+## Gemini Workflow Registration Incident — Resolution Status (Recorded 2026-09-16)
+
+**Task**: TASK-KILO-DOCUMENT-GEMINI-WORKFLOW-REGISTRATION-INCIDENT-001 (Issue #101)
+**Updated By**: Kilo
+
+This section records the documentation/reconciliation of the Gemini GitHub Actions workflow registration/trigger incident. The incident itself was resolved in commit `4ea1f22b2c49d76abd696d16fb57a7b65c331d97`; this task creates the durable historical record and reconciles project state.
+
+### Verified Resolution (Complete)
+
+1. **Root cause identified and fixed**: The callback-payload step in `.github/workflows/main.yml` contained a shell heredoc (`cat > callback_payload.json <<EOF` ... `EOF`) that prevented GitHub Actions from successfully parsing/registering the workflow. This was confirmed through controlled isolation tests in Issue #99.
+
+2. **Defect introduction**: Commit `cf7cc97` ("PART 2.2 — Corrective Hardening: Gemini callback outcome correlation, fail-closed config, repo/branch validation") replaced the earlier `jq`-based JSON construction from commit `43cdd7f` with the problematic heredoc.
+
+3. **Remediation**: Commit `4ea1f22b2c49d76abd696d16fb57a7b65c331d97` restored `jq`-based JSON construction while preserving the callback contract, triggers (`issue_comment` and `workflow_dispatch`), permissions (`contents: read`), and orchestration behavior.
+
+4. **Implementation verification passed**:
+   - YAML syntax validation
+   - Gemini callback tests: 15/15 passed
+   - Gemini trigger tests: 12/12 passed
+   - No callback-payload heredoc remains
+   - `workflow_dispatch` trigger present
+   - `issue_comment` trigger present
+   - `contents: read` permission unchanged
+   - `git diff --check` clean
+   - Commit pushed to `origin/main`; remote SHA matched
+
+5. **Operator verification**: The repository owner subsequently posted an actual `@gemini-cli` issue comment and confirmed successful Gemini activation — **OPERATOR-CONFIRMED / OPERATIONALLY VERIFIED**.
+
+### Documentation Reconciliation
+
+6. **`docs/ai/GEMINI_WORKFLOW_REGISTRATION_INCIDENT_2026-09-16.md`** — Created complete durable historical record with full causal timeline, preserving four distinct status states:
+   - REPORTED COMPLETE
+   - GITHUB-VERIFIED
+   - DOCUMENTATION RECONCILED
+   - OPERATOR-CONFIRMED / OPERATIONALLY VERIFIED
+
+7. **`docs/ai/TASK_LOG.md`** — Appended historical completion entry for this documentation task.
+
+8. **`docs/ai/STATE.md`** — This section added; `Last Updated` / `Updated By` updated.
+
+9. **`docs/ai/CONTROL_CENTER.md`** — Updated timestamp; Gemini status reflected as operational.
+
+### Status Distinctions
+
+10. **Important distinction preserved**: The `<<EOF` heredocs used for `$GITHUB_OUTPUT` elsewhere in the workflow (e.g., `request_comment` and `orchestration_context` steps) are valid/expected GitHub Actions syntax. The confirmed defect was specifically the heredoc used to construct `callback_payload.json`.
+
+11. **No implementation/workflow files were modified** by this documentation task.
+
+12. **Gemini status**: The Gemini Architect and Reviewer workflow (`.github/workflows/main.yml`) is now **OPERATIONALLY RESTORED**. The `@gemini-cli` issue-comment activation path works. This incident is no longer an unresolved blocker.

@@ -16,7 +16,7 @@ Designed for Kyle checking the project from a phone.
 | **Branch** | main |
 | **Deploy** | Render (Node.js/Express) |
 | **Google Adapter** | Google Apps Script |
-| **Last Updated** | 2026-09-15 |
+| **Last Updated** | 2026-09-16 |
 
 ---
 
