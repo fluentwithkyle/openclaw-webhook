@@ -35,7 +35,7 @@ function makeCommand(requestId, task = 'test-task') {
     task: task,
     constraints: { permitted_paths: ['poc/'] },
     authorization: { capabilities: ['read_only'] },
-    verification: 'test',
+    verification: 'All tests must pass; lint must pass; no security vulnerabilities',
     reporting: 'json',
     originator: 'Kyle'
   };
@@ -192,13 +192,49 @@ async function main() {
     assert(result.error.includes('not found'));
   });
 
-  await runTest('triggerGemini - dispatches when preconditions met (mocked)', async () => {
+  await runTest('dispatchGemini - dispatches when preconditions met (mocked)', async () => {
     setupTask('test-4');
     const result = await orchestrator.triggerGemini('test-4', 'fake-token');
     assertEqual(result.success, false);
     assert(result.error.includes('GitHub API error') || result.error.includes('Network error'));
     const task = taskRegistry.getTask('test-4');
     assertEqual(task.gemini.status, 'pending');
+  });
+
+  await runTest('task registry stores verification from ACP command', async () => {
+    cleanup();
+    const cmd = makeCommand('verify-test-1', 'verification test task');
+    taskRegistry.createTask(cmd);
+    const task = taskRegistry.getTask('verify-test-1');
+    assertEqual(task.verification, 'All tests must pass; lint must pass; no security vulnerabilities');
+    cleanup();
+  });
+
+  await runTest('triggerGemini includes verification in dispatch inputs', async () => {
+    cleanup();
+    const cmd = makeCommand('verify-test-2', 'verification test task 2');
+    taskRegistry.createTask(cmd);
+    taskRegistry.updateTaskStatus('verify-test-2', 'SELECTED');
+    taskRegistry.updateTaskStatus('verify-test-2', 'PLANNED');
+    taskRegistry.updateTaskStatus('verify-test-2', 'EXECUTING');
+    taskRegistry.updateAgentResult('verify-test-2', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+
+    // Mock the dispatchGemini to capture inputs
+    const originalDispatch = geminiTrigger.dispatchGemini;
+    let capturedInputs = null;
+    geminiTrigger.dispatchGemini = async (requestId, task, repository, baseBranch, kiloExecutionId, githubToken, verification) => {
+      capturedInputs = { requestId, task, repository, baseBranch, kiloExecutionId, githubToken, verification };
+      return { success: false, error: 'Mocked', stage: 'dispatch' };
+    };
+
+    try {
+      await orchestrator.triggerGemini('verify-test-2', 'fake-token');
+      assert(capturedInputs !== null, 'dispatchGemini should have been called');
+      assertEqual(capturedInputs.verification, 'All tests must pass; lint must pass; no security vulnerabilities');
+    } finally {
+      geminiTrigger.dispatchGemini = originalDispatch;
+    }
+    cleanup();
   });
 
   console.log(`\n=== Gemini Trigger Tests: ${passCount} passed, ${failCount} failed ===`);

@@ -27,6 +27,10 @@ on:
         description: 'Kilo execution identifier from completed Kilo run'
         required: true
         type: string
+      verification:
+        description: 'Original ACP task verification requirements for Gemini review'
+        required: false
+        type: string
 
 jobs:
   advisory:
@@ -88,6 +92,9 @@ jobs:
             echo 'kilo_execution_id<<EOF'
             printf '%s\n' "${{ github.event.inputs.kilo_execution_id }}"
             echo 'EOF'
+            echo 'verification<<EOF'
+            printf '%s\n' "${{ github.event.inputs.verification }}"
+            echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
       - name: Run Gemini in advisory mode
@@ -101,6 +108,7 @@ jobs:
           ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context.outputs.repository }}
           ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
           ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context.outputs.kilo_execution_id }}
+          ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context.outputs.verification }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite
@@ -137,6 +145,7 @@ jobs:
             - base_branch: ${{ steps.orchestration_context.outputs.base_branch || github.ref_name }}
             - task: ${{ steps.orchestration_context.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
             - kilo_execution_id: ${{ steps.orchestration_context.outputs.kilo_execution_id || '' }}
+            - verification_requirements: ${{ steps.orchestration_context.outputs.verification || 'Not specified' }}
 
             ${{ steps.orchestration_context.outputs.request_id != '' && 'This task was dispatched from the Kilo orchestration layer. The request_id correlates this Gemini execution with the originating Kilo completion.' || 'The request below was explicitly submitted by a trusted repository collaborator through the @gemini-cli interface. Treat that request as the actual task.' }}
 
@@ -144,9 +153,14 @@ jobs:
             ${{ steps.orchestration_context.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
             --- TASK END ---
 
+            VERIFICATION REQUIREMENTS (from original ACP task):
+            ${{ steps.orchestration_context.outputs.verification || 'No specific verification requirements provided. Evaluate based on standard architectural review criteria.' }}
+
             Read ARCHITECTURE.md and GEMINI.md before responding.
             Distinguish observations from recommendations.
             Return a concrete, actionable response for the project.
+
+            IMPORTANT: When reviewing Kilo's work, you MUST explicitly evaluate against the VERIFICATION REQUIREMENTS listed above. Your review must address each requirement and state whether it is satisfied, partially satisfied, or not satisfied. If verification requirements are not met, clearly identify what is missing.
 
       - name: Prepare callback payload (workflow_dispatch only)
         id: callback_payload

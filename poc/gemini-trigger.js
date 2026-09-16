@@ -13,7 +13,8 @@ function triggerGeminiWorkflow(inputs, githubToken) {
         task: inputs.task,
         repository: inputs.repository,
         base_branch: inputs.base_branch,
-        kilo_execution_id: inputs.kilo_execution_id
+        kilo_execution_id: inputs.kilo_execution_id,
+        verification: inputs.verification
       }
     });
 
@@ -61,7 +62,7 @@ function triggerGeminiWorkflow(inputs, githubToken) {
   });
 }
 
-async function dispatchGemini(requestId, task, repository, baseBranch, kiloExecutionId, githubToken) {
+async function dispatchGemini(requestId, task, repository, baseBranch, kiloExecutionId, githubToken, verification) {
   if (!githubToken) {
     return {
       success: false,
@@ -75,7 +76,8 @@ async function dispatchGemini(requestId, task, repository, baseBranch, kiloExecu
     task: task,
     repository: repository,
     base_branch: baseBranch,
-    kilo_execution_id: kiloExecutionId
+    kilo_execution_id: kiloExecutionId,
+    verification: verification
   };
 
   try {

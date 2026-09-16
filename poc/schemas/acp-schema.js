@@ -46,7 +46,8 @@ const TASK_REGISTRY_REQUIRED_FIELDS = [
   'updated_at',
   'kilo',
   'gemini',
-  'next_action'
+  'next_action',
+  'verification'
 ];
 
 const VALID_STATE_TRANSITIONS = {
@@ -196,7 +197,8 @@ function createInitialTaskRegistryEntry(requestId, command) {
       execution_id: null,
       report: null
     },
-    next_action: null
+    next_action: null,
+    verification: command.verification
   };
 }
 

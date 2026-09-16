@@ -44,7 +44,7 @@ const validCommand = {
   task: 'full-orchestration-test',
   constraints: { permitted_paths: ['poc/'] },
   authorization: { capabilities: ['read_only'] },
-  verification: 'test',
+  verification: 'All tests must pass; lint must pass; no security vulnerabilities',
   reporting: 'json',
   originator: 'Kyle'
 };

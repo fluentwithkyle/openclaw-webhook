@@ -190,6 +190,7 @@ async function triggerGemini(requestId, githubToken) {
   }
 
   const kiloExecutionId = task.kilo.execution_id || task.kilo.report?.result?.execution_metadata?.invocation_id || 'unknown';
+  const verification = task.verification;
 
   const dispatchResult = await geminiTrigger.dispatchGemini(
     task.request_id,
@@ -197,7 +198,8 @@ async function triggerGemini(requestId, githubToken) {
     task.repository,
     task.base_branch,
     kiloExecutionId,
-    githubToken
+    githubToken,
+    verification
   );
 
   if (!dispatchResult.success) {
