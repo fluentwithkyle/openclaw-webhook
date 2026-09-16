@@ -8,9 +8,9 @@ const { validateACPCommand, validateExecutionReport, createInitialTaskRegistryEn
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
 
-function runTest(name, fn) {
+async function runTest(name, fn) {
   try {
-    fn();
+    await fn();
     console.log(`PASS: ${name}`);
     return true;
   } catch (err) {
@@ -28,8 +28,8 @@ function assertEqual(actual, expected, msg) {
 let passCount = 0;
 let failCount = 0;
 
-function test(name, fn) {
-  const result = runTest(name, fn);
+async function test(name, fn) {
+  const result = await runTest(name, fn);
   if (result) passCount++; else failCount++;
 }
 
@@ -314,5 +314,9 @@ test('Authorization boundary preserved - reports are evidence not authorization'
   cleanup();
 });
 
-console.log(`\n=== Integration Tests: ${passCount} passed, ${failCount} failed ===`);
-if (failCount > 0) process.exit(1);
+async function main() {
+  console.log(`\n=== Integration Tests: ${passCount} passed, ${failCount} failed ===`);
+  if (failCount > 0) process.exit(1);
+}
+
+main().catch(console.error);
