@@ -167,7 +167,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "${{ steps.gemini_run.outputs.result }}" > gemini-acp-report.json
+          printf '%s' "${{ steps.gemini_run.outputs.summary }}" > gemini-acp-report.json
 
       - name: Upload Gemini result artifact
         uses: actions/upload-artifact@v4
@@ -190,7 +190,7 @@ jobs:
           KILO_EXECUTION_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
 
           # Capture Gemini output (stdout from run-gemini-cli)
-          GEMINI_OUTPUT="${{ steps.gemini_run.outputs.result }}"
+          GEMINI_OUTPUT="${{ steps.gemini_run.outputs.summary }}"
 
           # Determine status based on Gemini execution
           # For advisory mode, we treat completion as success unless there's an error
