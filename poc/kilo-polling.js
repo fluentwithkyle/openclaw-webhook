@@ -4,6 +4,7 @@ const orchestrator = require('./orchestrator');
 let providerClient = null;
 let pollingInterval = null;
 let isPolling = false;
+let githubToken = null;
 
 const DEFAULT_POLL_INTERVAL_MS = 30000;
 const MAX_POLL_RETRIES = 10;
@@ -14,6 +15,14 @@ function setProviderClient(client) {
 
 function getProviderClient() {
     return providerClient;
+}
+
+function setGithubToken(token) {
+    githubToken = token;
+}
+
+function getGithubToken() {
+    return githubToken;
 }
 
 async function pollKiloCompletion(requestId) {
@@ -111,6 +120,18 @@ async function pollAndProcess(requestId) {
 
     if (pollResult.status === 'success' || pollResult.status === 'failure' || pollResult.status === 'blocked') {
         const processResult = await processKiloCompletion(requestId, pollResult);
+
+        // Automatically trigger Gemini if next_action indicates it
+        if (processResult.success && processResult.next_action === 'trigger_gemini') {
+            const token = githubToken || process.env.ORCHESTRATOR_GH_TOKEN;
+            if (token) {
+                const geminiTriggerResult = await orchestrator.triggerGemini(requestId, token);
+                return { success: processResult.success, ...processResult, terminal: true, gemini_trigger: geminiTriggerResult };
+            } else {
+                console.warn('[Kilo Polling] ORCHESTRATOR_GH_TOKEN not configured, skipping Gemini trigger');
+            }
+        }
+
         return { success: processResult.success, ...processResult, terminal: true };
     }
 
@@ -187,6 +208,8 @@ async function pollOnce(requestId) {
 module.exports = {
     setProviderClient,
     getProviderClient,
+    setGithubToken,
+    getGithubToken,
     pollKiloCompletion,
     processKiloCompletion,
     pollAndProcess,

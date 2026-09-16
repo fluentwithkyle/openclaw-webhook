@@ -188,13 +188,29 @@ router.post('/kilo/callback', authenticateKiloCallback, async (req, res) => {
         });
     }
 
+    // Automatically trigger Gemini if next_action indicates it
+    let geminiTriggerResult = null;
+    if (result.next_action === 'trigger_gemini') {
+        const githubToken = process.env.ORCHESTRATOR_GH_TOKEN;
+        if (githubToken) {
+            geminiTriggerResult = await orchestrator.triggerGemini(requestId, githubToken);
+        } else {
+            console.warn('[Kilo Callback] ORCHESTRATOR_GH_TOKEN not configured, skipping Gemini trigger');
+        }
+    }
+
     res.status(200).json({
         request_id: requestId,
         status: 'Kilo completion recorded',
         stage: 'completed',
         next_action: result.next_action,
         task_status: result.task.status,
-        kilo_status: result.task.kilo.status
+        kilo_status: result.task.kilo.status,
+        gemini_trigger: geminiTriggerResult ? {
+            success: geminiTriggerResult.success,
+            message: geminiTriggerResult.message,
+            error: geminiTriggerResult.error
+        } : null
     });
 });
 
