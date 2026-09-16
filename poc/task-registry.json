@@ -1,0 +1,50 @@
+{
+  "poll-test-10": {
+    "request_id": "poll-test-10",
+    "parent_request_id": null,
+    "originator": "Kyle",
+    "current_agent": "Gemini",
+    "next_agent": "Gemini",
+    "repository": "fluentwithkyle/openclaw-webhook",
+    "base_branch": "main",
+    "task": "poll-test-task",
+    "status": "EXECUTING",
+    "created_at": "2026-09-16T10:19:08.070Z",
+    "updated_at": "2026-09-16T10:19:08.172Z",
+    "kilo": {
+      "status": "success",
+      "execution_id": null,
+      "report": {
+        "request_id": "poll-test-10",
+        "agent": "Kilo",
+        "status": "success",
+        "task": "poll-test-task",
+        "changed_files": [
+          "file1.js"
+        ],
+        "verification": [
+          "test passed"
+        ],
+        "result": {
+          "execution_metadata": {
+            "invocation_id": "unknown",
+            "run_id": "unknown"
+          },
+          "implementation": {
+            "implementation": "complete"
+          }
+        },
+        "commit": "abc123",
+        "push": true,
+        "blockers": []
+      }
+    },
+    "gemini": {
+      "status": "pending",
+      "execution_id": null,
+      "report": null
+    },
+    "next_action": "trigger_gemini",
+    "verification": "All tests must pass"
+  }
+}
