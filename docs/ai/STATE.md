@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-16
-**Updated By**: Kilo — Gemini Artifact Observability Documentation Reconciliation (TASK-KILO-GEMINI-ARTIFACT-OBSERVABILITY-DOCS-RECONCILE-001)
+**Updated By**: Kilo — Render Control Gatekeeper Documentation Reconciliation (TASK-KILO-RECONCILE-RENDER-CONTROL-GATEKEEPER-ARCHITECTURE-003)
 
 ---
 
@@ -25,6 +25,7 @@
 | Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | **IMPLEMENTED** | Kilo | TaskRegistry, Orchestrator, ACP Schema, and focused tests implemented in `poc/` and `test/`. See commit `TBD`. |
 | Gemini verification requirements propagation | **IMPLEMENTED** | Kilo | Verification field flows ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions → Gemini reviewer prompt. Implemented in commit `736ae3faf4d4ea75b22df8b85a6186dcdde91f59`; artifact persistence in `748ba91722ecbad6aaeaca5a084384862aabb6df`; prompt fix in `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`. Gemini independently verified functional. |
 | Automated Kilo delivery verification | **PARTIAL IMPLEMENTATION / PROPOSED / PENDING** | Gemini (research) | A persistence gate exists in `.github/workflows/kilo-gemini-poc.yml` (verifies no repo changes outside `poc/test-output/`). Full independent verification — verifying actual delivered ref/commit and changed files — remains PROPOSED / TARGET. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
+| Render Control Gatekeeper documentation reconciliation | **IMPLEMENTED** | Kilo | Documentation reconciled to explicitly record Render as future technical Control Gate / gatekeeper, machine-enforced boundary, Layer 1 → Layer 2 sequencing, and Kilo/Gemini architecture protection. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. No implementation performed. |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -86,6 +87,137 @@ represent implemented functionality.
 - Utility AI lane definition (PROPOSED / TARGET)
 - ACP protocol implementation — **Foundation IMPLEMENTED**; schema validation and execution report validation complete. Full protocol implementation remains PROPOSED / TARGET.
 - **ChatGPT Control Gate** — RESEARCH COMPLETE / PROPOSED / PENDING FUTURE EXECUTION. Full architectural research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Research covers: Control Gate layer between ChatGPT and execution backbone, policy/architecture/authorization enforcement model, GitHub enforcement (CODEOWNERS, branch protection, status checks), fail-closed blocking states, implementation phases, security considerations, and acceptance criteria. **No implementation authorized or performed.**
+- **Render Control Gate / Gatekeeper** — PROPOSED / TARGET architecture component. **Not currently implemented.** Render's future role is specifically a machine-enforced authorization and policy boundary between ChatGPT and repository execution. The Control Gate is intended to determine whether an AI-originated repository action is authorized to proceed. Responsibilities include: policy compliance, architectural alignment, explicit Kyle authorization, target existence and authorization, permitted paths/scope, permitted capabilities, ACP schema validity, fail-closed handling of invalid/unauthorized requests, request correlation and auditability through `request_id`, prevention of execution outside authorized ACP scope, secret/credential exclusion, preservation of repository/GitHub safeguards. Status: Control Gate research complete; Control Gate architecture PROPOSED / TARGET; Control Gate implementation not implemented; Control Gate enforcement not currently active. Layer 1 (existing Kilo↔Gemini orchestration backbone stabilization/hardening) is prerequisite. Layer 2 (Render Control Gate introduction) is future work after Layer 1. Existing Kilo/Gemini architecture is protected and must not be redesigned or replaced.
+
+---
+
+## Render Control Gate / Gatekeeper — Architectural Target (PROPOSED / TARGET)
+
+This section records the intended future execution boundary as documented in the completed Control Gate research (`docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`) and the current reconciliation task.
+
+### Future Execution Boundary
+
+```
+ChatGPT
+    ↓
+Render Control Gate / Gatekeeper (PROPOSED / TARGET)
+    ↓
+Validated / Authorized Existing Orchestration Boundary
+    ↓
+Existing ACP / TaskRegistry / Orchestrator
+    ↓
+Existing Kilo / Gemini Activation
+    ↓
+Execution
+    ↓
+Existing Callbacks / Results / Delivery Verification
+```
+
+### Control Gate Responsibilities (PROPOSED / TARGET)
+
+The documentation must accurately capture the researched intended responsibilities:
+
+- **Policy compliance** — Validates requests against CHATGPT_POLICY.md and operational procedures
+- **Architectural alignment** — Validates scope against ARCHITECTURE.md rules and boundaries
+- **Explicit Kyle authorization** — Verifies Kyle has explicitly authorized the task in current repository context
+- **Target existence and authorization** — Verifies requested repository targets exist or are permitted to be created
+- **Permitted paths / scope** — Enforces `permitted_paths` allow-list from ACP command
+- **Permitted capabilities** — Enforces explicit capabilities (read_only, modify_files, commit, push, run_tests)
+- **ACP schema validity** — Validates ACP command envelope against versioned schema
+- **Fail-closed handling** — Rejects invalid or unauthorized requests under all failure conditions
+- **Request correlation and auditability** — Correlates all actions through `request_id`
+- **Prevention of execution outside authorized ACP scope** — Blocks any operation not covered by granted capabilities
+- **Secret / credential exclusion** — Filters all request payloads to guarantee no credentials pass through
+- **Preservation of repository/GitHub safeguards** — Maintains CODEOWNERS, branch protection, status checks
+
+The Gate passes only a validated and authorized task into the existing execution architecture.
+
+### Two-Layer Sequence (CRITICAL)
+
+#### LAYER 1 — FIRST (Prerequisite)
+
+The existing Kilo↔Gemini execution architecture must first be stabilized, reconciled, and hardened **at its existing boundaries**.
+
+Layer 1 includes the existing work around:
+- ACP schema / engine
+- TaskRegistry
+- Orchestrator
+- Kilo transport
+- Gemini trigger
+- Existing Kilo activation
+- Existing Gemini activation
+- Callbacks / completion handling
+- `request_id` correlation
+- Execution reporting
+- Delivery verification
+- Part 2
+- Part 2.1
+- Part 2.2
+- Authenticated machine-readable Gemini return path to Render
+
+Layer 1 is the prerequisite for Layer 2.
+
+**This task does NOT implement Layer 1.**
+
+#### LAYER 2 — AFTER LAYER 1
+
+Once Layer 1 is stable, the future Render Control Gate is introduced upstream:
+
+```
+ChatGPT
+    ↓
+Render Control Gate
+    ↓
+Validated / Authorized Existing Orchestration Boundary
+    ↓
+Existing ACP / TaskRegistry / Orchestrator
+    ↓
+Existing Kilo / Gemini Activation
+    ↓
+Execution
+    ↓
+Existing Callbacks / Results / Delivery Verification
+```
+
+The Control Gate integrates with the existing architecture.
+It does **not** replace the Kilo↔Gemini architecture.
+
+### Critical Architectural Protection
+
+The following must be preserved and must NOT be redesigned, replaced, migrated, or reinterpreted:
+
+- Kilo activation path
+- Gemini activation path
+- GitHub Actions integration
+- ACP
+- TaskRegistry
+- Orchestrator
+- Kilo transport
+- Gemini trigger
+- Callback paths
+- `request_id` correlation
+- Part 2.2 return path
+- Delivery verification
+
+An earlier discussion considered `workflow_dispatch` as a possible GitHub handoff mechanism.
+
+**Do not establish `workflow_dispatch` as a new architectural requirement.**
+
+If `workflow_dispatch` exists in current implementation, document it only as verified current implementation-specific behavior.
+
+Do not replace the existing activation architecture with it.
+
+### Status Summary
+
+- Control Gate research: **COMPLETE**
+- Control Gate architecture: **PROPOSED / TARGET**
+- Control Gate implementation: **NOT IMPLEMENTED**
+- Control Gate enforcement: **NOT CURRENTLY ACTIVE**
+- Layer 1: **PREREQUISITE** (must stabilize/harden first)
+- Layer 2: **FUTURE WORK** (after Layer 1)
+- Existing Kilo/Gemini architecture: **PROTECTED**
+
+Do not describe the Control Gate as currently implemented or operational.
 
 ---
 

@@ -24,8 +24,9 @@ Designed for Kyle checking the project from a phone.
 
 1. **Kilo ↔ Gemini orchestration backbone** — PROPOSED / PENDING KYLE APPROVAL. Implementation plan: `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`. Not authorized until you approve.
 2. **ChatGPT Control Gate** — Research complete. No implementation authorized or performed. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
-3. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
-4. **No automated test suite** — Changes verified by manual review only.
+3. **Render Control Gate / Gatekeeper** — **PROPOSED / TARGET** (not implemented). Render is the future technical Control Gate between ChatGPT and repository execution. Layer 1 (Kilo↔Gemini orchestration stabilization) is prerequisite. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
+4. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
+5. **No automated test suite** — Changes verified by manual review only.
 
 ---
 
@@ -41,6 +42,7 @@ Designed for Kyle checking the project from a phone.
 | ChatGPT Control Gate architecture | PROPOSED / PENDING | Gemini |
 | Gemini verification requirements propagation | IMPLEMENTED | Kilo | Verified in commits `736ae3f`, `748ba91`, `53f1a3f`; Gemini independently verified functional |
 | Gemini result artifact observability | IMPLEMENTED / VERIFIED | Kilo | Artifact persistence + ChatGPT retrieval + non-empty capture VERIFIED (run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`) |
+| Render Control Gatekeeper documentation reconciliation | IMPLEMENTED | Kilo | Documentation reconciled: Render = future Control Gate/gatekeeper (PROPOSED/TARGET); Layer 1 → Layer 2 sequencing; Kilo/Gemini architecture protected |
 
 ---
 
@@ -57,6 +59,7 @@ Designed for Kyle checking the project from a phone.
 Decide whether to approve the Kilo ↔ Gemini orchestration backbone for implementation.
 Gemini verification requirements propagation is IMPLEMENTED and independently verified — no further action required.
 Gemini result artifact observability is IMPLEMENTED and VERIFIED — ChatGPT retrieves Gemini results from GitHub Actions artifact `gemini-acp-report` / `gemini-acp-report.json` after completed runs; no copy/paste required.
+Layer 1 (Kilo↔Gemini orchestration stabilization/hardening) is the prerequisite for Layer 2 (Render Control Gate).
 
 ---
 
