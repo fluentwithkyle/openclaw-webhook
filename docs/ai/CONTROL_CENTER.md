@@ -43,6 +43,7 @@ Designed for Kyle checking the project from a phone.
 | Gemini verification requirements propagation | IMPLEMENTED | Kilo | Verified in commits `736ae3f`, `748ba91`, `53f1a3f`; Gemini independently verified functional |
 | Gemini result artifact observability | IMPLEMENTED / VERIFIED | Kilo | Artifact persistence + ChatGPT retrieval + non-empty capture VERIFIED (run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`) |
 | Render Control Gatekeeper documentation reconciliation | IMPLEMENTED | Kilo | Documentation reconciled: Render = future Control Gate/gatekeeper (PROPOSED/TARGET); Layer 1 → Layer 2 sequencing; Kilo/Gemini architecture protected |
+| Kilo ↔ Gemini Part 2.2 Kilo completion/result delivery | IMPLEMENTED / VERIFIED | Kilo | Source commit `2e9355d`, main commit `ebb8e9e`, 124/124 tests pass; Kilo provider ID capture (`session_id`, `message_id`, `invocation_id`), TaskRegistry persistence, idempotent polling, completion/result processing, provider client abstraction, Gemini dispatch after Kilo completion, callback/JSON serialization |
 
 ---
 
