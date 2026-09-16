@@ -6,6 +6,28 @@
 
 ---
 
+## 2026-09-16 | Document Gemini Result Artifact Observability (TASK-KILO-DOCUMENT-GEMINI-RESULT-OBSERVABILITY-001)
+
+**Task**: Update the durable AI project-state documentation so that future ChatGPT sessions know that completed Gemini research results can be persisted to GitHub as workflow artifacts and retrieved/read directly by ChatGPT through the GitHub integration.
+
+**Summary**:
+- Documented the verified Gemini result artifact observability capability in `docs/ai/STATE.md`:
+  - Artifact persistence mechanism: `gemini-acp-report` (artifact name) / `gemini-acp-report.json` (filename) with 7-day retention, implemented in `.github/workflows/main.yml` lines 165–177 (commit `748ba91722ecbad6aaeaca5a084384862aabb6df`)
+  - ChatGPT GitHub integration retrieval: VERIFIED — ChatGPT can directly retrieve and download the artifact from completed Gemini workflow runs
+  - Non-empty Gemini result capture: UNVERIFIED — Previous retrieval test produced a 0-byte `gemini-acp-report.json`; successful non-empty end-to-end capture remains separately subject to validation
+- Updated `docs/ai/CONTROL_CENTER.md` Active Work table with "Gemini result artifact observability" entry distinguishing IMPLEMENTED/VERIFIED (artifact mechanism + ChatGPT retrieval) from UNVERIFIED (non-empty capture)
+- Preserved the distinction between current verified capability and functionality still requiring validation
+- Identified this as an artifact-observability capability separate from unrelated orchestration functionality (Kilo↔Gemini orchestration, task dispatch, callback mechanisms)
+- No application/runtime code, workflows, AGENTS.md, GEMINI.md, ARCHITECTURE.md, or production files modified
+- No secrets, credentials, or sensitive production values introduced
+- Only authorized documentation paths changed (`docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md`)
+
+**Outcome**: SUCCESS — Durable documentation created making the artifact-observability capability discoverable to future ChatGPT sessions; STATE.md and CONTROL_CENTER.md accurately distinguish IMPLEMENTED/VERIFIED (artifact persistence + ChatGPT retrieval) from UNVERIFIED (non-empty Gemini result capture); TASK_LOG.md append-only completion entry added; only authorized files changed; all verification requirements met.
+
+**Commit Reference**: (pending)
+
+---
+
 ## 2026-09-16 | Reconcile Gemini Verification Documentation (TASK-KILO-GEMINI-VERIFICATION-DOCS-RECONCILE-001)
 
 **Task**: Reconcile the AI project-state documentation with the now independently verified implementation of Gemini verification requirements propagation.

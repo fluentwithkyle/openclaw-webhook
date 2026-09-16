@@ -207,6 +207,48 @@ openclaw-webhook/
 
 ---
 
+## Gemini Result Artifact Observability (Recorded 2026-09-16)
+
+**Task**: TASK-KILO-DOCUMENT-GEMINI-RESULT-OBSERVABILITY-001 (Issue #113)
+**Updated By**: Kilo
+
+This section records the documented observability capability for Gemini research results persisted as GitHub Actions artifacts and retrievable by ChatGPT through the GitHub integration.
+
+### Verified Capabilities
+
+1. **Artifact persistence mechanism exists** — The Gemini GitHub Actions workflow (`.github/workflows/main.yml`) persists the Gemini result as a workflow artifact:
+   - Artifact name: `gemini-acp-report`
+   - Artifact filename: `gemini-acp-report.json`
+   - Retention period: 7 days
+   - Implementation: Lines 165–177 of `.github/workflows/main.yml` (commits `748ba91722ecbad6aaeaca5a084384862aabb6df` and subsequent)
+
+2. **ChatGPT can retrieve the GitHub artifact directly** — ChatGPT's GitHub integration has successfully retrieved and downloaded the `gemini-acp-report` artifact from a completed Gemini workflow run.
+
+### Current Verification Boundary
+
+3. **Non-empty Gemini result capture remains UNVERIFIED** — A previous retrieval test produced the artifact successfully, but the downloaded `gemini-acp-report.json` was 0 bytes. Therefore, successful non-empty end-to-end capture of Gemini's actual research result is NOT currently verified.
+
+This distinction must be preserved:
+- **IMPLEMENTED / VERIFIED**: Artifact persistence mechanism; ChatGPT artifact retrieval capability
+- **UNVERIFIED**: Successful non-empty capture of Gemini's actual research result
+
+### Operational Capability for Future ChatGPT Sessions
+
+Gemini research result
+→ GitHub Actions artifact
+→ `gemini-acp-report`
+→ `gemini-acp-report.json`
+→ ChatGPT retrieves the artifact directly through the GitHub integration.
+
+This is documented as an **artifact-observability capability** and is kept separate from unrelated orchestration functionality (Kilo↔Gemini orchestration, task dispatch, callback mechanisms, etc.).
+
+### Related Documentation
+
+- `ARCHITECTURE.md` Section 19 — GitHub Actions as AI execution plane (PROPOSED / TARGET)
+- `docs/ai/STATE.md` Active Tasks: "Gemini verification requirements propagation" (IMPLEMENTED)
+- `.github/workflows/main.yml` — Authoritative implementation of artifact persistence
+- `docs/ai/TASK_LOG.md` — Historical record of this documentation task (appended below)
+
 ## Kilo Activation Boundary & Part 2.1b Status (Recorded 2026-09-14)
 
 **Task**: TASK-KILO-REPOSITORY-NOTES-KILO-BOUNDARY-FINDINGS-001 (Issue #74)

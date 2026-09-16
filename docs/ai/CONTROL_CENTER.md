@@ -40,6 +40,7 @@ Designed for Kyle checking the project from a phone.
 | Automated Kilo delivery verification | PARTIAL / PROPOSED | Gemini |
 | ChatGPT Control Gate architecture | PROPOSED / PENDING | Gemini |
 | Gemini verification requirements propagation | IMPLEMENTED | Kilo | Verified in commits `736ae3f`, `748ba91`, `53f1a3f`; Gemini independently verified functional |
+| Gemini result artifact observability | DOCUMENTED | Kilo | Artifact persistence + ChatGPT retrieval IMPLEMENTED/VERIFIED; non-empty capture UNVERIFIED |
 
 ---
 
