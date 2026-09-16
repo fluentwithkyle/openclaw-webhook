@@ -156,6 +156,8 @@ jobs:
             VERIFICATION REQUIREMENTS (from original ACP task):
             ${{ steps.orchestration_context.outputs.verification || 'No specific verification requirements provided. Evaluate based on standard architectural review criteria.' }}
 
+            IMPORTANT: When reviewing Kilo's work, you MUST explicitly evaluate against the VERIFICATION REQUIREMENTS listed above. Your review must address each requirement and state whether it is satisfied, partially satisfied, or not satisfied. If verification requirements are not met, clearly identify what is missing.
+
             Read ARCHITECTURE.md and GEMINI.md before responding.
             Distinguish observations from recommendations.
             Return a concrete, actionable response for the project.
