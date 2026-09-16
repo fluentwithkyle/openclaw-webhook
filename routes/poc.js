@@ -55,8 +55,31 @@ router.post('/kilo', authenticatePoc, async (req, res) => {
         const command = JSON.parse(commandData);
         command.request_id = requestId; // Ensure unique ID
 
+        // Create task in registry
+        const taskResult = taskRegistry.createTask(command);
+        if (!taskResult.success) {
+            return res.status(409).json({
+                request_id: requestId,
+                status: 'Task creation failed',
+                stage: 'failed',
+                error: taskResult.error
+            });
+        }
+
         // Dispatch via Kilo Transport (from provider)
         const result = await getDispatcher()(command);
+
+        // Persist provider identifiers if returned
+        if (result.provider_session_id || result.provider_message_id || result.provider_invocation_id) {
+            const task = taskRegistry.getTask(requestId);
+            if (task) {
+                task.kilo.provider_session_id = result.provider_session_id;
+                task.kilo.provider_message_id = result.provider_message_id;
+                task.kilo.provider_invocation_id = result.provider_invocation_id;
+                task.updated_at = new Date().toISOString();
+                taskRegistry.persistCache();
+            }
+        }
 
         if (result.status === 'SUCCESS') {
             res.status(200).json({
