@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-16
-**Updated By**: Kilo — Gemini Workflow Registration Incident Documentation (TASK-KILO-DOCUMENT-GEMINI-WORKFLOW-REGISTRATION-INCIDENT-001)
+**Updated By**: Kilo — Gemini Verification Documentation Reconciliation (TASK-KILO-GEMINI-VERIFICATION-DOCS-RECONCILE-001)
 
 ---
 
@@ -23,6 +23,7 @@
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
 | ChatGPT Protocol Stop Gate hardening (Section 14) | **IMPLEMENTED / VERIFIED** | Kilo | Section 14 consequential-action stop gate hardened in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (commit `3ce42ac159dd8c73d7e043d7bc57692f6c5ecde`). Documentation reconciliation: `CONTROL_CENTER.md` reconciled in commit `da6a1a48190072049abc85b333cb4dfbd56f3ced`; `STATE.md` and `TASK_LOG.md` reconciled in this task. |
 | Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | **IMPLEMENTED** | Kilo | TaskRegistry, Orchestrator, ACP Schema, and focused tests implemented in `poc/` and `test/`. See commit `TBD`. |
+| Gemini verification requirements propagation | **IMPLEMENTED** | Kilo | Verification field flows ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions → Gemini reviewer prompt. Implemented in commit `736ae3faf4d4ea75b22df8b85a6186dcdde91f59`; artifact persistence in `748ba91722ecbad6aaeaca5a084384862aabb6df`; prompt fix in `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`. Gemini independently verified functional. |
 | Automated Kilo delivery verification | **PARTIAL IMPLEMENTATION / PROPOSED / PENDING** | Gemini (research) | A persistence gate exists in `.github/workflows/kilo-gemini-poc.yml` (verifies no repo changes outside `poc/test-output/`). Full independent verification — verifying actual delivered ref/commit and changed files — remains PROPOSED / TARGET. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
@@ -51,6 +52,7 @@ represent implemented functionality.
 | 9 | Failover Authorization | **PROPOSED / TARGET** | — | Define how ACP authorization remains valid and controlled during agent failover scenarios. See `ARCHITECTURE.md` Section 18. |
 | 10 | Kilo HTTP Trigger Secret Rotation | **PROPOSED / TARGET** | — | Define the mechanism and lifecycle for rotating shared secrets used by the Kilo HTTP trigger. Rotation must not be performed during this task. |
 | 11 | Automated Kilo Delivery Verification | **PARTIAL IMPLEMENTATION / PROPOSED / TARGET** | Gemini (research) | A basic persistence gate is implemented in `.github/workflows/kilo-gemini-poc.yml` (verifies no repository changes outside `poc/test-output/` after Gemini POC execution). Independent verification of actual delivered ref/commit and changed files, request_id correlation across the full delivery chain, and machine-readable evidence remain PROPOSED / TARGET. Kilo's self-report is execution evidence, not independent delivery proof. See implementation task #49. |
+| 12 | Gemini Verification Requirements Propagation | **CURRENT / IMPLEMENTED** | Kilo | Verification field added to ACP command schema, TaskRegistry entry, orchestrator, gemini-trigger, and GitHub Actions workflow. Verification requirements now flow: ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions workflow → Gemini reviewer prompt. Implemented in commit `736ae3faf4d4ea75b22df8b85a6186dcdde91f59`; artifact persistence in `748ba91722ecbad6aaeaca5a084384862aabb6df`; prompt fix in `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`. Gemini independently verified functional. |
 
 ---
 
@@ -77,6 +79,7 @@ represent implemented functionality.
 ### Lower Priority / Architectural
 - Kilo ↔ Gemini orchestration backbone implementation — **Part 1 Foundation IMPLEMENTED**; see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`. Part 2 (Gemini triggering and callback integration) remains PROPOSED / TARGET.
 - Automated Kilo delivery verification implementation — **PARTIAL IMPLEMENTATION / PROPOSED / PENDING**; a persistence gate exists in `.github/workflows/kilo-gemini-poc.yml`, but full independent verification (delivered ref/commit, changed files, request_id correlation) remains PROPOSED / TARGET. Future implementation must extend the existing orchestration/project-state architecture rather than create a second task system. See implementation task #49.
+- Gemini verification requirements propagation — **IMPLEMENTED**; verification field flows ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions → Gemini reviewer prompt. Independent Gemini verification confirmed.
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
 - Security AI lane definition (PROPOSED / TARGET)
@@ -414,3 +417,62 @@ This section records the documentation/reconciliation of the Gemini GitHub Actio
 11. **No implementation/workflow files were modified** by this documentation task.
 
 12. **Gemini status**: The Gemini Architect and Reviewer workflow (`.github/workflows/main.yml`) is now **OPERATIONALLY RESTORED**. The `@gemini-cli` issue-comment activation path works. This incident is no longer an unresolved blocker.
+
+---
+
+## Gemini Verification Requirements Propagation — Reconciliation Status (Recorded 2026-09-16)
+
+**Task**: TASK-KILO-GEMINI-VERIFICATION-DOCS-RECONCILE-001 (Issue #107)
+**Updated By**: Kilo
+
+This section records the documentation/state reconciliation for the verified implementation of Gemini verification requirements propagation. The implementation was completed in commit `736ae3faf4d4ea75b22df8b85a6186dcdde91f59` and subsequently enhanced in commits `748ba91722ecbad6aaeaca5a084384862aabb6df` and `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`. Gemini independently verified the functionality as present and active in the current main branch.
+
+### Verified Implementation (Complete)
+
+1. **Gemini verification requirements propagation is IMPLEMENTED and VERIFIED.**
+   - Commit `736ae3faf4d4ea75b22df8b85a6186dcdde91f59`: Core implementation
+     - Added `verification` field to ACP command required fields (`poc/schemas/acp-schema.js`)
+     - Added `verification` field to TaskRegistry entry (`poc/schemas/acp-schema.js`)
+     - Updated `poc/gemini-trigger.js` to accept and dispatch `verification` in workflow inputs
+     - Updated `poc/orchestrator.js` to pass `task.verification` to Gemini trigger
+     - Updated `.github/workflows/main.yml` to accept `verification` input and include in Gemini reviewer prompt
+     - Added tests verifying verification propagation from ACP task through Gemini trigger path
+   - Commit `748ba91722ecbad6aaeaca5a084384862aabb6df`: Artifact persistence
+     - Added steps to persist Gemini result as workflow artifact (`gemini-acp-report.json`) with 7-day retention
+   - Commit `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`: Prompt fix
+     - Restored IMPORTANT line in Gemini prompt explicitly requiring evaluation against verification requirements
+
+2. **Verification flow confirmed:**
+   ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions workflow → Gemini reviewer prompt
+
+3. **Independent Gemini verification:** Gemini independently verified that the functionality is present and active in the current main branch (TASK-GEMINI-VERIFY-KILO-GEMINI-VERIFICATION-REQUIREMENTS-001).
+
+### Documentation Reconciliation
+
+4. **`docs/ai/STATE.md`** — This section added; Active Tasks table updated with "Gemini verification requirements propagation" as IMPLEMENTED; Architectural Standardization Audit Items updated with item 12 as CURRENT / IMPLEMENTED; Upcoming/Backlog updated; `Last Updated` / `Updated By` updated.
+
+5. **`docs/ai/CONTROL_CENTER.md`** — Active Work table updated; "Gemini verification requirements propagation" added as IMPLEMENTED; Next Action updated.
+
+6. **`docs/ai/TASK_LOG.md`** — This task appends a historical completion entry for the documentation reconciliation.
+
+### Status Distinctions
+
+7. **Implementation verified** — The verification requirements propagation is implemented on main and verified by commits `736ae3faf4d4ea75b22df8b85a6186dcdde91f59`, `748ba91722ecbad6aaeaca5a084384862aabb6df`, and `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`.
+
+8. **Independent verification recorded** — Gemini's independent functional verification (TASK-GEMINI-VERIFY-KILO-GEMINI-VERIFICATION-REQUIREMENTS-001) is accurately represented.
+
+9. **Documentation reconciliation** — `STATE.md`, `CONTROL_CENTER.md`, and `TASK_LOG.md` updated to reflect verified state.
+
+10. **No stale/unverified claims** — Documentation no longer describes the Gemini verification-requirement implementation as proposed, partial, or unverified. Repository history provides verification that the implementation exists and is functional.
+
+11. **Remaining proposed/pending project work** — Automated Kilo delivery verification (PARTIAL IMPLEMENTATION / PROPOSED / PENDING), Kilo ↔ Gemini orchestration Part 2 (PROPOSED / TARGET), and other backlog items remain unchanged. This reconciliation only addresses the specific Gemini verification requirements propagation implementation.
+
+### Accuracy Requirement
+
+12. This section does not claim any implementation beyond what is verified in the cited commits. It distinguishes:
+    - Implementation verified (verification requirements propagation)
+    - Independent verification (Gemini's functional verification)
+    - Documentation reconciliation (this task)
+    - Remaining proposed/pending project work (Automated Kilo delivery verification, Part 2 orchestration, etc.)
+
+---
