@@ -129,32 +129,18 @@ jobs:
             - create or merge pull requests;
             - otherwise change repository state.
 
-            {{#if env.ORCHESTRATION_REQUEST_ID}}
-            ORCHESTRATION CONTEXT (from Kilo->Gemini workflow_dispatch):
-            - request_id: ${{ env.ORCHESTRATION_REQUEST_ID }}
-            - task: ${{ env.ORCHESTRATION_TASK }}
-            - repository: ${{ env.ORCHESTRATION_REPOSITORY }}
-            - base_branch: ${{ env.ORCHESTRATION_BASE_BRANCH }}
-            - kilo_execution_id: ${{ env.ORCHESTRATION_KILO_EXECUTION_ID }}
+            ORCHESTRATION CONTEXT:
+            - request_id: ${{ steps.orchestration_context.outputs.request_id || 'manual' }}
+            - repository: ${{ steps.orchestration_context.outputs.repository || github.repository }}
+            - base_branch: ${{ steps.orchestration_context.outputs.base_branch || github.ref_name }}
+            - task: ${{ steps.orchestration_context.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
+            - kilo_execution_id: ${{ steps.orchestration_context.outputs.kilo_execution_id || '' }}
 
-            This task was dispatched from the Kilo orchestration layer. The request_id
-            correlates this Gemini execution with the originating Kilo completion.
-            {{else}}
-            The request below was explicitly submitted by a trusted
-            repository collaborator through the @gemini-cli interface.
+            ${{ steps.orchestration_context.outputs.request_id != '' && 'This task was dispatched from the Kilo orchestration layer. The request_id correlates this Gemini execution with the originating Kilo completion.' || 'The request below was explicitly submitted by a trusted repository collaborator through the @gemini-cli interface. Treat that request as the actual task.' }}
 
-            Treat that request as the actual task.
-            {{/if}}
-
-            {{#if env.ORCHESTRATION_REQUEST_ID}}
-            --- ORCHESTRATION TASK START ---
-            ${{ env.ORCHESTRATION_TASK }}
-            --- ORCHESTRATION TASK END ---
-            {{else}}
-            --- REQUEST START ---
-            ${{ steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
-            --- REQUEST END ---
-            {{/if}}
+            --- TASK START ---
+            ${{ steps.orchestration_context.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
+            --- TASK END ---
 
             Read ARCHITECTURE.md and GEMINI.md before responding.
             Distinguish observations from recommendations.
