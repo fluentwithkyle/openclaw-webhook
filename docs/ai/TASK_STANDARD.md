@@ -146,3 +146,71 @@ Kilo refreshes CONTROL_CENTER.md as part of the task verification step, only whe
   "constraints": ["smallest-change"]
 }
 ```
+
+## 8. Dynamic Recovery and Convergence Protocol
+
+This section defines the execution behavior for Kilo (and any implementation agent) when implementing authorized tasks. It replaces any fixed recovery-cycle limits with a convergence-based model that allows productive exploration and recovery while preventing unbounded debugging loops and scope expansion.
+
+### 8.1 Initial Exploration Is Expected
+
+- Kilo may inspect relevant code, documentation, tests, and configuration before and during implementation.
+- A few exploratory steps are normal and should not immediately trigger a blocked result.
+- Exploration is bounded by the task's authorized scope (`permitted_paths`, `capabilities`).
+
+### 8.2 Recovery Is Allowed
+
+- When implementation or validation reveals a problem, Kilo may diagnose and repair it.
+- There is no rigid universal one-recovery-cycle limit.
+- Recovery steps must remain within the authorized scope and capabilities.
+
+### 8.3 Convergence Determines Whether Kilo Continues
+
+Continue execution when the execution path is converging toward the stated objective. Signals of convergence include:
+
+- The identified failure becomes narrower and more specific.
+- The implementation moves closer to the objective with each step.
+- Tests progressively improve or pass.
+- The required scope remains stable.
+- Each recovery step produces useful information or measurable progress.
+
+### 8.4 Non-Convergence Determines When Kilo Stops
+
+Stop and report `status: blocked` when recovery becomes materially non-convergent. Signals include:
+
+- Repeated failure without meaningful improvement.
+- Expanding into unrelated files or systems beyond authorized scope.
+- Changing the task objective.
+- Repeatedly restructuring test infrastructure instead of fixing the target implementation.
+- Entering open-ended architectural investigation.
+- Accumulating increasingly speculative fixes without evidence of convergence.
+
+### 8.5 Scope Expansion Is a Hard Warning Signal
+
+- Kilo should prefer preserving the original bounded execution path.
+- If solving the task requires genuinely new architectural decisions or external-system investigation, that work must be surfaced as a blocker/escalation rather than silently turning the task into a different task.
+- Scope expansion beyond `permitted_paths` or authorized `capabilities` requires new explicit authorization.
+
+### 8.6 Verification Remains Bounded
+
+- Verification should validate the stated objective and relevant regression surface.
+- Do not turn "verify the change" into an unrestricted repository-wide debugging exercise.
+- Verification scope is limited to what is necessary to confirm the authorized change.
+
+### 8.7 Durable Completion
+
+- When the task reaches a valid completed state, Kilo must finish the requested implementation, verification, commit, push, and completion report according to the existing task standard.
+- Completion includes reporting the commit SHA and verification performed.
+
+### 8.8 Behavioral Principle
+
+**Allow enough exploration and recovery for Kilo to gain traction. Stop when the execution path stops converging.**
+
+This principle replaces any interpretation of "fail fast" as "stop at the first unexpected problem." The objective is autonomous completion without babysitting, while preserving reasonable room for Kilo to solve ordinary implementation problems independently.
+
+### 8.9 Conflict Resolution
+
+If existing `TASK_STANDARD.md` language conflicts with the dynamic recovery model above, resolve the conflict in favor of:
+
+**Bounded execution + reasonable exploration + convergence-based recovery + explicit escalation when execution becomes non-convergent.**
+
+Do not introduce an arbitrary numeric retry limit merely to satisfy previous recommendations.
