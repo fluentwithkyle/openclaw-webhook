@@ -190,7 +190,10 @@ function createInitialTaskRegistryEntry(requestId, command) {
     kilo: {
       status: 'pending',
       execution_id: null,
-      report: null
+      report: null,
+      provider_session_id: null,
+      provider_message_id: null,
+      provider_invocation_id: null
     },
     gemini: {
       status: 'pending',

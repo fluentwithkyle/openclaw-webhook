@@ -7,3 +7,5 @@ node_modules/
 .clasprc.json
 
 gemini-artifacts/
+poc/task-registry.json
+poc/task-registry.json.bak
