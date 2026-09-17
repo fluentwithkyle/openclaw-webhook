@@ -1592,13 +1592,22 @@ The project must not introduce:
 
 Current Gap (IMPLEMENTED / VERIFIED)
 
-The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) has been implemented and verified. It accepts canonical ACP JSON from DeepSeek, validates it through the existing ACP schema (`validateACPCommand` in `poc/schemas/acp-schema.js`), and registers it through the existing TaskRegistry (`taskRegistry.createTask` in `poc/task-registry.js`). Registration-only semantics are enforced — the endpoint does not invoke `getDispatcher()` or any downstream transport execution. Returns 202 on success, 401 on auth failure, 400 on malformed/invalid ACP, 409 on duplicate request_id, 500 on registry failure. The `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`) provides a dedicated authentication boundary distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`.
+The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) has been implemented and verified. It accepts canonical ACP JSON from DeepSeek, authenticates via `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`), validates it through the existing ACP schema (`validateACPCommand` in `poc/schemas/acp-schema.js`), and registers it through the existing TaskRegistry (`taskRegistry.createTask` in `poc/task-registry.js`). After successful registration, the command is dispatched through the **existing Kilo dispatcher** via `getDispatcher()` (the same mechanism used by `/poc/kilo`). Registration failure prevents dispatch — if registration fails, the endpoint returns 500 without dispatching. Provider identifiers returned by the dispatcher are persisted in the TaskRegistry. Returns 202 on successful dispatch (SUCCESS), 401 on auth failure, 400 on malformed/invalid ACP, 409 on duplicate request_id, 403 on dispatch BLOCKED, 500 on dispatch FAILED or registry/dispatch failure. The `x-deepseek-coordinator-secret` header provides a dedicated authentication boundary distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`.
+
+The implemented flow is:
+
+DeepSeek Coordinator → authenticated `POST /poc/coordinator` → existing ACP validation → existing TaskRegistry → existing Kilo dispatcher → existing Kilo execution path
+
+No new dispatcher, parallel orchestration path, poller, or alternate execution architecture was introduced.
 
 The implementation direction (as proposed and now implemented):
 
 * Add an authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`.
 * Validate the submitted canonical ACP command using the existing ACP validator (`poc/schemas/acp-schema.js`).
 * Register the validated command through the existing TaskRegistry API (`poc/task-registry.js`).
+* After successful registration, dispatch the command through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`).
+* Persist provider identifiers returned by the dispatcher in the TaskRegistry.
+* Fail-closed on dispatch errors and exceptions.
 * Preserve the existing orchestrator, schema, transport, and registry architecture unless repository inspection proves a necessary exception.
 
 Existing verified components (remain unchanged unless implementation evidence requires otherwise):
@@ -1611,7 +1620,7 @@ Existing verified components (remain unchanged unless implementation evidence re
 * `.github/workflows/main.yml` — Gemini workflow
 * `poc/command.json` — POC ACP command fixture
 
-The authentication mechanism, environment-variable name, and route implementation have been verified against the current repository: Header `x-deepseek-coordinator-secret`; env var `DEEPSEEK_COORDINATOR_SECRET`; endpoint validates via `validateACPCommand` and registers via `taskRegistry.createTask`.
+The authentication mechanism, environment-variable name, and route implementation have been verified against the current repository: Header `x-deepseek-coordinator-secret`; env var `DEEPSEEK_COORDINATOR_SECRET`; endpoint validates via `validateACPCommand`, registers via `taskRegistry.createTask`, and dispatches via the existing `getDispatcher()` path.
 
 Gemini Research Basis
 

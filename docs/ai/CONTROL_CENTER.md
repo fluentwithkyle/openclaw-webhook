@@ -27,7 +27,7 @@ Designed for Kyle checking the project from a phone.
 3. **Render Control Gate / Gatekeeper** — **PROPOSED / TARGET** (not implemented). Render is the future technical Control Gate between ChatGPT and repository execution. Layer 1 (Kilo↔Gemini orchestration stabilization) is prerequisite. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
 4. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
 5. **No automated test suite** — Changes verified by manual review only.
-6. **DeepSeek Coordinator Project** — **HIGH PRIORITY**. Authenticated `POST /poc/coordinator` ingress implemented and verified in `routes/poc.js`. Registration-only semantics enforced. 15 new coordinator tests added. 168 total tests pass. (IMPLEMENTED / VERIFIED)
+6. **DeepSeek Coordinator Project** — **HIGH PRIORITY**. Authenticated `POST /poc/coordinator` ingress implemented and verified in `routes/poc.js`. After successful registration, the command is dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Registration failure prevents dispatch; provider identifiers persisted on successful dispatch. 19 coordinator tests pass; 170 total tests pass. (IMPLEMENTED / VERIFIED)
 
 ---
 
@@ -48,7 +48,7 @@ Designed for Kyle checking the project from a phone.
 | Gemini verification requirements propagation | IMPLEMENTED | Kilo | Verified in commits `736ae3f`, `748ba91`, `53f1a3f`; Gemini independently verified functional |
 | Gemini result artifact observability | IMPLEMENTED / VERIFIED | Kilo | Artifact persistence + ChatGPT retrieval + non-empty capture VERIFIED (run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`) |
 | Render Control Gatekeeper documentation reconciliation | IMPLEMENTED | Kilo | Documentation reconciled: Render = future Control Gate/gatekeeper (PROPOSED/TARGET); Layer 1 → Layer 2 sequencing; Kilo/Gemini architecture protected |
-| DeepSeek Coordinator Project establishment | ACTIVE / IMPLEMENTED / VERIFIED | Kilo | HIGH PRIORITY project implemented. Authenticated `POST /poc/coordinator` endpoint added in `routes/poc.js`. ACP validation via `validateACPCommand`; registration via `taskRegistry.createTask`. Registration-only (no dispatch). 168 tests pass. |
+| DeepSeek Coordinator Project establishment | ACTIVE / IMPLEMENTED / VERIFIED | Kilo | HIGH PRIORITY project implemented. Authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`. ACP validation via `validateACPCommand`; registration via `taskRegistry.createTask`; dispatch via existing `getDispatcher()` (same mechanism as `/poc/kilo`). Implementation commits: `5613214` (ingress), `950983a` (dispatch bridge). 19 coordinator tests pass; 170 total tests pass. |
 
 ---
 
@@ -90,12 +90,13 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 | **Priority** | HIGH |
 | **Current Status** | ACTIVE / IMPLEMENTED / VERIFIED |
 | **Objective** | Connect DeepSeek's natural-language coordination to the existing GitHub-native ACP control plane via Direct ACP |
-| **Agreed Architecture** | DeepSeek emits canonical ACP JSON directly → Existing ACP validator, TaskRegistry, Orchestrator validate and register → Kilo/Gemini execute → GitHub verifies. Documented in `ARCHITECTURE.md` Section 16.6. |
-| **Current Gap** | **CLOSED / IMPLEMENTED** — Authenticated `POST /poc/coordinator` ingress implemented in `routes/poc.js`, authenticated via `x-deepseek-coordinator-secret` / `DEEPSEEK_COORDINATOR_SECRET`, validated via `validateACPCommand`, registered via `taskRegistry.createTask`. Registration-only; does not invoke `getDispatcher()`. |
-| **Relevant Components** | `poc/schemas/acp-schema.js`, `poc/task-registry.js`, `poc/orchestrator.js`, `routes/poc.js`, `.github/workflows/main.yml` |
+| **Agreed Architecture** | DeepSeek emits canonical ACP JSON directly → Authenticated `POST /poc/coordinator` → Existing ACP validator (`validateACPCommand`) + TaskRegistry (`taskRegistry.createTask`) → Existing Kilo dispatcher (`getDispatcher()`) → Existing Kilo execution path → GitHub verification → DeepSeek → Chatbox. Documented in `ARCHITECTURE.md` Section 16.6. |
+| **Current Gap** | **CLOSED / IMPLEMENTED** — Authenticated `POST /poc/coordinator` ingress implemented in `routes/poc.js`, authenticated via `x-deepseek-coordinator-secret` / `DEEPSEEK_COORDINATOR_SECRET`, validated via `validateACPCommand`, registered via `taskRegistry.createTask`. After successful registration, dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Registration failure prevents dispatch. Provider identifiers persisted on successful dispatch. Implementation commit `950983a` (dispatch bridge) on top of `5613214` (initial ingress). |
+| **Relevant Components** | `poc/schemas/acp-schema.js`, `poc/task-registry.js`, `poc/orchestrator.js`, `services/transport-provider.js`, `routes/poc.js`, `.github/workflows/main.yml`, `poc/command.json`, `test/coordinator.test.js` |
 | **Next Concrete Action** | None — Coordinator ingress fully implemented and verified |
 | **Authorization State** | Implementation authorized and executed via ACP task TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001 (capabilities: inspect, modify, test, commit, push). Commit and push to main authorized. |
 | **Details** | See `docs/ai/STATE.md` → DeepSeek Coordinator Project section |
+| **Test Results** | 19/19 coordinator tests pass. 170 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator). |
 
 ---
 
