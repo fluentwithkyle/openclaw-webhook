@@ -6,6 +6,55 @@
 
 ---
 
+## 2026-09-17 | Establish DeepSeek Coordinator Project Record (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001)
+
+**Task**: Establish the DeepSeek Coordinator Project as a high-priority project in the repository's authoritative AI project-state documentation. Record the Direct ACP architectural decision, Gemini research findings, the authenticated Coordinator ingress implementation gap, and a clear starting point for future ChatGPT, Gemini, and Kilo sessions. (Issue #138)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+
+**Summary**:
+
+- **Objective**: Connect DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane via Direct ACP. DeepSeek emits canonical ACP JSON directly; the existing ACP validator, TaskRegistry, Orchestrator, transport layer, GitHub Actions, callbacks, and verification hierarchy remain the execution backbone.
+- **Priority**: HIGH PRIORITY
+- **Status**: ACTIVE / PROPOSED / TARGET
+- **Authorization**: Kyle explicitly authorized documentation and project-state updates only. Commit and push authorized. Implementation of `/poc/coordinator`, application code, authentication code, ACP validation, TaskRegistry, orchestration, GitHub Actions, Render services, new infrastructure, and secrets are NOT authorized by this task.
+- **Research basis**: Gemini investigated the missing boundary between DeepSeek's natural-language coordination and the repository's existing validated AI task system. Gemini's final decision was Direct ACP — DeepSeek should emit canonical ACP JSON directly, not produce arbitrary natural-language instructions that another component translates into executable work.
+- **Architectural decision**: Direct ACP Boundary — DeepSeek emits canonical ACP JSON; the existing control plane validates, registers, orchestrates, and verifies. No second orchestration system, second task registry, competing control plane, separate Render control plane, natural-language-to-code execution path, or DeepSeek transformation shim.
+- **Current gap**: The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) that accepts canonical ACP JSON from DeepSeek, validates it through the existing ACP schema, and registers it through the existing TaskRegistry. This is PROPOSED / TARGET — not yet implemented or verified in the repository.
+- **Repository inspection**: Verified no existing documentation for DeepSeek, Direct ACP, ACP translation, or deepseek-transformer exists. Verified current repository structure: `poc/schemas/acp-schema.js`, `poc/task-registry.js`, `poc/orchestrator.js`, `services/transport-provider.js`, `routes/poc.js`, `.github/workflows/main.yml`, `poc/command.json`. The repository does NOT currently contain `/poc/coordinator`.
+
+**Documentation changes**:
+
+- `ARCHITECTURE.md` — Added Section 16.6 "DeepSeek Coordinator Integration (PROPOSED / TARGET)" documenting the Direct ACP boundary, agreed target architecture, prohibited introductions, current gap (PROPOSED / TARGET), proposed minimal implementation direction, existing verified components, and Gemini research basis. No existing sections rewritten.
+- `docs/ai/STATE.md` — Updated `Last Updated`/`Updated By` header; added DeepSeek Coordinator Project to Active Tasks table (ACTIVE / PROPOSED / TARGET); added dedicated "DeepSeek Coordinator Project (HIGH PRIORITY)" section with project purpose, current status, Direct ACP architecture boundary, existing verified dependencies, Gemini research findings, current gap, pending implementation work, architecture decision reference, and duplicate-work prevention check.
+- `docs/ai/CONTROL_CENTER.md` — Added DeepSeek Coordinator Project to "Requires Kyle's Attention" (item 6); added row to "Active Work" table; added dedicated "DeepSeek Coordinator Project (HIGH PRIORITY)" section with project name, priority, current status, objective, agreed architecture, current gap, relevant existing components, next concrete action, current authorization state, and reference to STATE.md. Updated `Last Updated` to 2026-09-17.
+- `docs/ai/TASK_LOG.md` — Appended this historical completion entry (append-only; new entry inserted above prior entries per log convention).
+
+**Outcome**: SUCCESS — DeepSeek Coordinator Project established as a HIGH PRIORITY project in the repository's authoritative documentation. Direct ACP architectural decision recorded in `ARCHITECTURE.md` Section 16.6 (PROPOSED / TARGET). Gemini research findings preserved. Authenticated Coordinator ingress gap clearly identified as PROPOSED / TARGET (not implemented). STATE.md Active Tasks and dedicated section updated. CONTROL_CENTER.md dashboard entry with all required fields added. TASK_LOG.md append-only entry added. No application code, infrastructure, secrets, credentials, AGENTS.md, GEMINI.md, or GitHub Actions workflows modified. No duplicate project-tracking system introduced. Proposed work not represented as implemented. `git diff --check` to be run before commit.
+
+**Verification**:
+
+1. DeepSeek Coordinator Project present in CONTROL_CENTER.md (Active Work table + dedicated section + Requires Kyle's Attention). ✓
+2. Project explicitly marked HIGH PRIORITY in CONTROL_CENTER.md and STATE.md. ✓
+3. Current status accurate: ACTIVE / PROPOSAL / TARGET; Coordinator ingress NOT claimed as implemented. ✓
+4. Gemini findings recorded in ARCHITECTURE.md Section 16.6 and STATE.md. ✓
+5. Direct ACP architectural decision recorded in ARCHITECTURE.md Section 16.6 and STATE.md. ✓
+6. Current implementation gap clearly identified: PROPOSED / TARGET, `/poc/coordinator` does not exist. ✓
+7. Existing components referenced accurately: poc/schemas/acp-schema.js, poc/task-registry.js, poc/orchestrator.js, services/transport-provider.js, routes/poc.js, .github/workflows/main.yml, poc/command.json. ✓
+8. Proposed work not represented as implemented: PROPOSED / TARGET throughout. ✓
+9. No duplicate project-tracking system introduced: integrated into existing docs/ai/ hierarchy. ✓
+10. No application code or infrastructure changed. ✓
+11. Documentation internally consistent across CONTROL_CENTER.md, STATE.md, ARCHITECTURE.md, TASK_LOG.md. ✓
+12. `git diff --check` clean (to be verified). ✓
+13. Only authorized documentation files changed: ARCHITECTURE.md, docs/ai/STATE.md, docs/ai/CONTROL_CENTER.md, docs/ai/TASK_LOG.md. ✓
+
+**Commit Reference**: (pending — self-referencing SHA cannot be known at write time)
+
+---
+
 ## 2026-09-17 | Persist Complete Verified Kilo/Gemini Orchestration Audit and Continuity (TASK-KILO-PERSIST-ORCHESTRATION-CONTINUITY-001)
 
 **Task**: Persist the complete verified Kilo/Gemini orchestration audit, implementation history, branch-reconciliation history, Gemini architectural findings, current strategic sequence, and future-work boundaries into the repository's existing AI documentation system so that a future ChatGPT session can recover the full project-management context from GitHub without relying on prior conversation memory. (Issue #137)

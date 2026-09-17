@@ -27,6 +27,7 @@ Designed for Kyle checking the project from a phone.
 3. **Render Control Gate / Gatekeeper** — **PROPOSED / TARGET** (not implemented). Render is the future technical Control Gate between ChatGPT and repository execution. Layer 1 (Kilo↔Gemini orchestration stabilization) is prerequisite. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
 4. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
 5. **No automated test suite** — Changes verified by manual review only.
+6. **DeepSeek Coordinator Project** — **HIGH PRIORITY**. Documentation and project-state records established. Direct ACP boundary documented in `ARCHITECTURE.md` Section 16.6. Authenticated Coordinator ingress remains PROPOSED / TARGET. Next target: authenticated `POST /poc/coordinator` endpoint (not authorized by this documentation-only task).
 
 ---
 
@@ -47,6 +48,7 @@ Designed for Kyle checking the project from a phone.
 | Gemini verification requirements propagation | IMPLEMENTED | Kilo | Verified in commits `736ae3f`, `748ba91`, `53f1a3f`; Gemini independently verified functional |
 | Gemini result artifact observability | IMPLEMENTED / VERIFIED | Kilo | Artifact persistence + ChatGPT retrieval + non-empty capture VERIFIED (run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`) |
 | Render Control Gatekeeper documentation reconciliation | IMPLEMENTED | Kilo | Documentation reconciled: Render = future Control Gate/gatekeeper (PROPOSED/TARGET); Layer 1 → Layer 2 sequencing; Kilo/Gemini architecture protected |
+| DeepSeek Coordinator Project establishment | ACTIVE / PROPOSED / TARGET | Kilo | HIGH PRIORITY project established. Direct ACP boundary documented in `ARCHITECTURE.md` Section 16.6. Authenticated Coordinator ingress gap remains PROPOSED / TARGET. Next target: authenticated `POST /poc/coordinator` endpoint (not authorized by this documentation-only task) |
 
 ---
 
@@ -77,6 +79,23 @@ Remaining pending items:
 - ChatGPT Control Gate architecture — RESEARCH COMPLETE / PROPOSED / PENDING
 
 Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the prerequisite for Layer 2 (Render Control Gate).
+
+---
+
+## DeepSeek Coordinator Project (HIGH PRIORITY)
+
+| Field | Detail |
+|-------|--------|
+| **Project Name** | DeepSeek Coordinator — GitHub-Native AI Control Plane Integration |
+| **Priority** | HIGH |
+| **Current Status** | ACTIVE / PROPOSED / TARGET |
+| **Objective** | Connect DeepSeek's natural-language coordination to the existing GitHub-native ACP control plane via Direct ACP |
+| **Agreed Architecture** | DeepSeek emits canonical ACP JSON directly → Existing ACP validator, TaskRegistry, Orchestrator validate and register → Kilo/Gemini execute → GitHub verifies. Documented in `ARCHITECTURE.md` Section 16.6. |
+| **Current Gap** | Authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) — PROPOSED / TARGET, not yet implemented or verified in the repository |
+| **Relevant Components** | `poc/schemas/acp-schema.js`, `poc/task-registry.js`, `poc/orchestrator.js`, `routes/poc.js`, `.github/workflows/main.yml` |
+| **Next Concrete Action** | Add authenticated `POST /poc/coordinator` endpoint that validates canonical ACP JSON and registers via existing TaskRegistry (requires explicit authorization — not authorized by this documentation-only task) |
+| **Authorization State** | Documentation task authorized; implementation not authorized |
+| **Details** | See `docs/ai/STATE.md` → DeepSeek Coordinator Project section |
 
 ---
 

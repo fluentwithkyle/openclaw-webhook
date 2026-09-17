@@ -1563,6 +1563,73 @@ The Kilo Cloud Agent HTTP webhook trigger is a confirmed Kilo capability. The sp
 
 ⸻
 
+16.6 DeepSeek Coordinator Integration (PROPOSED / TARGET)
+
+The **DeepSeek Coordinator Project** is a HIGH PRIORITY project to connect DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane. It is recorded as a PROPOSED / TARGET architectural direction pending repository inspection and explicit implementation authorization.
+
+The project must be recorded as: **ACTIVE / PROPOSED / TARGET**.
+
+Direct ACP Boundary
+
+Current state: DeepSeek's natural-language coordination capability has no validated boundary into the existing ACP-based orchestration system.
+
+The agreed target architecture is **Direct ACP**: DeepSeek emits canonical ACP JSON directly. The existing repository control plane remains responsible for validation, registration, orchestration, execution routing, and verification.
+
+Target integration boundary:
+
+```
+Kyle → Chatbox → DeepSeek Coordinator → Authenticated GitHub-Native ACP Ingress → Existing ACP Validation and Control Plane → Kilo / Gemini → GitHub Verification → DeepSeek → Chatbox
+```
+
+The project must not introduce:
+
+* A second orchestration system.
+* A second task registry.
+* A competing control plane.
+* A separate Render-based AI coordination backend.
+* A natural-language-to-code execution path outside ACP validation.
+* An unnecessary DeepSeek transformation service (no `deepseek-transformer.js` or equivalent translation shim).
+
+Current Gap (PROPOSED / TARGET)
+
+The remaining target gap is an authenticated machine-to-machine Coordinator ingress capable of accepting canonical ACP JSON from DeepSeek, validating it through the existing ACP schema, and registering it through the existing task-control system. This is PROPOSED / TARGET — not yet implemented or verified in the repository.
+
+The proposed minimal implementation direction is:
+
+* Add an authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`.
+* Validate the submitted canonical ACP command using the existing ACP validator (`poc/schemas/acp-schema.js`).
+* Register the validated command through the existing TaskRegistry API (`poc/task-registry.js`).
+* Preserve the existing orchestrator, schema, transport, and registry architecture unless repository inspection proves a necessary exception.
+
+Existing verified components (remain unchanged unless implementation evidence requires otherwise):
+
+* `poc/schemas/acp-schema.js` — ACP command envelope validation
+* `poc/task-registry.js` — task registration
+* `poc/orchestrator.js` — task orchestration
+* `services/transport-provider.js` — transport provider abstraction
+* `routes/poc.js` — POC routes
+* `.github/workflows/main.yml` — Gemini workflow
+* `poc/command.json` — POC ACP command fixture
+
+The exact authentication mechanism, environment-variable name, and route implementation remain subject to verification against the current repository. Do not document an unverified secret name as a confirmed implementation detail.
+
+Gemini Research Basis
+
+Gemini investigated the missing boundary between DeepSeek's natural-language coordination capability and the repository's existing validated AI task system. The research concluded that the central integration gap is:
+
+DeepSeek intent must become a validated canonical ACP command before it can enter the existing orchestration system.
+
+Gemini's final decision was **Direct ACP**: DeepSeek should emit canonical ACP JSON directly rather than producing arbitrary natural-language instructions that another component translates into executable work. Specifically:
+
+1. DeepSeek should emit canonical ACP JSON.
+2. The existing `validateACPCommand` implementation should validate the command.
+3. No `deepseek-transformer.js` or equivalent translation shim should be introduced.
+4. The existing orchestration system should remain the execution backbone.
+5. The likely missing integration boundary is an authenticated Coordinator ingress route.
+6. The proposed ingress would accept a validated ACP command and register it through the existing TaskRegistry.
+
+⸻
+
 17. AI specialist roles
 
 17.1 Gemini — Architect / Planner / Reviewer

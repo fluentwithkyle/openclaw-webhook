@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-17
-**Updated By**: Kilo — Persist complete verified Kilo/Gemini orchestration audit, implementation history, branch-reconciliation history, Gemini architectural findings, current strategic sequence, and future-work boundaries (TASK-KILO-PERSIST-ORCHESTRATION-CONTINUITY-001)
+**Updated By**: Kilo — Establish DeepSeek Coordinator Project record, record Direct ACP architectural decision, and document the authenticated Coordinator ingress gap (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001)
 
 ---
 
@@ -29,6 +29,7 @@
 | Automated Kilo delivery verification | **IMPLEMENTED** | Kilo | Independent delivery verification lane implemented in `poc/kilo-verifier.js`, `.github/workflows/kilo-verification.yml`, `test/kilo-verifier.test.js`. Verifies commit identification, changed files, authorized file scope, request_id correlation, git diff --check, and idempotency. Triggers on push to main and pull request events. Kilo's self-report remains execution evidence, not independent delivery proof. |
 | Security Specialist architectural foundation | **IMPLEMENTED** | Kilo | Registered lane in `AGENTS.md`; expanded architecture in `ARCHITECTURE.md` Sections 12.7, 16.3, 17.2; added ADR-014; three open architectural decisions documented; POC `command.json` and `test.js` extended with optional security fields (Issue #38) |
 | Render Control Gatekeeper documentation reconciliation | **IMPLEMENTED** | Kilo | Documentation reconciled to explicitly record Render as future technical Control Gate / gatekeeper, machine-enforced boundary, Layer 1 → Layer 2 sequencing, and Kilo/Gemini architecture protection. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. No implementation performed. |
+| DeepSeek Coordinator Project establishment | **ACTIVE / PROPOSED / TARGET** | Kilo | HIGH PRIORITY project to document the DeepSeek Coordinator integration. Direct ACP boundary recorded in `ARCHITECTURE.md` Section 16.6. Authenticated Coordinator ingress gap remains PROPOSED / TARGET. Documentation established (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001). |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -1056,3 +1057,105 @@ The following existing architecture must be preserved and must NOT be redesigned
 - Delivery verification
 
 The repository state, not a branch name or agent report, determines whether work is still required.
+
+---
+
+## DeepSeek Coordinator Project (HIGH PRIORITY)
+
+**Project Name**: DeepSeek Coordinator — GitHub-Native AI Control Plane Integration
+**Priority**: HIGH PRIORITY
+**Status**: ACTIVE / PROPOSED / TARGET
+**Established**: 2026-09-17 (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001)
+**Updated By**: Kilo
+
+### Project Purpose
+
+DeepSeek Coordinator is a high-priority project to connect DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane. The agreed architecture is Direct ACP: DeepSeek emits canonical ACP JSON directly; the existing ACP validator, task registry, orchestrator, transport layer, GitHub Actions, callbacks, and verification hierarchy remain the execution backbone. No natural-language execution shim, duplicate orchestration system, or separate Render control plane is planned.
+
+### Current Status
+
+**PROPOSED / TARGET** — Documentation and project-state records established. The authenticated Coordinator ingress has not been implemented or verified in the repository.
+
+### Architecture Boundary (Direct ACP)
+
+The agreed target architecture is:
+
+```
+Kyle → Chatbox → DeepSeek Coordinator → Authenticated GitHub-Native ACP Ingress → Existing ACP Validation and Control Plane → Kilo / Gemini → GitHub Verification → DeepSeek → Chatbox
+```
+
+Key architectural principle: DeepSeek is a coordinator that emits canonical ACP commands directly. The existing repository control plane remains responsible for validation, registration, orchestration, execution routing, and verification.
+
+The project must not introduce:
+
+* A second orchestration system.
+* A second task registry.
+* A competing control plane.
+* A separate Render-based AI coordination backend.
+* A natural-language-to-code execution path outside ACP validation.
+* An unnecessary DeepSeek transformation service (`deepseek-transformer.js` or equivalent translation shim).
+
+### Existing Verified Dependencies
+
+The following existing components are relevant and remain unchanged unless implementation evidence requires otherwise:
+
+| Component | Path | Status |
+|-----------|------|--------|
+| ACP Schema | `poc/schemas/acp-schema.js` | CURRENT / IMPLEMENTED |
+| Task Registry | `poc/task-registry.js` | CURRENT / IMPLEMENTED |
+| Orchestrator | `poc/orchestrator.js` | CURRENT / IMPLEMENTED |
+| Transport Provider | `services/transport-provider.js` | CURRENT / IMPLEMENTED |
+| POC Routes | `routes/poc.js` | CURRENT / IMPLEMENTED |
+| Gemini Workflow | `.github/workflows/main.yml` | CURRENT / IMPLEMENTED |
+| POC Command Fixture | `poc/command.json` | CURRENT / IMPLEMENTED |
+
+### Gemini Research Findings
+
+Gemini investigated the missing boundary between DeepSeek's natural-language coordination capability and the repository's existing validated AI task system. The research identified the central integration gap as:
+
+> DeepSeek intent must become a validated canonical ACP command before it can enter the existing orchestration system.
+
+Gemini's final decision was **Direct ACP**:
+
+1. DeepSeek should emit canonical ACP JSON.
+2. The existing `validateACPCommand` implementation should validate the command.
+3. No `deepseek-transformer.js` or equivalent translation shim should be introduced.
+4. The existing orchestration system should remain the execution backbone.
+5. The likely missing integration boundary is an authenticated Coordinator ingress route.
+6. The proposed ingress would accept a validated ACP command and register it through the existing TaskRegistry.
+
+This research is recorded as PROPOSED / TARGET investigation findings, not as implemented functionality.
+
+### Current Gap
+
+**PROPOSED / TARGET** — The remaining target gap is an authenticated machine-to-machine Coordinator ingress capable of accepting canonical ACP JSON from DeepSeek, validating it through the existing ACP schema, and registering it through the existing task-control system.
+
+The proposed minimal implementation direction is:
+
+* Add an authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`.
+* Validate the submitted canonical ACP command using the existing ACP validator (`poc/schemas/acp-schema.js`).
+* Register the validated command through the existing TaskRegistry API (`poc/task-registry.js`).
+* Preserve the existing orchestrator, schema, transport, and registry architecture unless repository inspection proves a necessary exception.
+
+**The repository currently does not contain `/poc/coordinator`.** This must not be claimed as implemented or working. The exact authentication mechanism, environment-variable name, and route implementation remain subject to verification against the current repository. No unverified secret name is documented as a confirmed implementation detail.
+
+### Pending Implementation Work
+
+The next concrete implementation task is to add an authenticated `POST /poc/coordinator` endpoint that:
+
+* Accepts canonical ACP JSON from DeepSeek.
+* Validates the command through the existing ACP schema.
+* Registers the validated command through the existing TaskRegistry API.
+
+This work is **PROPOSED / TARGET** and is not authorized by this documentation-only task. It requires a separate, explicitly authorized ACP implementation task.
+
+### Architecture Decision Recorded
+
+The Direct ACP boundary decision is recorded in `ARCHITECTURE.md` Section 16.6 (PROPOSED / TARGET).
+
+### Duplicate-Work Prevention Check
+
+* Searched existing documentation for "DeepSeek" — no existing entries found.
+* Searched existing documentation for "Coordinator" ingress — no existing entries found.
+* Searched existing documentation for "ACP translation" / "Direct ACP" / "deepseek-transformer" — no existing entries found.
+* This is a new project record, not a duplicate of any existing entry.
