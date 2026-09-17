@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-16
-**Updated By**: Kilo — Part 2 Implementation Documentation Reconciliation (TASK-KILO-RECONCILE-PART-2-IMPLEMENTATION-DOCS-007)
+**Last Updated**: 2026-09-17
+**Updated By**: Kilo — Integrate Kilo candidate branches (TASK-KILO-INTEGRATE-RECONCILED-WORK-002): Security Specialist architectural foundation (clean-gem-ljm/Issue #38) and Kilo delivery verification lane (damp-gem-jgq)
 
 ---
 
@@ -26,7 +26,8 @@
 | Kilo ↔ Gemini orchestration backbone — Part 2 Automatic Gemini trigger after Kilo completion | **IMPLEMENTED / VERIFIED** | Kilo | Automatic Gemini trigger in `/poc/kilo/callback` and `poc/kilo-polling.js` after successful Kilo completion. `handleKiloCompletion` → `next_action='trigger_gemini'` → `orchestrator.triggerGemini()` → Gemini state `running` → `next_action='waiting_gemini_callback'`. Kilo failure/blocked does not trigger Gemini. Source commit `6c92a9a223cc58f8f85f052c8d2168424938b46c`. 95/95 tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 15 Gemini callback). `git diff --check` clean. |
 | Kilo ↔ Gemini orchestration backbone — Part 2.2 Kilo completion/result delivery | **IMPLEMENTED / VERIFIED** | Kilo | Kilo provider identifier capture (`session_id`, `message_id`, `invocation_id`), provider identifier persistence in TaskRegistry, idempotent Kilo completion polling, Kilo completion/result processing, provider client abstraction and mock provider, task-registry persistence, Gemini dispatch after Kilo completion, callback and JSON serialization behavior, relevant schema, registry, orchestrator, trigger, integration, callback, and polling tests. Source commit `2e9355d549f4c9379820476ef660cea3e274e560`, integrated main commit `ebb8e9e2e5beaeec5691d0667a659da0922928b3`, 124/124 tests pass. |
 | Gemini verification requirements propagation | **IMPLEMENTED** | Kilo | Verification field flows ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions → Gemini reviewer prompt. Implemented in commit `736ae3faf4d4ea75b22df8b85a6186dcdde91f59`; artifact persistence in `748ba91722ecbad6aaeaca5a084384862aabb6df`; prompt fix in `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`. Gemini independently verified functional. |
-| Automated Kilo delivery verification | **PARTIAL IMPLEMENTATION / PROPOSED / PENDING** | Gemini (research) | A persistence gate exists in `.github/workflows/kilo-gemini-poc.yml` (verifies no repo changes outside `poc/test-output/`). Full independent verification — verifying actual delivered ref/commit and changed files — remains PROPOSED / TARGET. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` and implementation task #49. |
+| Automated Kilo delivery verification | **IMPLEMENTED** | Kilo | Independent delivery verification lane implemented in `poc/kilo-verifier.js`, `.github/workflows/kilo-verification.yml`, `test/kilo-verifier.test.js`. Verifies commit identification, changed files, authorized file scope, request_id correlation, git diff --check, and idempotency. Triggers on push to main and pull request events. Kilo's self-report remains execution evidence, not independent delivery proof. |
+| Security Specialist architectural foundation | **IMPLEMENTED** | Kilo | Registered lane in `AGENTS.md`; expanded architecture in `ARCHITECTURE.md` Sections 12.7, 16.3, 17.2; added ADR-014; three open architectural decisions documented; POC `command.json` and `test.js` extended with optional security fields (Issue #38) |
 | Render Control Gatekeeper documentation reconciliation | **IMPLEMENTED** | Kilo | Documentation reconciled to explicitly record Render as future technical Control Gate / gatekeeper, machine-enforced boundary, Layer 1 → Layer 2 sequencing, and Kilo/Gemini architecture protection. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. No implementation performed. |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
@@ -54,7 +55,7 @@ represent implemented functionality.
 | 8 | Asynchronous / Long-Running Task Handling | **CURRENT / IMPLEMENTED (Foundation)** | Kilo | TaskRegistry in `poc/task-registry.js` provides persistent correlation state with request_id, supporting async execution across Kilo and Gemini lanes. |
 | 9 | Failover Authorization | **PROPOSED / TARGET** | — | Define how ACP authorization remains valid and controlled during agent failover scenarios. See `ARCHITECTURE.md` Section 18. |
 | 10 | Kilo HTTP Trigger Secret Rotation | **PROPOSED / TARGET** | — | Define the mechanism and lifecycle for rotating shared secrets used by the Kilo HTTP trigger. Rotation must not be performed during this task. |
-| 11 | Automated Kilo Delivery Verification | **PARTIAL IMPLEMENTATION / PROPOSED / TARGET** | Gemini (research) | A basic persistence gate is implemented in `.github/workflows/kilo-gemini-poc.yml` (verifies no repository changes outside `poc/test-output/` after Gemini POC execution). Independent verification of actual delivered ref/commit and changed files, request_id correlation across the full delivery chain, and machine-readable evidence remain PROPOSED / TARGET. Kilo's self-report is execution evidence, not independent delivery proof. See implementation task #49. |
+| 11 | Automated Kilo Delivery Verification | **CURRENT / IMPLEMENTED** | Kilo | Independent verification lane implemented in `poc/kilo-verifier.js`, `.github/workflows/kilo-verification.yml`, `test/kilo-verifier.test.js`. Kilo's self-report remains execution evidence; the verifier provides independent verification of delivered ref/commit, changed files, request_id correlation, and git diff --check. See implementation task #49. |
 | 12 | Gemini Verification Requirements Propagation | **CURRENT / IMPLEMENTED** | Kilo | Verification field added to ACP command schema, TaskRegistry entry, orchestrator, gemini-trigger, and GitHub Actions workflow. Verification requirements now flow: ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions workflow → Gemini reviewer prompt. Implemented in commit `736ae3faf4d4ea75b22df8b85a6186dcdde91f59`; artifact persistence in `748ba91722ecbad6aaeaca5a084384862aabb6df`; prompt fix in `53f1a3fbd5c2fd0777397a0a139614d1fe92ba05`. Gemini independently verified functional. |
 
 ---
@@ -85,7 +86,7 @@ represent implemented functionality.
 - Gemini verification requirements propagation — **IMPLEMENTED**; verification field flows ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions → Gemini reviewer prompt. Independent Gemini verification confirmed.
 - LINE-centered AI operating model (PROPOSED / TARGET)
 - Qwen Router implementation (UNDER VALIDATION)
-- Security AI lane definition (PROPOSED / TARGET)
+- Security AI lane definition (**PROPOSED / TARGET** — architectural foundation established per Issue #38)
 - Utility AI lane definition (PROPOSED / TARGET)
 - ACP protocol implementation — **Foundation IMPLEMENTED**; schema validation and execution report validation complete. Full protocol implementation remains PROPOSED / TARGET.
 - **ChatGPT Control Gate** — RESEARCH COMPLETE / PROPOSED / PENDING FUTURE EXECUTION. Full architectural research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Research covers: Control Gate layer between ChatGPT and execution backbone, policy/architecture/authorization enforcement model, GitHub enforcement (CODEOWNERS, branch protection, status checks), fail-closed blocking states, implementation phases, security considerations, and acceptance criteria. **No implementation authorized or performed.**
@@ -231,7 +232,7 @@ Do not describe the Control Gate as currently implemented or operational.
 | Primary Builder / Implementer / Tester | Kilo | **ACTIVE** |
 | Architect / Planner / Reviewer | Gemini | **ACTIVE** |
 | Router | Qwen | **PLANNED** (UNDER VALIDATION) |
-| Security Specialist | — | **PROPOSED** |
+| Security Specialist | — | **PROPOSED / TARGET** (architectural foundation established) |
 | Utility Specialist | — | **PROPOSED** |
 | Orchestrator (optional) | OpenClaw | **PROPOSED** |
 
@@ -243,6 +244,20 @@ Do not describe the Control Gate as currently implemented or operational.
 - **Google Apps Script**: Google-specific execution (Sheets reads/writes, Gmail delivery)
 - **GitHub Actions**: NOT production server; ephemeral AI execution plane only (PROPOSED / TARGET)
 - **LINE**: Communication/notification channel only (not business-rules engine)
+
+---
+
+## Open Architectural Decisions (Security Specialist)
+
+The following three decisions remain **OPEN** as of the Security Specialist architectural foundation implementation (Issue #38). They are explicitly **PROPOSED / TARGET** and not implemented.
+
+| # | Decision | Status | Notes |
+|---|----------|--------|-------|
+| 1 | Qwen Router Trigger Logic Refinement | **OPEN** | Exact logic for Mandatory/Conditional/Advisory classification not finalized. Rule engine vs model-based classifier vs hybrid undecided. Ownership of rule set TBD. |
+| 2 | Security Audit Report Persistence Mechanism | **OPEN** | Format, storage location, retrieval mechanism in `docs/ai/` not defined. Candidates: dedicated directory, `STATE.md`/`ARCH_DECISIONS.md` integration, external artifact store. Schema, versioning, retention, searchability, ACP correlation open. |
+| 3 | Security Specialist Callback Mechanism to Orchestrator | **OPEN** | Mechanism for returning Security Audit Report and signaling gate completion not defined. Candidates: ACP report extension, webhook/callback, polling, file-based signal. Sync vs async, timeout/retry, correlation with pending ACP command open. |
+
+These decisions are documented to preserve open state and prevent premature closure. They will be resolved through future authorized architectural work.
 
 ---
 
@@ -338,6 +353,12 @@ openclaw-webhook/
 - No secrets in new documentation
 - `AGENTS.md` clearly references `docs/ai/` system
 - Distinction between CURRENT/IMPLEMENTED and PROPOSED/TARGET maintained
+- Security Specialist registered in `AGENTS.md` Section 4
+- Security Specialist architecture expanded in `ARCHITECTURE.md` Sections 12.7, 16.3, 17.2
+- ACP schema extended with optional `security_review_required` and `security_audit_context` fields
+- Three open architectural decisions (Security Specialist) documented in `STATE.md` and `ARCHITECTURE.md`
+- ADR-014 added to `docs/ai/ARCH_DECISIONS.md`
+- Kilo delivery verification lane implemented in `poc/`, `.github/workflows/`, and `test/`
 
 ---
 

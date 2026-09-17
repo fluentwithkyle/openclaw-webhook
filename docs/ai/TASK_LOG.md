@@ -590,4 +590,50 @@
 
 ---
 
+## 2026-09-17 | Integrate Reconciled Kilo Candidate Branches into Main (TASK-KILO-INTEGRATE-RECONCILED-WORK-002, Issue #132)
+
+**Task**: Starting from the current main, verify and integrate any still-valid, uniquely relevant implementation or documentation work found in the identified Kilo branch candidate set. The goal is for main to contain each verified, still-valid change exactly once, while preserving the current architecture and avoiding integration of superseded, duplicate, stale, or unresolved work.
+
+**Summary**:
+- Established current main commit (`46f522e`) and fetched all five candidate branches: `kilo/cheerful-flux-z62`, `kilo/clean-gem-ljm`, `kilo/eager-signal-7kl`, `kilo/live-crest-5zt`, `kilo/damp-gem-jgq`.
+- Inspected each candidate's actual commits, changed files, and effective diff against current main.
+
+Candidate dispositions:
+- **kilo/cheerful-flux-z62** (993370e) — "Harden Gemini GitHub Issue activation semantics" — INTEGRATED. Added "GitHub Issue activation semantics" section to `GEMINI.md` and expanded the "Gemini Task Activation" section in `docs/ai/README.md` with activation semantics rules (read both together, no silent override, conflicts require clarification). Verified content was absent from current main.
+- **kilo/clean-gem-ljm** (d82fdb1) — "Implement Security Specialist architectural foundation" — INTEGRATED. Expanded `ARCHITECTURE.md` Section 12.7 with Activation Model, Authority Model, Risk-Based Activation Criteria table, and three Open Architectural Decisions; added "Optional Security Fields" (security_review_required, security_audit_context) to Section 16.3; expanded Section 17.2 with condensed activation model and open decisions. Added Security Specialist to `AGENTS.md` Section 4. Added ADR-014 (Security Specialist Architectural Foundation) to `ARCH_DECISIONS.md`. Registered lane in `AGENTS.md`. Updated `STATE.md` Agent Roles and backlog. Extended `poc/command.json` with optional security fields and added three backward-compatibility tests to `poc/test.js`. Verified content was absent from current main. Used ADR-014 (not 013, which is taken by Kilo Activation).
+- **kilo/eager-signal-7kl** (523886f) — "Add cognitive load communication rule to ChatGPT protocol" — ALREADY REPRESENTED. Main already contains a "Cognitive Load Communication Rule" at Section 17.9 of `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`. Integrating would create duplicate documentation. Left untouched.
+- **kilo/live-crest-5zt** (a8aafd2) — "callback JSON serialization regression coverage" — INTEGRATED. The jq-based JSON serialization fix is already in main (commit `4ea1f22`). Integrated the regression test suite (Tests 16-23) into `test/gemini-callback.test.js`, adding `spawnSync` import and `runJqSerializationTest` helper. Tests verify jq handles double quotes, single quotes, backslashes, newlines, tabs, JSON-like content, and combined special characters; plus verification of all required ACP fields in the generated payload. The `gemini_output` field is included as a test field within the self-contained jq filter; no production main.yml changes were needed since jq serialization is already present.
+- **kilo/damp-gem-jgq** (7caeebd) — "feat: add Kilo delivery verification lane" — INTEGRATED. Created `poc/kilo-verifier.js` (independent verification of commit identification, changed files, authorized file scope, request_id correlation, git diff --check, idempotency), `.github/workflows/kilo-verification.yml` (triggers on push to main and pull request), and `test/kilo-verifier.test.js` (18 test cases covering all verifier functions). Updated `STATE.md` Active Tasks and Audit Items to reflect implementation as IMPLEMENTED.
+
+Documentation reconciliation:
+- `docs/ai/STATE.md` — Updated Last Updated/Updated By; Active Tasks (Kilo delivery verification IMPLEMENTED, Security Specialist architectural foundation IMPLEMENTED); Audit Items (Automated Kilo Delivery Verification → IMPLEMENTED); Agent Roles (Security Specialist status updated); backlog (Security AI lane definition status updated); added Open Architectural Decisions section; updated Verification Requirements.
+- `docs/ai/TASK_LOG.md` — This entry.
+- `docs/ai/ARCH_DECISIONS.md` — Added ADR-014.
+
+Files changed:
+- `GEMINI.md` — GitHub Issue activation semantics section
+- `docs/ai/README.md` — Activation semantics subsection
+- `AGENTS.md` — Security Specialist lane registration (Section 4)
+- `ARCHITECTURE.md` — Security Specialist architectural foundation (Sections 12.7, 16.3, 17.2)
+- `docs/ai/ARCH_DECISIONS.md` — ADR-014
+- `docs/ai/STATE.md` — Status updates and Open Architectural Decisions section
+- `poc/command.json` — Optional security fields
+- `poc/test.js` — Security field backward-compatibility tests
+- `test/gemini-callback.test.js` — jq serialization regression tests (Tests 16-23)
+- `poc/kilo-verifier.js` — New file
+- `.github/workflows/kilo-verification.yml` — New file
+- `test/kilo-verifier.test.js` — New file
+
+Tests/validation performed:
+- `node poc/test.js` — All tests passed (8 original + 3 new security field tests = 11 tests)
+- `node test/kilo-verifier.test.js` — All 18 tests passed
+- `node test/gemini-callback.test.js` — All 23 tests passed (15 existing + 8 new regression tests)
+- `git diff --check` — clean (no whitespace errors)
+
+**Outcome**: SUCCESS — Five candidate branches evaluated; four integrated (cheerful-flux-z62, clean-gem-ljm, live-crest-5zt, damp-gem-jgq); one already represented (eager-signal-7kl). All integrated changes verified; no unrelated files modified; no secrets introduced; commit created and pushed to main.
+
+**Commit Reference**: `58a0a10`
+
+---
+
 *End of log. New entries appended above this line.*

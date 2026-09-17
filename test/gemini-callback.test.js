@@ -6,6 +6,7 @@ const path = require('path');
 const taskRegistry = require('../poc/task-registry');
 const orchestrator = require('../poc/orchestrator');
 const { validateExecutionReport } = require('../poc/schemas/acp-schema');
+const { spawnSync } = require('child_process');
 
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
@@ -337,6 +338,105 @@ async function main() {
     assert(yaml.includes('x-gemini-callback-secret'));
     assert(yaml.includes('RENDER_GEMINI_CALLBACK_URL'));
     assert(yaml.includes('GEMINI_CALLBACK_SECRET'));
+  });
+
+  // Helper: run jq test with given task and gemini_output values
+  function runJqSerializationTest(task, geminiOutput) {
+    return async () => {
+      const jqFilter = `
+{
+  request_id: $request_id,
+  agent: $agent,
+  status: $status,
+  task: $task,
+  repository: $repository,
+  base_branch: $base_branch,
+  changed_files: [],
+  verification: ["advisory review completed"],
+  result: {
+    execution_metadata: {
+      invocation_id: $invocation_id,
+      run_id: $run_id
+    },
+    gemini_output: $gemini_output
+  },
+  commit: null,
+  push: false,
+  blockers: $blockers
+}`;
+      const result = spawnSync('jq', [
+        '-n',
+        '--arg', 'request_id', 'test-req',
+        '--arg', 'agent', 'Gemini',
+        '--arg', 'status', 'success',
+        '--arg', 'task', task,
+        '--arg', 'repository', 'owner/repo',
+        '--arg', 'base_branch', 'main',
+        '--arg', 'gemini_output', geminiOutput,
+        '--arg', 'invocation_id', 'gemini-123-1',
+        '--arg', 'run_id', '123',
+        '--argjson', 'blockers', '[]',
+        jqFilter
+      ], { encoding: 'utf8' });
+
+      if (result.status !== 0) {
+        throw new Error(`jq failed with status ${result.status}: ${result.stderr}`);
+      }
+      const payload = JSON.parse(result.stdout);
+      if (payload.task !== task) {
+        throw new Error(`task mismatch: expected ${JSON.stringify(task)}, got ${JSON.stringify(payload.task)}`);
+      }
+      if (payload.result.gemini_output !== geminiOutput) {
+        throw new Error(`gemini_output mismatch: expected ${JSON.stringify(geminiOutput)}, got ${JSON.stringify(payload.result.gemini_output)}`);
+      }
+      if (payload.repository !== 'owner/repo') throw new Error('repository mismatch');
+      if (payload.base_branch !== 'main') throw new Error('base_branch mismatch');
+      return payload;
+    };
+  }
+
+  // Test 16: Regression - jq-based JSON construction handles double quotes
+  await runTest('Regression - callback payload handles double quotes in task', runJqSerializationTest('Task with "double quotes" inside', 'Output with "quotes"'));
+
+  // Test 17: Regression - jq-based JSON construction handles single quotes
+  await runTest('Regression - callback payload handles single quotes', runJqSerializationTest("Task with 'single quotes' inside", "Output with 'single quotes'"));
+
+  // Test 18: Regression - jq-based JSON construction handles backslashes
+  await runTest('Regression - callback payload handles backslashes', runJqSerializationTest('Path: C:\\Users\\Test\\file.txt', 'Escaped: \\n \\t \\" \\\\'));
+
+  // Test 19: Regression - jq-based JSON construction handles newlines
+  await runTest('Regression - callback payload handles newlines', runJqSerializationTest('Line1\nLine2\nLine3', 'Output\nwith\nnewlines'));
+
+  // Test 20: Regression - jq-based JSON construction handles tabs
+  await runTest('Regression - callback payload handles tabs', runJqSerializationTest('Col1\tCol2\tCol3', 'Tab\tseparated\tvalues'));
+
+  // Test 21: Regression - jq-based JSON construction handles JSON-like content
+  await runTest('Regression - callback payload handles JSON-like content', runJqSerializationTest('Review {"key": "value", "nested": {"arr": [1,2,3]}}', 'Result: {"status": "ok", "data": [1,2,3]}'));
+
+  // Test 22: Regression - jq-based JSON construction handles all special chars combined
+  await runTest('Regression - callback payload handles combined special characters', runJqSerializationTest('Complex: "quotes" \'single\' \\backslash\nnewline\ttab{"json": true}', 'Output: "quotes" \'single\' \\backslash\nnewline\ttab{"json": true}'));
+
+  // Test 23: Verify required ACP fields are present in generated payload
+  await runTest('Regression - all required ACP fields present in payload', async () => {
+    const payload = await runJqSerializationTest('test task', 'test output')();
+
+    // Verify all required fields per ACP contract
+    assert(payload.hasOwnProperty('request_id'));
+    assert(payload.hasOwnProperty('agent'));
+    assert(payload.hasOwnProperty('status'));
+    assert(payload.hasOwnProperty('task'));
+    assert(payload.hasOwnProperty('repository'));
+    assert(payload.hasOwnProperty('base_branch'));
+    assert(payload.hasOwnProperty('changed_files'));
+    assert(payload.hasOwnProperty('verification'));
+    assert(payload.hasOwnProperty('result'));
+    assert(payload.result.hasOwnProperty('execution_metadata'));
+    assert(payload.result.execution_metadata.hasOwnProperty('invocation_id'));
+    assert(payload.result.execution_metadata.hasOwnProperty('run_id'));
+    assert(payload.result.hasOwnProperty('gemini_output'));
+    assert(payload.hasOwnProperty('commit'));
+    assert(payload.hasOwnProperty('push'));
+    assert(payload.hasOwnProperty('blockers'));
   });
 
   server.close();

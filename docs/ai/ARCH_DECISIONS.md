@@ -188,3 +188,31 @@
 - No repository event (issue, commit, workflow run) automatically activates Kilo; activation requires an explicit authorized ACP command dispatched to the Kilo trigger URL.
 - The Kilo trigger URL and shared-secret authentication material are credentials and must not be committed, logged, or exposed in documentation or issues.
 - AI sessions may be temporary; repository state (commits, diffs, CI results) provides persistent verification independent of Kilo's report.
+
+---
+
+## ADR-014: Security Specialist Architectural Foundation
+
+**Status**: PROPOSED / TARGET (architectural foundation established)
+**Date**: 2026-09-12
+**Context**: The Security Specialist lane is defined as PROPOSED / TARGET in ARCHITECTURE.md (Sections 12.7 and 17.2). The lane exists only as a high-level description without an activation model, authority model, risk-based activation criteria, or open architectural decisions. Without these, the routing layer (Qwen) and Architect (Gemini) lack the structured basis to determine when a Security Specialist review is required, what authority the specialist holds, or what architectural questions remain unresolved.
+**Decision**: Establish the Security Specialist architectural foundation in ARCHITECTURE.md:
+
+- **Activation Model**: Three risk tiers — Mandatory (review required before implementation; triggered by `security_review_required: true` in ACP command, or auth/credential/secrets/trust-boundary/cryptographic changes), Conditional (review triggered when task touches elevated security surface area; triggered by `security_audit_context` with relevant concerns, or webhook/API/persistence/CI-CD/dependency changes), and Advisory (consultation at discretion of routing layer or Architect for general security hygiene).
+- **Authority Model**: Advisory Authority (produces Security Audit Report informing Architect and Director; does not authorize or block commits directly), Gatekeeping Authority (for Mandatory-tier tasks, must complete review and produce report before implementation ACP command to Kilo may be issued; Orchestrator enforces gate; does not block for Conditional/Advisory), and No Implementation Authority (does not write production code, modify files, or execute implementation tasks).
+- **Risk-Based Activation Criteria**: Tabulated mapping of trigger conditions to tiers (Mandatory/Conditional/Advisory) and gates (blocked until report / consulted in parallel / no gate).
+- **Optional Security Fields**: `security_review_required` (boolean) and `security_audit_context` (object with `touch_points`, `risk_indicators`, `requested_focus`, `prior_audit_ref`) added as optional ACP command envelope extensions.
+
+**Rationale**:
+- Provides the structured basis for Qwen Router risk classification and activation routing.
+- Establishes clear authority boundaries: Security Specialist is advisory/gatekeeping, not implementation.
+- Makes activation criteria explicit and machine-evaluable where possible (`security_review_required`).
+- Distinguishes Mandatory (hard gate) from Conditional (parallel) from Advisory (optional) to avoid unnecessary blocking while preserving security review where needed.
+- Preserves the existing architectural boundary: Security Specialist does not replace, disable, or rewrite existing AI lanes or production code.
+
+**Consequences**:
+- The Security Specialist remains PROPOSED / TARGET for activation until the Qwen Router implements the trigger logic (see Open Architectural Decisions below).
+- Three open architectural decisions are recorded: (1) Qwen Router Trigger Logic Refinement, (2) Security Audit Report Persistence Mechanism, and (3) Security Specialist Callback Mechanism to Orchestrator. These are explicitly PROPOSED / TARGET and must not be claimed as resolved.
+- The optional ACP security fields (`security_review_required`, `security_audit_context`) are added to the schema illustration but do not alter the current mandatory ACP contract.
+- `poc/command.json` and `poc/test.js` updated to include and validate the optional security fields with backward-compatible tests.
+- No production code, workflows, services, or agent implementation behavior is modified by this decision.

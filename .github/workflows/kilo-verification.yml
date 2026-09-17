@@ -1,0 +1,109 @@
+name: Kilo Delivery Verification
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: kilo-verification-${{ github.event.pull_request.number || github.sha }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  status-write: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      status-write: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set verification inputs from event
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMIT="${{ github.event.pull_request.head.sha }}"
+            BASE_REF="${{ github.event.pull_request.base.ref }}"
+            HEAD_REF="${{ github.event.pull_request.head.ref }}"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          else
+            COMMIT="${{ github.sha }}"
+            BASE_REF="${{ github.event.before }}"
+            HEAD_REF="${{ github.ref_name }}"
+            PR_NUMBER=""
+          fi
+
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Run Kilo verification
+        id: verifier
+        env:
+          VERIFY_COMMIT: ${{ steps.inputs.outputs.commit }}
+          VERIFY_BASE_REF: ${{ steps.inputs.outputs.base_ref }}
+          VERIFY_HEAD_REF: ${{ steps.inputs.outputs.head_ref }}
+          VERIFY_EVENT: ${{ github.event_name }}
+          VERIFY_PR_NUMBER: ${{ steps.inputs.outputs.pr_number }}
+          VERIFY_REPO: ${{ github.repository }}
+          VERIFY_PERMITTED_PATHS: ${{ vars.KILO_VERIFICATION_PERMITTED_PATHS || '' }}
+          VERIFY_TASK: ${{ vars.KILO_VERIFICATION_TASK || '' }}
+          VERIFY_REQUEST_ID: ${{ vars.KILO_VERIFICATION_REQUEST_ID || '' }}
+        run: |
+          node poc/kilo-verifier.js
+
+      - name: Upload verification result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kilo-verification-result
+          path: poc/verification-result.json
+          retention-days: 30
+
+      - name: Set commit status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RESULT_FILE="poc/verification-result.json"
+          if [ ! -f "$RESULT_FILE" ]; then
+            echo "No result file found"
+            exit 1
+          fi
+
+          VERIFY_STATUS=$(jq -r '.status' "$RESULT_FILE")
+          BLOCKERS=$(jq -r '(.blockers | join("; "))' "$RESULT_FILE")
+
+          if [ "$VERIFY_STATUS" = "passed" ]; then
+            STATE="success"
+            DESCRIPTION="Kilo verification passed"
+          elif [ "$VERIFY_STATUS" = "blocked" ]; then
+            STATE="failure"
+            DESCRIPTION="Kilo verification blocked"
+          else
+            STATE="failure"
+            DESCRIPTION="Kilo verification failed"
+          fi
+
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/statuses/${{ steps.inputs.outputs.commit }}" \
+            -f state="$STATE" \
+            -f description="$DESCRIPTION" \
+            -f context="kilo-verification" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
