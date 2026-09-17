@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-17
-**Updated By**: Kilo — Reconcile STATE.md with verified main state (TASK-KILO-RECONCILE-STATE-001): corrected Part 1 commit reference, updated Part 2/Part 2.2 test counts to reflect post-integration suite, reconciled Automated Kilo delivery verification backlog to IMPLEMENTED, reconciled Part 2.1b Gemini workflow dispatch status to IMPLEMENTED / VERIFIED (commit `5f49f99`, 2026-09-15), updated Repository Structure to reflect current main
+**Updated By**: Kilo — Persist complete verified Kilo/Gemini orchestration audit, implementation history, branch-reconciliation history, Gemini architectural findings, current strategic sequence, and future-work boundaries (TASK-KILO-PERSIST-ORCHESTRATION-CONTINUITY-001)
 
 ---
 
@@ -833,3 +833,226 @@ This section records the documentation/state reconciliation for the verified imp
     - Remaining proposed/pending project work (Render Control Gate, etc.) — Part 2.1b and Automated Kilo delivery verification since IMPLEMENTED
 
 ---
+
+## TASK-KILO-PERSIST-ORCHESTRATION-CONTINUITY-001 — Project Continuity Persistence
+
+**Task**: TASK-KILO-PERSIST-ORCHESTRATION-CONTINUITY-001 (Issue #137)
+**Updated By**: Kilo
+
+This task persists the complete verified Kilo/Gemini orchestration audit, implementation history, branch-reconciliation history, Gemini architectural findings, current strategic sequence, and future-work boundaries into the existing AI documentation system so that a future ChatGPT session can recover the full project-management context from GitHub without relying on prior conversation memory.
+
+**Verified baseline**: `origin/main` at `379af3bcbfc4238738801a0a74f0bb4f5f5a2cfb` (commit message: "docs(ai): make Gemini artifact discovery mandatory").
+
+This reconciliation adds the following historical records to this document:
+- Kilo branch audit with classification and candidate-branch findings
+- Architectural lesson from the branch audit (never merge blindly)
+- Gemini Part 2.1 architectural investigation result
+- Status distinction vocabulary
+- Complete verified orchestration sequence
+
+No runtime/application code, workflows, AGENTS.md, GEMINI.md, or ARCHITECTURE.md were modified. Only the four authorized documentation paths were changed (`docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`).
+
+---
+
+## Kilo Branch Audit — Historical Record and Lessons
+
+A comprehensive Kilo branch audit was conducted against this repository. This section records the verified historical findings and the architectural lesson they produced.
+
+### Branch Inventory (Historical Audit vs. Current Verification)
+
+| Scope | Historical Audit Count | Current Verified Count |
+|-------|----------------------|----------------------|
+| Remote `origin/kilo/*` branches | 42 | 43 |
+| Local `kilo/*` branches | 1 (`kilo/cosmic-oak-maz`) | 1 (`kilo/wintry-bit-br1`) |
+| Total Kilo refs | 43 | 44 |
+
+The historical audit recorded 42 remote + 1 local = 43 total. A current verification (`git branch -r | grep kilo | wc -l` = 43; `git branch -a | grep kilo | wc -l` = 44) shows 43 remote + 1 local = 44 total, indicating new Kilo branches were created after the original audit. The classification counts below reflect the historical audit scope.
+
+### Classification Counts and Meanings
+
+| Class | Count | Meaning |
+|-------|-------|---------|
+| A | 13 | Already integrated |
+| B | 5 | Pushed/committed but not integrated and potentially valid |
+| C | 20 | Superseded by later work |
+| D | 2 | Duplicate/equivalent |
+| E | 7 | Stale/obsolete |
+| F | 0 | Unresolved |
+
+Classification meanings:
+- **A**: already integrated.
+- **B**: potentially valid candidate requiring comparison against current `main`.
+- **C**: superseded by later work.
+- **D**: duplicate/equivalent work.
+- **E**: stale/obsolete.
+- **F**: unresolved.
+
+### Key Candidate-Branch Findings
+
+#### `kilo/damp-gem-jgq` — `7caeebd` — Class A (Integrated)
+
+Kilo delivery verification lane. Unique files:
+- `.github/workflows/kilo-verification.yml`
+- `poc/kilo-verifier.js`
+- `test/kilo-verifier.test.js`
+
+This work was subsequently integrated into main. The resulting independent verification lane verifies: commit identification; changed files; authorized file scope; `request_id` correlation; `git diff --check`; idempotency.
+
+#### `kilo/live-crest-5zt` — `8c2438b` / `a8aafd2` — Class A (Integrated)
+
+Gemini callback JSON serialization regression work. The relevant jq serialization behavior was already restored in main via `4ea1f22`. Regression tests were subsequently integrated through commit `1f2412a951a81847b1b8fa8e271883e8137fa513`. The resulting callback regression suite covers special-character and required-ACP-field serialization cases (23 tests).
+
+#### `kilo/tuned-anchor-k2a` — `b24cf01` — Class B (Candidate)
+
+Contained `test/json-serialization.test.js`. This was a candidate requiring comparison against current main rather than blind merging. The current main already contains equivalent jq-based serialization regression tests.
+
+#### `kilo/woodsy-flux-qmv` — `92641bc` — Class C (Superseded)
+
+Part 2.1b documentation reconciliation. The relevant state was subsequently reconciled by later documentation work. Do not treat this historical branch as an independent current implementation.
+
+#### `kilo/clean-gem-ljm` — `d82fdb1` — Class A (Integrated)
+
+Security Specialist architectural foundation. This work was subsequently integrated through `1f2412a`. It established: Security Specialist registration in `AGENTS.md`; architecture expansion in `ARCHITECTURE.md`; ADR-014; POC security fields; three open architectural decisions.
+
+#### Other Superseded/Duplicate/Stale Branches
+
+- `kilo/electric-elm-37e` — `5d9a08a` — Class A (already represented/integrated): Proposed ACP execution contract.
+- `kilo/wintry-cell-nsq` — `dd4db66` — Class C (superseded): Render Control Gate documentation, superseded/reconciled into main.
+- `mega-tiger-he1` — `7d40e28` — Class C (superseded): First/incorrect Part 2.1b implementation. Must not be treated as authoritative.
+- `handy-bloom-8ii` — `b5e27de` / `5e53e35` — Class C (superseded): Corrected Part 2.1b implementation plus stale task-registry sample. Relevant substance represented in evolved main state.
+- `solar-grove-uki` — `2e9355d` / `77f50c3` — Class A (integrated): Part 2.2 source implementation, recovered into main via `ebb8e9e`.
+- `spirited-helm-o1r` — `cf7cc97` — Class C (superseded): Contained a heredoc defect, superseded by jq restoration `4ea1f22`.
+- `modular-koala-nos` — Class D (duplicate): Duplicate log-removal work.
+- `oceanic-chip-6a9` — Class D (duplicate): Duplicate log-removal work.
+- `plucky-cycle-b0h` — Class E (stale): Experimental pre-Gemini state capture.
+- `gleeful-heron-r7b` — Class E (stale): Experimental pre-Gemini state capture.
+- `live-brook-ino` — Class E (stale): Experimental pre-Gemini state capture.
+- `astral-alpaca-ifr` — `7409372` — Class E (stale): Unadopted 555-line orchestration execution plan. Observation only.
+- `cheerful-flux-z62` — `993370e` — Class A (integrated): Minor Gemini issue activation semantics documentation. Integrated through `1f2412a`.
+
+### Architectural Lesson: Never Merge Blindly
+
+No Kilo branch should ever be merged blindly. The required historical/recovery pattern is:
+1. Identify the candidate branch.
+2. Inspect its ancestry.
+3. Compare its actual diff against current `main`.
+4. Determine whether its substance is already represented.
+5. Classify it as integrated, valid candidate, superseded, duplicate, stale, or unresolved.
+6. Only then decide whether any remaining work should be reused.
+
+The repository state, not a branch name or agent report, determines whether work is still required.
+
+---
+
+## Gemini Part 2.1 Architectural Investigation — Result
+
+Gemini investigated the remaining Part 2.1 gap (the authenticated machine-readable Gemini → Render return path).
+
+**Key conclusion**: The authenticated machine-readable Gemini → Render return path is **NOT implemented**.
+
+Current flow:
+- Kilo → Render → GitHub Actions → Gemini → GitHub Actions artifact
+
+Missing architectural leg:
+- Gemini → authenticated Render callback
+
+Existing relevant pieces include: Kilo → Render authenticated callback; orchestration registry; Gemini trigger; Gemini result artifact persistence.
+
+The smallest likely implementation area identified by Gemini consists of: authenticated Gemini callback route; existing registry integration; callback integration tests; `main.yml` callback after Gemini execution. Likely affected implementation areas: `routes/poc.js`; `poc/orchestrator.js`; relevant tests; `.github/workflows/main.yml`.
+
+**Status**: **PROPOSED / TARGET** — This Gemini finding is an architectural investigation result, not authorization to implement Part 2.1. Implementation requires explicit Kyle authorization.
+
+---
+
+## Status Distinction Vocabulary
+
+The following distinctions must be preserved throughout all documentation:
+
+| Status Label | Meaning |
+|-------------|---------|
+| **Reported complete** | An agent claims completion. Claims alone are not verified project state. |
+| **GitHub verified** | The actual commit, files, diff, and relevant validation have been independently confirmed against repository state. |
+| **Documentation reconciled** | Project state and historical records have been updated to match verified reality. |
+| **Still requiring validation** | The report or implementation has not yet received the required independent verification. |
+| **Blocked / uncertain** | The evidence is insufficient or a decision is required. |
+
+Never convert an agent report into verified project state merely because the agent says it completed the work.
+
+---
+
+## Complete Verified Project Context (Durable Continuity Record)
+
+For future ChatGPT sessions reconstructing project-management context from GitHub only, the verified orchestration history sequence is:
+
+1. **Kilo branch audit** — comprehensive audit of 43 remote + 1 local Kilo refs, classified A/B/C/D/E/F. Established the "never merge blindly" pattern.
+2. **Candidate-work reconciliation** — 5 candidate branches evaluated; 4 integrated (cheerful-flux-z62, clean-gem-ljm, live-crest-5zt, damp-gem-jgq); 1 already represented (eager-signal-7kl). Commit `1f2412a`.
+3. **Part 1 Foundation** — IMPLEMENTED (commit `9407470`). TaskRegistry, Orchestrator, ACP Schema, focused tests, persistent correlation state.
+4. **Part 2 Automatic Gemini trigger after Kilo completion** — IMPLEMENTED / VERIFIED (commit `6c92a9a`). Behavior: Kilo completion → `handleKiloCompletion` → `next_action='trigger_gemini'` → `orchestrator.triggerGemini()` → Gemini state `running` → `next_action='waiting_gemini_callback'`. Kilo failure/blocked does not trigger Gemini. 103/103 tests pass; `git diff --check` clean.
+5. **Part 2.1b Gemini workflow dispatch** — IMPLEMENTED / VERIFIED (commit `5f49f99`). `poc/gemini-trigger.js` with `dispatchGemini()`, `workflow_dispatch` inputs to `.github/workflows/main.yml`, `orchestrator.triggerGemini()`, `test/gemini-trigger.test.js` (14 tests).
+6. **Part 2.2 Kilo completion/result delivery** — IMPLEMENTED / VERIFIED (source `2e9355d`, main commit `ebb8e9e`). Kilo provider ID capture (`session_id`, `message_id`, `invocation_id`), TaskRegistry persistence, idempotent polling, completion/result processing, provider client abstraction, mock provider, Gemini dispatch after Kilo completion, callback/JSON serialization. 133/133 tests pass; `git diff --check` clean.
+7. **Gemini verification requirements propagation** — IMPLEMENTED (commits `736ae3f`, `748ba91`, `53f1a3f`). Flow: ACP command → TaskRegistry → orchestrator → gemini-trigger → GitHub Actions → Gemini reviewer prompt. Independently verified by Gemini.
+8. **Gemini artifact persistence/retrieval** — IMPLEMENTED / VERIFIED (commit `793d083`). Workflow: Gemini → `steps.gemini_run.outputs.summary` → `gemini-acp-report.json` → `gemini-acp-report` GitHub Actions artifact → ChatGPT retrieves directly. Verified live run: 35090491295, artifact ID 10444246441, 1120 bytes.
+9. **Independent Kilo delivery verification lane** — IMPLEMENTED (commit `7caeebd`, integrated). `poc/kilo-verifier.js`, `.github/workflows/kilo-verification.yml`, `test/kilo-verifier.test.js` (18 tests). Verifies: commit identification, changed files, authorized file scope, `request_id` correlation, `git diff --check`, idempotency.
+10. **Security Specialist architectural foundation** — IMPLEMENTED (commit `d82fdb1`, integrated). Lane registration in `AGENTS.md`; architecture expansion in `ARCHITECTURE.md` Sections 12.7, 16.3, 17.2; ADR-014; POC security fields; three open architectural decisions.
+11. **AI project-state documentation system** — IMPLEMENTED (commit `5894d6b`). `docs/ai/` system with STATE.md, ARCH_DECISIONS.md, TASK_LOG.md, README.md integrated into AGENTS.md.
+12. **ChatGPT Protocol Gate** — IMPLEMENTED / VERIFIED (commit `3ce42ac159dd8c73d7e043d7bc57692f6c5ecde`). Section 14 of `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` hardening.
+13. **Gemini artifact discovery procedure** — IMPLEMENTED (commit `379af3b`).
+14. **Gemini investigates remaining Part 2.1 gap** → identifies missing authenticated Gemini → Render return path. Status: PROPOSED / TARGET.
+15. **Current Layer 1 stabilization/hardening boundary** — IMPLEMENTED items above constitute the stabilized Layer 1.
+16. **Future Layer 2 Render Control Gate** — PROPOSED / TARGET. Not implemented. Not active.
+17. **Existing Kilo/Gemini architecture preserved** — PROTECTED. Must not be redesigned, replaced, migrated, or reinterpreted.
+
+---
+
+## Remaining Part 2.1 Gap
+
+- **Part 2.1b** — Gemini workflow dispatch — IMPLEMENTED / VERIFIED (commit `5f49f99`).
+- **Remaining Part 2.1** — authenticated machine-readable Gemini → Render return path — PROPOSED / TARGET. Not implemented. Not authorized for implementation. See Section: Gemini Part 2.1 Architectural Investigation.
+
+---
+
+## Current Strategic Sequence
+
+### Layer 1 — FIRST (Current / Stabilization Boundary)
+
+Stabilize, reconcile, and harden the existing Kilo↔Gemini execution architecture at its existing boundaries.
+
+Layer 1 includes:
+- ACP schema/engine — IMPLEMENTED / VERIFIED
+- TaskRegistry — IMPLEMENTED / VERIFIED
+- Orchestrator — IMPLEMENTED / VERIFIED
+- Kilo transport — IMPLEMENTED / VERIFIED
+- Gemini trigger — IMPLEMENTED / VERIFIED
+- Part 2 Automatic Gemini trigger — IMPLEMENTED / VERIFIED (commit `6c92a9a`)
+- Part 2.1b Gemini workflow dispatch — IMPLEMENTED / VERIFIED (commit `5f49f99`)
+- Part 2.2 Kilo completion/result delivery — IMPLEMENTED / VERIFIED (commit `ebb8e9e`)
+- Callbacks/result persistence — IMPLEMENTED / VERIFIED
+- `request_id` correlation — IMPLEMENTED / VERIFIED
+- Execution reporting — IMPLEMENTED / VERIFIED
+- Delivery verification — IMPLEMENTED / VERIFIED
+- Gemini artifact observability — IMPLEMENTED / VERIFIED (artifact retrieval path verified)
+
+### Layer 2 — FUTURE (After Layer 1)
+
+Introduce the Render Control Gate as a machine-enforced authorization and policy boundary upstream of the existing architecture. The Control Gate integrates with the existing architecture; it does **not** replace the Kilo↔Gemini architecture.
+
+---
+
+## Architectural Protection Statement
+
+The following existing architecture must be preserved and must NOT be redesigned, replaced, migrated, or reinterpreted merely to introduce future components:
+
+- Kilo activation path
+- Gemini activation path
+- GitHub Actions integration
+- ACP
+- TaskRegistry
+- Orchestrator
+- Kilo transport
+- Gemini trigger
+- Callback paths
+- `request_id` correlation
+- Part 2.2 return path
+- Delivery verification
+
+The repository state, not a branch name or agent report, determines whether work is still required.

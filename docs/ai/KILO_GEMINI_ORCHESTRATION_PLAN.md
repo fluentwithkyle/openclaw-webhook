@@ -1,6 +1,6 @@
 # Kilo ↔ Gemini Orchestration Backbone — Implementation Plan
 
-**Status**: Part 1 Foundation — IMPLEMENTED (2026-09-14) | Part 2 Automatic Gemini Trigger After Kilo Completion — IMPLEMENTED / VERIFIED (2026-09-16, commit `6c92a9a`) | Part 2.2 Kilo Completion/Result Delivery — IMPLEMENTED / VERIFIED (2026-09-16, main commit `ebb8e9e`) | Part 2.1+ — PROPOSED / PENDING KYLE APPROVAL
+**Status**: Part 1 Foundation — IMPLEMENTED (2026-09-14) | Part 2 Automatic Gemini Trigger After Kilo Completion — IMPLEMENTED / VERIFIED (2026-09-16, commit `6c92a9a`) | Part 2.1b Gemini Workflow Dispatch — IMPLEMENTED / VERIFIED (2026-09-15, commit `5f49f99`) | Part 2.2 Kilo Completion/Result Delivery — IMPLEMENTED / VERIFIED (2026-09-16, main commit `ebb8e9e`) | Remaining Part 2.1 (authenticated Gemini → Render return path) — PROPOSED / TARGET
 **Repository**: `fluentwithkyle/openclaw-webhook`
 **Base branch**: `main`
 **Purpose**: Define the smallest viable machine-to-machine orchestration backbone connecting Kilo completion → orchestration state → Gemini execution → structured Gemini result → subsequent agent/action determination.
@@ -83,7 +83,8 @@ The following existing architecture must be preserved and must NOT be redesigned
   - Part 1 Foundation: **IMPLEMENTED** (2026-09-14)
   - **Part 2 Automatic Gemini Trigger After Kilo Completion: IMPLEMENTED / VERIFIED** (2026-09-16, commit `6c92a9a`)
   - **Part 2.2 Kilo Completion/Result Delivery: IMPLEMENTED / VERIFIED** (2026-09-16, main commit `ebb8e9e`)
-  - Part 2.1: PROPOSED / TARGET
+   - Part 2.1b (Gemini workflow dispatch): **IMPLEMENTED / VERIFIED** (2026-09-15, commit `5f49f99`, 14 tests)
+   - Remaining Part 2.1 (authenticated Gemini → Render return path): **PROPOSED / TARGET** (Gemini investigation result; not implemented)
 - Layer 2 (Control Gate): **FUTURE WORK** — after Layer 1
 - Existing Kilo/Gemini architecture: **PROTECTED**
 
@@ -198,8 +199,8 @@ Part 2 (Automatic Gemini Trigger After Kilo Completion) has been implemented and
 ### Source and Verification
 
 - **Implementation commit**: `6c92a9a223cc58f8f85f052c8d2168424938b46c`
-- **Verification**: `origin/main` verified at `6c92a9a`; 95/95 tests pass; `git diff --check` clean
-- **Test breakdown**: 20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 15 Gemini callback
+- **Verification**: `origin/main` verified at `6c92a9a`; 103/103 tests pass; `git diff --check` clean
+- **Test breakdown**: 20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback
 
 ### Implemented Components
 
@@ -209,12 +210,38 @@ Part 2 (Automatic Gemini Trigger After Kilo Completion) has been implemented and
 - **Failure/blocked protection**: Kilo failure or blocked outcomes correctly do NOT trigger Gemini
 - **Comprehensive test coverage**: New async integration test `Automatic Gemini trigger after Kilo success - orchestrator.triggerGemini called`
 
-### Not Implemented in Part 2 (Deferred to Part 2.1+)
+### Not Implemented in Part 2 (Deferred to Part 2.1b+)
 
-- `poc/gemini-trigger.js` — GitHub Actions workflow_dispatch integration (already exists but not fully integrated)
 - `routes/poc.js` callback endpoints — `/poc/kilo/callback` and `/poc/gemini/callback` (Part 2.2 implements callback endpoints; Part 2 uses them)
 - Authenticated callback endpoints with shared-secret validation
 - End-to-end Kilo → Gemini → Kilo execution loop
+
+> **Note (2026-09-17)**: `poc/gemini-trigger.js` was subsequently implemented as Part 2.1b — Gemini Workflow Dispatch (commit `5f49f99`, 14 tests). See Part 2.1b Implementation Summary below. Do not treat Part 2.1b as pending implementation.
+
+---
+
+## Part 2.1b Implementation Summary (VERIFIED)
+
+Part 2.1b (Gemini Workflow Dispatch) has been implemented and verified.
+
+### Source and Verification
+
+- **Implementation commit**: `5f49f99` (2026-09-15, "Part 2.1b + 2.2: Kilo -> Gemini orchestration backbone")
+- **Verification**: 14 Gemini trigger tests pass
+- **Test file**: `test/gemini-trigger.test.js`
+
+### Implemented Components
+
+- `poc/gemini-trigger.js` — `dispatchGemini()` method encapsulating GitHub Actions `workflow_dispatch` integration
+- `workflow_dispatch` inputs added to `.github/workflows/main.yml`
+- `orchestrator.triggerGemini()` method in `poc/orchestrator.js`
+- `test/gemini-trigger.test.js` — 14 tests covering trigger dispatch and failure handling
+
+**Do not treat Part 2.1b as pending or unimplemented.** It is complete and verified.
+
+### Remaining Part 2.1 (PROPOSED / TARGET)
+
+The remaining Part 2.1 — the authenticated machine-readable Gemini → Render return path — is **NOT implemented**. This is a Gemini architectural investigation result, not authorization to implement. See `STATE.md` section "Gemini Part 2.1 Architectural Investigation — Result."
 
 ---
 
@@ -670,3 +697,106 @@ These are outside the initial backbone implementation:
 - Human approval gates for consequential actions.
 
 The backbone should therefore establish stable contracts and correlation without prematurely implementing the larger multi-agent system.
+
+---
+
+## 17. Durable Historical Context (Prevents Completed Work Being Treated as Pending)
+
+This section persists the complete verified project history to prevent future agents from incorrectly treating completed work as pending or unimplemented.
+
+### 17.1 Complete Implementation Timeline
+
+| # | Component | Status | Commit | Tests | Date |
+|---|-----------|--------|--------|-------|------|
+| 1 | Part 1 Foundation (TaskRegistry, Orchestrator, ACP Schema) | IMPLEMENTED | `9407470` | All pass | 2026-09-14 |
+| 2 | Part 2 Automatic Gemini Trigger After Kilo Completion | IMPLEMENTED / VERIFIED | `6c92a9a` | 103/103 pass | 2026-09-16 |
+| 3 | Part 2.1b Gemini Workflow Dispatch | IMPLEMENTED / VERIFIED | `5f49f99` | 14 pass | 2026-09-15 |
+| 4 | Part 2.2 Kilo Completion/Result Delivery | IMPLEMENTED / VERIFIED | `ebb8e9e` | 133/133 pass | 2026-09-16 |
+| 5 | Gemini Verification Requirements Propagation | IMPLEMENTED | `736ae3f`, `748ba91`, `53f1a3f` | — | 2026-09-16 |
+| 6 | Gemini Result Artifact Persistence/Retrieval | IMPLEMENTED / VERIFIED | `793d083` | — | 2026-09-16 |
+| 7 | Independent Kilo Delivery Verification Lane | IMPLEMENTED | `7caeebd` | 18 pass | 2026-09-15 |
+| 8 | Security Specialist Architectural Foundation | IMPLEMENTED | `d82fdb1` (via `1f2412a`) | 3 new | 2026-09-14 |
+| 9 | AI Project-State Documentation System | IMPLEMENTED | `5894d6b` | — | 2026-09-12 |
+| 10 | ChatGPT Protocol Gate (Section 14) | IMPLEMENTED / VERIFIED | `3ce42ac` | — | 2026-09-16 |
+| 11 | Gemini Artifact Discovery Procedure | IMPLEMENTED | `379af3b` | — | 2026-09-17 |
+| 12 | Kilo Branch Audit + Candidate Integration | COMPLETED | `1f2412a` | — | 2026-09-17 |
+
+### 17.2 What Is Implemented vs. Proposed vs. Future
+
+**IMPLEMENTED / VERIFIED:**
+- Part 1 Foundation (TaskRegistry, Orchestrator, ACP Schema, focused tests)
+- Part 2 Automatic Gemini trigger after Kilo completion
+- Part 2.1b Gemini workflow dispatch (`poc/gemini-trigger.js`, `dispatchGemini()`, `workflow_dispatch` to `main.yml`)
+- Part 2.2 Kilo completion/result delivery
+- Gemini verification requirements propagation
+- Gemini result artifact observability and retrieval path
+- Independent Kilo delivery verification lane
+- Security Specialist architectural foundation
+- AI project-state documentation system
+- ChatGPT Protocol Gate
+- Kilo branch audit and candidate reconciliation
+
+**PROPOSED / TARGET (Not Implemented):**
+- Remaining Part 2.1: authenticated machine-readable Gemini → Render return path
+  - Gemini investigated this and concluded it is NOT implemented
+  - Required implementation: authenticated Gemini callback route, registry integration, callback tests, `main.yml` callback after Gemini execution
+  - Affected areas: `routes/poc.js`, `poc/orchestrator.js`, relevant tests, `.github/workflows/main.yml`
+  - **Not authorized for implementation without explicit Kyle approval**
+- Render Control Gate / Gatekeeper (Layer 2 — future work after Layer 1 stabilization)
+- Full ACP protocol implementation beyond current foundation
+- ACP Router / Dispatcher
+- Agent communication/transport standardization (Qwen → ACP)
+- Failover authorization model
+- Kilo HTTP trigger secret rotation
+- LINE-centered AI operating model
+- Utility AI lane
+- Security AI expansion beyond existing foundation
+
+**UNDER VALIDATION:**
+- Qwen Router
+
+**BACKLOG / PRODUCTION HARDENING:**
+- Apps Script shared-secret authentication
+- Abandoned-booking idempotency
+- Tally/Cal.com webhook signature verification and event-ID deduplication
+- Standardized Apps Script responses
+- Email template ownership migration
+- Automated testing infrastructure
+
+### 17.3 Kilo Branch Audit Summary
+
+- 43 remote `origin/kilo/*` branches (currently verified; historical audit found 42)
+- 1 local kilo branch (currently `kilo/wintry-bit-br1`; historical audit referenced `kilo/cosmic-oak-maz`)
+- 44 total Kilo refs (currently verified; historical audit: 43)
+- Classification: A=13 (integrated), B=5 (valid candidate), C=20 (superseded), D=2 (duplicate), E=7 (stale), F=0 (unresolved)
+- **Architectural lesson**: No Kilo branch should ever be merged blindly. Required pattern: identify candidate → inspect ancestry → compare actual diff against current main → determine whether substance is already represented → classify → only then decide whether to reuse. Repository state, not branch name or agent report, determines whether work is required.
+
+### 17.4 Architectural Protection
+
+The following existing architecture must be preserved and must NOT be redesigned, replaced, migrated, or reinterpreted merely to introduce future components:
+- Kilo activation path
+- Gemini activation path
+- GitHub Actions integration
+- ACP
+- TaskRegistry
+- Orchestrator
+- Kilo transport
+- Gemini trigger (`poc/gemini-trigger.js`)
+- Callback paths
+- `request_id` correlation
+- Part 2.2 return path
+- Delivery verification
+
+Do not establish `workflow_dispatch` as a new architectural requirement beyond its existing verified use in Part 2.1b. If `workflow_dispatch` exists in current implementation, document it only as verified current implementation-specific behavior.
+
+### 17.5 Status Distinction Vocabulary
+
+| Label | Meaning |
+|-------|---------|
+| **Reported complete** | An agent claims completion. Claims alone are not verified project state. |
+| **GitHub verified** | The actual commit, files, diff, and relevant validation have been independently confirmed against repository state. |
+| **Documentation reconciled** | Project state and historical records have been updated to match verified reality. |
+| **Still requiring validation** | The report or implementation has not yet received the required independent verification. |
+| **Blocked / uncertain** | The evidence is insufficient or a decision is required. |
+
+Never convert an agent report into verified project state merely because the agent says it completed the work.
