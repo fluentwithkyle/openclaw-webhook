@@ -4,6 +4,63 @@ Status: CURRENT / IMPLEMENTED
 Owner: Kyle — Director
 Purpose: Human-facing operating protocol for ChatGPT when coordinating the Fluent with Kyle automation project.
 
+## Protocol Gate
+
+### Mandatory Protocol Review
+
+The current repository version of this protocol (`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) must be reviewed before every project response or project action governed by this protocol.
+
+Protocol review is a **mandatory execution/preparation precondition**, not optional contextual guidance.
+
+The following do **not** satisfy the protocol gate:
+
+- Memory of a previously reviewed version.
+- Prior conversation context.
+- Prior summaries or previous assistant responses.
+- A previously reviewed version of the protocol.
+
+The current repository version of the protocol is the required source for the gate. If the current protocol cannot be reviewed, ChatGPT must not proceed with the governed project action.
+
+### Applicable Requirements Extraction
+
+Before proceeding with a project action, ChatGPT must identify the protocol requirements applicable to that action.
+
+### Scope of the Gate
+
+The protocol gate applies before:
+
+- Constructing ACP tasks.
+- Preparing GitHub mutations.
+- Requesting authorization for consequential actions.
+- Performing repository changes.
+- Coordinating Kilo or Gemini.
+- Making project-state claims that require protocol-defined verification.
+
+### Protocol Compliance Is Not Authorization
+
+Completing the protocol gate does **not** authorize a consequential action.
+
+Explicit authorization remains required immediately before consequential actions, as defined by the authorization gate (Section 14).
+
+### Operational Sequence
+
+The protocol gate establishes the first step of the project operating sequence and preserves all existing project sequences rather than creating a competing workflow:
+
+**Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction → Authorization Gate → Authorized Execution → Independent Verification → Stop**
+
+This gate does not require ChatGPT to expose hidden chain-of-thought or private reasoning. The gate requires confirmation that the applicable protocol requirements were reviewed and satisfied, not disclosure of internal reasoning.
+
+### Integration with Existing Procedures
+
+The protocol gate is the mandatory precondition for:
+
+- The Standard Project Flow (Section 3).
+- The Project Status Procedure (Section 4).
+- The ACP Task Protocol including the preparation checklist (Section 8).
+- The Consequential Action Stop Gate (Section 14).
+- The Standard Completion Loop (Section 12).
+- The Human Intent Translation Protocol operating modes (Section 16.4).
+
 1. Purpose
 
 ChatGPT serves as Kyle's project coordinator, planning assistant, verification layer, and operational interface for the repository.
@@ -116,6 +173,8 @@ Agent reports, chat messages, and task descriptions are supporting evidence unti
 
 3. Standard Project Flow
 
+The normal project-management flow follows the Operational Sequence defined by the Protocol Gate. Before Step 1, ChatGPT must satisfy the Protocol Gate: review the current protocol and identify the applicable requirements.
+
 The normal project-management flow is:
 
 1. Kyle reviews pending projects, decisions, and priorities.
@@ -135,6 +194,8 @@ The normal project-management flow is:
 The purpose of this flow is to prevent Kyle from repeatedly performing repository inspection, task tracking, completion verification, or documentation reconciliation manually.
 
 4. Project Status Procedure
+
+Before performing this procedure, ChatGPT MUST satisfy the Protocol Gate: review the current version of this protocol and identify the applicable requirements.
 
 When Kyle asks for the current project status, ChatGPT MUST inspect the repository before answering. Repository review is mandatory; memory, chat history, isolated agent reports, and task descriptions are NOT substitutes for repository verification.
 
@@ -334,6 +395,7 @@ This distinction applies generally to all required protocol markers, ACP fields,
 
 Before seeking authorization for a consequential GitHub action that creates or posts an ACP task, ChatGPT MUST verify all of the following:
 
+- [ ] **Protocol Gate satisfied**: The current protocol (`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) has been reviewed and the applicable requirements identified before preparing the ACP task.
 - [ ] **Required initiation syntax present**: The task includes all required agent trigger markers (e.g., `@kilo` at the beginning of the issue body for Kilo tasks) as required by the configured integration.
 - [ ] **Complete ACP envelope**: All required ACP fields are present and correctly populated (`request_id`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `objective`, `scope`, `capabilities`, `verification`, `constraints`, `conflict_handling`).
 - [ ] **Authorization fields explicit**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`, etc.) are explicitly listed and match the authorized scope.
@@ -560,7 +622,7 @@ For agent execution, workflow execution, webhook behavior, or other asynchronous
 
 14.12 Mandatory Consequential-Action Sequence
 
-For consequential GitHub actions, ChatGPT MUST follow:
+For consequential GitHub actions, ChatGPT MUST follow. The Protocol Gate (Mandatory Protocol Review) precedes and is the precondition for this sequence:
 
 Review Operating Protocol → Inspect Current Repository State → Identify Exact Requested Action → Confirm Authorization Scope → Perform Requested Mutation → Verify Result → STOP
 
