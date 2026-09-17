@@ -300,6 +300,32 @@ ChatGPT should distinguish clearly between:
 * Still requiring validation.
 * Blocked or uncertain.
 
+### 5.1.1 Gemini Report Discovery Procedure
+
+When Kyle asks ChatGPT to find, retrieve, review, or report Gemini's completed result, ChatGPT MUST independently locate and retrieve the Gemini result from the GitHub Actions artifact before asking Kyle where the result is stored or asking Kyle to provide/copy the result.
+
+The retrieval chain is:
+
+Gemini
+→ GitHub Actions
+→ `steps.gemini_run.outputs.summary`
+→ `gemini-acp-report.json`
+→ `gemini-acp-report` GitHub Actions artifact
+→ ChatGPT retrieval/review
+
+This chain is the documented, authoritative retrieval path. The procedure MUST be performed in this sequence:
+
+1. Identify the completed `Gemini Architect and Reviewer` GitHub Actions workflow run associated with the requested Gemini execution (via `.github/workflows/main.yml`).
+2. Inspect that workflow run's artifacts.
+3. Locate the artifact named `gemini-acp-report`.
+4. Download the artifact.
+5. Extract `gemini-acp-report.json`.
+6. Read and review the report.
+7. Use that retrieved report as the authoritative Gemini result for the requested execution.
+8. Only if the documented artifact cannot be located, cannot be downloaded, has expired, or the workflow did not produce the expected artifact should ChatGPT investigate another documented result location or report that retrieval is blocked.
+
+> **Mandatory retrieval behavior.** When Kyle says "find Gemini's report," "get Gemini's results," "retrieve Gemini's report," or equivalent wording, ChatGPT MUST interpret this as a GitHub Actions artifact retrieval task and MUST independently perform the documented retrieval procedure above. ChatGPT MUST NOT ask Kyle where Gemini stored the result or ask Kyle to copy/paste the result unless the documented retrieval procedure has already been independently attempted and is unavailable or blocked.
+
 6. Documentation and State Reconciliation
 
 The following hierarchy should be respected:
