@@ -316,7 +316,7 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
     });
 });
 
-router.post('/coordinator', authenticateDeepSeekCoordinator, (req, res) => {
+router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) => {
     const command = req.body;
 
     const validation = validateACPCommand(command);
@@ -347,15 +347,67 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, (req, res) => {
             });
         }
 
-        return res.status(202).json({
-            request_id: command.request_id,
-            status: 'Task registered',
-            stage: 'registered',
-            execution_initiated: false,
-            task_status: result.entry.status,
-            current_agent: result.entry.current_agent,
-            next_agent: result.entry.next_agent
-        });
+        let dispatchResult;
+        try {
+            dispatchResult = await getDispatcher()(command);
+        } catch (dispatchError) {
+            console.error('Dispatch error in /poc/coordinator:', dispatchError);
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'Registration succeeded, dispatch failed',
+                stage: 'failed',
+                execution_initiated: false,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent,
+                error: dispatchError.message
+            });
+        }
+
+        if (dispatchResult.provider_session_id || dispatchResult.provider_message_id || dispatchResult.provider_invocation_id) {
+            const task = taskRegistry.getTask(command.request_id);
+            if (task) {
+                task.kilo.provider_session_id = dispatchResult.provider_session_id;
+                task.kilo.provider_message_id = dispatchResult.provider_message_id;
+                task.kilo.provider_invocation_id = dispatchResult.provider_invocation_id;
+                task.updated_at = new Date().toISOString();
+                taskRegistry.persistCache();
+            }
+        }
+
+        if (dispatchResult.status === 'SUCCESS') {
+            return res.status(202).json({
+                request_id: command.request_id,
+                status: 'Task registered and dispatched',
+                stage: 'dispatched',
+                execution_initiated: true,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent
+            });
+        } else if (dispatchResult.status === 'BLOCKED') {
+            return res.status(403).json({
+                request_id: command.request_id,
+                status: 'ACP validation blocked',
+                stage: 'blocked',
+                execution_initiated: false,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent,
+                error: dispatchResult.error
+            });
+        } else {
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'Kilo transport failure',
+                stage: 'failed',
+                execution_initiated: false,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent,
+                error: dispatchResult.error
+            });
+        }
     } catch (error) {
         console.error('Error in /poc/coordinator:', error);
         return res.status(500).json({
