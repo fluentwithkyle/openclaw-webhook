@@ -6,6 +6,73 @@
 
 ---
 
+## 2026-09-17 | Implement Authenticated DeepSeek Coordinator ACP Ingress (TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001)
+
+**Task**: Implement the authenticated `POST /poc/coordinator` endpoint for the DeepSeek Coordinator using the existing canonical ACP validation and TaskRegistry, with registration-only semantics. The endpoint authenticates via `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`), validates the request body as canonical ACP using the existing `validateACPCommand`, registers the task through the existing `taskRegistry.createTask()`, and returns 202 Accepted. It must not initiate downstream execution (no `getDispatcher()` call, no Kilo/Gemini transport invocation). (Issue #139)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+
+**Summary**:
+
+- **Objective**: Implement authenticated `POST /poc/coordinator` boundary for DeepSeek Coordinator using existing ACP validation and TaskRegistry, with registration-only semantics.
+- **Task Mode**: EXECUTE
+- **Capabilities Authorized**: inspect, modify, test, commit, push
+- **Architectural Decision**: Decision B — Register only. The Coordinator endpoint authenticates → validates canonical ACP → registers task → returns 202. It does not call `getDispatcher()` or invoke Kilo/Gemini transport execution.
+- **Direct ACP Boundary**: DeepSeek emits canonical ACP JSON directly; the existing control plane (validator, TaskRegistry, Orchestrator, transport) remains the execution backbone. No translation shim, second registry, or parallel orchestration system introduced.
+- **Scope**: `routes/poc.js` (implementation) and `test/coordinator.test.js` (tests). No modifications to `poc/orchestrator.js`, `poc/task-registry.js`, `poc/schemas/acp-schema.js`, transport services, GitHub Actions, or Render configuration.
+
+**Implementation**:
+
+- `routes/poc.js` — Added `authenticateDeepSeekCoordinator` middleware (header `x-deepseek-coordinator-secret`, env var `DEEPSEEK_COORDINATOR_SECRET`, fail-closed, distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`). Added `POST /coordinator` route that validates canonical ACP via `validateACPCommand`, registers via `taskRegistry.createTask()`, and returns 202 with `request_id` and task status. Returns 401 for missing/invalid auth, 400 for malformed/invalid ACP, 409 for duplicate `request_id`, 500 for registry failure. Registration-only: does not call `getDispatcher()` or invoke transport execution.
+- `test/coordinator.test.js` — Added 15 tests covering valid registration, missing/invalid auth, missing env secret, malformed JSON, missing required ACP fields, invalid ACP structure, duplicate request_id idempotency, registration failure, registration-only (no dispatch), existing route regression, and secret distinctness.
+
+**Endpoint Contract**:
+
+- **Authentication**: Header `x-deepseek-coordinator-secret` must equal env var `DEEPSEEK_COORDINATOR_SECRET`. Missing/invalid → 401. Missing env var → 401 (fail closed).
+- **Request format**: Canonical ACP JSON with fields: `protocol_version`, `request_id`, `source`, `target`, `task_type`, `repository`, `base_branch`, `task`, `constraints` (with `permitted_paths` array), `authorization` (with `capabilities` array), `verification`, `reporting`.
+- **Success response**: 202 Accepted with `request_id`, `status: 'Task registered'`, `stage: 'registered'`, `execution_initiated: false`, `task_status`, `current_agent`, `next_agent`.
+- **Error responses**: 401 (auth), 400 (malformed JSON / invalid ACP), 409 (duplicate request_id), 500 (registry failure).
+- **Registration semantics**: Task enters TaskRegistry with status PENDING, current_agent Kilo, next_agent Gemini. No downstream dispatch occurs from this endpoint.
+
+**Documentation changes**:
+
+- `ARCHITECTURE.md` — Updated Section 16.6 from (PROPOSED / TARGET) to (IMPLEMENTED / VERIFIED); updated current state, current gap, implementation direction, and authentication note to reflect verified implementation.
+- `docs/ai/STATE.md` — Updated "Updated By" header; updated DeepSeek Coordinator Project row in Active Tasks table to IMPLEMENTED / VERIFIED; updated Status, Current Status, Current Gap, Pending Implementation Work sections; added implementation details.
+- `docs/ai/CONTROL_CENTER.md` — Updated "Requires Kyle's Attention" item 6; updated Active Work table row; updated DeepSeek Coordinator Project dashboard section (Current Status, Current Gap, Next Concrete Action, Authorization State).
+
+**Outcome**: SUCCESS — Authenticated `POST /poc/coordinator` endpoint implemented in `routes/poc.js` using existing ACP validation and TaskRegistry. Registration-only semantics enforced. 15 new coordinator tests added. All 168 tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 15 coordinator). `git diff --check` clean. No modifications to `poc/orchestrator.js`, `poc/task-registry.js`, `poc/schemas/acp-schema.js`, transport services, GitHub Actions, or Render configuration. DeepSeek → authenticated Coordinator ingress → ACP validation → TaskRegistry registration → 202 Accepted (no downstream dispatch).
+
+**Verification**:
+
+1. New coordinator tests run and pass (15/15). ✓
+2. Existing schema tests pass (20/20). ✓
+3. Existing task-registry tests pass (17/17). ✓
+4. Existing orchestrator tests pass (18/18). ✓
+5. Existing integration tests pass (11/11). ✓
+6. Existing Kilo callback tests pass (15/15). ✓
+7. Existing Gemini callback tests pass (23/23). ✓
+8. Existing Gemini trigger tests pass (14/14). ✓
+9. Existing Kilo polling tests pass (10/10). ✓
+10. Existing Kilo verifier tests pass (18/18). ✓
+11. Existing POC route tests pass (5/5). ✓
+12. Endpoint authenticates correctly (401 for missing/invalid, 202 for valid). ✓
+13. Canonical ACP validation is enforced (400 for missing fields, invalid structure, malformed JSON). ✓
+14. Successful requests create TaskRegistry entries (202 response, task in registry with PENDING status). ✓
+15. Duplicate request IDs are rejected (409, existing task remains intact). ✓
+16. Endpoint returns 202 after registration. ✓
+17. Coordinator does not directly dispatch execution (registration-only: `getDispatcher()` not called, verified via spy). ✓
+18. Existing Kilo/Gemini paths remain intact (regression tests for `/poc/kilo`, `/poc/kilo/callback`, `/poc/gemini/callback` auth all return 401 without secret). ✓
+19. DeepSeek secret is distinct from KILO_CALLBACK_SECRET and GEMINI_CALLBACK_SECRET. ✓
+20. `git diff --check` clean (no whitespace errors). ✓
+21. Only intended files changed: `routes/poc.js`, `test/coordinator.test.js`, `ARCHITECTURE.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md`. ✓
+
+**Commit Reference**: (pending — self-referencing SHA cannot be known at write time)
+
+---
+
 ## 2026-09-17 | Establish DeepSeek Coordinator Project Record (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001)
 
 **Task**: Establish the DeepSeek Coordinator Project as a high-priority project in the repository's authoritative AI project-state documentation. Record the Direct ACP architectural decision, Gemini research findings, the authenticated Coordinator ingress implementation gap, and a clear starting point for future ChatGPT, Gemini, and Kilo sessions. (Issue #138)

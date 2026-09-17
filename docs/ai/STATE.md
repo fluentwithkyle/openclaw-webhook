@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-17
-**Updated By**: Kilo — Establish DeepSeek Coordinator Project record, record Direct ACP architectural decision, and document the authenticated Coordinator ingress gap (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001)
+**Updated By**: Kilo — Implement authenticated DeepSeek Coordinator ACP ingress (TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001)
 
 ---
 
@@ -29,7 +29,7 @@
 | Automated Kilo delivery verification | **IMPLEMENTED** | Kilo | Independent delivery verification lane implemented in `poc/kilo-verifier.js`, `.github/workflows/kilo-verification.yml`, `test/kilo-verifier.test.js`. Verifies commit identification, changed files, authorized file scope, request_id correlation, git diff --check, and idempotency. Triggers on push to main and pull request events. Kilo's self-report remains execution evidence, not independent delivery proof. |
 | Security Specialist architectural foundation | **IMPLEMENTED** | Kilo | Registered lane in `AGENTS.md`; expanded architecture in `ARCHITECTURE.md` Sections 12.7, 16.3, 17.2; added ADR-014; three open architectural decisions documented; POC `command.json` and `test.js` extended with optional security fields (Issue #38) |
 | Render Control Gatekeeper documentation reconciliation | **IMPLEMENTED** | Kilo | Documentation reconciled to explicitly record Render as future technical Control Gate / gatekeeper, machine-enforced boundary, Layer 1 → Layer 2 sequencing, and Kilo/Gemini architecture protection. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. No implementation performed. |
-| DeepSeek Coordinator Project establishment | **ACTIVE / PROPOSED / TARGET** | Kilo | HIGH PRIORITY project to document the DeepSeek Coordinator integration. Direct ACP boundary recorded in `ARCHITECTURE.md` Section 16.6. Authenticated Coordinator ingress gap remains PROPOSED / TARGET. Documentation established (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001). |
+| DeepSeek Coordinator Project establishment | **ACTIVE / IMPLEMENTED / VERIFIED** | Kilo | HIGH PRIORITY project implementing the authenticated `POST /poc/coordinator` endpoint. DeepSeek Coordinator ingress implemented in `routes/poc.js` using existing ACP validation (`poc/schemas/acp-schema.js`) and TaskRegistry (`poc/task-registry.js`). Registration-only semantics; does not invoke `getDispatcher()` or downstream transport. 168 total tests pass (15 new coordinator tests). (TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001) |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -1064,7 +1064,7 @@ The repository state, not a branch name or agent report, determines whether work
 
 **Project Name**: DeepSeek Coordinator — GitHub-Native AI Control Plane Integration
 **Priority**: HIGH PRIORITY
-**Status**: ACTIVE / PROPOSED / TARGET
+**Status**: ACTIVE / IMPLEMENTED / VERIFIED
 **Established**: 2026-09-17 (TASK-KILO-ESTABLISH-DEEPSEEK-COORDINATOR-PROJECT-LOG-001)
 **Updated By**: Kilo
 
@@ -1074,7 +1074,7 @@ DeepSeek Coordinator is a high-priority project to connect DeepSeek's natural-la
 
 ### Current Status
 
-**PROPOSED / TARGET** — Documentation and project-state records established. The authenticated Coordinator ingress has not been implemented or verified in the repository.
+**IMPLEMENTED / VERIFIED** — Authenticated `POST /poc/coordinator` endpoint implemented in `routes/poc.js`. Validates canonical ACP JSON via existing `validateACPCommand` and registers via existing `taskRegistry.createTask()`. Registration-only semantics enforced — does not call `getDispatcher()` or downstream transport. 15 new coordinator tests added; 168 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC). `git diff --check` clean.
 
 ### Architecture Boundary (Direct ACP)
 
@@ -1128,26 +1128,22 @@ This research is recorded as PROPOSED / TARGET investigation findings, not as im
 
 ### Current Gap
 
-**PROPOSED / TARGET** — The remaining target gap is an authenticated machine-to-machine Coordinator ingress capable of accepting canonical ACP JSON from DeepSeek, validating it through the existing ACP schema, and registering it through the existing task-control system.
+**IMPLEMENTED / VERIFIED** — The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) has been implemented. It accepts canonical ACP JSON from DeepSeek, validates it through the existing ACP schema (`poc/schemas/acp-schema.js` via `validateACPCommand`), and registers it through the existing TaskRegistry (`poc/task-registry.js` via `createTask`). Registration-only semantics are enforced — the endpoint does not invoke `getDispatcher()` or any downstream transport execution. The `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`) provides a dedicated authentication boundary distinct from KILO_CALLBACK_SECRET and GEMINI_CALLBACK_SECRET.
 
-The proposed minimal implementation direction is:
+The implementation direction (as proposed and now implemented):
 
 * Add an authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`.
 * Validate the submitted canonical ACP command using the existing ACP validator (`poc/schemas/acp-schema.js`).
 * Register the validated command through the existing TaskRegistry API (`poc/task-registry.js`).
 * Preserve the existing orchestrator, schema, transport, and registry architecture unless repository inspection proves a necessary exception.
 
-**The repository currently does not contain `/poc/coordinator`.** This must not be claimed as implemented or working. The exact authentication mechanism, environment-variable name, and route implementation remain subject to verification against the current repository. No unverified secret name is documented as a confirmed implementation detail.
+**IMPLEMENTED / VERIFIED** — The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) is now implemented in `routes/poc.js`. The exact authentication mechanism, environment-variable name (`DEEPSEEK_COORDINATOR_SECRET`), and route implementation have been verified against the current repository: Header `x-deepseek-coordinator-secret`; env var `DEEPSEEK_COORDINATOR_SECRET`; endpoint validates via `validateACPCommand` and registers via `taskRegistry.createTask`. Returns 202 on successful registration, 401 on auth failure, 400 on malformed/invalid ACP, 409 on duplicate request_id, 500 on registry failure. Registration-only: does not call `getDispatcher()` or invoke Kilo/Gemini transport execution.
 
 ### Pending Implementation Work
 
-The next concrete implementation task is to add an authenticated `POST /poc/coordinator` endpoint that:
+The authenticated `POST /poc/coordinator` endpoint has been implemented (TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001). The endpoint authenticates via `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`), validates canonical ACP JSON via `validateACPCommand`, and registers via `taskRegistry.createTask()`. Registration-only semantics are enforced — the endpoint does not invoke `getDispatcher()` or any downstream transport execution. 15 coordinator tests added and passing.
 
-* Accepts canonical ACP JSON from DeepSeek.
-* Validates the command through the existing ACP schema.
-* Registers the validated command through the existing TaskRegistry API.
-
-This work is **PROPOSED / TARGET** and is not authorized by this documentation-only task. It requires a separate, explicitly authorized ACP implementation task.
+No further implementation is pending for the Coordinator ingress boundary.
 
 ### Architecture Decision Recorded
 

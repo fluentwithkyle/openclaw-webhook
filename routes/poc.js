@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const { getDispatcher } = require('../services/transport-provider');
 const orchestrator = require('../poc/orchestrator');
-const { validateExecutionReport } = require('../poc/schemas/acp-schema');
+const { validateExecutionReport, validateACPCommand } = require('../poc/schemas/acp-schema');
 const taskRegistry = require('../poc/task-registry');
 
 const router = express.Router();
@@ -43,6 +43,20 @@ const authenticateGeminiCallback = (req, res, next) => {
             status: 'authentication blocked',
             stage: 'authentication blocked',
             error: 'Invalid or missing callback secret'
+        });
+    }
+    next();
+};
+
+// DeepSeek Coordinator Authentication Middleware
+const authenticateDeepSeekCoordinator = (req, res, next) => {
+    const secret = req.headers['x-deepseek-coordinator-secret'];
+    if (!secret || secret !== process.env.DEEPSEEK_COORDINATOR_SECRET) {
+        return res.status(401).json({
+            request_id: req.body?.request_id || 'unknown',
+            status: 'authentication blocked',
+            stage: 'authentication blocked',
+            error: 'Invalid or missing DeepSeek Coordinator secret'
         });
     }
     next();
@@ -300,6 +314,56 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
         task_status: result.task.status,
         gemini_status: result.task.gemini.status
     });
+});
+
+router.post('/coordinator', authenticateDeepSeekCoordinator, (req, res) => {
+    const command = req.body;
+
+    const validation = validateACPCommand(command);
+    if (!validation.valid) {
+        return res.status(400).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Invalid ACP command: ${validation.error}`
+        });
+    }
+
+    try {
+        const result = taskRegistry.createTask(command);
+        if (!result.success) {
+            if (result.duplicate) {
+                return res.status(409).json({
+                    request_id: command.request_id,
+                    status: 'duplicate',
+                    stage: 'conflict',
+                    error: result.error
+                });
+            }
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'registration failed',
+                stage: 'failed'
+            });
+        }
+
+        return res.status(202).json({
+            request_id: command.request_id,
+            status: 'Task registered',
+            stage: 'registered',
+            execution_initiated: false,
+            task_status: result.entry.status,
+            current_agent: result.entry.current_agent,
+            next_agent: result.entry.next_agent
+        });
+    } catch (error) {
+        console.error('Error in /poc/coordinator:', error);
+        return res.status(500).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'registration failed',
+            stage: 'failed'
+        });
+    }
 });
 
 module.exports = { router };

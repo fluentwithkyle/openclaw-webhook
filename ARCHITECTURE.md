@@ -1563,15 +1563,15 @@ The Kilo Cloud Agent HTTP webhook trigger is a confirmed Kilo capability. The sp
 
 ⸻
 
-16.6 DeepSeek Coordinator Integration (PROPOSED / TARGET)
+16.6 DeepSeek Coordinator Integration (IMPLEMENTED / VERIFIED)
 
-The **DeepSeek Coordinator Project** is a HIGH PRIORITY project to connect DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane. It is recorded as a PROPOSED / TARGET architectural direction pending repository inspection and explicit implementation authorization.
+The **DeepSeek Coordinator Project** is a HIGH PRIORITY project to connect DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane. It is recorded as **ACTIVE / IMPLEMENTED / VERIFIED** after explicit authorization and implementation.
 
-The project must be recorded as: **ACTIVE / PROPOSED / TARGET**.
+The project status is: **ACTIVE / IMPLEMENTED / VERIFIED**.
 
 Direct ACP Boundary
 
-Current state: DeepSeek's natural-language coordination capability has no validated boundary into the existing ACP-based orchestration system.
+Current state: The authenticated DeepSeek Coordinator ingress (`POST /poc/coordinator`) is implemented and verified. DeepSeek's natural-language coordination capability has a validated boundary into the existing ACP-based orchestration system.
 
 The agreed target architecture is **Direct ACP**: DeepSeek emits canonical ACP JSON directly. The existing repository control plane remains responsible for validation, registration, orchestration, execution routing, and verification.
 
@@ -1590,11 +1590,11 @@ The project must not introduce:
 * A natural-language-to-code execution path outside ACP validation.
 * An unnecessary DeepSeek transformation service (no `deepseek-transformer.js` or equivalent translation shim).
 
-Current Gap (PROPOSED / TARGET)
+Current Gap (IMPLEMENTED / VERIFIED)
 
-The remaining target gap is an authenticated machine-to-machine Coordinator ingress capable of accepting canonical ACP JSON from DeepSeek, validating it through the existing ACP schema, and registering it through the existing task-control system. This is PROPOSED / TARGET — not yet implemented or verified in the repository.
+The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) has been implemented and verified. It accepts canonical ACP JSON from DeepSeek, validates it through the existing ACP schema (`validateACPCommand` in `poc/schemas/acp-schema.js`), and registers it through the existing TaskRegistry (`taskRegistry.createTask` in `poc/task-registry.js`). Registration-only semantics are enforced — the endpoint does not invoke `getDispatcher()` or any downstream transport execution. Returns 202 on success, 401 on auth failure, 400 on malformed/invalid ACP, 409 on duplicate request_id, 500 on registry failure. The `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`) provides a dedicated authentication boundary distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`.
 
-The proposed minimal implementation direction is:
+The implementation direction (as proposed and now implemented):
 
 * Add an authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`.
 * Validate the submitted canonical ACP command using the existing ACP validator (`poc/schemas/acp-schema.js`).
@@ -1611,7 +1611,7 @@ Existing verified components (remain unchanged unless implementation evidence re
 * `.github/workflows/main.yml` — Gemini workflow
 * `poc/command.json` — POC ACP command fixture
 
-The exact authentication mechanism, environment-variable name, and route implementation remain subject to verification against the current repository. Do not document an unverified secret name as a confirmed implementation detail.
+The authentication mechanism, environment-variable name, and route implementation have been verified against the current repository: Header `x-deepseek-coordinator-secret`; env var `DEEPSEEK_COORDINATOR_SECRET`; endpoint validates via `validateACPCommand` and registers via `taskRegistry.createTask`.
 
 Gemini Research Basis
 
