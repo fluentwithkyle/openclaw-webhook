@@ -62,6 +62,63 @@ const authenticateDeepSeekCoordinator = (req, res, next) => {
     next();
 };
 
+// Chatbox Gateway Authentication Middleware
+const authenticateChatboxGateway = (req, res, next) => {
+    const secret = req.headers['x-chatbox-gateway-secret'];
+    if (!secret || secret !== process.env.CHATBOX_GATEWAY_SECRET) {
+        return res.status(401).json({
+            request_id: 'unknown',
+            status: 'authentication blocked',
+            stage: 'authentication blocked',
+            error: 'Invalid or missing Chatbox gateway secret'
+        });
+    }
+    next();
+};
+
+function buildChatboxCommand(requestBody) {
+    const userMessages = requestBody.messages.filter(m => m.role === 'user');
+    const intentText = userMessages
+        .map(m => m.content)
+        .filter(c => typeof c === 'string')
+        .join('\n');
+
+    if (!intentText) {
+        return { valid: false, error: 'No user message content found in request' };
+    }
+
+    const requestId = `chatbox-${Date.now()}`;
+
+    return {
+        valid: true,
+        command: {
+            protocol_version: '0.1',
+            request_id: requestId,
+            source: 'Chatbox',
+            target: 'Kilo',
+            task_type: 'natural-language-ingress',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task: intentText,
+            task_mode: 'REVIEW',
+            constraints: {
+                permitted_paths: ['poc/']
+            },
+            authorization: {
+                capabilities: ['read_only']
+            },
+            verification: 'Chatbox ingress authenticated; intent preserved into REVIEW-mode ACP command for trusted control-plane classification',
+            reporting: 'structured-json',
+            originator: 'Kyle',
+            natural_language_intent: {
+                source: 'Chatbox',
+                model: requestBody.model,
+                messages: requestBody.messages
+            }
+        }
+    };
+}
+
 router.post('/kilo', authenticatePoc, async (req, res) => {
     const requestId = `poc-${Date.now()}`;
     try {
@@ -314,6 +371,177 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
         task_status: result.task.status,
         gemini_status: result.task.gemini.status
     });
+});
+
+router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
+    const requestId = req.body?.request_id || 'unknown';
+
+    if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing or invalid request body'
+        });
+    }
+
+    if (!req.body.model || typeof req.body.model !== 'string') {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing or invalid required field: model'
+        });
+    }
+
+    if (!Array.isArray(req.body.messages)) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing or invalid required field: messages (must be an array)'
+        });
+    }
+
+    if (req.body.messages.length === 0) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'messages array must not be empty'
+        });
+    }
+
+    for (const msg of req.body.messages) {
+        if (!msg || typeof msg !== 'object' || !msg.role || !msg.content) {
+            return res.status(400).json({
+                request_id: requestId,
+                status: 'validation blocked',
+                stage: 'validation blocked',
+                error: 'Each message must contain role and content fields'
+            });
+        }
+    }
+
+    const hasUserMessage = req.body.messages.some(m => m.role === 'user');
+    if (!hasUserMessage) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'At least one user message is required to preserve intent'
+        });
+    }
+
+    const buildResult = buildChatboxCommand(req.body);
+    if (!buildResult.valid) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: buildResult.error
+        });
+    }
+
+    const command = buildResult.command;
+
+    const validation = validateACPCommand(command);
+    if (!validation.valid) {
+        return res.status(400).json({
+            request_id: command.request_id,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Invalid ACP command: ${validation.error}`
+        });
+    }
+
+    try {
+        const result = taskRegistry.createTask(command);
+        if (!result.success) {
+            if (result.duplicate) {
+                return res.status(409).json({
+                    request_id: command.request_id,
+                    status: 'duplicate',
+                    stage: 'conflict',
+                    error: result.error
+                });
+            }
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'registration failed',
+                stage: 'failed'
+            });
+        }
+
+        let dispatchResult;
+        try {
+            dispatchResult = await getDispatcher()(command);
+        } catch (dispatchError) {
+            console.error('Dispatch error in /poc/chatbox:', dispatchError);
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'Registration succeeded, dispatch failed',
+                stage: 'failed',
+                execution_initiated: false,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent,
+                error: dispatchError.message
+            });
+        }
+
+        if (dispatchResult.provider_session_id || dispatchResult.provider_message_id || dispatchResult.provider_invocation_id) {
+            const task = taskRegistry.getTask(command.request_id);
+            if (task) {
+                task.kilo.provider_session_id = dispatchResult.provider_session_id;
+                task.kilo.provider_message_id = dispatchResult.provider_message_id;
+                task.kilo.provider_invocation_id = dispatchResult.provider_invocation_id;
+                task.updated_at = new Date().toISOString();
+                taskRegistry.persistCache();
+            }
+        }
+
+        if (dispatchResult.status === 'SUCCESS') {
+            return res.status(202).json({
+                request_id: command.request_id,
+                status: 'Task registered and dispatched',
+                stage: 'dispatched',
+                execution_initiated: true,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent
+            });
+        } else if (dispatchResult.status === 'BLOCKED') {
+            return res.status(403).json({
+                request_id: command.request_id,
+                status: 'ACP validation blocked',
+                stage: 'blocked',
+                execution_initiated: false,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent,
+                error: dispatchResult.error
+            });
+        } else {
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'Kilo transport failure',
+                stage: 'failed',
+                execution_initiated: false,
+                task_status: result.entry.status,
+                current_agent: result.entry.current_agent,
+                next_agent: result.entry.next_agent,
+                error: dispatchResult.error
+            });
+        }
+    } catch (error) {
+        console.error('Error in /poc/chatbox:', error);
+        return res.status(500).json({
+            request_id: command?.request_id || requestId,
+            status: 'registration failed',
+            stage: 'failed'
+        });
+    }
 });
 
 router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) => {

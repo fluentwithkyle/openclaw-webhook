@@ -50,6 +50,7 @@ Designed for Kyle checking the project from a phone.
 | Gemini result artifact observability | IMPLEMENTED / VERIFIED | Kilo | Artifact persistence + ChatGPT retrieval + non-empty capture VERIFIED (run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`) |
 | Render Control Gatekeeper documentation reconciliation | IMPLEMENTED | Kilo | Documentation reconciled: Render = future Control Gate/gatekeeper (PROPOSED/TARGET); Layer 1 → Layer 2 sequencing; Kilo/Gemini architecture protected |
 | DeepSeek Coordinator Project establishment | ACTIVE / IMPLEMENTED / VERIFIED | Kilo | HIGH PRIORITY project implemented. Authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`. ACP validation via `validateACPCommand`; registration via `taskRegistry.createTask`; dispatch via existing `getDispatcher()` (same mechanism as `/poc/kilo`). Implementation commits: `5613214` (ingress), `950983a` (dispatch bridge). 19 coordinator tests pass; 170 total tests pass. |
+| Chatbox Gateway Ingress | IMPLEMENTED / VERIFIED | Kilo | Authenticated `POST /poc/chatbox` in `routes/poc.js`. OpenAI-compatible request → REVIEW-mode ACP command (read_only, poc/ paths) → `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`. Auth: `x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET` (distinct from all other secrets). Intent preserved in `task` field and `natural_language_intent` field. 23 gateway tests pass; 259 total tests pass. (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001) |
 | VERIFY_RECONCILE operating mode implementation | IMPLEMENTED / VERIFIED | Kilo | Task mode dispatch: REVIEW (read-only), VERIFY_RECONCILE (4 caps, bounded docs/ai paths), FAILOVER_EXECUTE (5 caps, explicit paths). Schema, ACP engine, gemini-trigger, orchestrator, workflow all updated. Reconciliation model added. 238 total tests pass. (Issue #145) |
 
 ---
@@ -73,7 +74,8 @@ Substantially complete:
 - Gemini verification requirements propagation — IMPLEMENTED / independently verified
 - Gemini result artifact observability — IMPLEMENTED / VERIFIED (artifact `gemini-acp-report` / `gemini-acp-report.json`)
 - Automated Kilo delivery verification lane — IMPLEMENTED
-- VERIFY_RECONCILE operating mode — **IMPLEMENTED / VERIFIED** (234 total tests pass)
+- VERIFY_RECONCILE operating mode — **IMPLEMENTED / VERIFIED** (238 total tests pass)
+- Chatbox Gateway Ingress — **IMPLEMENTED / VERIFIED** (23 gateway tests pass; 259 total tests pass)
 
 Remaining pending items:
 - Remaining Part 2.1 (authenticated Gemini → Render return path) — PROPOSED / TARGET, not yet implemented (Gemini investigation result)
@@ -103,11 +105,30 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 
 ---
 
+## Chatbox Gateway Project
+
+| Field | Detail |
+|-------|--------|
+| **Project Name** | Chatbox Gateway — Authenticated Non-Authorizing Ingress |
+| **Priority** | MEDIUM |
+| **Current Status** | IMPLEMENTED / VERIFIED |
+| **Objective** | Connect Chatbox iOS (via OpenRouter → DeepSeek, OpenAI-compatible) to the existing canonical ACP control plane via an authenticated, non-authorizing ingress that preserves natural-language intent |
+| **Agreed Architecture** | Authenticated `POST /poc/chatbox` → OpenAI-compatible validation → REVIEW-mode ACP command construction (read_only, poc/ paths) → `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()` (same mechanism as `/poc/kordinator` and `/poc/kilo`). No parallel authorization, orchestration, or dispatch system. |
+| **Authentication** | Header `x-chatbox-gateway-secret`; env var `CHATBOX_GATEWAY_SECRET`; fail-closed; distinct from `KILO_CALLBACK_SECRET`, `GEMINI_CALLBACK_SECRET`, `DEEPSEEK_COORDINATOR_SECRET`, `ACP_POC_TRIGGER_SECRET` |
+| **Authorization Boundary** | Chatbox is an authenticated, NON-AUTHORIZING ingress. The gateway issues only REVIEW-mode ACP commands (read_only, poc/ paths). It does NOT grant modify_files, commit, push, or FAILOVER_EXECUTE. Classification/authorization belongs to the trusted Coordinator/orchestration/ACP layer. |
+| **Relevant Components** | `routes/poc.js` (implementation), `test/chatbox-gateway.test.js` (tests), `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` (architecture record), `docs/ai/ARCH_DECISIONS.md` (ADR-015) |
+| **Next Concrete Action** | None — Chatbox gateway fully implemented and verified |
+| **Authorization State** | Implementation authorized and executed via ACP task TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001 (capabilities: inspect, modify_files, run_tests, commit, push). Commit and push to main authorized. |
+| **Test Results** | 23/23 Chatbox gateway tests pass. 259 total tests pass. |
+| **Remaining Unknowns** | Qwen Router classification/trigger (UNKNOWN), Security Specialist callback mechanism (UNKNOWN), Security Audit Report persistence mechanism (UNKNOWN) |
+
+---
+
 ## Key References
 
 - **Architecture:** ARCHITECTURE.md (authoritative for intended architecture)
 - **State:** docs/ai/STATE.md (authoritative current project state)
-- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-014)
+- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-015)
 - **Task History:** docs/ai/TASK_LOG.md
 - **Issue:** [fluentwithkyle/openclaw-webhook#56](https://github.com/fluentwithkyle/openclaw-webhook/issues/56)
 - **Docs:** docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md

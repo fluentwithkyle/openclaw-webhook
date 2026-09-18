@@ -6,6 +6,74 @@
 
 ---
 
+## 2026-09-18 | Implement Chatbox Gateway Ingress (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001)
+
+**Task**: Implement the smallest production-appropriate authenticated Chatbox HTTP/OpenAI-compatible ingress that connects Chatbox iOS natural-language requests (via OpenRouter → DeepSeek) to the existing trusted ACP control plane, preserving the architecture established in ADR-015 and the Chatbox ACP Architecture Record. (Issue #154)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE
+**Capabilities Authorized**: inspect, modify_files, run_tests, commit, push
+
+**Objective**:
+Implement an authenticated, non-authorizing Chatbox ingress that authenticates the caller, preserves the user's natural-language intent, and passes that intent into the existing trusted server-side control-plane path without creating a second authorization system or granting elevated ACP capabilities from natural-language input.
+
+**Summary**:
+
+- **Endpoint**: `POST /poc/chatbox` in `routes/poc.js`, mounted on the existing POC router alongside `/poc/coordinator`, `/poc/kilo`, etc. No new routing architecture.
+- **Authentication**: Dedicated `x-chatbox-gateway-secret` header (env: `CHATBOX_GATEWAY_SECRET`), resolved from the existing authenticated Coordinator pattern. Fail-closed: missing or invalid secret returns 401 without registering a task or dispatching. Distinct from `KILO_CALLBACK_SECRET`, `GEMINI_CALLBACK_SECRET`, `DEEPSEEK_COORDINATOR_SECRET`, and `ACP_POC_TRIGGER_SECRET`.
+- **Request shape**: OpenAI-compatible (`model` string + `messages` array with at least one user message, each message requiring `role` and `content`). Validated fail-closed (400 on missing/invalid model, missing/empty messages, missing role/content, no user message, malformed JSON).
+- **Intent preservation**: User message content extracted and concatenated into the ACP `task` field. Full original messages preserved in a `natural_language_intent` structured field within the ACP command for downstream trusted control-plane classification.
+- **Translation boundary**: OpenAI-compatible natural-language request is translated into a canonical ACP command with `task_mode: REVIEW` (the bounded initial state for an unverified request), `authorization.capabilities: ["read_only"]`, and `constraints.permitted_paths: ["poc/"]`. The gateway does NOT grant `modify_files`, `commit`, `push`, or `FAILOVER_EXECUTE`.
+- **Control-plane handoff**: The constructed ACP command is validated via the existing `validateACPCommand` (`poc/schemas/acp-schema.js`), registered via the existing `taskRegistry.createTask` (`poc/task-registry.js`), and dispatched via the existing `getDispatcher()` (the same mechanism used by `/poc/kilo` and `/poc/coordinator`). Provider identifiers returned by the dispatcher are persisted in the TaskRegistry. Registration failure prevents dispatch. Fail-closed on dispatch errors and exceptions.
+- **No parallel authorization**: The gateway reuses the existing ACP validation, TaskRegistry, and dispatcher — no second orchestration system, second task registry, or parallel control plane.
+- **No elevated capabilities**: The gateway always issues REVIEW-mode ACP commands (read_only, poc/ paths). Natural-language wording does not itself grant authority. Authorization classification belongs to the trusted Coordinator/orchestration/ACP layer.
+
+**Files changed**:
+
+- `routes/poc.js` — Added `authenticateChatboxGateway` middleware (header `x-chatbox-gateway-secret`, env var `CHATBOX_GATEWAY_SECRET`, fail-closed) and `buildChatboxCommand` helper (OpenAI → REVIEW-mode ACP command translation). Added `POST /chatbox` route handler following the same pattern as `POST /coordinator`. No changes to existing routes.
+- `test/chatbox-gateway.test.js` — 23 focused tests covering: authenticated request acceptance (202), missing/invalid/missing-env auth (401), malformed OpenAI request rejection (400), intent preservation, downstream control-plane handoff, capability boundary (REVIEW/read_only only), registration failure (500), dispatch failure (500, task still registered), dispatch blocked (403, task still registered), dispatch exception (500, task still registered), malformed JSON (400), secret distinctness, and existing route regression.
+
+**Documentation changes**:
+
+- `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` — Updated status from PROPOSED / TARGET to IMPLEMENTED / VERIFIED; resolved the Chatbox authentication mechanism in a new Section 12.1; updated Section 13.2 component table; updated Section 15 status distinction summary; added Section 14.4 implementation record; remaining unknowns (Qwen Router, Security Specialist callback, Security Audit Report persistence) remain explicitly UNKNOWN.
+- `docs/ai/ARCH_DECISIONS.md` — Updated ADR-015 status from PROPOSED / TARGET to IMPLEMENTED / VERIFIED; documented the resolved authentication mechanism without exposing the secret; noted which remaining items stay UNKNOWN.
+- `docs/ai/STATE.md` — Updated header; added Chatbox Gateway Ingress to Active Tasks table (IMPLEMENTED / VERIFIED); updated Chatbox architecture section status and implementation status table.
+- `docs/ai/CONTROL_CENTER.md` — Added Chatbox Gateway Ingress row to Active Work table; added dedicated Chatbox Gateway Project section; updated Next Action and Key References.
+
+**Verification performed**:
+
+1. New Chatbox gateway tests — 23/23 passed.
+2. Existing coordinator tests — 19/19 passed (DeepSeek Coordinator regression).
+3. Existing integration tests — 11/11 passed.
+4. Existing schema tests — 20/20 passed.
+5. Existing task-registry tests — 17/17 passed.
+6. Existing orchestrator tests — 18/18 passed.
+7. Existing Kilo callback tests — 15/15 passed.
+8. Existing Gemini callback tests — 23/23 passed.
+9. Existing Gemini trigger tests — 14/14 passed.
+10. Existing Kilo polling tests — 10/10 passed.
+11. Existing Kilo verifier tests — 18/18 passed.
+12. Existing verify-reconcile tests — 52/52 passed.
+13. Existing workflow-expression tests — 14/14 passed.
+14. Existing POC tests (`poc/test.js`, `test/run-poc-tests.js`) — all passed.
+15. `git diff --check` — clean (no whitespace errors).
+16. Confirmed no secrets, credentials, or sensitive production values introduced (gateway test secret is a test-only value, not a production value; no env var names or secret values committed).
+17. Confirmed the gateway does not create a parallel authorization system (reuses `validateACPCommand`, `taskRegistry.createTask`, `getDispatcher()`).
+18. Confirmed elevated capabilities are not granted by Chatbox natural-language input (REVIEW mode with read_only only; no modify_files, commit, push, or FAILOVER_EXECUTE).
+19. Confirmed the existing DeepSeek Coordinator behavior remains intact (19/19 regression tests pass).
+20. Confirmed the existing `/poc/kilo` and `/poc/gemini/callback` routes remain intact (regression tests pass).
+
+Total: 259 tests passing (23 new + 236 existing).
+
+**Outcome**: SUCCESS — Authenticated, non-authorizing Chatbox gateway `POST /poc/chatbox` implemented in `routes/poc.js` following the DeepSeek Coordinator Direct ACP pattern. OpenAI-compatible requests are validated, natural-language intent is preserved into a bounded REVIEW-mode ACP command, and the command is submitted through the existing control plane (`validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`). The gateway does NOT grant elevated capabilities. Dedicated authentication boundary (`x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET`) is distinct from all other gateway secrets. No parallel authorization, orchestration, or dispatch system created. No Qwen, Security Specialist, or Security Audit Report persistence implementation. Existing DeepSeek Coordinator and all other routes remain intact. `git diff --check` clean. No secrets introduced. 259 tests pass.
+
+**Commit Reference**: (pending — self-referencing SHA cannot be known at write time)
+
+---
+
 ## 2026-09-18 | Implement Project-Wide Gemini Report Retrieval Definition (TASK-KILO-GEMINI-REPORT-RETRIEVAL-DOCUMENTATION-IMPLEMENT-001)
 
 **Originator**: Kyle — Director

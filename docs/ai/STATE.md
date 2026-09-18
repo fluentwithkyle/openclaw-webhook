@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-18
-**Updated By**: Kilo — Document Chatbox → ACP architecture record (Issue #153)
+**Updated By**: Kilo — Implement Chatbox gateway ingress (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001)
 
 ---
 
@@ -31,6 +31,7 @@
 | Render Control Gatekeeper documentation reconciliation | **IMPLEMENTED** | Kilo | Documentation reconciled to explicitly record Render as future technical Control Gate / gatekeeper, machine-enforced boundary, Layer 1 → Layer 2 sequencing, and Kilo/Gemini architecture protection. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. No implementation performed. |
 | DeepSeek Coordinator Project establishment | **ACTIVE / IMPLEMENTED / VERIFIED** | Kilo | HIGH PRIORITY project implementing the authenticated `POST /poc/coordinator` endpoint. DeepSeek Coordinator ingress implemented in `routes/poc.js` using existing ACP validation (`poc/schemas/acp-schema.js`) and TaskRegistry (`poc/task-registry.js`). After successful registration, the command is dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Authentication via `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`), distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`. Registration failure prevents dispatch; provider identifiers persisted on successful dispatch. 19 coordinator tests pass; 170 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator). (TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001, commit `950983a`) |
 | VERIFY_RECONCILE operating mode implementation | **IMPLEMENTED / VERIFIED** | Kilo | Task mode dispatch added to ACP schema (`poc/schemas/acp-schema.js`) and engine (`poc/acp-engine.js`): REVIEW (read-only, existing behavior), VERIFY_RECONCILE (read_only + modify_files + commit + push capabilities; bounded docs/ai path scope), FAILOVER_EXECUTE (all 5 capabilities, explicit paths). `task_mode`, `capabilities`, `permitted_paths` fields added to ACP command and task registry entry. Reconciliation model added (status, changed_files, commit_sha) with `determineReconciliationStatus()`. Gemini workflow `.github/workflows/main.yml` updated with mode-aware prompt, `task_mode`/`capabilities`/`permitted_paths` inputs, `contents: write` permission, and reconciliation reporting in callback payload. `poc/gemini-trigger.js`, `poc/orchestrator.js`, `poc/command.json` updated to pass mode context through dispatch. 238 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator, 52 verify-reconcile, 16 poc/test.js); `git diff --check` clean. (Issue #145) |
+| Chatbox Gateway Ingress | **IMPLEMENTED / VERIFIED** | Kilo | Authenticated `POST /poc/chatbox` ingress implemented in `routes/poc.js` following the DeepSeek Coordinator Direct ACP pattern. Authenticates via `x-chatbox-gateway-secret` header (env: `CHATBOX_GATEWAY_SECRET`), dedicated and distinct from all other gateway secrets (`KILO_CALLBACK_SECRET`, `GEMINI_CALLBACK_SECRET`, `DEEPSEEK_COORDINATOR_SECRET`, `ACP_POC_TRIGGER_SECRET`). Accepts OpenAI-compatible requests (`model` + `messages`), extracts and preserves natural-language intent, builds a bounded REVIEW-mode ACP command (`read_only` capability, `poc/` permitted paths), validates via existing `validateACPCommand`, registers via existing `taskRegistry.createTask`, and dispatches via existing `getDispatcher()`. The gateway does NOT independently grant elevated capabilities (`modify_files`, `commit`, `push`, `FAILOVER_EXECUTE`). Intent is preserved in the ACP `task` field and `natural_language_intent` structured field for downstream trusted control-plane classification. 23 focused gateway tests pass; all existing regression tests pass (259 total). (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001) |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -1280,7 +1281,7 @@ This section records the documentation/state reconciliation for the externally c
 
 ### Research Status
 
-**RESEARCH COMPLETE — PROPOSED / TARGET**
+**RESEARCH COMPLETE — IMPLEMENTED / VERIFIED**
 
 The architectural research for connecting Chatbox iOS (via OpenRouter → DeepSeek,
 OpenAI-compatible) to the existing canonical ACP control plane is complete.
@@ -1327,8 +1328,8 @@ ACP layer (two-stage authorization: Stage 1 Ingress, Stage 2 Authorization).
 
 | Component | Status |
 |-----------|--------|
-| Chatbox gateway | **NOT IMPLEMENTED** — PROPOSED / TARGET |
-| Chatbox gateway authentication | **NOT IMPLEMENTED** — UNKNOWN |
+| Chatbox gateway | **IMPLEMENTED / VERIFIED** — `POST /poc/chatbox` in `routes/poc.js`; authenticates via `x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET`; accepts OpenAI-compatible requests; preserves natural-language intent into REVIEW-mode ACP command; dispatches via existing `getDispatcher()` |
+| Chatbox gateway authentication | **IMPLEMENTED / VERIFIED** — Dedicated `x-chatbox-gateway-secret` header / `CHATBOX_GATEWAY_SECRET` env var; fail-closed; distinct from all other gateway secrets |
 | Qwen Router classification/trigger | **NOT IMPLEMENTED** — UNKNOWN |
 | Security Specialist callback | **NOT IMPLEMENTED** — UNKNOWN |
 | Security Audit Report persistence | **NOT IMPLEMENTED** — UNKNOWN |
@@ -1338,13 +1339,25 @@ ACP layer (two-stage authorization: Stage 1 Ingress, Stage 2 Authorization).
 - `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` — Created (new detailed research record)
 - `docs/ai/ARCH_DECISIONS.md` — Added ADR-015
 - `docs/ai/STATE.md` — Added this section; updated header
-- `docs/ai/TASK_LOG.md` — Appended historical completion entry
+
+### What This Task Changed (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001)
+
+- `routes/poc.js` — Added Chatbox gateway: `authenticateChatboxGateway` middleware (header `x-chatbox-gateway-secret`, env var `CHATBOX_GATEWAY_SECRET`, fail-closed, distinct from all other gateway secrets) and `POST /chatbox` route handler. The route accepts OpenAI-compatible requests (`model` + `messages`), validates the request shape (fail-closed on malformed input), extracts and preserves the user's natural-language intent, builds a bounded REVIEW-mode ACP command (`read_only` capability, `poc/` permitted paths), validates via existing `validateACPCommand`, registers via existing `taskRegistry.createTask`, and dispatches via existing `getDispatcher()`. Provider identifiers are persisted on successful dispatch. Registration failure prevents dispatch. Fail-closed on dispatch errors and exceptions.
+- `test/chatbox-gateway.test.js` — 23 focused tests covering: authenticated request acceptance (202), missing auth (401), invalid auth (401), missing env secret fail-closed (401), malformed OpenAI request rejection (400 — missing model, missing messages, empty messages, missing role/content, no user message), natural-language intent preservation (task field + `natural_language_intent` field), downstream control-plane handoff (ACP validation, TaskRegistry registration, dispatch via `getDispatcher`), capability boundary (REVIEW/read_only only — no modify_files/commit/push/run_tests/FAILOVER_EXECUTE), registration failure (500), dispatch failure (500, task still registered), dispatch blocked (403, task still registered), dispatch exception (500, task still registered), malformed JSON (400), secret distinctness (DeepSeek secret does not authenticate Chatbox), and existing route regression (DeepSeek Coordinator and Kilo routes still 401 without secret).
+- `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` — Updated status from PROPOSED / TARGET to IMPLEMENTED / VERIFIED; documented the resolved authentication mechanism (dedicated `x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET` boundary); marked the gateway and authentication as implemented; remaining unknowns (Qwen Router, Security Specialist callback, Security Audit Report persistence) remain explicitly UNKNOWN.
+- `docs/ai/ARCH_DECISIONS.md` — Updated ADR-015 status from PROPOSED / TARGET to IMPLEMENTED / VERIFIED.
+- `docs/ai/STATE.md` — Updated header; added Chatbox Gateway Ingress to Active Tasks table; updated Chatbox architecture section status; this entry.
+- `docs/ai/TASK_LOG.md` — Appended historical completion entry.
+- `docs/ai/CONTROL_CENTER.md` — Updated dashboard to reflect implemented Chatbox gateway.
 
 ### What This Task Did NOT Change
 
-- No application code
-- No workflows
-- No authentication implementation
+- No `poc/acp-engine.js` or `poc/schemas/acp-schema.js` or `poc/task-registry.js` or `poc/orchestrator.js` modifications
+- No workflows (`/.github/workflows/`)
+- No new dependencies
 - No Qwen implementation
 - No Security Specialist implementation
-- No new dependencies
+- No security_review_required escalation (REVIEW mode, not a Mandatory-tier security change)
+- No ARCHITECTURE.md, AGENTS.md, or GEMINI.md modifications
+- No deployment changes
+- No new orchestration system, second task registry, or parallel authorization architecture

@@ -1,18 +1,22 @@
 # Chatbox → DeepSeek → ACP Architecture Research Record
 
-**Status**: RESEARCH COMPLETE — PROPOSED / TARGET
+**Status**: IMPLEMENTED / VERIFIED — Gateway implemented and verified
 **Repository**: `fluentwithkyle/openclaw-webhook`
 **Base Branch**: `main`
 **Date**: 2026-09-18
-**Task ID**: TASK-KILO-CHATBOX-ACP-ARCHITECTURE-RECORD-001
+**Task ID**: TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001
 
-> **IMPORTANT**: This document records completed architectural research and the
-> agreed architectural direction for the Chatbox → ACP integration. It does
-> **NOT** authorize implementation. The Chatbox gateway described herein is
-> **PROPOSED / TARGET** — no gateway code, authentication implementation, Qwen
-> classification, or Security Specialist callback has been implemented as a
-> result of this research. This exists to preserve the findings as durable
-> repository state for future authorized execution.
+> **IMPLEMENTED / VERIFIED**: The Chatbox gateway has been implemented as an
+> authenticated, non-authorizing ingress in `routes/poc.js` (`POST /poc/chatbox`).
+> The gateway authenticates via a dedicated `x-chatbox-gateway-secret` header
+> (env: `CHATBOX_GATEWAY_SECRET`), accepts OpenAI-compatible requests,
+> preserves the user's natural-language intent, builds a bounded REVIEW-mode
+> ACP command, and submits it through the existing control plane
+> (`validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`).
+> The authentication mechanism that was previously UNKNOWN is now resolved
+> (see Section 12.1). The remaining architectural items (Qwen Router
+> classification, Security Specialist callback, Security Audit Report
+> persistence) remain explicitly UNKNOWN and are NOT implemented.
 
 ---
 
@@ -393,17 +397,32 @@ envelope.
 
 ---
 
-## 12. RESEARCH CONCLUSIONS ABOUT UNKNOWNS
+## 12. Resolved and Remaining Unknowns
 
-The following items are recorded as **unresolved architectural / implementation
+### 12.1 Resolved: Chatbox Gateway Authentication Mechanism
+
+The previously UNKNOWN Chatbox gateway authentication mechanism has been
+**resolved and implemented**:
+
+- **Header**: `x-chatbox-gateway-secret`
+- **Environment variable**: `CHATBOX_GATEWAY_SECRET`
+- **Boundary**: A dedicated credential boundary for Chatbox ingress, distinct
+  from `KILO_CALLBACK_SECRET`, `GEMINI_CALLBACK_SECRET`, `DEEPSEEK_COORDINATOR_SECRET`,
+  and `ACP_POC_TRIGGER_SECRET`.
+- **Behavior**: Fail-closed — missing or invalid secret returns 401 without
+  registering a task or dispatching.
+- **Resolution date**: 2026-09-18 (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001)
+
+### 12.2 Remaining Unresolved Items
+
+The following items remain **unresolved architectural / implementation
 items** rather than silently resolved:
 
 | # | Unresolved Item | Status |
 |---|-----------------|--------|
-| 1 | Exact authentication mechanism for the Chatbox gateway | **UNKNOWN** |
-| 2 | Exact Qwen Router classification / trigger implementation | **UNKNOWN** |
-| 3 | Exact Security Specialist callback mechanism to the Orchestrator | **UNKNOWN** |
-| 4 | Exact Security Audit Report persistence mechanism | **UNKNOWN** |
+| 1 | Exact Qwen Router classification / trigger implementation | **UNKNOWN** |
+| 2 | Exact Security Specialist callback mechanism to the Orchestrator | **UNKNOWN** |
+| 3 | Exact Security Audit Report persistence mechanism | **UNKNOWN** |
 
 These are additionally recorded in `docs/ai/STATE.md` Open Architectural
 Decisions (Security Specialist) and `ARCH_DECISIONS.md` ADR-014 consequences.
@@ -420,7 +439,7 @@ The architecture must preserve the distinction between:
 
 | Component | Role | Status |
 |-----------|------|--------|
-| **Chatbox gateway** | Authenticated non-authorizing ingress / translation layer | PROPOSED / TARGET |
+| **Chatbox gateway** | Authenticated non-authorizing ingress / translation layer | IMPLEMENTED / VERIFIED |
 | **Coordinator** | Trusted authorization / orchestration boundary | CURRENT / IMPLEMENTED (DeepSeek pattern) |
 | **ACP validation** | Canonical command validation | CURRENT / IMPLEMENTED |
 | **TaskRegistry** | Task registration and state persistence | CURRENT / IMPLEMENTED |
@@ -442,24 +461,24 @@ scope.
 
 ### 14.1 What This Task Does
 
-This task **does NOT** implement the gateway.
+This task **records the architectural contract** that the implementation
+must follow. That contract has now been implemented.
 
-It only **records the architectural contract** that the later implementation
-task must follow.
+### 14.2 What the Implementation Produced
 
-### 14.2 What the Future Implementation Should Produce
+**IMPLEMENTED / VERIFIED** — The Chatbox gateway was implemented as the
+**smallest** authenticated ingress that:
 
-**PROPOSED / TARGET** — The eventual implementation task should produce the
-**smallest** authenticated Chatbox gateway that:
-
-- Accepts an OpenAI-compatible request from Chatbox iOS
-- Authenticates the caller
-- Preserves the user's natural-language intent
+- Accepts an OpenAI-compatible request from Chatbox iOS (`model` + `messages`)
+- Authenticates the caller via `x-chatbox-gateway-secret` header / `CHATBOX_GATEWAY_SECRET`
+- Preserves the user's natural-language intent in the ACP `task` field and a
+  `natural_language_intent` structured field
 - Submits the request into the existing control plane (following the DeepSeek
-  Coordinator ingress pattern)
+  Coordinator ingress pattern: `validateACPCommand` → `taskRegistry.createTask`
+  → `getDispatcher()`)
 - Does **not** create a parallel authorization architecture
-- Does **not** permanently force all requests into REVIEW
 - Does **not** grant elevated capabilities directly from natural-language input
+  (issues only REVIEW-mode ACP commands with `read_only` capability)
 - Preserves the existing ACP / security boundaries
 - Allows the existing orchestration layer to determine the legitimate execution
   path
@@ -468,13 +487,23 @@ task must follow.
 
 This task does **NOT**:
 
-- Implement the Chatbox gateway
-- Implement gateway authentication
 - Implement Qwen Router classification
 - Implement Security Specialist callback
-- Modify application code
+- Modify application code outside the gateway route (`routes/poc.js`)
 - Modify workflows
 - Add dependencies
+- Modify `poc/acp-engine.js`, `poc/schemas/acp-schema.js`, `poc/task-registry.js`,
+  or `poc/orchestrator.js` (all reused unmodified)
+
+### 14.4 Implementation Record
+
+- **Endpoint**: `POST /poc/chatbox` (mounted on the existing POC router at `/poc`)
+- **Authentication**: `x-chatbox-gateway-secret` header, `CHATBOX_GATEWAY_SECRET` env var
+- **Request shape**: OpenAI-compatible `model` + `messages` array (minimum: one user message)
+- **Translation**: OpenAI natural-language request → REVIEW-mode ACP command (`read_only`, `poc/` paths)
+- **Control-plane path**: `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`
+- **Tests**: `test/chatbox-gateway.test.js` (23 tests, all passing)
+- **Total project tests**: 259 (all passing)
 
 ---
 
@@ -482,10 +511,10 @@ This task does **NOT**:
 
 | Label | Meaning | Applies To |
 |-------|---------|------------|
-| **VERIFIED** | Present and confirmed in current repository code/state | ACP, TaskRegistry, Orchestrator, DeepSeek Coordinator ingress, Kilo/Gemini lanes, existing execution modes |
+| **VERIFIED** | Present and confirmed in current repository code/state | Chatbox gateway (`POST /poc/chatbox`), Chatbox authentication, ACP, TaskRegistry, Orchestrator, DeepSeek Coordinator ingress, Kilo/Gemini lanes, existing execution modes |
 | **INFERRED** | Reasoned from verified architecture but not explicitly documented as the Chatbox path | Two-stage authorization model for Chatbox, Direct ACP ingress pattern for Chatbox |
-| **PROPOSED / TARGET** | Agreed architectural direction not yet implemented | Chatbox gateway, authentication mechanism, Qwen classification, Security Specialist callback |
-| **UNKNOWN** | Unresolved items requiring future authorized work | Exact auth mechanism, Qwen trigger logic, Security Specialist callback, Security Audit Report persistence |
+| **PROPOSED / TARGET** | Agreed architectural direction not yet implemented | Qwen Router classification/trigger, Security Specialist callback |
+| **UNKNOWN** | Unresolved items requiring future authorized work | Exact Qwen trigger logic, Security Specialist callback, Security Audit Report persistence |
 
 ---
 
@@ -495,7 +524,7 @@ This task does **NOT**:
 |----------|---------|
 | `ARCHITECTURE.md` | Authoritative architecture (Sections 12–17, 19) |
 | `docs/ai/README.md` | AI project-state system operating rules |
-| `docs/ai/ARCH_DECISIONS.md` | ADR-001 through ADR-014 (prior decisions) |
+| `docs/ai/ARCH_DECISIONS.md` | ADR-001 through ADR-015 (including ADR-015 Chatbox Gateway, now IMPLEMENTED / VERIFIED) |
 | `docs/ai/STATE.md` | Current project state (to be updated by this task) |
 | `docs/ai/TASK_LOG.md` | Historical task record (to be appended by this task) |
 | `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` | Prior Control Gate research (related concepts) |
