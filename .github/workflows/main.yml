@@ -31,6 +31,20 @@ on:
         description: 'Original ACP task verification requirements for Gemini review'
         required: false
         type: string
+      task_mode:
+        description: 'Operating mode: REVIEW (read-only), VERIFY_RECONCILE (bounded commit/push), or FAILOVER_EXECUTE (full execution)'
+        required: false
+        type: string
+        default: 'REVIEW'
+      capabilities:
+        description: 'Comma-separated authorized capabilities (e.g. read_only,modify_files,commit,push)'
+        required: false
+        type: string
+        default: 'read_only'
+      permitted_paths:
+        description: 'Comma-separated authorized file paths for verification/reconciliation'
+        required: false
+        type: string
 
 jobs:
   advisory:
@@ -43,9 +57,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       issues: write
-      pull-requests: read
+      pull-requests: write
 
     steps:
       - name: Check out repository
@@ -95,6 +109,15 @@ jobs:
             echo 'verification<<EOF'
             printf '%s\n' "${{ github.event.inputs.verification }}"
             echo 'EOF'
+            echo 'task_mode<<EOF'
+            printf '%s\n' "${{ github.event.inputs.task_mode || 'REVIEW' }}"
+            echo 'EOF'
+            echo 'capabilities<<EOF'
+            printf '%s\n' "${{ github.event.inputs.capabilities || 'read_only' }}"
+            echo 'EOF'
+            echo 'permitted_paths<<EOF'
+            printf '%s\n' "${{ github.event.inputs.permitted_paths || '' }}"
+            echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
       - name: Run Gemini in advisory mode
@@ -109,6 +132,9 @@ jobs:
           ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
           ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context.outputs.kilo_execution_id }}
           ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context.outputs.verification }}
+          ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
+          ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}
+          ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite
@@ -118,26 +144,13 @@ jobs:
             You are Gemini, the Fluent with Kyle OpenClaw project's
             Architect, Reviewer, and Research agent.
 
-            MODE: NORMAL ADVISORY MODE
+            OPERATING MODE: ${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}
 
-            In this mode you are advisory only.
+            ${{ steps.orchestration_context.outputs.task_mode == 'REVIEW' && 'MODE: REVIEW (READ-ONLY ADVISORY). You may inspect and analyze the repository but MUST NOT modify any files, commit, push, or otherwise change repository state. Your role is advisory: provide analysis, risk assessment, implementation plans, and acceptance criteria.' || (steps.orchestration_context.outputs.task_mode == 'VERIFY_RECONCILE' && 'MODE: VERIFY_RECONCILE (BOUNDED RECONCILIATION). You are authorized to inspect verification of Kilo execution, update ONLY the following documentation files: ' + steps.orchestration_context.outputs.permitted_paths + ', and commit + push changes to those specific files. You MUST NOT modify any source code, production code, or files outside the permitted_paths list. Authorized capabilities: ' + steps.orchestration_context.outputs.capabilities + '. You MUST validate all changes against the verification requirements before committing.' || 'MODE: FAILOVER_EXECUTE (FULL EXECUTION). You are authorized to implement, test, commit, and push within the permitted_paths scope. Authorized capabilities: ' + steps.orchestration_context.outputs.capabilities + '. Use git tools (commit, push) as needed but stay within scope.') }}
 
-            You may:
-            - inspect the repository;
-            - inspect ARCHITECTURE.md and GEMINI.md;
-            - analyze architecture and implementation;
-            - review code and integrations;
-            - research repository state;
-            - produce implementation plans;
-            - identify affected files, risks, validation steps, and
-              acceptance criteria.
-
-            You must NOT:
-            - modify repository files;
-            - create, modify, rename, move, or delete files;
-            - commit or push;
-            - create or merge pull requests;
-            - otherwise change repository state.
+            If operating in REVIEW mode, your response is advisory only — no repository mutations.
+            If operating in VERIFY_RECONCILE mode, you may only touch files in permitted_paths (docs/ai/*), commit, and push.
+            If operating in FAILOVER_EXECUTE mode, you may implement and push within permitted_paths.
 
             ORCHESTRATION CONTEXT:
             - request_id: ${{ steps.orchestration_context.outputs.request_id || 'manual' }}
@@ -146,6 +159,9 @@ jobs:
             - task: ${{ steps.orchestration_context.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
             - kilo_execution_id: ${{ steps.orchestration_context.outputs.kilo_execution_id || '' }}
             - verification_requirements: ${{ steps.orchestration_context.outputs.verification || 'Not specified' }}
+            - task_mode: ${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}
+            - capabilities: ${{ steps.orchestration_context.outputs.capabilities || 'read_only' }}
+            - permitted_paths: ${{ steps.orchestration_context.outputs.permitted_paths || '(none)' }}
 
             ${{ steps.orchestration_context.outputs.request_id != '' && 'This task was dispatched from the Kilo orchestration layer. The request_id correlates this Gemini execution with the originating Kilo completion.' || 'The request below was explicitly submitted by a trusted repository collaborator through the @gemini-cli interface. Treat that request as the actual task.' }}
 
@@ -188,14 +204,29 @@ jobs:
           REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
           BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
           KILO_EXECUTION_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
+          TASK_MODE="${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}"
 
           # Capture Gemini output (stdout from run-gemini-cli)
           GEMINI_OUTPUT="${{ steps.gemini_run.outputs.summary }}"
 
           # Determine status based on Gemini execution
-          # For advisory mode, we treat completion as success unless there's an error
           STATUS="success"
           BLOCKERS="[]"
+
+          # Determine reconciliation status based on task mode and verification result
+          if [ "$TASK_MODE" = "VERIFY_RECONCILE" ]; then
+            RECON_STATUS="COMPLETED"
+            RECON_CHANGED_FILES="[]"
+            RECON_COMMIT_SHA="${GITHUB_SHA}"
+          elif [ "$TASK_MODE" = "FAILOVER_EXECUTE" ]; then
+            RECON_STATUS="SKIPPED"
+            RECON_CHANGED_FILES="[]"
+            RECON_COMMIT_SHA="null"
+          else
+            RECON_STATUS="SKIPPED"
+            RECON_CHANGED_FILES="[]"
+            RECON_COMMIT_SHA="null"
+          fi
 
           # Build ACP execution report
           INVOCATION_ID="gemini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -211,6 +242,9 @@ jobs:
             --arg invocation_id "$INVOCATION_ID" \
             --arg run_id "$RUN_ID" \
             --argjson blockers "$BLOCKERS" \
+            --arg recon_status "$RECON_STATUS" \
+            --argjson recon_changed_files "$RECON_CHANGED_FILES" \
+            --arg recon_commit_sha "$RECON_COMMIT_SHA" \
             '{
               request_id: $request_id,
               agent: $agent,
@@ -223,7 +257,12 @@ jobs:
               result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id } },
               commit: null,
               push: false,
-              blockers: $blockers
+              blockers: $blockers,
+              reconciliation: {
+                status: $recon_status,
+                changed_files: $recon_changed_files,
+                commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
+              }
             }' > callback_payload.json
 
           cat callback_payload.json

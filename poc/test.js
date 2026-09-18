@@ -122,4 +122,76 @@ runTest('Security fields true/object', {
   }
 }, 'SUCCESS');
 
+// 11. VERIFY_RECONCILE mode with valid authorization and paths
+runTest('VERIFY_RECONCILE mode valid', {
+  "protocol_version": "0.1", "request_id": "test-vr-1",
+  "source": "CHATGPT", "target": "KILO", "task_type": "T",
+  "repository": "fluentwithkyle/openclaw-webhook", "base_branch": "main",
+  "task": "verify-and-update-docs",
+  "task_mode": "VERIFY_RECONCILE",
+  "constraints": { "permitted_paths": ["docs/ai/TASK_LOG.md", "docs/ai/STATE.md", "docs/ai/CONTROL_CENTER.md"] },
+  "authorization": { "capabilities": ["read_only", "modify_files", "commit", "push"] },
+  "verification": "V", "reporting": "R"
+}, 'SUCCESS');
+
+// 12. VERIFY_RECONCILE mode missing required capability
+runTest('VERIFY_RECONCILE mode missing push capability', {
+  "protocol_version": "0.1", "request_id": "test-vr-2",
+  "source": "CHATGPT", "target": "KILO", "task_type": "T",
+  "repository": "fluentwithkyle/openclaw-webhook", "base_branch": "main",
+  "task": "verify-and-update-docs",
+  "task_mode": "VERIFY_RECONCILE",
+  "constraints": { "permitted_paths": ["docs/ai/TASK_LOG.md", "docs/ai/STATE.md", "docs/ai/CONTROL_CENTER.md"] },
+  "authorization": { "capabilities": ["read_only", "modify_files", "commit"] },
+  "verification": "V", "reporting": "R"
+}, 'BLOCKED');
+
+// 13. VERIFY_RECONCILE mode unauthorized path
+runTest('VERIFY_RECONCILE mode unauthorized path', {
+  "protocol_version": "0.1", "request_id": "test-vr-3",
+  "source": "CHATGPT", "target": "KILO", "task_type": "T",
+  "repository": "fluentwithkyle/openclaw-webhook", "base_branch": "main",
+  "task": "verify-and-update-docs",
+  "task_mode": "VERIFY_RECONCILE",
+  "constraints": { "permitted_paths": ["index.js"] },
+  "authorization": { "capabilities": ["read_only", "modify_files", "commit", "push"] },
+  "verification": "V", "reporting": "R"
+}, 'BLOCKED');
+
+// 14. FAILOVER_EXECUTE mode valid
+runTest('FAILOVER_EXECUTE mode valid', {
+  "protocol_version": "0.1", "request_id": "test-fe-1",
+  "source": "CHATGPT", "target": "KILO", "task_type": "T",
+  "repository": "fluentwithkyle/openclaw-webhook", "base_branch": "main",
+  "task": "emergency-fix",
+  "task_mode": "FAILOVER_EXECUTE",
+  "constraints": { "permitted_paths": ["index.js", "utils/helper.js"] },
+  "authorization": { "capabilities": ["read_only", "modify_files", "run_tests", "commit", "push"] },
+  "verification": "V", "reporting": "R"
+}, 'SUCCESS');
+
+// 15. FAILOVER_EXECUTE mode missing run_tests
+runTest('FAILOVER_EXECUTE mode missing run_tests', {
+  "protocol_version": "0.1", "request_id": "test-fe-2",
+  "source": "CHATGPT", "target": "KILO", "task_type": "T",
+  "repository": "fluentwithkyle/openclaw-webhook", "base_branch": "main",
+  "task": "emergency-fix",
+  "task_mode": "FAILOVER_EXECUTE",
+  "constraints": { "permitted_paths": ["index.js"] },
+  "authorization": { "capabilities": ["read_only", "modify_files", "commit", "push"] },
+  "verification": "V", "reporting": "R"
+}, 'BLOCKED');
+
+// 16. Invalid task_mode rejected
+runTest('Invalid task_mode rejected', {
+  "protocol_version": "0.1", "request_id": "test-bad-1",
+  "source": "Q", "target": "K", "task_type": "T",
+  "repository": "R", "base_branch": "B",
+  "task": "test",
+  "task_mode": "INVALID",
+  "constraints": { "permitted_paths": ["poc/"] },
+  "authorization": { "capabilities": ["read_only"] },
+  "verification": "V", "reporting": "R"
+}, 'BLOCKED');
+
 console.log("All tests passed.");

@@ -191,6 +191,9 @@ async function triggerGemini(requestId, githubToken) {
 
   const kiloExecutionId = task.kilo.execution_id || task.kilo.report?.result?.execution_metadata?.invocation_id || 'unknown';
   const verification = task.verification;
+  const taskMode = task.task_mode || 'REVIEW';
+  const capabilities = task.capabilities || ['read_only'];
+  const permittedPaths = task.permitted_paths || [];
 
   const dispatchResult = await geminiTrigger.dispatchGemini(
     task.request_id,
@@ -199,7 +202,10 @@ async function triggerGemini(requestId, githubToken) {
     task.base_branch,
     kiloExecutionId,
     githubToken,
-    verification
+    verification,
+    taskMode,
+    capabilities,
+    permittedPaths
   );
 
   if (!dispatchResult.success) {
@@ -243,8 +249,10 @@ function getOrchestrationState(requestId) {
       request_id: task.request_id,
       status: task.status,
       current_agent: task.current_agent,
-      next_agent: task.next_agent,
-      kilo_status: task.kilo.status,
+           next_agent: task.next_agent,
+       task_mode: task.task_mode || 'REVIEW',
+       capabilities: task.capabilities || ['read_only'],
+       kilo_status: task.kilo.status,
       gemini_status: task.gemini.status,
       next_action: task.next_action,
       created_at: task.created_at,

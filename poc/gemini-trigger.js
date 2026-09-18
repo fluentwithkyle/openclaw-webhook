@@ -14,7 +14,10 @@ function triggerGeminiWorkflow(inputs, githubToken) {
         repository: inputs.repository,
         base_branch: inputs.base_branch,
         kilo_execution_id: inputs.kilo_execution_id,
-        verification: inputs.verification
+        verification: inputs.verification,
+        task_mode: inputs.task_mode || 'REVIEW',
+        capabilities: Array.isArray(inputs.capabilities) ? inputs.capabilities.join(',') : (inputs.capabilities || 'read_only'),
+        permitted_paths: Array.isArray(inputs.permitted_paths) ? inputs.permitted_paths.join(',') : ''
       }
     });
 
@@ -62,7 +65,7 @@ function triggerGeminiWorkflow(inputs, githubToken) {
   });
 }
 
-async function dispatchGemini(requestId, task, repository, baseBranch, kiloExecutionId, githubToken, verification) {
+async function dispatchGemini(requestId, task, repository, baseBranch, kiloExecutionId, githubToken, verification, taskMode, capabilities, permittedPaths) {
   if (!githubToken) {
     return {
       success: false,
@@ -77,7 +80,10 @@ async function dispatchGemini(requestId, task, repository, baseBranch, kiloExecu
     repository: repository,
     base_branch: baseBranch,
     kilo_execution_id: kiloExecutionId,
-    verification: verification
+    verification: verification,
+    task_mode: taskMode || 'REVIEW',
+    capabilities: capabilities || ['read_only'],
+    permitted_paths: permittedPaths || []
   };
 
   try {

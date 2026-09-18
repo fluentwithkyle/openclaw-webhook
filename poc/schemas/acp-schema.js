@@ -61,6 +61,182 @@ const VALID_STATE_TRANSITIONS = {
   'COMPLETE': []
 };
 
+const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE'];
+const DEFAULT_TASK_MODE = 'REVIEW';
+
+const VALID_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push', 'run_tests'];
+
+const REVIEW_CAPABILITIES = ['read_only'];
+const VERIFY_RECONCILE_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push'];
+const FAILOVER_EXECUTE_CAPABILITIES = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+
+const VERIFY_RECONCILE_PATHS = [
+  'docs/ai/TASK_LOG.md',
+  'docs/ai/STATE.md',
+  'docs/ai/CONTROL_CENTER.md'
+];
+
+const VALID_RECONCILIATION_STATUSES = ['COMPLETED', 'SKIPPED', 'FAILED'];
+
+function getRequiredCapabilitiesForMode(taskMode) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+  switch (mode) {
+    case 'VERIFY_RECONCILE': return VERIFY_RECONCILE_CAPABILITIES;
+    case 'FAILOVER_EXECUTE': return FAILOVER_EXECUTE_CAPABILITIES;
+    case 'REVIEW':
+    default: return REVIEW_CAPABILITIES.slice();
+  }
+}
+
+function getAuthorizedPathsForMode(taskMode) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+  if (mode === 'VERIFY_RECONCILE') return VERIFY_RECONCILE_PATHS;
+  return null;
+}
+
+function getModeCapabilities(mode) {
+  return getRequiredCapabilitiesForMode(mode);
+}
+
+function validateTaskMode(taskMode) {
+  if (!taskMode) {
+    return { valid: true, task_mode: DEFAULT_TASK_MODE };
+  }
+  if (!VALID_TASK_MODES.includes(taskMode)) {
+    return { valid: false, error: `Invalid task_mode: ${taskMode}. Must be one of: ${VALID_TASK_MODES.join(', ')}` };
+  }
+  return { valid: true, task_mode: taskMode };
+}
+
+function validateCapabilitiesForMode(taskMode, capabilities) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+
+  if (!Array.isArray(capabilities)) {
+    return { valid: false, error: 'authorization.capabilities must be an array' };
+  }
+
+  for (const cap of capabilities) {
+    if (!VALID_CAPABILITIES.includes(cap)) {
+      return { valid: false, error: `Invalid capability: ${cap}. Must be one of: ${VALID_CAPABILITIES.join(', ')}` };
+    }
+  }
+
+  const required = getRequiredCapabilitiesForMode(mode);
+
+  if (mode === 'REVIEW') {
+    if (capabilities.length !== 1 || capabilities[0] !== 'read_only') {
+      return { valid: false, error: 'REVIEW mode requires exactly ["read_only"] capability' };
+    }
+    return { valid: true };
+  }
+
+  for (const cap of required) {
+    if (!capabilities.includes(cap)) {
+      return { valid: false, error: `${mode} mode requires capability: ${cap}` };
+    }
+  }
+
+  return { valid: true };
+}
+
+function validatePermittedPathsForMode(taskMode, permittedPaths) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+  const authorizedPaths = getAuthorizedPathsForMode(mode);
+
+  if (!Array.isArray(permittedPaths)) {
+    return { valid: false, error: 'constraints.permitted_paths must be an array' };
+  }
+
+  if (authorizedPaths === null) {
+    if (permittedPaths.length === 0) {
+      return { valid: false, error: 'constraints.permitted_paths must not be empty' };
+    }
+    return { valid: true };
+  }
+
+  for (const p of permittedPaths) {
+    if (!authorizedPaths.includes(p)) {
+      return { valid: false, error: `Unauthorized path for ${mode}: ${p}. Authorized paths: ${authorizedPaths.join(', ')}` };
+    }
+  }
+
+  return { valid: true };
+}
+
+function validateAuthorization(command) {
+  const rawMode = command.task_mode || DEFAULT_TASK_MODE;
+
+  const modeValidation = validateTaskMode(rawMode);
+  if (!modeValidation.valid) {
+    return modeValidation;
+  }
+
+  const capabilities = command.authorization && command.authorization.capabilities;
+  const permittedPaths = command.constraints && command.constraints.permitted_paths;
+
+  const capValidation = validateCapabilitiesForMode(rawMode, capabilities);
+  if (!capValidation.valid) {
+    return capValidation;
+  }
+
+  const pathValidation = validatePermittedPathsForMode(rawMode, permittedPaths);
+  if (!pathValidation.valid) {
+    return pathValidation;
+  }
+
+  return { valid: true, task_mode: rawMode };
+}
+
+function validateReconciliation(reconciliation) {
+  if (reconciliation === undefined || reconciliation === null) {
+    return { valid: true };
+  }
+
+  if (typeof reconciliation !== 'object') {
+    return { valid: false, error: 'reconciliation must be an object' };
+  }
+
+  if (!reconciliation.status) {
+    return { valid: false, error: 'reconciliation.status is required' };
+  }
+
+  if (!VALID_RECONCILIATION_STATUSES.includes(reconciliation.status)) {
+    return { valid: false, error: `Invalid reconciliation.status: ${reconciliation.status}. Must be one of: ${VALID_RECONCILIATION_STATUSES.join(', ')}` };
+  }
+
+  if (!Array.isArray(reconciliation.changed_files)) {
+    return { valid: false, error: 'reconciliation.changed_files must be an array' };
+  }
+
+  if (reconciliation.commit_sha !== null && typeof reconciliation.commit_sha !== 'string') {
+    return { valid: false, error: 'reconciliation.commit_sha must be a string or null' };
+  }
+
+  return { valid: true };
+}
+
+function determineReconciliationStatus(verificationStatus, taskMode) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+
+  if (mode !== 'VERIFY_RECONCILE') {
+    return { status: 'SKIPPED', reason: `Reconciliation not applicable for mode: ${mode}` };
+  }
+
+  if (verificationStatus === 'success' || verificationStatus === 'PASS') {
+    return { status: 'COMPLETED', reason: 'Verification passed; reconciliation permitted' };
+  }
+
+  if (verificationStatus === 'failure' || verificationStatus === 'FAIL') {
+    return { status: 'SKIPPED', reason: 'Verification failed; reconciliation prohibited' };
+  }
+
+  if (verificationStatus === 'blocked' || verificationStatus === 'BLOCKED') {
+    return { status: 'SKIPPED', reason: 'Verification blocked; reconciliation prohibited' };
+  }
+
+  return { status: 'SKIPPED', reason: `Unknown verification status: ${verificationStatus}` };
+}
+
 function validateACPCommand(command) {
   if (!command || typeof command !== 'object') {
     return { valid: false, error: 'Command must be an object' };
@@ -138,6 +314,13 @@ function validateExecutionReport(report) {
     return { valid: false, error: 'result.execution_metadata.run_id must be a string' };
   }
 
+  if ('reconciliation' in report) {
+    const reconValidation = validateReconciliation(report.reconciliation);
+    if (!reconValidation.valid) {
+      return reconValidation;
+    }
+  }
+
   return { valid: true };
 }
 
@@ -175,6 +358,9 @@ function isValidStateTransition(from, to) {
 
 function createInitialTaskRegistryEntry(requestId, command) {
   const now = new Date().toISOString();
+  const taskMode = command.task_mode || DEFAULT_TASK_MODE;
+  const capabilities = (command.authorization && command.authorization.capabilities) ? command.authorization.capabilities : ['read_only'];
+  const permittedPaths = (command.constraints && command.constraints.permitted_paths) ? command.constraints.permitted_paths : [];
   return {
     request_id: requestId,
     parent_request_id: command.parent_request_id || null,
@@ -184,6 +370,7 @@ function createInitialTaskRegistryEntry(requestId, command) {
     repository: command.repository,
     base_branch: command.base_branch,
     task: command.task,
+    task_mode: taskMode,
     status: 'PENDING',
     created_at: now,
     updated_at: now,
@@ -201,7 +388,9 @@ function createInitialTaskRegistryEntry(requestId, command) {
       report: null
     },
     next_action: null,
-    verification: command.verification
+    verification: command.verification,
+    capabilities: capabilities,
+    permitted_paths: permittedPaths
   };
 }
 
@@ -212,6 +401,23 @@ module.exports = {
   VALID_AGENTS,
   VALID_STATUSES,
   VALID_STATE_TRANSITIONS,
+  VALID_TASK_MODES,
+  DEFAULT_TASK_MODE,
+  VALID_CAPABILITIES,
+  REVIEW_CAPABILITIES,
+  VERIFY_RECONCILE_CAPABILITIES,
+  FAILOVER_EXECUTE_CAPABILITIES,
+  VERIFY_RECONCILE_PATHS,
+  VALID_RECONCILIATION_STATUSES,
+  getRequiredCapabilitiesForMode,
+  getAuthorizedPathsForMode,
+  getModeCapabilities,
+  validateTaskMode,
+  validateCapabilitiesForMode,
+  validatePermittedPathsForMode,
+  validateAuthorization,
+  validateReconciliation,
+  determineReconciliationStatus,
   validateACPCommand,
   validateExecutionReport,
   validateTaskRegistryEntry,

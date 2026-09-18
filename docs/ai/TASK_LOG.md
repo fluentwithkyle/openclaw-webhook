@@ -6,6 +6,47 @@
 
 ---
 
+## 2026-09-18 | Implement VERIFY_RECONCILE Operating Mode (Issue #145)
+
+**Task**: Implement VERIFY_RECONCILE as a standard, bounded Gemini operating mode. Authorize verification + bounded docs reconciliation (commit/push) while keeping REVIEW read-only and FAILOVER_EXECUTE exceptional.
+
+**Originator**: ChatGPT (candidate ACP request via Issue #145, `issue.body`)
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: VERIFY_RECONCILE
+**Capabilities Authorized**: read_only, modify_files, commit, push
+**Authorized Documentation Scope**: `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md`
+**Implementation Scope**: `poc/schemas/acp-schema.js`, `poc/acp-engine.js`, `poc/gemini-trigger.js`, `poc/orchestrator.js`, `poc/command.json`, `poc/test.js`, `test/verify-reconcile.test.js`, `.github/workflows/main.yml`, `GEMINI.md`
+
+**Summary**:
+
+- **Objective**: Implement VERIFY_RECONCILE as a standard, bounded operating mode in the Kilo↔Gemini orchestration backbone, with mode-aware authorization enforcement, bounded docs reconciliation capability, and mode-aware Gemini workflow dispatch.
+- **Task Mode**: VERIFY_RECONCILE (verification + bounded docs reconciliation, commit/push authorized)
+- **Capabilities Authorized**: `read_only`, `modify_files`, `commit`, `push` (4 capabilities, no `run_tests`)
+- **Authorized paths**: Only `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md` (documentation reconciliation); implementation files in `poc/` and `test/` per authorized implementation scope
+- **Verification performed**: All 234 tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator, 53 verify-reconcile); `git diff --check` clean.
+
+**Implementation details**:
+
+1. `poc/schemas/acp-schema.js` — Added `VALID_TASK_MODES` (`['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE']`), `DEFAULT_TASK_MODE`, capability constants and per-mode capability sets, `VERIFY_RECONCILE_PATHS` (3 docs/ai paths), `VALID_RECONCILIATION_STATUSES`, and validation functions: `validateTaskMode`, `validateCapabilitiesForMode`, `validatePermittedPathsForMode`, `validateAuthorization`, `validateReconciliation`, `determineReconciliationStatus`. Updated `validateExecutionReport` to validate optional `reconciliation` field. Updated `createInitialTaskRegistryEntry` to include `task_mode`, `capabilities`, `permitted_paths`.
+2. `poc/acp-engine.js` — Added `require('./schemas/acp-schema')`. Updated `validate()` to dispatch based on `task_mode`: REVIEW preserves existing strict behavior; VERIFY_RECONCILE and FAILOVER_EXECUTE use schema validation via `validateAuthorization`. Extracted `validateReviewMode()`.
+3. `poc/gemini-trigger.js` — Pass `task_mode`, `capabilities` (as comma-separated string), `permitted_paths` (as comma-separated string) through `workflow_dispatch` inputs.
+4. `poc/orchestrator.js` — Source `task_mode`, `capabilities`, `permitted_paths` from TaskRegistry entry; pass to `dispatchGemini`. Include in `getOrchestrationState`.
+5. `poc/command.json` — Added `task_mode: "REVIEW"`.
+6. `poc/test.js` — 6 new POC tests for VERIFY_RECONCILE, FAILOVER_EXECUTE, invalid mode.
+7. `test/verify-reconcile.test.js` (new) — 53 tests covering all schema/engine validation paths.
+8. `.github/workflows/main.yml` — Added `task_mode`/`capabilities`/`permitted_paths` inputs; `contents: write`; mode-aware prompt; reconciliation data in callback payload.
+9. `GEMINI.md` — Added "Operating modes" section.
+
+**Protected boundaries preserved**: AGENTS.md, ARCHITECTURE.md, production code, `codex-builder.yml`, `kilo-gemini-poc.yml`, `kilo-verification.yml`, secrets/credentials — none modified. Only `.github/workflows/main.yml` permission changed, as explicitly authorized.
+
+**Outcome**: SUCCESS — VERIFY_RECONCILE operating mode fully implemented with mode-aware authorization enforcement, bounded docs reconciliation capability, schema validation, ACP engine dispatch, Gemini workflow mode-awareness, and reconciliation reporting. 234/234 tests pass. `git diff --check` clean.
+
+**Commit Reference**: (pending — self-referencing SHA cannot be known at commit time)
+
+---
+
 ## 2026-09-18 | Reconcile Current API Prompt Documentation with Exact Prompt and Rate-Limit Recovery (TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-002)
 
 **Task**: Reconcile the repository documentation with the externally configured Kilo API/webhook prompt currently authorized by Kyle. Verify the documented prompt matches the exact prompt verbatim; document the exact rate-limit condition "Assistant request was rate limited" in Section 6.7; fix the broken Section 7.4 cross-reference; and reconcile STATE.md, TASK_LOG.md, and CONTROL_CENTER.md with the actual documentation changes. (Issue #148)

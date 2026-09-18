@@ -1,33 +1,22 @@
 const { execSync } = require('child_process');
 const path = require('path');
 
+const schema = require('./schemas/acp-schema');
+
 const ALLOWED_CAPABILITIES = ['read_only'];
 const ALLOWED_BASE_PATH = 'poc/';
 
 function normalizePath(p) {
-    // Normalize to: "poc/"
     let normalized = p.replace(/\\/g, '/');
     if (normalized.startsWith('./')) normalized = normalized.substring(2);
     if (!normalized.endsWith('/')) normalized += '/';
     if (normalized.startsWith('/')) normalized = normalized.substring(1);
 
-    // Only allow "poc/"
     if (normalized === 'poc/') return 'poc/';
     return null;
 }
 
-function validate(command) {
-    // 1. Validate envelope (12 fields)
-    const requiredFields = [
-        'protocol_version', 'request_id', 'source', 'target', 'task_type',
-        'repository', 'base_branch', 'task', 'constraints', 'authorization',
-        'verification', 'reporting'
-    ];
-    for (const field of requiredFields) {
-        if (!command[field]) return { status: 'FAILED', error: `Missing field: ${field}` };
-    }
-
-    // 2. Authorization: exactly ["read_only"]
+function validateReviewMode(command) {
     if (!command.authorization.capabilities ||
         !Array.isArray(command.authorization.capabilities) ||
         command.authorization.capabilities.length !== 1 ||
@@ -35,7 +24,6 @@ function validate(command) {
         return { status: 'BLOCKED', error: 'Invalid or missing authorization. Only ["read_only"] allowed.' };
     }
 
-    // 3. Constraints: permitted_paths only `poc/`
     if (!command.constraints.permitted_paths || !Array.isArray(command.constraints.permitted_paths)) {
         return { status: 'FAILED', error: 'Missing permitted_paths' };
     }
@@ -50,8 +38,35 @@ function validate(command) {
     return { status: 'SUCCESS' };
 }
 
+function validate(command) {
+    const requiredFields = [
+        'protocol_version', 'request_id', 'source', 'target', 'task_type',
+        'repository', 'base_branch', 'task', 'constraints', 'authorization',
+        'verification', 'reporting'
+    ];
+    for (const field of requiredFields) {
+        if (!command[field]) return { status: 'FAILED', error: `Missing field: ${field}` };
+    }
+
+    const taskMode = command.task_mode || schema.DEFAULT_TASK_MODE;
+
+    if (!schema.VALID_TASK_MODES.includes(taskMode)) {
+        return { status: 'BLOCKED', error: `Invalid task_mode: ${taskMode}. Must be one of: ${schema.VALID_TASK_MODES.join(', ')}` };
+    }
+
+    if (taskMode === 'REVIEW') {
+        return validateReviewMode(command);
+    }
+
+    const authResult = schema.validateAuthorization(command);
+    if (!authResult.valid) {
+        return { status: 'BLOCKED', error: authResult.error };
+    }
+
+    return { status: 'SUCCESS' };
+}
+
 function execute(command) {
-    // MUST validate again internally to fail closed
     const v = validate(command);
     if (v.status !== 'SUCCESS') {
         return {
@@ -63,7 +78,6 @@ function execute(command) {
 
     try {
         if (command.task === 'inspect-poc-files') {
-            // Scoped operation
             const output = execSync('git ls-files poc/', { encoding: 'utf-8' });
             return {
                 request_id: command.request_id,

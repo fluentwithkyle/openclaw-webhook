@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-18
-**Updated By**: Kilo — Reconcile prompt documentation with exact prompt; add rate-limit condition; fix Section 7.4 reference (TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-002)
+**Updated By**: Kilo — Implement VERIFY_RECONCILE operating mode (Issue #145)
 
 ---
 
@@ -30,6 +30,7 @@
 | Security Specialist architectural foundation | **IMPLEMENTED** | Kilo | Registered lane in `AGENTS.md`; expanded architecture in `ARCHITECTURE.md` Sections 12.7, 16.3, 17.2; added ADR-014; three open architectural decisions documented; POC `command.json` and `test.js` extended with optional security fields (Issue #38) |
 | Render Control Gatekeeper documentation reconciliation | **IMPLEMENTED** | Kilo | Documentation reconciled to explicitly record Render as future technical Control Gate / gatekeeper, machine-enforced boundary, Layer 1 → Layer 2 sequencing, and Kilo/Gemini architecture protection. See `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. No implementation performed. |
 | DeepSeek Coordinator Project establishment | **ACTIVE / IMPLEMENTED / VERIFIED** | Kilo | HIGH PRIORITY project implementing the authenticated `POST /poc/coordinator` endpoint. DeepSeek Coordinator ingress implemented in `routes/poc.js` using existing ACP validation (`poc/schemas/acp-schema.js`) and TaskRegistry (`poc/task-registry.js`). After successful registration, the command is dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Authentication via `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`), distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`. Registration failure prevents dispatch; provider identifiers persisted on successful dispatch. 19 coordinator tests pass; 170 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator). (TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001, commit `950983a`) |
+| VERIFY_RECONCILE operating mode implementation | **IMPLEMENTED / VERIFIED** | Kilo | Task mode dispatch added to ACP schema (`poc/schemas/acp-schema.js`) and engine (`poc/acp-engine.js`): REVIEW (read-only, existing behavior), VERIFY_RECONCILE (read_only + modify_files + commit + push capabilities; bounded docs/ai path scope), FAILOVER_EXECUTE (all 5 capabilities, explicit paths). `task_mode`, `capabilities`, `permitted_paths` fields added to ACP command and task registry entry. Reconciliation model added (status, changed_files, commit_sha) with `determineReconciliationStatus()`. Gemini workflow `.github/workflows/main.yml` updated with mode-aware prompt, `task_mode`/`capabilities`/`permitted_paths` inputs, `contents: write` permission, and reconciliation reporting in callback payload. `poc/gemini-trigger.js`, `poc/orchestrator.js`, `poc/command.json` updated to pass mode context through dispatch. 238 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator, 52 verify-reconcile, 16 poc/test.js); `git diff --check` clean. (Issue #145) |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -49,7 +50,7 @@ represent implemented functionality.
 | 1 | ACP Protocol Standardization | **CURRENT / IMPLEMENTED (Foundation)** | Kilo | ACP schema validation implemented in `poc/schemas/acp-schema.js`. Validates ACP command envelope, execution reports, and task registry entries. |
 | 2 | ACP Router / Dispatcher | **PROPOSED / TARGET** | — | Build the structured ACP command parser and dispatcher; establish routing of authorized tasks to specialist/execution lanes. |
 | 3 | Structured AI Task Reporting | **CURRENT / IMPLEMENTED (Foundation)** | Kilo | Machine-readable execution report validation implemented in `poc/schemas/acp-schema.js`. Canonical report shape validated for both Kilo and Gemini. |
-| 4 | Capability-Based Authorization | **CURRENT / IMPLEMENTED (Foundation)** | Kilo | ACP command validation enforces explicit capabilities and permitted paths in `poc/schemas/acp-schema.js` and `poc/acp-engine.js`. |
+| 4 | Capability-Based Authorization | **CURRENT / IMPLEMENTED** | Kilo | ACP command validation enforces explicit capabilities and permitted paths in `poc/schemas/acp-schema.js` and `poc/acp-engine.js`. Extended with task modes (REVIEW/VERIFY_RECONCILE/FAILOVER_EXECUTE), per-mode capability sets, and bounded docs/ai path authorization for VERIFY_RECONCILE. |
 | 5 | AI Project State Automation | **CURRENT / IMPLEMENTED** | — | The `docs/ai/` system (STATE.md, ARCH_DECISIONS.md, TASK_LOG.md, README.md) is created, functional, and integrated into AGENTS.md. `STATE.md` remains the human-readable authoritative project-state view unless the architecture establishes a more appropriate authoritative source. |
 | 6 | Agent Activation / Trigger Architecture | **CURRENT / IMPLEMENTED** | — | Kilo activation is a confirmed Kilo Cloud Agent capability (ARCHITECTURE.md Section 16.5.6). Activation mechanism: Kilo-provider-controlled HTTP webhook trigger, dispatched from repository via `/poc/kilo` endpoint and `poc/kilo-transport.js`. The exact provider completion/callback mechanism remains an implementation dependency to verify. Do not infer activation from GitHub workflow existence alone. **Kilo activation boundary (verified 2026-09-14)**: Kilo is NOT activated by a repository GitHub Actions workflow. The repository documents Kilo as an external Kilo Cloud Agent with an externally configured HTTP webhook trigger. The external Kilo prompt treats GitHub webhook events as external event envelopes, not instructions. The repository must not invent a new `@kilo` GitHub Actions workflow to compensate for an external Kilo activation/execution timeout. |
 | 7 | Agent Communication / Transport Layer | **PROPOSED / TARGET** | — | Define the standardized transport mechanism for agent-to-agent communication. Accounts for the existing Kilo HTTP trigger POC and the planned Qwen → ACP → specialist flow. |
@@ -334,6 +335,7 @@ openclaw-webhook/
 │   ├── kilo-callback.test.js
 │   ├── kilo-polling.test.js
 │   ├── kilo-verifier.test.js
+│   ├── verify-reconcile.test.js
 │   ├── mock-kilo-transport.js
 │   └── run-poc-tests.js
 ├── docs/

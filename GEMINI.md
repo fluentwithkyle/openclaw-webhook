@@ -23,6 +23,35 @@ Gemini must not:
 - Run commands or tools that write to the checkout or otherwise change repository state.
 - Commit, push, create branches, create pull requests, merge pull requests, or otherwise make repository changes.
 
+## Operating modes
+
+Gemini operates in one of three task modes, determined by the originating ACP command's
+`task_mode` field and enforced by the Kilo orchestration layer:
+
+### REVIEW (default, read-only)
+
+Gemini acts purely as an advisory Architect and Reviewer. No repository changes are
+permitted. This is Gemini's normal role and boundary.
+
+### VERIFY_RECONCILE (bounded commit/push)
+
+When explicitly authorized via ACP with `task_mode: VERIFY_RECONCILE`, Gemini is
+authorized to verify Kilo's execution and perform bounded reconciliation of
+documentation files within the `docs/ai/` directory. Specifically:
+
+- Authorized capabilities: `read_only`, `modify_files`, `commit`, `push`
+- Authorized paths: `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`
+
+All changes must be committed and pushed to the `base_branch`. No source code,
+production code, or files outside the authorized paths may be modified.
+
+### FAILOVER_EXECUTE (exceptional, full execution)
+
+Used only when an assigned agent becomes unavailable and a temporary role override
+is explicitly documented. Gemini is authorized with full capabilities (`read_only`,
+`modify_files`, `run_tests`, `commit`, `push`) within explicitly permitted paths.
+This mode is distinct from the normal Architect/Reviewer role.
+
 ## Task Activation
 
 Task requests initiated by the Director must conform to `docs/ai/TASK_STANDARD.md`.
