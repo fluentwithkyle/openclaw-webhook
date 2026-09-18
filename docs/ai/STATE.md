@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-18
-**Updated By**: Kilo — Document current API prompt and autonomous recovery behavior (TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-001)
+**Updated By**: Kilo — Reconcile prompt documentation with exact prompt; add rate-limit condition; fix Section 7.4 reference (TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-002)
 
 ---
 
@@ -19,7 +19,7 @@
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
-| Kilo External Integration Contract documentation | **IMPLEMENTED** | Kilo | `docs/ai/KILO_INTEGRATION.md` documents GitHub webhook (Pushes + Issues + Issue comments), external Kilo trigger, ACP task-ingestion contract, and exact current Kilo prompt. The exact current Kilo prompt has been updated to the externally configured prompt supplied by Kyle. The documented prompt now includes convergence-based autonomous recovery (ALLOW EXPLORATION, STOP ON NON-CONVERGENCE), same-execution durable completion, timeout/interruption continuation, and self-wake authority (continuation-only, does not create new authorization). ACP remains the authorization boundary. The prompt itself remains externally configured. No secrets committed. |
+| Kilo External Integration Contract documentation | **IMPLEMENTED** | Kilo | `docs/ai/KILO_INTEGRATION.md` documents GitHub webhook (Pushes + Issues + Issue comments), external Kilo trigger, ACP task-ingestion contract, and exact current Kilo prompt. The exact current Kilo prompt has been updated to the externally configured prompt supplied by Kyle. The documented prompt now includes convergence-based autonomous recovery (ALLOW EXPLORATION, STOP ON NON-CONVERGENCE), same-execution durable completion, timeout/interruption continuation, and self-wake authority (continuation-only, does not create new authorization). ACP remains the authorization boundary. The prompt itself remains externally configured. No secrets committed. The exact rate-limit condition `Assistant request was rate limited` is documented in Section 6.7; the broken Section 7.4 reference has been corrected to Section 6.7 and Section 7 of the verbatim prompt. |
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
 | ChatGPT Protocol Stop Gate hardening (Section 14) | **IMPLEMENTED / VERIFIED** | Kilo | Section 14 consequential-action stop gate hardened in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (commit `3ce42ac159dd8c73d7e043d7bc57692f6c5ecde`). Documentation reconciliation: `CONTROL_CENTER.md` reconciled in commit `da6a1a48190072049abc85b333cb4dfbd56f3ced`; `STATE.md` and `TASK_LOG.md` reconciled in this task. |
 | Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | **IMPLEMENTED** | Kilo | TaskRegistry, Orchestrator, ACP Schema, and focused tests implemented in `poc/` and `test/`. See commit `9407470`. |
@@ -1236,4 +1236,34 @@ externally configured Kilo API/webhook prompt supplied by Kyle (Director).
   with timeout/interruption and self-wake behavior.
 - No application code, tests, GitHub Actions workflows, AGENTS.md, GEMINI.md,
   ARCHITECTURE.md, or Kilo external configuration was modified.
+- No secrets, credentials, or sensitive production values introduced.
+
+---
+
+## Kilo External Integration Contract Prompt Reconciliation — Task 002 (Recorded 2026-09-18)
+
+**Task**: TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-002 (Issue #148)
+**Updated By**: Kilo
+
+This section records the documentation/state reconciliation for the externally configured Kilo API/webhook prompt, reconciling `docs/ai/KILO_INTEGRATION.md` Section 7.1 with the exact prompt supplied by Kyle (Director) and verifying the surrounding documentation.
+
+### Verified Documentation Changes (Complete)
+
+1. **`docs/ai/KILO_INTEGRATION.md` Section 7.1 (Verbatim Prompt)**: Confirmed the verbatim prompt matches the exact prompt supplied by Kyle. All 14 numbered sections are present (1. Webhook/ACP Input Boundary, 2. Required ACP Authorization, 3. Authorization Is Bounded, 4. Inspect Before Modifying, 5. Autonomous Execution and Convergence, 6. Non-Convergence Stop Condition, 7. Timeout/Agent Interruption Recovery, 8. Completion Means Durable Completion, 9. Commit and Push Authority, 10. Protected Files, 11. Security, 12. Verification, 13. Reporting, 14. Final Execution Rule). The old "FIRST:" prompt marker is absent. The prompt is externally configured (Section 7.3 Configuration Ownership). No changes to the verbatim prompt content were required — it already matched the exact prompt.
+
+2. **`docs/ai/KILO_INTEGRATION.md` Section 6.7 (Timeout / Agent Interruption Recovery)**: Updated the timeout/interruption recovery paragraph to name the exact rate-limit condition `Assistant request was rate limited` as the specific runtime interruption signal. Updated the self-wake authority paragraph to state the self-wake is triggered after `Assistant request was rate limited`. These changes align the documentation with the ACP request's RATE-LIMIT / SELF-WAKE section.
+
+3. **`docs/ai/KILO_INTEGRATION.md` Section 7 introduction (line 374)**: Fixed broken cross-reference from "(see Section 7.4)" to "(see Section 6.7 below and Section 7 of the verbatim prompt)". No Section 7.4 exists in the document.
+
+4. **`docs/ai/STATE.md`**: Updated `Last Updated` / `Updated By` to reflect task 002. Updated Active Tasks entry for Kilo External Integration Contract documentation to note the rate-limit condition in Section 6.7 and the Section 7.4 reference fix.
+
+5. **`docs/ai/TASK_LOG.md`**: Appended append-only historical entry for task 002.
+
+6. **`docs/ai/CONTROL_CENTER.md`**: Inspected; no material staleness found. The Active Work entry for "Kilo External Integration Contract documentation" (IMPLEMENTED) remains accurate. Left unchanged per task authorization.
+
+### Accuracy Requirements
+
+- The verbatim prompt in Section 7.1 is an exact copy of the externally configured Kilo prompt. It is not repository-controlled.
+- The rate-limit condition `Assistant request was rate limited` and self-wake authority are documented at the KILO_INTEGRATION.md documentation layer (Section 6.7), not inside the verbatim prompt itself.
+- No application code, tests, GitHub Actions workflows, AGENTS.md, GEMINI.md, ARCHITECTURE.md, or Kilo external configuration was modified.
 - No secrets, credentials, or sensitive production values introduced.

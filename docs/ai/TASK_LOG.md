@@ -6,6 +6,60 @@
 
 ---
 
+## 2026-09-18 | Reconcile Current API Prompt Documentation with Exact Prompt and Rate-Limit Recovery (TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-002)
+
+**Task**: Reconcile the repository documentation with the externally configured Kilo API/webhook prompt currently authorized by Kyle. Verify the documented prompt matches the exact prompt verbatim; document the exact rate-limit condition "Assistant request was rate limited" in Section 6.7; fix the broken Section 7.4 cross-reference; and reconcile STATE.md, TASK_LOG.md, and CONTROL_CENTER.md with the actual documentation changes. (Issue #148)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE
+
+**Summary**:
+
+- **Objective**: Reconcile `docs/ai/KILO_INTEGRATION.md` with the exact externally configured Kilo API/webhook prompt supplied by Kyle, verify the verbatim prompt matches, document the rate-limit condition and self-wake/continuation behavior, fix the broken Section 7.4 reference, and reconcile STATE.md, TASK_LOG.md, and CONTROL_CENTER.md.
+- **Capabilities Authorized**: inspect, modify_files, run_tests, commit, push
+- **Authorized documentation paths**: `docs/ai/KILO_INTEGRATION.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`, `docs/ai/CONTROL_CENTER.md`
+- **Commit authority**: explicitly authorized
+- **Push authority**: explicitly authorized
+- **Persistence expectation**: same_execution
+- **Constraints**: Documentation reconciliation only. Did not modify application code, tests, GitHub Actions workflows, AGENTS.md, GEMINI.md, ARCHITECTURE.md, Kilo external configuration, Kilo credentials, or secrets. Did not create a second Kilo activation mechanism. Did not change ACP architecture.
+
+**Implementation**:
+
+- `docs/ai/KILO_INTEGRATION.md`:
+  - Verified Section 7.1 "Verbatim Prompt" matches the exact prompt supplied by Kyle verbatim. All 14 numbered sections present; old "FIRST:" marker absent; no changes to the verbatim prompt content required.
+  - Section 6.7 "Timeout / Agent Interruption Recovery": Updated the timeout/interruption recovery paragraph to name the exact rate-limit condition `Assistant request was rate limited` as the specific runtime interruption signal. Updated the self-wake authority paragraph to state the self-wake is triggered after `Assistant request was rate limited`.
+  - Section 7 introduction: Fixed broken cross-reference from "(see Section 7.4)" to "(see Section 6.7 below and Section 7 of the verbatim prompt)".
+- `docs/ai/STATE.md`: Updated `Last Updated` / `Updated By` to reflect task 002. Updated Active Tasks entry for Kilo External Integration Contract documentation to note the rate-limit condition in Section 6.7 and the Section 7.4 reference fix. Added reconciliation section for task 002.
+- `docs/ai/TASK_LOG.md`: Appended this append-only historical entry above the task 001 entry.
+- `docs/ai/CONTROL_CENTER.md`: Inspected; no material staleness found. Left unchanged per task authorization.
+
+**Verification performed**:
+
+1. Section 7.1 verbatim prompt matches the exact prompt: all 14 sections present, all key phrases verified. ✓
+2. The old "FIRST:" prompt marker is absent from the documented prompt. ✓
+3. The documented prompt (Section 6.7) contains the exact rate-limit condition `Assistant request was rate limited`. ✓
+4. The documented prompt contains the ACP authorization boundary (Sections 2, 3 of the prompt). ✓
+5. The documented prompt contains convergence-based autonomous recovery (Section 5: ALLOW EXPLORATION, STOP ON NON-CONVERGENCE). ✓
+6. The documented prompt contains self-wake/continuation authority and its ACP boundaries (Section 7 of the prompt + Section 6.7). ✓
+7. The documented prompt contains the FINAL EXECUTION RULE (Section 14). ✓
+8. Broken "Section 7.4" cross-reference corrected. ✓
+9. STATE.md accurately reflects the resulting current state (Active Tasks entry updated, reconciliation section added). ✓
+10. TASK_LOG.md contains the append-only historical entry. ✓
+11. CONTROL_CENTER.md correctly left unchanged (no material dashboard staleness). ✓
+12. `git diff --check` — clean (no whitespace errors). ✓
+13. Only authorized documentation paths changed: `docs/ai/KILO_INTEGRATION.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`. ✓
+14. No secrets, credentials, or sensitive production values introduced. ✓
+15. No application code, tests, GitHub Actions, AGENTS.md, GEMINI.md, or ARCHITECTURE.md modified. ✓
+
+**Outcome**: SUCCESS — The externally configured Kilo API/webhook prompt is verified verbatim in `docs/ai/KILO_INTEGRATION.md` Section 7.1; the exact rate-limit condition `Assistant request was rate limited` is documented in Section 6.7; the broken Section 7.4 cross-reference is corrected; STATE.md reflects the current state with a reconciliation section; TASK_LOG.md contains the append-only historical entry; CONTROL_CENTER.md left unchanged; only authorized documentation paths changed; `git diff --check` clean.
+
+**Commit Reference**: (pending — self-referencing SHA cannot be known at write time)
+
+---
+
 ## 2026-09-18 | Document Current Kilo API Prompt and Autonomous Recovery Behavior (TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-001)
 
 **Task**: Update the repository's durable documentation to accurately record the new Kilo external API/webhook prompt that Kyle has already configured externally. Reconcile the Kilo integration contract, current project state, and historical task log with the new prompt and its autonomous convergence/recovery behavior. (Issue #146)

@@ -327,21 +327,24 @@ primary stopping rule; it uses convergence, authorization, evidence, and
 measurable progress as the criteria. On non-convergence, Kilo reports
 `status: blocked` or `status: failure` with the evidence and reason.
 
-**Timeout / agent interruption recovery** — If the agent runtime imposes a
-timeout, pause, interruption, or continuation boundary while the authorized ACP
-task is still incomplete, Kilo preserves the original task objective and ACP
-authorization, does not create a new task objective, does not broaden
-permissions, does not restart completed work unnecessarily, inspects the current
-repository state, and resumes from the latest verified state.
+**Timeout / agent interruption recovery** — The specific runtime
+interruption signal is the exact condition `Assistant request was rate limited`.
+This is treated as a temporary execution interruption, not task failure. If it
+occurs while the authorized ACP task is still incomplete, Kilo preserves the
+original task objective and ACP authorization, does not create a new task
+objective, does not broaden permissions, does not restart completed work
+unnecessarily, inspects the current repository state, and resumes from the latest
+verified state.
 
 **Self-wake authority** — Kilo is authorized, where the agent interface
-supports it, to post a continuation/self-wake message in its own execution/chat
-context to resume an already-authorized incomplete task. This self-wake
-authority is **only** a continuation mechanism: it does not constitute new ACP
-authorization, does not create new permissions, does not expand permitted files,
-does not change the task objective, and does not authorize implementation that
-was not already authorized. If the original task is already complete, Kilo does
-not self-wake merely to perform unnecessary work.
+supports it, to post a continuation/self-wake message or comment in its own
+agent execution/chat context to resume an already-authorized incomplete task
+after `Assistant request was rate limited`. This self-wake authority is
+**only** a continuation mechanism: it does not constitute new ACP authorization,
+does not create new permissions, does not expand permitted files, does not
+change the task objective, and does not authorize implementation that was not
+already authorized. If the original task is already complete, Kilo does not
+self-wake merely to perform unnecessary work.
 
 **Same-execution completion** — An authorized implementation task with commit
 and push capabilities must complete all persistence (implementation,
@@ -368,7 +371,8 @@ The following is the current prompt configured on the external Kilo webhook
 trigger. This is an **exact-current copy**. It is externally configured and
 therefore subject to external configuration changes. The prompt includes
 convergence-based autonomous recovery, timeout/interruption continuation, and
-self-wake authorization behavior (see Section 7.4).
+self-wake authorization behavior (see Section 6.7 below and Section 7 of the
+verbatim prompt).
 
 ### 7.1 Verbatim Prompt
 
