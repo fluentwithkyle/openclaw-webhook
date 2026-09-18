@@ -6,7 +6,40 @@
 
 ---
 
-## 2026-09-18 | Implement VERIFY_RECONCILE Operating Mode (Issue #145)
+## 2026-09-18 | Fix Gemini Workflow Registration/Trigger Regression (TASK-KILO-FIX-GEMINI-WORKFLOW-TRIGGER-001)
+
+**Task**: Fix the Gemini workflow registration/trigger regression (Issue #151) caused by invalid GitHub Actions `+` operator syntax in the mode-aware prompt expression, and correct the `issue_comment` task-mode default to REVIEW.
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE
+
+**Summary**:
+
+- **Objective**: Restore valid GitHub Actions expression syntax in `.github/workflows/main.yml`, fix the `issue_comment` task_mode default routing, and verify the Gemini trigger fix.
+- **Root Cause**: Six invalid `+` string-concatenation operators introduced in commit `fc4cab2a217dae32187a6c11bb59862822ef7210` were used as expression operators, causing the GitHub Actions lexer to reject the workflow and block `@gemini-cli` issue_comment triggers.
+- **Secondary Correction**: `issue_comment` executions (whose orchestration_context step is skipped, leaving `task_mode` empty) incorrectly fell through to `FAILOVER_EXECUTE` instead of resolving to `REVIEW`.
+- **Implementation**:
+    - Replaced six `+` concatenation operators with `format()` calls in `.github/workflows/main.yml`.
+    - Applied `'task_mode || 'REVIEW''` to mode comparisons in `main.yml` to force `issue_comment` defaults to `REVIEW`.
+    - Added regression test `test/workflow-expression.test.js` to lex expressions for `+` operators and verify REVIEW-mode default and three-mode routing.
+- **Pushed directly to main**: Yes.
+- **Verification performed**:
+    - Confirmed Kilo implementation commit `8b1c325710351ab9068dcc67af7843250529023e` is on main.
+    - Verified all 14 tests in `test/workflow-expression.test.js` pass.
+    - Verified workflow expression syntax in `.github/workflows/main.yml`.
+    - Verified `issue_comment` REVIEW-mode default and task-mode routing behavior.
+- **Integrity Requirements**: No source code, workflow files, or unrelated files modified in this reconciliation task.
+
+**Outcome**: SUCCESS — Gemini workflow registration restored. Invalid `+` syntax replaced with `format()`. `issue_comment` correctly defaults to REVIEW. Regression test suite verified.
+
+**Commit Reference**: (pending — self-referencing SHA cannot be known at commit time)
+
+---
+
+
 
 **Task**: Implement VERIFY_RECONCILE as a standard, bounded Gemini operating mode. Authorize verification + bounded docs reconciliation (commit/push) while keeping REVIEW read-only and FAILOVER_EXECUTE exceptional.
 
