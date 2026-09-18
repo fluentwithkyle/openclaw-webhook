@@ -216,3 +216,35 @@
 - The optional ACP security fields (`security_review_required`, `security_audit_context`) are added to the schema illustration but do not alter the current mandatory ACP contract.
 - `poc/command.json` and `poc/test.js` updated to include and validate the optional security fields with backward-compatible tests.
 - No production code, workflows, services, or agent implementation behavior is modified by this decision.
+
+---
+
+## ADR-015: Chatbox Gateway — Authenticated Non-Authorizing Ingress into Existing ACP Control Plane
+
+**Status**: PROPOSED / TARGET (research complete; gateway not implemented)
+**Date**: 2026-09-18
+**Context**: Chatbox iOS provides phone-based natural-language access to the AI control plane via OpenRouter → DeepSeek using an OpenAI-compatible interface. The long-term objective is to allow the owner (Kyle) to communicate high-level desired outcomes from a phone and have the existing AI control plane translate that intent into legitimate planning, implementation, testing, review, and deployment work. The existing repository already has a canonical Coordinator ingress (implemented via `POST /poc/coordinator` for DeepSeek), ACP validation, TaskRegistry, orchestrator, and Kilo/Gemini execution lanes. MCP investigation established that Chatbox iOS does not provide the desktop-style MCP tool-execution loop, so a direct remote-MCP approach is not viable. The question is how the Chatbox ingress should integrate with the existing control plane without creating a parallel authorization architecture or silently resolving architectural unknowns.
+
+**Decision**:
+- Chatbox must be an **authenticated, non-authorizing ingress / translation layer**. The gateway authenticates the caller and preserves the user's natural-language intent, then submits the request into the **existing** control plane (following the Direct ACP pattern established by the DeepSeek Coordinator ingress).
+- The gateway must **NOT** independently grant: `modify_files`, `commit`, `push`, arbitrary `permitted_paths`, `FAILOVER_EXECUTE`, or other elevated capabilities.
+- Authorization classification (REVIEW / VERIFY_RECONCILE / FAILOVER_EXECUTE, capabilities, permitted paths) belongs to the **trusted Coordinator / orchestration / ACP layer**, not to the Chatbox ingress.
+- A **two-stage authorization model** applies: Stage 1 — Ingress (authenticate, preserve intent, submit to control plane, do not escalate); Stage 2 — Authorization / orchestration (classify, determine ACP mode, determine capabilities and permitted paths, issue/validate the authorized ACP command, dispatch to the appropriate specialist).
+- A permanent REVIEW-only policy for Chatbox is rejected: REVIEW is the initial bounded state for an unverified request, not the permanent capability ceiling of the phone interface.
+- The gateway must not become a second authorization system. It must not create a parallel orchestration path, a second task registry, or a separate control plane.
+- Unresolved items (exact Chatbox authentication mechanism, exact Qwen Router classification/trigger implementation, exact Security Specialist callback mechanism, exact Security Audit Report persistence mechanism) remain **UNKNOWN** and must not be silently resolved.
+
+**Rationale**:
+- Preserves user intent without allowing natural-language input itself to grant authority.
+- Prevents the phone interface from being reduced to a read-only terminal (rejecting permanent REVIEW-only).
+- Leverages the existing implemented Coordinator ingress pattern rather than building a parallel control plane.
+- Keeps FAILOVER_EXECUTE as an exceptional, security-gated mode that the gateway cannot grant directly.
+- Aligns with existing ADR-005 (Specialist Lanes with ACP Boundary), ADR-009 (No Secrets in Documentation), ADR-011 (OpenClaw Independence), and ADR-014 (Security Specialist Architectural Foundation).
+
+**Consequences**:
+- The Chatbox gateway itself is **PROPOSED / TARGET** and is **not implemented**.
+- This decision records the architectural contract that the later Chatbox implementation task must follow.
+- The existing DeepSeek Coordinator ingress (`POST /poc/coordinator`) remains the proven reference pattern for the Chatbox ingress.
+- The four unresolved architectural items (authentication mechanism, Qwen Router trigger logic, Security Specialist callback, Security Audit Report persistence) remain open and are tracked in `docs/ai/STATE.md`.
+- No production code, workflows, services, or existing implementation behavior is modified by this decision.
+- A detailed research record is preserved in `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md`.

@@ -1070,4 +1070,62 @@ Tests/validation performed:
 
 ---
 
+## 2026-09-18 | Document Chatbox → DeepSeek → ACP Architecture (TASK-KILO-CHATBOX-ACP-ARCHITECTURE-RECORD-001, Issue #153)
+
+**Task**: Create a durable repository record of the completed Chatbox → DeepSeek → ACP architecture research, the Director's intended end-state, the architectural conclusions reached through Gemini research, and the agreed implementation direction. Reconcile the current project state and architectural decision records so future agents can recover this context without relying on conversation history.
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE (documentation-only)
+**Capabilities Authorized**: inspect, modify_files, commit, push
+**Authorized Documentation Scope**: `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` (new), `docs/ai/ARCH_DECISIONS.md`, `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`
+
+**Summary**:
+
+- **Objective**: Record the completed Chatbox → DeepSeek → ACP architectural research and implementation direction as durable repository state, distinguishing VERIFIED, INFERRED, PROPOSED / TARGET, and UNKNOWN findings, without implementing the gateway.
+- **Research context preserved**:
+  - User's intended destination: phone-based natural-language control interface for the AI development/control plane.
+  - Current DeepSeek/Chatbox starting point: Chatbox iOS → OpenRouter → DeepSeek (OpenAI-compatible), not yet the production/control-plane integration.
+  - MCP investigation: Chatbox iOS does not provide the desktop-style MCP tool-execution loop; selected direction is an authenticated HTTP/OpenAI-compatible gateway, not an MCP bridge.
+  - Existing Coordinator architecture: authenticated Coordinator ingress, canonical ACP validation, TaskRegistry, orchestration/dispatch, Kilo, Gemini, Security Specialist, Qwen router direction.
+  - Canonical ACP boundary: ACP is the structured authorization boundary with task intent, task mode, capabilities, permitted paths, authorization, verification, reporting, repository, base branch, target agent.
+  - ACP execution modes: REVIEW (read-only), VERIFY_RECONCILE (bounded modify + commit + push), FAILOVER_EXECUTE (full capabilities, security-gated).
+  - Rejected permanent-REVIEW approach: REVIEW is the initial bounded state for an unverified request, not the permanent capability ceiling.
+  - Final gateway boundary: Chatbox must be an authenticated, non-authorizing ingress/translation layer that preserves intent and passes it into the trusted control-plane boundary; must NOT independently grant modify_files, commit, push, arbitrary permitted_paths, FAILOVER_EXECUTE, or other elevated capabilities.
+  - Two-stage authorization: Stage 1 Ingress (authenticate, preserve intent, submit to control plane, do not escalate); Stage 2 Authorization (classify, determine ACP mode, determine capabilities/paths, issue/validate ACP command, dispatch to specialist).
+  - FAILOVER_EXECUTE protection: gateway must not grant it directly; existing Security Specialist gate must remain intact.
+  - User-intent preservation: distinction between what Kyle asked, how the system classified, what Kyle explicitly authorized, what capabilities the ACP command grants, and what the agent performs.
+  - Unknowns recorded (not silently resolved): exact Chatbox authentication mechanism; exact Qwen Router classification/trigger implementation; exact Security Specialist callback mechanism; exact Security Audit Report persistence mechanism.
+  - Architectural distinction preserved between Chatbox gateway, Coordinator, ACP validation, TaskRegistry, Orchestrator/dispatcher, and Kilo agent.
+  - Implementation direction: smallest authenticated Chatbox gateway accepting OpenAI-compatible requests, authenticating the caller, preserving intent, submitting into the existing control plane, not creating a parallel authorization architecture, not permanently forcing REVIEW, not granting elevated capabilities directly from natural-language input, preserving existing ACP/security boundaries.
+- **Changes**:
+  - `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` — Created (new dedicated research/architecture document with VERIFIED / INFERRED / PROPOSED / TARGET / UNKNOWN distinctions).
+  - `docs/ai/ARCH_DECISIONS.md` — Added ADR-015 documenting the Chatbox gateway as authenticated non-authorizing ingress into the existing ACP control plane. Status: PROPOSED / TARGET (research complete; gateway not implemented).
+  - `docs/ai/STATE.md` — Updated `Last Updated` / `Updated By`; added "Chatbox → DeepSeek → ACP Architecture (PROPOSED / TARGET)" section recording research status, key findings, decision, implementation status table, and what this task changed / did NOT change.
+- **Authorization**: Commit and push to `main` explicitly authorized by the ACP task (Issue #153).
+- **Pushed directly to main**: Yes.
+
+**Verification performed**:
+
+1. Inspected the current documentation structure before editing (`docs/ai/` directory listing, existing `ARCH_DECISIONS.md` ADR-001 through ADR-014, existing `STATE.md` sections, existing `TASK_LOG.md` entries).
+2. Confirmed the new record `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` does not duplicate an existing document (no prior Chatbox-specific architecture record existed; prior research documents cover ChatGPT Control Gate, DeepSeek Coordinator, Kilo/Gemini orchestration).
+3. Confirmed ADR-015 is the next appropriate ADR number (ADR-001 through ADR-014 already present).
+4. Confirmed all four documentation surfaces are internally consistent:
+  - `CHATBOX_ACP_ARCHITECTURE_RECORD.md` — detailed research and architecture record with status labels.
+  - `ARCH_DECISIONS.md` — ADR-015 capturing the architectural decision, status PROPOSED / TARGET.
+  - `STATE.md` — records Chatbox architecture as PROPOSED / TARGET, research complete, gateway NOT implemented; records unresolved unknowns.
+  - `TASK_LOG.md` — append-only historical entry (this entry).
+5. Confirmed the architecture is recorded as PROPOSED / TARGET, not IMPLEMENTED / CURRENT.
+6. Confirmed unresolved questions remain explicitly unresolved (authentication mechanism, Qwen Router, Security Specialist callback, Security Audit Report persistence).
+7. Confirmed no application code or workflows were changed (only documentation files in `docs/ai/`).
+8. Confirmed `git diff --check` clean (no whitespace errors).
+9. Inspected the final diff — only intended documentation files changed.
+10. No secrets, credentials, or sensitive production values introduced.
+
+**Outcome**: SUCCESS — Chatbox → DeepSeek → ACP architecture research recorded as durable repository state; ADR-015 added documenting the authenticated non-authorizing ingress boundary; STATE.md reconciled with PROPOSED / TARGET status and unresolved unknowns; TASK_LOG.md appended; no application code, workflows, or non-authorized files changed; `git diff --check` clean.
+
+---
+
 *End of log. New entries appended above this line.*

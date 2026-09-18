@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-18
-**Updated By**: Kilo — Implement VERIFY_RECONCILE operating mode (Issue #145)
+**Updated By**: Kilo — Document Chatbox → ACP architecture record (Issue #153)
 
 ---
 
@@ -1269,3 +1269,82 @@ This section records the documentation/state reconciliation for the externally c
 - The rate-limit condition `Assistant request was rate limited` and self-wake authority are documented at the KILO_INTEGRATION.md documentation layer (Section 6.7), not inside the verbatim prompt itself.
 - No application code, tests, GitHub Actions workflows, AGENTS.md, GEMINI.md, ARCHITECTURE.md, or Kilo external configuration was modified.
 - No secrets, credentials, or sensitive production values introduced.
+
+---
+
+## Chatbox → DeepSeek → ACP Architecture (PROPOSED / TARGET)
+
+**Task**: TASK-KILO-CHATBOX-ACP-ARCHITECTURE-RECORD-001 (Issue #153)
+**Updated By**: Kilo
+**Date**: 2026-09-18
+
+### Research Status
+
+**RESEARCH COMPLETE — PROPOSED / TARGET**
+
+The architectural research for connecting Chatbox iOS (via OpenRouter → DeepSeek,
+OpenAI-compatible) to the existing canonical ACP control plane is complete.
+The findings, conclusions, and implementation direction are recorded in
+`docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` (detailed research record) and
+`docs/ai/ARCH_DECISIONS.md` (ADR-015).
+
+### Key Findings (VERIFIED)
+
+1. **Chatbox iOS does not provide a desktop-style MCP tool-execution loop.**
+   A direct remote-MCP approach is not viable. The selected direction is an
+   ordinary authenticated HTTP / OpenAI-compatible gateway.
+2. **The repository already has a canonical Coordinator ingress.** The DeepSeek
+   Coordinator ingress (`POST /poc/coordinator`, IMPLEMENTED / VERIFIED)
+   establishes the proven Direct ACP pattern: authenticate → validate ACP →
+   register via TaskRegistry → dispatch via existing Kilo dispatcher.
+3. **ACP is the authorization boundary.** The ACP schema (`pcp/schemas/acp-schema.js`)
+   and ACP engine (`poc/acp-engine.js`) require explicit capabilities, permitted
+   paths, and task mode in the ACP command envelope.
+4. **Existing ACP execution modes are established:** REVIEW (read-only),
+   VERIFY_RECONCILE (read_only + modify_files + commit + push, bounded paths),
+   FAILOVER_EXECUTE (all capabilities, security-gated, PROPOSED / TARGET).
+5. **A permanent REVIEW-only policy for Chatbox was rejected.** REVIEW is the
+   initial bounded state for an unverified request, not the permanent capability
+   ceiling of the phone interface.
+
+### Architectural Decision (PROPOSED / TARGET — ADR-015)
+
+Chatbox must be an **authenticated, non-authorizing ingress / translation layer**
+that:
+
+- Authenticates the caller
+- Preserves the user's natural-language intent
+- Submits the request into the **existing** control plane (following the DeepSeek
+  Coordinator ingress pattern)
+- Does NOT independently grant: `modify_files`, `commit`, `push`, arbitrary
+  `permitted_paths`, `FAILOVER_EXECUTE`, or other elevated capabilities
+- Does NOT create a parallel authorization architecture or control plane
+
+Authorization classification belongs to the trusted Coordinator / orchestration /
+ACP layer (two-stage authorization: Stage 1 Ingress, Stage 2 Authorization).
+
+### Implementation Status
+
+| Component | Status |
+|-----------|--------|
+| Chatbox gateway | **NOT IMPLEMENTED** — PROPOSED / TARGET |
+| Chatbox gateway authentication | **NOT IMPLEMENTED** — UNKNOWN |
+| Qwen Router classification/trigger | **NOT IMPLEMENTED** — UNKNOWN |
+| Security Specialist callback | **NOT IMPLEMENTED** — UNKNOWN |
+| Security Audit Report persistence | **NOT IMPLEMENTED** — UNKNOWN |
+
+### What This Task Changed
+
+- `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` — Created (new detailed research record)
+- `docs/ai/ARCH_DECISIONS.md` — Added ADR-015
+- `docs/ai/STATE.md` — Added this section; updated header
+- `docs/ai/TASK_LOG.md` — Appended historical completion entry
+
+### What This Task Did NOT Change
+
+- No application code
+- No workflows
+- No authentication implementation
+- No Qwen implementation
+- No Security Specialist implementation
+- No new dependencies
