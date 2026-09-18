@@ -88,8 +88,57 @@ jobs:
           echo "  Worktree modified: $(printf '%s\n' "$PRE_WORKTREE" | wc -l) files"
           echo "  Deleted: $(printf '%s\n' "$PRE_DELETED" | wc -l) files"
 
+      - name: Validate ACP request before Gemini invocation
+        id: validate_acp
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROMPT="$(printf '%s' "$COMMENT_BODY" | sed 's/@kilo-gemini-poc//g' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+          printf '%s' "$PROMPT" | node -e '
+            const { validateACPCommand } = require("./poc/schemas/acp-schema.js");
+            let input = "";
+            process.stdin.on("data", (d) => input += d);
+            process.stdin.on("end", () => {
+              input = input.trim();
+
+              if (!input) {
+                console.error("::error::BLOCKED: Empty trigger body after removing @kilo-gemini-poc marker. No ACP request present. Gemini CLI will not be invoked.");
+                process.exit(1);
+              }
+
+              let asJson = null;
+              try { asJson = JSON.parse(input); } catch (e) { /* not JSON */ }
+
+              if (asJson && typeof asJson === "object" && asJson !== null) {
+                const result = validateACPCommand(asJson);
+                if (!result.valid) {
+                  console.error("::error::BLOCKED: " + result.error + ". Gemini CLI will not be invoked.");
+                  process.exit(1);
+                }
+                console.log("::notice::ACP request validation PASSED (canonical ACP schema validated JSON command envelope).");
+                process.exit(0);
+              }
+
+              const required = ["originator", "target_agent", "repository", "base_branch", "task_mode", "capabilities", "permitted_paths"];
+              const missing = required.filter((f) => !new RegExp("^" + f + ":", "im").test(input));
+              if (missing.length > 0) {
+                console.error("::error::BLOCKED: ACP request missing required authorization fields: " + missing.join(", ") + ". Gemini CLI will not be invoked.");
+                process.exit(1);
+              }
+              console.log("::notice::ACP request validation PASSED. All required authorization fields are present.");
+              process.exit(0);
+            });
+          '
+
+          echo "valid=true" >> "$GITHUB_OUTPUT"
+
       - name: Run Gemini in POC mode
         id: gemini
+        if: steps.validate_acp.outputs.valid == 'true'
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
