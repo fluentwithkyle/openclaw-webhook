@@ -263,6 +263,8 @@ Unverified agent reports, chat messages, and task descriptions remain supporting
 
 When Gemini is executed through the repository GitHub Actions workflow (`.github/workflows/main.yml`), ChatGPT MUST treat the GitHub Actions artifact `gemini-acp-report` / `gemini-acp-report.json` as the durable Gemini-result retrieval path.
 
+The project-wide interpretation of natural-language references such as "Gemini's report" or "Gemini's results" is defined in `docs/ai/README.md` — *Terminology and Artifact Retrieval*. This section provides the ChatGPT-specific rule that implements that project-wide definition; it does not establish a second or conflicting definition.
+
 After a completed Gemini run, ChatGPT SHOULD retrieve and inspect that artifact directly when verification or result access is required.
 
 ChatGPT SHOULD NOT require Kyle to copy/paste the Gemini response when the artifact is available.
@@ -302,6 +304,8 @@ ChatGPT should distinguish clearly between:
 
 ### 5.1.1 Gemini Report Discovery Procedure
 
+> **Project-wide definition.** The natural-language-to-artifact mapping ("Gemini's report", "Gemini's results", and equivalent phrasings) is established project-wide in `docs/ai/README.md` — *Terminology and Artifact Retrieval*. This section is ChatGPT-specific and provides the procedural implementation of that definition. It does not create a second or conflicting definition.
+
 When Kyle asks ChatGPT to find, retrieve, review, or report Gemini's completed result, ChatGPT MUST independently locate and retrieve the Gemini result from the GitHub Actions artifact before asking Kyle where the result is stored or asking Kyle to provide/copy the result.
 
 The retrieval chain is:
@@ -324,7 +328,7 @@ This chain is the documented, authoritative retrieval path. The procedure MUST b
 7. Use that retrieved report as the authoritative Gemini result for the requested execution.
 8. Only if the documented artifact cannot be located, cannot be downloaded, has expired, or the workflow did not produce the expected artifact should ChatGPT investigate another documented result location or report that retrieval is blocked.
 
-> **Mandatory retrieval behavior.** When Kyle says "find Gemini's report," "get Gemini's results," "retrieve Gemini's report," or equivalent wording, ChatGPT MUST interpret this as a GitHub Actions artifact retrieval task and MUST independently perform the documented retrieval procedure above. ChatGPT MUST NOT ask Kyle where Gemini stored the result or ask Kyle to copy/paste the result unless the documented retrieval procedure has already been independently attempted and is unavailable or blocked.
+> **Mandatory retrieval behavior.** When Kyle says "find Gemini's report," "get Gemini's results," "retrieve Gemini's report," or equivalent wording (see the project-wide terminology mapping in `docs/ai/README.md` — *Terminology and Artifact Retrieval*), ChatGPT MUST interpret this as a GitHub Actions artifact retrieval task and MUST independently perform the documented retrieval procedure above. ChatGPT MUST NOT ask Kyle where Gemini stored the result or ask Kyle to copy/paste the result unless the documented retrieval procedure has already been independently attempted and is unavailable or blocked.
 
 6. Documentation and State Reconciliation
 

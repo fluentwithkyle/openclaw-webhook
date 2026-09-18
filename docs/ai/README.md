@@ -37,6 +37,55 @@ These rules preserve the existing activation procedure and role boundaries. The 
 
 Future AI systems should follow these requirements when preparing and initiating Gemini tasks.
 
+## Terminology and Artifact Retrieval
+
+This section establishes the **project-wide deterministic interpretation** of natural-language references to Gemini's output. It applies to all project agents and actors when interpreting or retrieving Gemini's report, regardless of which agent performs the retrieval.
+
+### Gemini Report Terminology → Artifact Mapping
+
+Requests that refer to Gemini's output using natural-language references — including, but not limited to:
+
+- "Gemini's report"
+- "Gemini's results"
+- "look at Gemini's report"
+- "get Gemini's results"
+- "find Gemini's report"
+- "retrieve Gemini's report"
+- "check Gemini's report"
+- "go look at her report"
+- "the Gemini result"
+- any equivalent natural-language reference to Gemini's output
+
+are **deterministically interpreted** as a request to retrieve the:
+
+**`gemini-acp-report` GitHub Actions artifact**
+
+produced by the relevant completed Gemini workflow run.
+
+### Canonical Source
+
+The `gemini-acp-report` artifact (containing `gemini-acp-report.json`) is the **canonical project-wide source** for Gemini-generated reports and all artifact-based Gemini output.
+
+### Retrieval Path
+
+The retrieval chain is:
+
+```
+Gemini
+→ GitHub Actions (`.github/workflows/main.yml` — Gemini Architect and Reviewer workflow)
+→ `gemini-acp-report.json`
+→ `gemini-acp-report` GitHub Actions artifact
+→ Agent retrieval / review
+```
+
+### Resolving the Relevant Run
+
+When multiple completed Gemini workflow runs exist, the **relevant run** is resolved from the **immediately preceding Gemini execution / task context** — the Gemini workflow run associated with the most recent Gemini task, activation, or execution relevant to the current request.
+
+### ChatGPT Procedural Retrieval
+
+The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, Section 5.1.1 (Gemini Report Discovery Procedure), which implements this project-wide definition. This project-wide definition is the single authoritative mapping; local agent procedures must not create a second or conflicting definition.
+
 ## File Contents
 
 ### `STATE.md` — Current Live Project State

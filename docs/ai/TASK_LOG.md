@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-09-18 | Implement Project-Wide Gemini Report Retrieval Definition (TASK-KILO-GEMINI-REPORT-RETRIEVAL-DOCUMENTATION-IMPLEMENT-001)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE (documentation-only)
+**Capabilities Authorized**: inspect, modify_files, commit, push
+
+**Summary**:
+
+- **Objective**: Establish "Gemini's report" (and equivalent natural-language references) as a project-wide deterministic documentation convention mapping to the `gemini-acp-report` GitHub Actions artifact from the relevant completed Gemini workflow run.
+- **Changes**:
+    - `docs/ai/README.md` — Added the **Terminology and Artifact Retrieval** section establishing the project-wide natural-language-to-artifact mapping ("Gemini's report", "Gemini's results", "find/retrieve/check Gemini's report", "go look at her report", and equivalents) → `gemini-acp-report` GitHub Actions artifact; identifies the artifact as the canonical project-wide source for Gemini-generated reports and artifact-based output; defines the retrieval chain; specifies that the relevant run is resolved from the immediately preceding Gemini execution/task context; and cross-references the ChatGPT-specific procedural instructions in Section 5.1.1.
+    - `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` — Section 5.1 cross-references the project-wide definition; Section 5.1.1 adds a project-wide-definition note and updates the mandatory-retrieval blockquote to cross-reference `docs/ai/README.md`. All procedural retrieval instructions in Section 5.1.1 remain intact; no second or conflicting definition is introduced.
+- **Authorization**: Commit and push to `main` explicitly authorized by the ACP task.
+- **Pushed directly to main**: Yes.
+
+**Verification performed**:
+
+1. Confirmed the new project-wide definition is present in `docs/ai/README.md`.
+2. Confirmed the natural-language → artifact mapping is explicit in both `docs/ai/README.md` and `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` Section 5.1.1.
+3. Confirmed Section 5.1.1 procedural instructions remain intact and coherent.
+4. Confirmed no conflicting definitions elsewhere in `docs/ai/` (only Section 5.1.1 plus `gemini-acp-report` artifact references elsewhere, all consistent).
+5. Confirmed the final diff contains only intended documentation changes: `docs/ai/README.md`, `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, `docs/ai/TASK_LOG.md`.
+6. Confirmed `git diff --check` clean (no whitespace errors).
+7. Confirmed no secrets, credentials, or sensitive production values introduced.
+8. Confirmed no workflow, artifact-generation, artifact-name, GitHub Actions architecture, Kilo execution architecture, or Gemini execution architecture files modified.
+
+**Outcome**: SUCCESS — "Gemini's report" terminology is established as a project-wide documentation convention mapping to the `gemini-acp-report` GitHub Actions artifact; existing ChatGPT Section 5.1.1 procedural instructions preserved and cross-referenced; no conflicting definitions introduced; only intended documentation files changed; `git diff --check` clean.
+
+**Commit Reference**: (pending — self-referencing SHA cannot be known at write time)
+
+---
+
 ## 2026-09-18 | Fix Gemini Workflow Registration/Trigger Regression (TASK-KILO-FIX-GEMINI-WORKFLOW-TRIGGER-001)
 
 **Task**: Fix the Gemini workflow registration/trigger regression (Issue #151) caused by invalid GitHub Actions `+` operator syntax in the mode-aware prompt expression, and correct the `issue_comment` task-mode default to REVIEW.
