@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-17
-**Updated By**: Kilo — Reconcile DeepSeek Coordinator documentation with verified dispatch implementation (TASK-KILO-DEEPSEEK-COORDINATOR-DOCS-RECONCILIATION-001)
+**Last Updated**: 2026-09-18
+**Updated By**: Kilo — Document current API prompt and autonomous recovery behavior (TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-001)
 
 ---
 
@@ -19,7 +19,7 @@
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
-| Kilo External Integration Contract documentation | **IMPLEMENTED** | Kilo | `docs/ai/KILO_INTEGRATION.md` created. Documents GitHub webhook (Pushes + Issues + Issue comments), external Kilo trigger, ACP task-ingestion contract, and exact current Kilo prompt. No secrets committed. |
+| Kilo External Integration Contract documentation | **IMPLEMENTED** | Kilo | `docs/ai/KILO_INTEGRATION.md` documents GitHub webhook (Pushes + Issues + Issue comments), external Kilo trigger, ACP task-ingestion contract, and exact current Kilo prompt. The exact current Kilo prompt has been updated to the externally configured prompt supplied by Kyle. The documented prompt now includes convergence-based autonomous recovery (ALLOW EXPLORATION, STOP ON NON-CONVERGENCE), same-execution durable completion, timeout/interruption continuation, and self-wake authority (continuation-only, does not create new authorization). ACP remains the authorization boundary. The prompt itself remains externally configured. No secrets committed. |
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
 | ChatGPT Protocol Stop Gate hardening (Section 14) | **IMPLEMENTED / VERIFIED** | Kilo | Section 14 consequential-action stop gate hardened in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (commit `3ce42ac159dd8c73d7e043d7bc57692f6c5ecde`). Documentation reconciliation: `CONTROL_CENTER.md` reconciled in commit `da6a1a48190072049abc85b333cb4dfbd56f3ced`; `STATE.md` and `TASK_LOG.md` reconciled in this task. |
 | Kilo ↔ Gemini orchestration backbone — Part 1 Foundation | **IMPLEMENTED** | Kilo | TaskRegistry, Orchestrator, ACP Schema, and focused tests implemented in `poc/` and `test/`. See commit `9407470`. |
@@ -1164,3 +1164,76 @@ The Direct ACP boundary decision is recorded in `ARCHITECTURE.md` Section 16.6 (
 * Searched existing documentation for "Coordinator" ingress — no existing entries found.
 * Searched existing documentation for "ACP translation" / "Direct ACP" / "deepseek-transformer" — no existing entries found.
 * This is a new project record, not a duplicate of any existing entry.
+
+---
+
+## Kilo External Integration Contract Prompt Update — Reconciliation Status (Recorded 2026-09-18)
+
+**Task**: TASK-KILO-DOCUMENT-CURRENT-API-PROMPT-AND-AUTONOMOUS-RECOVERY-001 (Issue #146)
+**Updated By**: Kilo
+
+This section records the documentation/state reconciliation for the updated
+externally configured Kilo API/webhook prompt supplied by Kyle (Director).
+
+### Verified Documentation Changes (Complete)
+
+1. **`docs/ai/KILO_INTEGRATION.md`** — Section 7.1 "Verbatim Prompt" updated
+   with the complete new externally configured Kilo prompt. The new prompt
+   includes:
+   - ACP enforcement with expanded authorization fields (task mode / execution
+     authority, required capabilities, permitted paths, prohibited paths,
+     completion conditions, reporting requirements, reconciliation requirements,
+     task mode classification).
+   - Convergence-based autonomous recovery (Section 5: ALLOW EXPLORATION, STOP
+     ON NON-CONVERGENCE).
+   - Non-convergence stop condition with fail-closed reporting (Section 6).
+   - Timeout / agent interruption recovery with resume-from-verified-state
+     behavior (Section 7).
+   - Self-wake authority — explicitly limited to continuation of an
+     already-authorized task; does NOT constitute new ACP authorization, does
+     NOT create new permissions, does NOT expand permitted files, does NOT
+     change the task objective, does NOT authorize implementation that was not
+     already authorized (Section 7).
+   - Same-execution durable completion with commit/push requiring explicit
+     ACP authorization (Sections 8, 9).
+   - Final execution rule: INSPECT → IMPLEMENT → VERIFY → RECOVER WHEN
+     CONVERGING → COMPLETE AUTHORIZED RECONCILIATION → COMMIT → PUSH →
+     VERIFY → REPORT (Section 14).
+   - Standardized execution report format (Section 13).
+
+2. **Section 6.3 (Required ACP Authorization Fields)** updated to include the
+   expanded list of required and where-applicable authorization fields from the
+   new prompt.
+
+3. **Section 6.4 (Fail-Closed Behavior)** updated to reflect "missing,
+   malformed, contradictory, or materially ambiguous" authorization.
+
+4. **Section 6.7 (Autonomous Execution, Convergence, and Interruption
+   Recovery)** added to document convergence-based autonomous recovery,
+   non-convergence stopping, timeout/interruption continuation, self-wake
+   authority, and same-execution completion behavior. References
+   `docs/ai/TASK_STANDARD.md` Section 8 as the canonical convergence protocol.
+
+5. **Verification dates** updated from 2026-09-14/2026-09-16 to 2026-09-18
+   throughout the document.
+
+6. **`/docs/ai/STATE.md` Active Tasks** entry for Kilo External Integration
+   Contract documentation updated to reflect the prompt update, convergence
+   behavior, timeout/interruption continuation, and self-wake authority
+   limitation.
+
+### Accuracy Requirements
+
+- The prompt is **externally configured** by the Kilo provider. The repository
+  documents the prompt but does not control Kilo's external dashboard.
+- This reconciliation does **not** claim independent verification of Kilo's
+  external dashboard, webhook delivery logs, trigger health, credentials, or
+  private configuration.
+- The prompt's autonomous-recovery behavior is documented as externally
+  configured, not as a repository-controlled mechanism.
+- The convergence-based recovery model itself is the existing model from
+  `docs/ai/TASK_STANDARD.md` Section 8; the prompt codifies and extends it
+  with timeout/interruption and self-wake behavior.
+- No application code, tests, GitHub Actions workflows, AGENTS.md, GEMINI.md,
+  ARCHITECTURE.md, or Kilo external configuration was modified.
+- No secrets, credentials, or sensitive production values introduced.
