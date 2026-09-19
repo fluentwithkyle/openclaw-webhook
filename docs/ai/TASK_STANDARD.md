@@ -11,12 +11,14 @@ All task requests must be structured with the following fields:
 - `repository`: (Required) The repository the task applies to.
 - `base_branch`: (Required) The branch the task is based on and intended to integrate with.
 - `task_mode`: (Required) The execution mode. One of: "RESEARCH", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions.
+- `capabilities`: (Required) Explicit list of capabilities required (e.g., "inspect", "modify_files", "commit", "push").
 - `objective`: (Required) A concise statement of the goal.
 - `scope`: (Required) Clear definition of the files, directories, or architectural boundaries impacted.
-- `capabilities`: (Required) Explicit list of capabilities required (e.g., "inspect", "modify_files", "commit", "push").
 - `verification`: (Required) Specific criteria for verifying the task completion.
 - `constraints`: (Optional) Operational limits or rules (e.g., "no-new-dependencies").
 - `conflict_handling`: (Optional) Instructions for handling rule conflicts.
+
+The canonical field ordering is: `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`. The `capabilities` field must appear immediately before `objective` so that the task's authorized capabilities are immediately visible to the Director before the objective is reviewed or the task is authorized.
 
 ## 2. Authorization and Safety
 
@@ -137,11 +139,11 @@ Kilo refreshes CONTROL_CENTER.md as part of the task verification step, only whe
   "repository": "fluentwithkyle/openclaw-webhook",
   "base_branch": "main",
   "task_mode": "EXECUTE",
+  "capabilities": ["inspect", "modify_files", "run_tests", "commit"],
   "objective": "Fix bug in abandoned booking trigger.",
   "scope": {
     "permitted_paths": ["workflows/abandonedBooking.js"]
   },
-  "capabilities": ["inspect", "modify_files", "run_tests", "commit"],
   "verification": "Verify trigger logic with test case.",
   "constraints": ["smallest-change"]
 }

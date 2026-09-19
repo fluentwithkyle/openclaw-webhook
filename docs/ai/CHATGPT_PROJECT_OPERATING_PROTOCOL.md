@@ -396,12 +396,14 @@ An ACP task should identify, as applicable:
 * repository
 * base_branch
 * task_mode
+* capabilities
 * objective
 * scope
-* capabilities
 * verification
 * constraints
 * conflict_handling
+
+The canonical field ordering requires `capabilities` to appear immediately before `objective` so that the task's authorized capabilities are immediately visible to the Director before the objective is reviewed or the task is authorized.
 
 The task should define the intended result, affected scope, required validation, and reporting expectations.
 
@@ -427,7 +429,7 @@ Before seeking authorization for a consequential GitHub action that creates or p
 
 - [ ] **Protocol Gate satisfied**: The current protocol (`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) has been reviewed and the applicable requirements identified before preparing the ACP task.
 - [ ] **Required initiation syntax present**: The task includes all required agent trigger markers (e.g., `@kilo` at the beginning of the issue body for Kilo tasks) as required by the configured integration.
-- [ ] **Complete ACP envelope**: All required ACP fields are present and correctly populated (`request_id`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `objective`, `scope`, `capabilities`, `verification`, `constraints`, `conflict_handling`).
+- [ ] **Complete ACP envelope**: All required ACP fields are present and correctly populated (`request_id`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`). The `capabilities` field immediately precedes `objective`.
 - [ ] **Authorization fields explicit**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`, etc.) are explicitly listed and match the authorized scope.
 - [ ] **Task is agent-ready**: The complete issue body is self-contained and executable per the integration contract; no separate follow-up comment is needed to complete the task.
 - [ ] **Protocol syntax distinguished from authorization**: The presence of required protocol syntax (initiation markers, routing identifiers, ACP fields) is confirmed as a property of the prepared task artifact, not as authorization for the consequential action.
