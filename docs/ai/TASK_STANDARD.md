@@ -10,7 +10,7 @@ All task requests must be structured with the following fields:
 - `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Kilo").
 - `repository`: (Required) The repository the task applies to.
 - `base_branch`: (Required) The branch the task is based on and intended to integrate with.
-- `task_mode`: (Required) The execution mode ("RESEARCH", "PLAN", "EXECUTE").
+- `task_mode`: (Required) The execution mode. One of: "RESEARCH", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions.
 - `objective`: (Required) A concise statement of the goal.
 - `scope`: (Required) Clear definition of the files, directories, or architectural boundaries impacted.
 - `capabilities`: (Required) Explicit list of capabilities required (e.g., "inspect", "modify_files", "commit", "push").
@@ -214,3 +214,68 @@ If existing `TASK_STANDARD.md` language conflicts with the dynamic recovery mode
 **Bounded execution + reasonable exploration + convergence-based recovery + explicit escalation when execution becomes non-convergent.**
 
 Do not introduce an arbitrary numeric retry limit merely to satisfy previous recommendations.
+
+## 9. Task Modes
+
+The following task modes define the execution semantics for ACP tasks. Every task request must specify exactly one `task_mode`.
+
+### 9.1 RESEARCH
+
+The agent inspects the repository, architecture, and relevant files to answer questions, analyze problems, or gather information. No repository changes are made. Read-only.
+
+### 9.2 PLAN
+
+The agent produces a structured implementation plan — affected files, steps, risks, validation requirements, and acceptance criteria. No repository changes are made.
+
+### 9.3 EXECUTE
+
+The agent implements the authorized task within the permitted scope, validates, and persists results. May include `modify_files`, and when explicitly authorized, `commit` and `push`. See Section 5 for persistence expectations.
+
+### 9.4 VERIFY_RECONCILE
+
+**Definition**: `VERIFY_RECONCILE = VERIFY + RECONCILE`. Both components are mandatory and neither may be satisfied by the other.
+
+**VERIFY** means independently establishing whether the target state, implementation, or prior agent result is correct. This includes inspecting the actual repository state (committed code, documentation, CI results, commits, diffs) and confirming that reported work was actually delivered and matches the original objective. Agent reports and prior conversation are supporting evidence only; the durable repository state is the authoritative verification source.
+
+**RECONCILE** means updating the designated durable repository records so that they accurately and durably represent the independently verified state and verification result. For tasks scoped to `docs/ai/`, the durable records include `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`, `docs/ai/ARCH_DECISIONS.md`, and `docs/ai/CONTROL_CENTER.md` as appropriate.
+
+**RECONCILIATION IS NOT OPTIONAL.**
+
+The following interpretation is explicitly prohibited:
+
+> "No reconciliation is required because the existing documentation is already accurate."
+
+Existing accurate documentation does NOT eliminate the reconciliation requirement. If the existing durable records already describe the implementation accurately, the agent must still perform reconciliation by determining where the independent verification event/result belongs in the established durable-record structure and recording it appropriately — for example, recording that the verification was performed, its result, and that the verified state was confirmed accurate.
+
+The durable record must distinguish, where applicable:
+
+- What was implemented by the implementation agent;
+- What was independently verified by the verification agent;
+- The resulting verified state.
+
+**A VERIFY_RECONCILE task is incomplete if verification occurred but reconciliation did not.**
+
+#### 9.4.1 Relationship Between Operations
+
+The canonical ordering and relationship between operations is:
+
+1. **VERIFY** — Independently establish whether the target state or prior result is correct.
+2. **RECONCILE** — Update durable repository records to represent the verified result.
+3. **VALIDATE** — Confirm that the reconciliation accurately reflects the verified state (i.e., the updated records correctly and completely represent what was implemented and verified).
+4. **COMMIT** — Persist the reconciled documentation (only when the `commit` capability is explicitly authorized).
+5. **PUSH** — Make the persisted reconciliation available on the authorized `base_branch` (only when the `push` capability is explicitly authorized).
+
+Verification and reconciliation are co-mandatory. Validation confirms the reconciliation. Commit and push persist the reconciliation. None of these steps may be skipped when their corresponding capability is authorized and the task requires it.
+
+#### 9.4.2 Completion Requirement
+
+A VERIFY_RECONCILE task cannot be considered complete until:
+
+1. Independent verification of the target state or prior result has been performed and its result is documented.
+2. The verification result has been durably recorded in the appropriate repository durable records.
+3. The reconciliation has been validated as accurate.
+4. If `commit` and `push` capabilities are authorized, the changes have been committed and pushed to the authorized `base_branch`.
+
+#### 9.4.3 Authorization Boundary Preserved
+
+Reconciliation being mandatory within the task does not bypass existing authorization gates. The mandatory nature of reconciliation is a task-internal procedural requirement, not an authorization grant. Authorization remains governed by the ACP command envelope: explicit capabilities are never implied, `modify_files` does not authorize `commit`, `commit` does not authorize `push`, and every capability must be explicitly granted. Only explicitly authorized paths may be modified. The fact that reconciliation is mandatory within a VERIFY_RECONCILE task does not authorize repository changes outside the explicitly authorized `permitted_paths` or capabilities.

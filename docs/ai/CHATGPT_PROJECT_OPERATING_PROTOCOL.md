@@ -512,7 +512,7 @@ The loop is complete only when:
 
 * The requested work has been implemented or formally blocked.
 * The actual repository result has been verified.
-* Documentation has been reconciled where applicable.
+* Documentation has been reconciled — reconciliation is mandatory, never optional.
 * Kyle has a clear understanding of the remaining work and next decision.
 
 13. Primary Objective
@@ -967,6 +967,92 @@ Document and preserve the existing boundaries:
 - Gemini comments go to the established Gemini research issue when that is the configured activation mechanism.
 - **Do NOT add wording permitting ChatGPT to create a new issue when Gemini needs activation.**
 - **Do NOT establish an alternate Gemini issue-based activation path.**
+
+---
+
+## 18. VERIFY_RECONCILE Semantics
+
+### 18.1 Definition
+
+`VERIFY_RECONCILE = VERIFY + RECONCILE`.
+
+Both operations are mandatory components of a VERIFY_RECONCILE task. Neither may be satisfied by the other, and neither may be skipped.
+
+### 18.2 VERIFY
+
+VERIFY means independently establishing whether the target state, implementation, or prior agent result is correct. This includes:
+
+- Inspecting the actual repository state (committed code, documentation, CI results, commits, diffs).
+- Confirming that reported work was actually delivered and matches the original objective.
+- Verifying that the change stayed within authorized scope and capabilities.
+- Running relevant validation checks (e.g., `git diff --check`, targeted tests).
+
+Agent reports, prior conversation, and isolated agent reports are supporting evidence only; they must be verified against GitHub, which is the durable source of truth. See Section 5 (Completion Verification) for the verification checklist.
+
+### 18.3 RECONCILE
+
+RECONCILE means updating the designated durable repository records so that they accurately and durably represent the independently verified state and verification result. The durable record hierarchy is:
+
+1. `ARCHITECTURE.md` — authoritative for intended architecture.
+2. Production code — authoritative for implemented behavior.
+3. `docs/ai/STATE.md` — current AI project state.
+4. `docs/ai/ARCH_DECISIONS.md` — recorded architectural decisions.
+5. `docs/ai/TASK_LOG.md` — historical task records.
+6. `docs/ai/CONTROL_CENTER.md` — derived presentation layer.
+7. `README.md` — repository orientation.
+
+**RECONCILIATION IS NOT OPTIONAL.**
+
+The following interpretation is explicitly prohibited:
+
+> "No reconciliation is required because the existing documentation is already accurate."
+
+Existing accurate documentation does NOT eliminate the reconciliation requirement. If the existing durable records already describe the implementation accurately, the agent must still perform reconciliation by determining where the independent verification event/result belongs in the established durable-record structure and recording it appropriately — for example, recording that the verification was performed, its result, and that the verified state was confirmed accurate.
+
+The durable record must distinguish, where applicable:
+
+- What was implemented by the implementation agent.
+- What was independently verified by the verification agent.
+- The resulting verified state.
+
+### 18.4 Incompleteness of Verification-Only
+
+A VERIFY_RECONCILE task is incomplete if verification occurred but reconciliation did not. Verification and reconciliation are distinct, co-mandatory steps: verification confirms correctness; reconciliation makes the verified result durable and discoverable in the established repository records.
+
+### 18.5 Relationship Between Operations
+
+The canonical ordering and relationship between operations is:
+
+1. **VERIFY** — Independently establish whether the target state or prior result is correct.
+2. **RECONCILE** — Update durable repository records to represent the verified result.
+3. **VALIDATE** — Confirm that the reconciliation accurately reflects the verified state (i.e., the updated records correctly and completely represent what was implemented and verified).
+4. **COMMIT** — Persist the reconciled documentation (only when the `commit` capability is explicitly authorized by the ACP command).
+5. **PUSH** — Make the persisted reconciliation available on the authorized `base_branch` (only when the `push` capability is explicitly authorized by the ACP command).
+
+Verification and reconciliation are co-mandatory. Validation confirms the reconciliation. Commit and push persist the reconciliation. None of these steps may be skipped when their corresponding capability is authorized and the task requires it. The completion loop (Section 12) and persistence expectations (TASK_STANDARD.md Section 5) remain authoritative for the authorized persistence sequence.
+
+### 18.6 Completion Requirement
+
+A VERIFY_RECONCILE task cannot be considered complete until:
+
+- Independent verification of the target state or prior result has been performed and its result documented.
+- The verification result has been durably recorded in the appropriate repository durable records.
+- The reconciliation has been validated as accurate.
+- If `commit` and `push` capabilities are authorized by the ACP command, the changes have been committed and pushed to the authorized `base_branch`.
+
+### 18.7 Authorization Boundary Preserved
+
+Reconciliation being mandatory within the task does not bypass existing authorization gates. The mandatory nature of reconciliation is a task-internal procedural requirement, not an authorization grant. Authorization remains governed by Section 14 (Consequential Action Stop Gate) and the ACP command envelope. Explicit capabilities are never implied: `modify_files` does not authorize `commit`, `commit` does not authorize `push`, and every capability must be explicitly granted. Only explicitly authorized `permitted_paths` may be modified. The fact that reconciliation is mandatory within a VERIFY_RECONCILE task does not authorize repository changes outside the explicitly authorized paths or capabilities.
+
+### 18.8 Integration With Existing Procedures
+
+This section integrates with, and does not replace, the existing protocol:
+
+- **Section 5 (Completion Verification)**: Provides the verification checklist that VERIFY satisfies; the "documentation reflects the actual result" item is the reconciliation target.
+- **Section 6 (Documentation and State Reconciliation)**: Defines the durable record hierarchy that RECONCILE updates.
+- **Section 12 (Standard Completion Loop)**: The `Verify → Reconcile` steps in the loop are now explicitly co-mandatory; "Documentation has been reconciled" is no longer qualified as conditional.
+- **Section 14 (Consequential Action Stop Gate)**: Authorization gates remain authoritative; mandatory reconciliation within a task does not authorize changes outside authorized paths or capabilities.
+- **TASK_STANDARD.md Section 5 (Persistence Expectations)**: Same-execution persistence, atomic task sizing, and commit/push authorization boundaries remain authoritative.
 
 ---
 
