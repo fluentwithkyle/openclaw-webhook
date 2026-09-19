@@ -6,6 +6,63 @@
 
 ---
 
+## 2026-09-19 | Close Polling Path Gaps for Kilo→Gemini Completion Handoff (TASK-KILO-KILO-GEMINI-COMPLETION-HANDOFF-IMPLEMENT-001)
+
+**Task**: Close polling path gaps so Kilo completions are delivered via repository-controlled polling rather than undocumented outbound callbacks. Three fixes: (1) preserve provider IDs in task-registry during result recording; (2) extract execution_id from ACP report's nested metadata; (3) transition task to EXECUTING after dispatch so the polling loop picks up tasks.
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE
+**Capabilities Authorized**: inspect, modify_files, run_tests, commit, push
+
+**Summary**:
+
+- **Objective**: Close polling path gaps so that Kilo completions reach Render via repository-controlled polling, with the same `request_id` correlated end-to-end through TaskRegistry → `handleKiloCompletion()` → `triggerGemini()`.
+
+- **Fix 1 — Provider ID preservation** (`poc/task-registry.js` `updateAgentResult`): The Kilo branch previously overwrote the entire `entry.kilo` object, destroying `provider_session_id`, `provider_message_id`, and `provider_invocation_id`. Changed to use `...entry.kilo` spread merge, preserving provider fields for downstream polling and Gemini handoff.
+
+- **Fix 2 — Execution ID extraction** (`poc/orchestrator.js` `handleKiloCompletion`): Previously passed `report.execution_id || null`, but the ACP execution report stores the invocation ID at `report.result.execution_metadata.invocation_id` (a required string field per `validateExecutionReport` in `poc/schemas/acp-schema.js`). Now extracts: `report.execution_id || report.result?.execution_metadata?.invocation_id || null`. This ensures `task.kilo.execution_id` is populated for `triggerGemini()` which uses it as `kilo_execution_id` in the `workflow_dispatch` input.
+
+- **Fix 3 — EXECUTING transition after dispatch** (`routes/poc.js`): Added `transitionToExecuting(requestId)` helper that walks PENDING → SELECTED → PLANNED → EXECUTING (valid per `VALID_STATE_TRANSITIONS` in `poc/schemas/acp-schema.js`). Called after successful dispatch (status === 'SUCCESS') in `/kilo`, `/chatbox`, and `/coordinator` endpoints. Previously, tasks remained at PENDING after dispatch, so the polling loop in `poc/kilo-polling.js` (line 155: `getTasksByStatus('EXECUTING').filter(t => t.kilo.status === 'pending')`) never matched.
+
+- **Provider ID sufficiency for polling path**: `pollKiloCompletion` constructs `identifiers` from `task.kilo.provider_session_id`, `provider_message_id`, `provider_invocation_id`, and `internal_execution_id`. The mock provider returns these in its response; `processKiloCompletion` uses them as fallbacks for `invocation_id`/`run_id` in the execution report. With Fix 1 preserving these fields through `updateAgentResult`, the polling path has all necessary identifiers.
+
+- **request_id correlation verification**: The `/kilo/callback` endpoint receives `requestId` from `req.body.request_id`, validates it exists in TaskRegistry, and passes it through `handleKiloCompletion(requestId, ...)` → `updateAgentResult(requestId, 'Kilo', ...)` → `triggerGemini(requestId, ...)`. The polling path uses the same `requestId` from the task registry entry. The Kilo callback report is validated against the TaskRegistry entry keyed by `request_id` (per `authenticateKiloCallback` + `validateExecutionReport` + `getTask(requestId)` in `routes/poc.js`).
+
+- **State machine compatibility**: `transitionToExecuting` walks valid transitions: PENDING → SELECTED → PLANNED → EXECUTING. `handleKiloCompletion` for Kilo success leaves the task at EXECUTING (no further transition needed — `next_action='trigger_gemini'`). For Kilo failure/blocked, transitions to FAILED/BLOCKED. `canTriggerGemini` requires `task.status === 'EXECUTING'` and `task.kilo.status === 'success'`. `handleGeminiCompletion` transitions EXECUTING → VERIFIED → COMPLETE on success. All transitions conform to `VALID_STATE_TRANSITIONS`.
+
+- **Files changed**: `poc/orchestrator.js`, `poc/task-registry.js`, `routes/poc.js`, `test/task-registry.test.js`, `test/orchestrator.test.js`, `test/coordinator.test.js`, `test/chatbox-gateway.test.js`
+
+- **Documentation**: `docs/ai/STATE.md` (new Active Tasks entry), `docs/ai/TASK_LOG.md` (this entry) — both per docs/ai/README.md update rules.
+
+**Verification performed**:
+1. task-registry tests — 18/18 passed (including new "preserves provider IDs" test)
+2. orchestrator tests — 19/19 passed (including new "extracts execution_id from result.execution_metadata" test)
+3. kilo-polling tests — 10/10 passed
+4. kilo-callback tests — 15/15 passed
+5. coordinator tests — 19/19 passed (updated PENDING→EXECUTING assertions)
+6. chatbox-gateway tests — 23/23 passed (updated PENDING→EXECUTING assertions)
+7. schema tests — 20/20 passed
+8. verify-reconcile tests — 52/52 passed
+9. workflow-expression tests — 23/23 passed
+10. kilo-verifier tests — 18/18 passed
+11. gemini-callback tests — 23/23 passed
+12. gemini-trigger tests — 14/14 passed
+13. integration tests — 11/11 passed
+14. `git diff --check` — clean (no whitespace errors)
+15. Confirmed only authorized files changed (no `.github/workflows/main.yml`, no `AGENTS.md`, no `GEMINI.md`, no `ARCHITECTURE.md`)
+16. Confirmed no secrets/credentials introduced
+
+**Outcome**: SUCCESS — Polling path gaps closed. Kilo completions now flow through repository-controlled polling with preserved provider IDs, correct execution_id extraction, and EXECUTING state transition after dispatch. End-to-end: Kilo receives authorized ACP task → Kilo completes → completion reaches Render (callback or polling) → same `request_id` correlated in TaskRegistry → `handleKiloCompletion()` recognizes Kilo success → `triggerGemini()` automatically dispatched through existing path. 237 tests pass. `git diff --check` clean.
+
+**Commit Reference**: `90de87d328501f3fd6630fd1aa295d20c19a88ed` on `origin/main`
+
+**Remaining UNKNOWNs/blockers**: UK-01 (Kilo outbound completion callback capability) remains PROPOSED/TARGET per existing Gemini verification record (TASK-GEMINI-VERIFY-RECONCILE-KILO-GEMINI-LIFECYCLE-RESEARCH-001, STATE.md). This task closed the polling-side gaps but did not establish a new Kilo outbound callback architecture.
+
+---
+
 ## 2026-09-19 | Independently Verify and Reconcile Kilo → Gemini Lifecycle Research (TASK-GEMINI-VERIFY-RECONCILE-KILO-GEMINI-LIFECYCLE-RESEARCH-001)
 
 **Task**: Independently verify Kilo's RESEARCH report on the Kilo → Gemini VERIFY_RECONCILE handoff lifecycle against the repository and reconcile findings.
