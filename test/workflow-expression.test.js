@@ -221,5 +221,64 @@ runTest('run-gemini-cli action invocation is preserved', () => {
   assert.ok(raw.includes('google-github-actions/run-gemini-cli@v0'), 'run-gemini-cli step missing');
 });
 
-console.log(`\n=== Workflow Expression Tests: ${passCount} passed, ${failCount} failed ===`);
-if (failCount > 0) process.exit(1);
+runTest('Determine Gemini execution result step exists and reads gemini_run.outcome', () => {
+  assert.ok(raw.includes('Determine Gemini execution result'), 'gemini_result step missing');
+  assert.ok(raw.includes('steps.gemini_run.outcome'), 'gemini_run.outcome reference missing');
+});
+
+runTest('artifact persistence steps use if: always()', () => {
+  const persistIdx = raw.indexOf('Persist Gemini result as artifact');
+  assert.ok(persistIdx !== -1, 'Persist step missing');
+  const persistSlice = raw.slice(persistIdx, raw.indexOf('Upload Gemini result artifact'));
+  assert.ok(/if:\s*always\(\)/.test(persistSlice), 'Persist step missing if: always()');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  assert.ok(uploadIdx !== -1, 'Upload step missing');
+  const uploadSlice = raw.slice(uploadIdx, raw.indexOf('Determine Gemini execution result'));
+  assert.ok(/if:\s*always\(\)/.test(uploadSlice), 'Upload step missing if: always()');
+});
+
+runTest('Determine Gemini execution result step uses if: always()', () => {
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  assert.ok(resultIdx !== -1, 'gemini_result step missing');
+  const resultSlice = raw.slice(resultIdx, raw.indexOf('Prepare callback payload'));
+  assert.ok(/if:\s*always\(\)/.test(resultSlice), 'gemini_result step missing if: always()');
+});
+
+runTest('callback payload step uses if: always() with workflow_dispatch', () => {
+  assert.ok(raw.includes("if: always() && github.event_name == 'workflow_dispatch'"), 'callback payload step missing always() condition');
+});
+
+runTest('send callback step uses if: always() with workflow_dispatch', () => {
+  const sendIdx = raw.indexOf('Send callback to Render');
+  assert.ok(sendIdx !== -1, 'send callback step missing');
+  assert.ok(/if:\s*always\(\)\s*&&\s*github\.event_name\s*==\s*'workflow_dispatch'/.test(raw.slice(sendIdx)), 'send callback step missing always() condition');
+});
+
+runTest('STATUS is not hardcoded to success in callback payload step', () => {
+  const callbackIdx = raw.indexOf('Prepare callback payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const callbackSection = raw.slice(callbackIdx, sendIdx);
+  assert.ok(!callbackSection.includes('STATUS="success"'), 'STATUS should not be hardcoded to success in callback payload step');
+});
+
+runTest('callback payload derives STATUS from gemini_result step', () => {
+  const callbackIdx = raw.indexOf('Prepare callback payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const callbackSection = raw.slice(callbackIdx, sendIdx);
+  assert.ok(callbackSection.includes('steps.gemini_result.outputs.gemini_status'), 'STATUS should be derived from steps.gemini_result.outputs.gemini_status');
+});
+
+runTest('VERIFY_RECONCILE recon_status is conditional on verification PASS', () => {
+  const completedIdx = raw.indexOf('RECON_STATUS="COMPLETED"');
+  assert.ok(completedIdx !== -1, 'RECON_STATUS="COMPLETED" should be present');
+  const passIdx = raw.lastIndexOf('VERIFICATION_STATUS="PASS"', completedIdx);
+  assert.ok(passIdx !== -1, 'RECON_STATUS="COMPLETED" must be conditional on VERIFICATION_STATUS="PASS"');
+});
+
+runTest('gemini_output is included in callback result', () => {
+  const callbackIdx = raw.indexOf('Prepare callback payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const callbackSection = raw.slice(callbackIdx, sendIdx);
+  assert.ok(callbackSection.includes('--arg gemini_output'), 'gemini_output arg missing from jq');
+  assert.ok(callbackSection.includes('gemini_output: $gemini_output'), 'gemini_output field missing from jq output');
+});

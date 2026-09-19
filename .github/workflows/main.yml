@@ -180,21 +180,71 @@ jobs:
 
       - name: Persist Gemini result as artifact
         id: gemini_artifact
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           printf '%s' "${{ steps.gemini_run.outputs.summary }}" > gemini-acp-report.json
 
       - name: Upload Gemini result artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gemini-acp-report
           path: gemini-acp-report.json
           retention-days: 7
 
+      - name: Determine Gemini execution result
+        id: gemini_result
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          GEMINI_OUTCOME="${{ steps.gemini_run.outcome }}"
+          TASK_MODE="${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}"
+
+          # Determine Gemini execution status from the actual step outcome.
+          # Distinguish: dispatch accepted -> Gemini CLI executed -> succeeded/failed.
+          # A GitHub 204 from workflow_dispatch only confirmed dispatch acceptance.
+          if [ "$GEMINI_OUTCOME" = "success" ]; then
+            STATUS="success"
+            VERIFICATION_STATUS="PASS"
+            BLOCKER_MSG=""
+          elif [ "$GEMINI_OUTCOME" = "failure" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Gemini CLI execution failed (step outcome: failure)"
+          else
+            # skipped, cancelled, or empty -- Gemini did not execute successfully
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Gemini workflow did not execute successfully (step outcome: ${GEMINI_OUTCOME:-none})"
+          fi
+
+          # Determine reconciliation status using the same contract as
+          # determineReconciliationStatus() in poc/schemas/acp-schema.js:
+          # VERIFY_RECONCILE + verification PASS -> COMPLETED
+          # VERIFY_RECONCILE + verification FAIL -> SKIPPED
+          # Other modes -> SKIPPED
+          if [ "$TASK_MODE" = "VERIFY_RECONCILE" ]; then
+            if [ "$VERIFICATION_STATUS" = "PASS" ]; then
+              RECON_STATUS="COMPLETED"
+            else
+              RECON_STATUS="SKIPPED"
+            fi
+          else
+            RECON_STATUS="SKIPPED"
+          fi
+
+          echo "gemini_status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "verification_status=$VERIFICATION_STATUS" >> "$GITHUB_OUTPUT"
+          echo "blocker_message=$BLOCKER_MSG" >> "$GITHUB_OUTPUT"
+          echo "recon_status=$RECON_STATUS" >> "$GITHUB_OUTPUT"
+
       - name: Prepare callback payload (workflow_dispatch only)
         id: callback_payload
-        if: github.event_name == 'workflow_dispatch'
+        if: always() && github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -209,22 +259,26 @@ jobs:
           # Capture Gemini output (stdout from run-gemini-cli)
           GEMINI_OUTPUT="${{ steps.gemini_run.outputs.summary }}"
 
-          # Determine status based on Gemini execution
-          STATUS="success"
-          BLOCKERS="[]"
+          # Use status determined from actual Gemini execution outcome.
+          # Do NOT hardcode status=success: a green workflow does not
+          # prove Gemini's semantic verification succeeded.
+          STATUS="${{ steps.gemini_result.outputs.gemini_status }}"
+          VERIFICATION_STATUS="${{ steps.gemini_result.outputs.verification_status }}"
+          BLOCKER_MSG="${{ steps.gemini_result.outputs.blocker_message }}"
+          RECON_STATUS="${{ steps.gemini_result.outputs.recon_status }}"
 
-          # Determine reconciliation status based on task mode and verification result
-          if [ "$TASK_MODE" = "VERIFY_RECONCILE" ]; then
-            RECON_STATUS="COMPLETED"
-            RECON_CHANGED_FILES="[]"
-            RECON_COMMIT_SHA="${GITHUB_SHA}"
-          elif [ "$TASK_MODE" = "FAILOVER_EXECUTE" ]; then
-            RECON_STATUS="SKIPPED"
-            RECON_CHANGED_FILES="[]"
-            RECON_COMMIT_SHA="null"
+          # Build blockers array from the actual execution result
+          if [ "$STATUS" = "failure" ]; then
+            BLOCKERS=$(jq -n --arg msg "$BLOCKER_MSG" '[$msg]')
           else
-            RECON_STATUS="SKIPPED"
-            RECON_CHANGED_FILES="[]"
+            BLOCKERS="[]"
+          fi
+
+          # Build reconciliation fields based on determined status
+          RECON_CHANGED_FILES="[]"
+          if [ "$RECON_STATUS" = "COMPLETED" ]; then
+            RECON_COMMIT_SHA="${GITHUB_SHA}"
+          else
             RECON_COMMIT_SHA="null"
           fi
 
@@ -239,6 +293,7 @@ jobs:
             --arg task "$TASK" \
             --arg repository "$REPOSITORY" \
             --arg base_branch "$BASE_BRANCH" \
+            --arg gemini_output "$GEMINI_OUTPUT" \
             --arg invocation_id "$INVOCATION_ID" \
             --arg run_id "$RUN_ID" \
             --argjson blockers "$BLOCKERS" \
@@ -254,7 +309,7 @@ jobs:
               base_branch: $base_branch,
               changed_files: [],
               verification: ["advisory review completed"],
-              result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id } },
+              result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id }, gemini_output: $gemini_output },
               commit: null,
               push: false,
               blockers: $blockers,
@@ -269,7 +324,7 @@ jobs:
 
       - name: Send callback to Render (workflow_dispatch only)
         id: send_callback
-        if: github.event_name == 'workflow_dispatch'
+        if: always() && github.event_name == 'workflow_dispatch'
         env:
           CALLBACK_URL: ${{ secrets.RENDER_GEMINI_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.GEMINI_CALLBACK_SECRET }}
