@@ -18,6 +18,8 @@ Designed for Kyle checking the project from a phone.
 | **Google Adapter** | Google Apps Script |
 | **Last Updated** | 2026-09-19 |
 
+Updated By | Kilo — Post-dispatch lifecycle repair
+
 ---
 
 ## Requires Kyle's Attention
@@ -51,7 +53,8 @@ Designed for Kyle checking the project from a phone.
 | Render Control Gatekeeper documentation reconciliation | IMPLEMENTED | Kilo | Documentation reconciled: Render = future Control Gate/gatekeeper (PROPOSED/TARGET); Layer 1 → Layer 2 sequencing; Kilo/Gemini architecture protected |
 | DeepSeek Coordinator Project establishment | ACTIVE / IMPLEMENTED / VERIFIED | Kilo | HIGH PRIORITY project implemented. Authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`. ACP validation via `validateACPCommand`; registration via `taskRegistry.createTask`; dispatch via existing `getDispatcher()` (same mechanism as `/poc/kilo`). Implementation commits: `5613214` (ingress), `950983a` (dispatch bridge). 19 coordinator tests pass; 170 total tests pass. |
 | Chatbox Gateway Ingress | IMPLEMENTED / VERIFIED | Kilo | Authenticated `POST /poc/chatbox` in `routes/poc.js`. OpenAI-compatible request → REVIEW-mode ACP command (read_only, poc/ paths) → `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`. Auth: `x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET` (distinct from all other secrets). Intent preserved in `task` field and `natural_language_intent` field. 23 gateway tests pass; 259 total tests pass. (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001) |
-| VERIFY_RECONCILE operating mode implementation | IMPLEMENTED / VERIFIED | Kilo | Task mode dispatch: REVIEW (read-only), VERIFY_RECONCILE (4 caps, bounded docs/ai paths), FAILOVER_EXECUTE (5 caps, explicit paths). Schema, ACP engine, gemini-trigger, orchestrator, workflow all updated. Reconciliation model added. 238 total tests pass. (Issue #145) |
+| VERIFY_RECONCILE operating mode implementation | IMPLEMENTED / VERIFIED | Kilo | Task mode dispatch: REVIEW (read-only), VERIFY_RECONCILE (4 caps, bounded docs/ai paths), FAILOVER_EXECUTE (5 caps, explicit paths). 238 total tests pass. (Issue #145) |
+| Kilo ↔ Gemini post-dispatch result lifecycle repair | IMPLEMENTED / VERIFIED | Kilo | Repaired false-success callback path: `STATUS` now derives from `steps.gemini_run.outcome` instead of hardcoded `"success"`; `RECON_STATUS` follows `determineReconciliationStatus()` contract; callback and artifact steps use `if: always()`; `gemini_output` included in payload. 270 total tests pass. (TASK-KILO-GEMINI-POST-DISPATCH-RESULT-LIFECYCLE-IMPLEMENT-001) |
 
 ---
 
@@ -75,6 +78,7 @@ Substantially complete:
 - Gemini result artifact observability — IMPLEMENTED / VERIFIED (artifact `gemini-acp-report` / `gemini-acp-report.json`)
 - Automated Kilo delivery verification lane — IMPLEMENTED
 - VERIFY_RECONCILE operating mode — **IMPLEMENTED / VERIFIED** (238 total tests pass)
+- Kilo ↔ Gemini post-dispatch result lifecycle repair — **IMPLEMENTED / VERIFIED** (270 total tests pass; repaired false-success callback path in `main.yml`)
 - Chatbox Gateway Ingress — **IMPLEMENTED / VERIFIED** (23 gateway tests pass; 259 total tests pass)
 
 Remaining pending items:
