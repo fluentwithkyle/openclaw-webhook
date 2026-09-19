@@ -21,7 +21,7 @@
 - **Objective**: Independently verify Kilo's research report regarding the Kilo → Gemini VERIFY_RECONCILE handoff lifecycle (Section 19 of CHATGPT_PROJECT_OPERATING_PROTOCOL.md) and reconcile findings into durable project records.
 - **Independent Verification (Gemini)**:
     - Verified Kilo's Section 19 lifecycle implementation against `poc/` and `routes/`.
-    - Corrected VF-01: Commit `d69800a` is **NOT** documentation-only (77 files modified, 21,392 lines).
+    - Verified correction: Commit `d69800a` is a documentation-only change to `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (1 file, +60/-0), confirmed directly from the commit and parent comparison.
     - Confirmed Kilo findings VF-02 through VF-20 as independently verifiable repository facts.
     - Confirmed UK-01 as the principal architectural gap (Kilo outbound completion callback capability PROPOSED/TARGET).
     - Confirmed downstream Gemini lifecycle implementation (states 6–11) is fully committed.
@@ -35,7 +35,7 @@
 
 **Outcome**: SUCCESS — Kilo's lifecycle research verified, with material correction regarding commit `d69800a`. Remaining architectural gap (Kilo outbound completion callback) confirmed as PROPOSED/TARGET. Durable project records reconciled, validated, committed, and pushed to `main`.
 
-**Commit Reference**: [Pending - see completion report for SHA]
+**Commit Reference**: `95ef27f`
 
 ---
 
@@ -77,7 +77,7 @@
 
 **Outcome**: SUCCESS — Kilo’s implementation in commit `892386d` independently verified. False-success bug resolved. Gemini’s independent verification durably recorded in `STATE.md` and `TASK_LOG.md`. Reconciliation validated, committed, and pushed to `main`.
 
-**Commit Reference**: [Pending - see completion report for SHA]
+**Commit Reference**: `95ef27f`
 
 ---
 
@@ -180,7 +180,7 @@ Total: 270 tests passing (259 existing + 11 new).
 
 **Outcome**: SUCCESS — Kilo’s commit `ff6cf93` independently verified. VERIFY_RECONCILE procedure hardening confirmed correct. Gemini’s independent verification durably recorded in `STATE.md` and `TASK_LOG.md`. Reconciliation validated, committed, and pushed to `main`.
 
-**Commit Reference**: [Pending - see completion report for SHA]
+**Commit Reference**: `95ef27f`
 
 ---
 
