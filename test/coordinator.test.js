@@ -139,15 +139,14 @@ async function main() {
             assertEqual(res.body.status, 'Task registered and dispatched');
             assertEqual(res.body.stage, 'dispatched');
             assertEqual(res.body.execution_initiated, true);
-            assertEqual(res.body.task_status, 'PENDING');
+            assertEqual(res.body.task_status, 'EXECUTING');
 
             assert(dispatchedCommand !== null, 'Dispatcher should have been called');
             assertEqual(dispatchedCommand.request_id, 'coord-test-1');
 
             const task = taskRegistry.getTask('coord-test-1');
             assert(task !== null, 'Task should be registered');
-            assertEqual(task.request_id, 'coord-test-1');
-            assertEqual(task.status, 'PENDING');
+            assertEqual(task.status, 'EXECUTING');
             assertEqual(task.current_agent, 'Kilo');
             assertEqual(task.kilo.provider_session_id, 'session-123');
         } finally {
@@ -266,7 +265,7 @@ async function main() {
 
             const task = taskRegistry.getTask('coord-test-7');
             assert(task !== null);
-            assertEqual(task.status, 'PENDING');
+            assertEqual(task.status, 'EXECUTING');
             assertEqual(task.request_id, 'coord-test-7');
         } finally {
             setDispatcher(dispatch);

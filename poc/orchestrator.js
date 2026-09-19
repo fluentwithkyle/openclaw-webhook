@@ -41,9 +41,10 @@ function handleKiloCompletion(requestId, report) {
     return { success: false, error: 'Kilo result already recorded (idempotency)', stage: 'idempotency', duplicate: true };
   }
 
+  const executionId = report.execution_id || report.result?.execution_metadata?.invocation_id || null;
   const updateResult = taskRegistry.updateAgentResult(requestId, 'Kilo', {
     status: report.status,
-    execution_id: report.execution_id || null,
+    execution_id: executionId,
     report: report
   });
 

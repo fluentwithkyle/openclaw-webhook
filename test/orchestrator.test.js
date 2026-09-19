@@ -100,6 +100,19 @@ test('handleKiloCompletion - valid success report', () => {
   cleanup();
 });
 
+test('handleKiloCompletion - extracts execution_id from result.execution_metadata.invocation_id', () => {
+  setupTask();
+  const reportWithoutExecutionId = {
+    ...validKiloReport,
+    execution_id: undefined
+  };
+  const result = orchestrator.handleKiloCompletion('test-orch-1', reportWithoutExecutionId);
+  assertEqual(result.success, true);
+  const task = taskRegistry.getTask('test-orch-1');
+  assertEqual(task.kilo.execution_id, 'inv-1');
+  cleanup();
+});
+
 test('handleKiloCompletion - failure report transitions to FAILED', () => {
   setupTask();
   const failureReport = { ...validKiloReport, status: 'failure' };

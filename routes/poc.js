@@ -7,6 +7,17 @@ const taskRegistry = require('../poc/task-registry');
 
 const router = express.Router();
 
+function transitionToExecuting(requestId) {
+    const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
+    for (const status of transitions) {
+        const result = taskRegistry.updateTaskStatus(requestId, status);
+        if (!result.success) {
+            return { success: false, error: result.error };
+        }
+    }
+    return { success: true };
+}
+
 // POC Endpoint Authentication Middleware
 const authenticatePoc = (req, res, next) => {
     const secret = req.headers['x-poc-trigger-secret'];
@@ -153,6 +164,10 @@ router.post('/kilo', authenticatePoc, async (req, res) => {
         }
 
         if (result.status === 'SUCCESS') {
+            const transitionResult = transitionToExecuting(requestId);
+            if (!transitionResult.success) {
+                console.error('Failed to transition task to EXECUTING:', transitionResult.error);
+            }
             res.status(200).json({
                 request_id: requestId,
                 status: 'Kilo dispatch accepted',
@@ -502,6 +517,10 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
         }
 
         if (dispatchResult.status === 'SUCCESS') {
+            const transitionResult = transitionToExecuting(command.request_id);
+            if (!transitionResult.success) {
+                console.error('Failed to transition task to EXECUTING:', transitionResult.error);
+            }
             return res.status(202).json({
                 request_id: command.request_id,
                 status: 'Task registered and dispatched',
@@ -604,6 +623,10 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
         }
 
         if (dispatchResult.status === 'SUCCESS') {
+            const transitionResult = transitionToExecuting(command.request_id);
+            if (!transitionResult.success) {
+                console.error('Failed to transition task to EXECUTING:', transitionResult.error);
+            }
             return res.status(202).json({
                 request_id: command.request_id,
                 status: 'Task registered and dispatched',

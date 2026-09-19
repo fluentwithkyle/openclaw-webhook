@@ -166,6 +166,35 @@ test('updateAgentResult - unknown agent fails', () => {
   cleanup();
 });
 
+test('updateAgentResult - Kilo preserves provider IDs', () => {
+  cleanup();
+  taskRegistry.createTask(validCommand);
+  taskRegistry.updateTaskStatus('test-reg-1', 'SELECTED');
+  taskRegistry.updateTaskStatus('test-reg-1', 'PLANNED');
+  taskRegistry.updateTaskStatus('test-reg-1', 'EXECUTING');
+
+  // Simulate provider IDs set by dispatch route
+  const task = taskRegistry.getTask('test-reg-1');
+  task.kilo.provider_session_id = 'session-abc';
+  task.kilo.provider_message_id = 'message-def';
+  task.kilo.provider_invocation_id = 'invocation-ghi';
+  taskRegistry.persistCache();
+
+  // Now record Kilo completion
+  const result = taskRegistry.updateAgentResult('test-reg-1', 'Kilo', {
+    status: 'success',
+    execution_id: 'exec-123',
+    report: { request_id: 'test-reg-1', agent: 'Kilo', status: 'success', result: { execution_metadata: { invocation_id: 'inv-1', run_id: 'run-1' } } }
+  });
+  assertEqual(result.success, true);
+  assertEqual(result.entry.kilo.status, 'success');
+  assertEqual(result.entry.kilo.execution_id, 'exec-123');
+  assertEqual(result.entry.kilo.provider_session_id, 'session-abc');
+  assertEqual(result.entry.kilo.provider_message_id, 'message-def');
+  assertEqual(result.entry.kilo.provider_invocation_id, 'invocation-ghi');
+  cleanup();
+});
+
 test('setNextAction - updates next_action', () => {
   cleanup();
   taskRegistry.createTask(validCommand);

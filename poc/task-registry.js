@@ -108,6 +108,7 @@ function updateAgentResult(requestId, agent, result) {
 
   if (agent === 'Kilo') {
     entry.kilo = {
+      ...entry.kilo,
       status: result.status,
       execution_id: result.execution_id || null,
       report: result.report || null
