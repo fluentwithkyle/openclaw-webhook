@@ -1056,4 +1056,64 @@ This section integrates with, and does not replace, the existing protocol:
 
 ---
 
+## 19. Kilo → Gemini VERIFY_RECONCILE Handoff Lifecycle
+
+### 19.1 Overview
+
+The repository's orchestration backbone (`poc/orchestrator.js`, `poc/gemini-trigger.js`, `.github/workflows/main.yml`) establishes an automatic handoff from a completed Kilo execution to a Gemini review. This section makes the communication lifecycle explicit so that each stage is a **distinguished, non-interchangeable state**, the `request_id` is preserved end-to-end, and recursion is structurally prevented.
+
+### 19.2 Distinguished Lifecycle States
+
+The Kilo → Gemini handoff progresses through the following **distinguished** states. Agent self-reports (Section 19.3) remain execution evidence; durable repository/GitHub state remains the authoritative verification source.
+
+1. **Kilo task execution** — Kilo is executing the authorized ACP task (Inspect → Implement → Verify → Reconcile → Commit → Push → Report). Not complete.
+2. **Kilo task completion** — Kilo has finished the authorized work and emitted a structured execution report with `status: success`. This is Kilo's self-reported completion, not independent verification of delivery.
+3. **Kilo commit completion** — The authorized commits have been created locally on the authorized `base_branch`. Distinct from task completion and from push; commit is an explicit ACP capability.
+4. **Kilo push completion** — The authorized commits have been pushed to `origin/<base_branch>`. This is the durable, externally observable signal that Kilo's execution is reflected in GitHub. Distinct from commit and from task completion.
+5. **Orchestration recognition** — The Kilo completion callback (`POST /poc/kilo/callback`) or Kilo polling (`poc/kilo-polling.js`) receives, validates, and records the Kilo execution report in TaskRegistry under `request_id`. The orchestrator checks `kilo.status === 'success'` and, only then, sets `next_action = 'trigger_gemini'`.
+6. **Gemini dispatch acceptance** — The orchestrator calls `orchestrator.triggerGemini()` → `geminiTrigger.dispatchGemini()` → GitHub `workflow_dispatch` on `main.yml`. A `204` response confirms the workflow run was **accepted for scheduling** only. It does NOT confirm the Gemini workflow has started executing or completed. This distinction is enforced by `gemini-trigger.js` (resolves `success` only on `204`) and the `gemini_result` step in `main.yml` (lines 197–243).
+7. **Gemini workflow execution** — The `main.yml` run executes: checkout at the pushed commit, run the Gemini CLI with the mode-specific prompt, and produce the `gemini-acp-report.json` artifact. Gemini runs in its isolated specialist lane.
+8. **Gemini independent VERIFY completion** — Gemini has independently inspected the actual repository state (committed code, diffs, CI results, the `gemini-acp-report` artifact) and completed its verification judgment against the ACP `verification` requirements. Result is published in the `gemini-acp-report` artifact (Section 5.1 / README Terminology mapping).
+9. **Gemini RECONCILE completion** — Gemini has updated the designated durable `docs/ai/` records to reflect the independently verified state, and (when authorized in VERIFY_RECONCILE mode) committed and pushed those reconciliation changes to the authorized `base_branch`.
+10. **Complete downstream terminal state** — The TaskRegistry entry for `request_id` has been updated via the Gemini callback (`POST /poc/gemini/callback`) with the Gemini result, and the orchestrator has set `next_action` to `complete` (success), `human_review` (failure/blocked), or another terminal disposition.
+11. **Failure at any downstream stage** — Any failure (Kilo failure/blocked, dispatch rejection/non-204, Gemini execution failure, callback failure, or callback authentication/validation failure) sets the task terminal state to FAILED or BLOCKED and `next_action` to `human_review`. The `request_id` is preserved so the exact failure stage is traceable. Kilo failure or blocked does NOT trigger Gemini (`orchestrator.js` sets `next_action = 'human_review'`, not `'trigger_gemini'`, on failure/blocked).
+
+### 19.3 request_id / Task Identity Preservation
+
+`request_id` is the immutable correlation identifier carried across the **entire** handoff. It is never reissued or replaced during the Kilo → Gemini transition. A new `request_id` is generated only for a new, independent task.
+
+The `request_id` flows through each stage:
+
+- The ACP command embeds `request_id` (TASK_STANDARD.md Section 7).
+- Kilo's execution report references the same `request_id`.
+- The Kilo callback is validated against the TaskRegistry entry keyed by `request_id` (`routes/poc.js` `authenticateKiloCallback` + `validateExecutionReport`).
+- `orchestrator.handleKiloCompletion` looks up the task by `request_id` and passes it to `geminiTrigger.dispatchGemini`.
+- The `workflow_dispatch` is dispatched with `request_id` as an input (`poc/gemini-trigger.js`, `.github/workflows/main.yml` workflow_dispatch inputs).
+- The Gemini callback is validated against the same TaskRegistry entry via `request_id` (`routes/poc.js` `/poc/gemini/callback`).
+
+Recovery from interruption (KILO_INTEGRATION.md Section 13.9) inspects GitHub state and TaskRegistry by `request_id`, not agent session memory. TaskRegistry provides `request_id`-keyed durable correlation across Kilo and Gemini lanes (see `poc/task-registry.js` and Architecture Section 12.8).
+
+### 19.4 Agent-Reported vs. Independently Verified Completion
+
+- **Kilo task completion** (state 2) is Kilo's self-reported status. It is execution evidence, not independent verification.
+- **Independently verified completion** requires external confirmation against GitHub/durable state: the commit and push exist on the authorized branch, changed files are within authorized scope, and `git diff --check` is clean (Section 5.1, Section 4.5).
+- **Gemini VERIFY** (state 8) is an independent verification pass against the original ACP verification requirements. It is NOT a Kilo or Git self-verification.
+- The independent Kilo delivery verification lane (`.github/workflows/kilo-verification.yml`) provides independent verification of Kilo's delivered ref, changed files, and scope — distinct from Kilo's self-report.
+- A successful Kilo report does NOT authorize or imply Gemini dispatch. Gemini is dispatched only after the orchestrator independently confirms `kilo.status === 'success'` AND `next_action === 'trigger_gemini'`.
+
+### 19.5 Recursion Prevention
+
+The automatic Kilo → Gemini pipeline must not re-trigger itself from its own reconciliation commits. Recursion prevention is **structural**:
+
+- Gemini is dispatched via `workflow_dispatch` triggered **only by the orchestrator** (`orchestrator.triggerGemini`), which is invoked **only** from a Kilo completion callback that set `next_action = 'trigger_gemini'`. It is NOT triggered by GitHub `push` webhooks to `base_branch`.
+- A Gemini reconciliation commit/push to `main` is a repository content event, not a Kilo completion callback. It does NOT match the `x-kilo-callback-secret` authentication on `POST /poc/kilo/callback` and does NOT invoke `handleKiloCompletion`. Therefore it does NOT set `next_action = 'trigger_gemini'` and does NOT trigger another `triggerGemini`.
+- `main.yml` triggers only on `issue_comment` (with `@gemini-cli`) and `workflow_dispatch`. A `push` event does not satisfy either trigger. A reconciliation push therefore does NOT re-run `main.yml`.
+- `kilo-verification.yml` triggers on `push`/`pull_request` events for independent delivery verification only; it does NOT dispatch Gemini.
+- Kilo activation surfaces are a new GitHub Issue or explicit ACP dispatch through `POST /poc/kilo` (Section 17.1, KILO_INTEGRATION.md Section 12.1). Neither is triggered by a Gemini push.
+- Gemini activation surfaces are `@gemini-cli` issue comments or orchestrator `workflow_dispatch` (Section 17.1). A reconciliation push does not match either.
+
+If a future change introduces a GitHub push webhook that could activate the pipeline, it MUST gate on a distinguishing condition (e.g., the existing `request_id` is not in a terminal state, or a commit-message marker) to prevent recursive triggering from reconciliation commits. Until such a mechanism exists, the orchestrator-controlled `workflow_dispatch` path remains the sole automatic Gemini dispatch path, and structural trigger separation prevents recursion.
+
+---
+
 (End of file)
