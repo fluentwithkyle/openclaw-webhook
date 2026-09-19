@@ -3,7 +3,13 @@ const axios = require('axios');
 const fs = require('fs');
 const app = express();
 
-app.use(express.json());
+app.use(express.json({
+    verify: (req, res, buf, type) => {
+        if (type === 'application/json') {
+            req.rawBody = buf;
+        }
+    }
+}));
 
 const { handleTallyWebhook } = require('./services/tally');
 const { handleCalWebhook } = require('./services/cal');

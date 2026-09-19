@@ -9,3 +9,5 @@ node_modules/
 gemini-artifacts/
 poc/task-registry.json
 poc/task-registry.json.bak
+poc/delivery-log.json
+poc/delivery-log.json.bak

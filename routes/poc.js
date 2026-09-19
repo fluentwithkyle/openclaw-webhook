@@ -4,6 +4,7 @@ const { getDispatcher } = require('../services/transport-provider');
 const orchestrator = require('../poc/orchestrator');
 const { validateExecutionReport, validateACPCommand } = require('../poc/schemas/acp-schema');
 const taskRegistry = require('../poc/task-registry');
+const gitWebhook = require('../poc/github-webhook');
 
 const router = express.Router();
 
@@ -665,6 +666,57 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
             request_id: command?.request_id || 'unknown',
             status: 'registration failed',
             stage: 'failed'
+        });
+    }
+});
+
+// POC GitHub Push Webhook — Git-based Kilo completion-signal receiver
+// Receives GitHub push events and validates them as Kilo completion signals.
+// This endpoint is a bounded POC, clearly separated from the existing
+// production completion mechanism (kilo-polling.js, kilo/callback).
+router.post('/github/webhook', async (req, res) => {
+    const deliveryId = req.headers['x-github-delivery'];
+    const signature = req.headers['x-hub-signature-256'];
+    const githubEvent = req.headers['x-github-event'];
+    const rawBody = req.rawBody;
+
+    if (githubEvent !== 'push') {
+        return res.status(200).json({
+            status: 'ignored',
+            message: 'Not a push event (event: ' + githubEvent + ')'
+        });
+    }
+
+    try {
+        const result = await gitWebhook.processPushEvent(
+            req.body,
+            deliveryId,
+            {
+                rawBody: rawBody,
+                signature: signature,
+                webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
+                githubToken: process.env.GITHUB_TOKEN || process.env.ORCHESTRATOR_GH_TOKEN,
+                config: {
+                    repository: 'fluentwithkyle/openclaw-webhook',
+                    branch: 'main'
+                }
+            }
+        );
+
+        let httpStatus = 200;
+        if (result.status === 'blocked' || result.status === 'rejected') {
+            httpStatus = 400;
+        } else if (result.status === 'failed') {
+            httpStatus = 500;
+        }
+
+        res.status(httpStatus).json(result);
+    } catch (err) {
+        console.error('Error in /poc/github/webhook:', err);
+        res.status(500).json({
+            status: 'error',
+            delivery_id: deliveryId || 'unknown',
+            error: err.message
         });
     }
 });

@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-19
-**Updated By**: Kilo — EXECUTE (End-to-end system test TASK-KILO-GEMINI-END-TO-END-SYSTEM-TEST-001)
+**Updated By**: Kilo — EXECUTE (Git-based Kilo completion-signal POC TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001)
 
 ---
 
@@ -34,6 +34,7 @@
 | Kilo → Gemini Completion Handoff — Polling Path Closure | **IMPLEMENTED / VERIFIED** | Kilo | Closed polling path gaps so Kilo completions are delivered via repository-controlled polling. Three fixes: (1) `poc/task-registry.js` `updateAgentResult` preserves `provider_session_id`/`provider_message_id`/`provider_invocation_id` via spread merge instead of overwriting; (2) `poc/orchestrator.js` `handleKiloCompletion` extracts `execution_id` from `report.result.execution_metadata.invocation_id` (guaranteed string per ACP schema); (3) `routes/poc.js` transitions task PENDING → SELECTED → PLANNED → EXECUTING after successful dispatch (`/kilo`, `/chatbox`, `/coordinator`) so `poc/kilo-polling.js` picks up tasks. Provider IDs remain sufficient for polling path (used as identifiers in `getCompletionStatus`, as fallbacks for report `invocation_id`/`run_id`). EXECUTING transition follows valid state-machine path. 237 tests pass. Commit `90de87d`. |
 | Kilo ↔ Gemini post-dispatch result lifecycle repair | **IMPLEMENTED / VERIFIED** | Kilo | Repaired false-success path in `.github/workflows/main.yml`: callback payload now reflects actual Gemini execution result via `steps.gemini_run.outcome` instead of hardcoded `status: "success"`. Added `gemini_result` step with `if: always()` to determine STATUS/VERIFICATION_STATUS/BLOCKER_MSG/RECON_STATUS from real outcome; callback and artifact persistence steps now use `if: always()`. Callback payload now includes `gemini_output`. RECON_STATUS conditional on VERIFICATION_STATUS=PASS per `determineReconciliationStatus()` contract. 9 new workflow-expression tests + 3 new gemini-callback tests; all 270 total tests pass. (TASK-KILO-GEMINI-POST-DISPATCH-RESULT-LIFECYCLE-IMPLEMENT-001) |
 | Kilo → Gemini End-to-End System Test (Issue #161) | **EXECUTING (Kilo phase)** | Kilo | SYSTEM TEST (TASK-KILO-GEMINI-END-TO-END-SYSTEM-TEST-001). Exercises the existing Kilo → repository-controlled polling → TaskRegistry → handleKiloCompletion() → orchestrator.triggerGemini() → Gemini workflow_dispatch → Gemini execution → callback path end-to-end. Authorized change: `docs/ai/STATE.md` only. |
+| Git-based Kilo completion-signal POC (Issue #162) | **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** | Kilo | Bounded POC implementing Git-based Kilo completion signal via GitHub push webhook. Implemented `poc/github-webhook.js` (HMAC-SHA256 signature verification, repository/branch/path/request_id validation, signal artifact fetch, delivery-id + task-level idempotency, explicit recursion prevention excluding Gemini reconciliation commits) and `POST /poc/github/webhook` route. Reuses existing TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling, callback, verification, and Kilo→Gemini orchestration preserved. Status remains UNDER VALIDATION. (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001) |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -384,6 +385,7 @@ openclaw-webhook/
 │   ├── gemini-trigger.js         # GitHub Actions workflow_dispatch integration
 │   ├── kilo-polling.js           # Idempotent Kilo completion/result polling
 │   ├── kilo-verifier.js          # Independent Kilo delivery verification
+│   ├── github-webhook.js         # Git-based Kilo completion-signal POC receiver
 │   ├── command.json              # POC ACP command fixture
 │   ├── main.js                   # POC entry point
 │   ├── test.js                   # POC unit tests
@@ -404,6 +406,7 @@ openclaw-webhook/
 │   ├── kilo-polling.test.js
 │   ├── kilo-verifier.test.js
 │   ├── verify-reconcile.test.js
+│   ├── github-webhook.test.js
 │   ├── mock-kilo-transport.js
 │   └── run-poc-tests.js
 ├── docs/

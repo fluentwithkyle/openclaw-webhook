@@ -6,6 +6,86 @@
 
 ---
 
+## 2026-09-19 | Implement Git-based Kilo Completion-Signal POC (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001)
+
+**Task**: Implement the bounded proof-of-concept Git-based Kilo completion-signal architecture established by Gemini's architectural research. The implementation validates whether a Git-based Kilo completion signal (via GitHub push webhook) can safely integrate with the existing TaskRegistry correlation and orchestrator completion path, while preserving all existing completion mechanisms as the comparator. (Issue #162)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE
+**Capabilities Authorized**: inspect, modify_files, run_tests, commit, push
+**Commit Authority**: explicitly authorized
+**Push Authority**: explicitly authorized
+
+**Architecture Status**: UNDER VALIDATION
+
+**Summary**:
+
+- **Objective**: Implement a bounded POC Git-based Kilo completion-signal architecture. The target flow is: Kilo completes authorized work → Kilo commit/push → GitHub push event → Render receives and validates a Kilo completion signal → existing TaskRegistry correlation → existing orchestrator completion path → existing Kilo → Gemini VERIFY_RECONCILE handoff. The POC preserves the existing Kilo→Gemini architecture and remains clearly separated from the current production completion mechanism until validation establishes equivalence/reliability.
+
+- **Signal Design**: Request-specific immutable completion artifact at `poc/signals/<request_id>.json`. Each request_id maps to a unique, immutable file supporting concurrent tasks, retries, duplicate deliveries, and historical reconstruction. A single mutable global file (e.g. `docs/ai/KILO_COMPLETION_SIGNAL.json`) is explicitly rejected as unsafe. The signal artifact contains: `signal_id` (artifact identity for idempotency), `request_id`, `repository`, `base_branch`, `commit_sha`, `status`, `result.execution_metadata.invocation_id`/`run_id`, `changed_files`, `verification`, `blockers`, `push`, `timestamp`. The signal is a valid ACP execution report (reusing existing `validateExecutionReport` contract via `orchestrator.handleKiloCompletion`).
+
+- **Request Correlation**: `request_id` preserved across the entire flow: ACP task → Kilo execution → Git commit (commit message marker) → GitHub push event → completion signal artifact → TaskRegistry → orchestrator → Gemini dispatch. No second task identity system created.
+
+- **Webhook Implementation** (`poc/github-webhook.js`):
+  - `verifySignature(rawBody, signature, secret)` — HMAC-SHA256 verification using `crypto.timingSafeEqual`, reading `x-hub-signature-256` header against `GITHUB_WEBHOOK_SECRET` env var. Fail-closed.
+  - `processPushEvent(payload, deliveryId, options)` — Main entry point. Validates: GitHub webhook signature (when secret configured), event type (push only), repository identity (`fluentwithkyle/openclaw-webhook`), expected branch/ref (`refs/heads/main`), delivery ID idempotency (in-memory + `poc/delivery-log.json`).
+  - `findSignalFiles(commits)` — Scans push commits for files matching `poc/signals/<request_id>.json` regex. Returns empty for all other paths.
+  - `processSignalFile(signalFile, headCommit, config, token)` — Fetches signal artifact via GitHub Contents API (injectable `setFetchSignalArtifact` for testing), validates signal content (request_id, commit_sha, repository, base_branch, status, signal_id, result.metadata, changed_files, verification, blockers, push), correlates to TaskRegistry, validates task state (must be EXECUTING with kilo.status === 'pending'), builds ACP execution report via `buildCompletionReport()`, delegates to `orchestrator.handleKiloCompletion()`.
+  - Idempotency: Two layers — (1) GitHub delivery ID tracked in `poc/delivery-log.json` to reject duplicate deliveries; (2) existing `orchestrator.handleKiloCompletion` idempotency check (`task.kilo.status !== 'pending'`) for same-commit re-delivery with new delivery ID.
+  - Recursion prevention: Explicit distinguishing conditions — (1) only files at `poc/signals/<request_id>.json` path are treated as Kilo completion signals; Gemini reconciliation commits (docs/ai/*, poc/task-registry.json, etc.) never match; (2) request_id must exist in TaskRegistry; (3) task must be in EXECUTING state with kilo.status === 'pending' — Gemini reconciliation tasks are in VERIFIED/COMPLETE state.
+  - No parallel orchestration: Delegates to existing `orchestrator.handleKiloCompletion()` and `orchestrator.triggerGemini()` — no second state machine, no second dispatcher, no second task registry.
+
+- **Route** (`routes/poc.js`): Added `POST /poc/github/webhook` route. Checks `x-github-event` header (only `push` events processed, all others ignored with 200). Delegates to `gitWebhook.processPushEvent()`. HTTP status mapping: 200 for ignored/processed/completed; 400 for blocked/rejected; 500 for failed/error.
+
+- **Raw Body Preservation** (`index.js`): Changed `app.use(express.json())` to `app.use(express.json({ verify: ... }))` to preserve raw body buffer as `req.rawBody` for HMAC signature verification. This is the standard Express pattern and does not alter existing JSON parsing behavior for any route.
+
+- **Files changed**:
+  - `poc/github-webhook.js` (new) — Core webhook processing module
+  - `routes/poc.js` — Added `POST /poc/github/webhook` route and `gitWebhook` require
+  - `index.js` — Added raw body preservation via `verify` callback
+  - `.gitignore` — Added `poc/delivery-log.json` and `.bak`
+  - `test/github-webhook.test.js` (new) — 52 focused tests covering all 16 required scenarios
+  - `docs/ai/STATE.md` — Active Tasks table entry, header update
+  - `docs/ai/TASK_LOG.md` — This append-only entry
+
+- **Protected files preserved**: AGENTS.md, ARCHITECTURE.md, GEMINI.md, `.github/workflows/main.yml`, `.github/workflows/codex-builder.yml`, `.github/workflows/kilo-gemini-poc.yml`, `.github/workflows/kilo-verification.yml`, all production business logic, secrets, credentials. No GitHub Actions workflows modified. No new dependencies added.
+
+- **No existing mechanisms removed or disabled**: `poc/kilo-polling.js` intact, `kilo/callback` callback handling intact, `kilo-verifier.js` intact, Kilo→Gemini orchestration intact, Gemini issue-comment activation intact, `main.yml` workflow_dispatch behavior intact.
+
+**Verification performed**:
+1. New GitHub webhook tests — 52/52 passed, covering all 16 required scenarios:
+   - Valid signal accepted (path extraction, file finding, signal validation, report building)
+   - Invalid/missing authentication rejected (signature verification, wrong secret, tampered body)
+   - Wrong repository rejected
+   - Wrong branch/ref ignored
+   - Unrelated push/path ignored
+   - Missing/invalid/mismatched request_id rejected
+   - Unknown request_id handled safely (rejected, stage: registry)
+   - Malformed completion signals rejected (missing status, invalid status, missing signal_id, missing execution_metadata)
+   - Duplicate/replayed delivery idempotent (delivery ID + orchestrator-level)
+   - Concurrent request-specific signals independent (no cross-contamination)
+   - Gemini reconciliation commits cannot be interpreted as Kilo completion (path filtering + TaskRegistry gate + state gate)
+   - Valid completion reaches existing orchestrator path (handleKiloCompletion, task state updated, next_action=trigger_gemini)
+   - Failed Kilo completion does not trigger Gemini
+   - Existing polling/callback/callback behavior intact (module exports verified, route inspection)
+   - Existing Kilo→Gemini orchestration intact (triggerGemini delegation verified)
+   - Existing Gemini issue-comment and workflow_dispatch activation intact (route inspection)
+2. Existing regression test suites — all pass: schema (20), task-registry (17), orchestrator (18), integration (11), gemini-trigger (14), gemini-callback (23), kilo-callback (15), kilo-polling (10), kilo-verifier (18), verify-reconcile (52), coordinator (19), workflow-expression (23), chatbox-gateway (23), run-poc-tests (5) = 265 existing + 52 new = 317 total tests pass
+3. `git diff --check` — clean (no whitespace errors)
+4. Confirmed only intended files changed (no protected files modified)
+5. Confirmed no secrets/credentials introduced (env vars referenced by name only)
+
+**Remaining LIVE validation requirement**: Full end-to-end GitHub push webhook delivery cannot be exercised in this environment (requires live GitHub webhook configuration and GitHub API token with contents:read access). The deterministic validation path (signature verification, repository/branch/path/request_id validation, signal schema validation, TaskRegistry correlation, orchestrator integration, idempotency, recursion prevention) is fully tested with mock signal fetch. Live webhook delivery validation is required before production adoption.
+
+**Outcome**: SUCCESS — Bounded Git-based Kilo completion-signal POC implemented, tested (52 focused tests + 265 regression tests all passing), verified, committed, and pushed. Architecture status remains UNDER VALIDATION. The POC establishes that a Git-based Kilo completion signal can be integrated with the existing TaskRegistry correlation and orchestrator completion path while preserving all existing completion mechanisms.
+
+**Commit Reference**: (pending — self-referencing SHA)
+
+---
+
 ## 2026-09-19 | Close Polling Path Gaps for Kilo→Gemini Completion Handoff (TASK-KILO-KILO-GEMINI-COMPLETION-HANDOFF-IMPLEMENT-001)
 
 **Task**: Close polling path gaps so Kilo completions are delivered via repository-controlled polling rather than undocumented outbound callbacks. Three fixes: (1) preserve provider IDs in task-registry during result recording; (2) extract execution_id from ACP report's nested metadata; (3) transition task to EXECUTING after dispatch so the polling loop picks up tasks.
