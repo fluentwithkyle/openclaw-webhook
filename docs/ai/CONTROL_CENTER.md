@@ -18,7 +18,7 @@ Designed for Kyle checking the project from a phone.
 | **Google Adapter** | Google Apps Script |
 | **Last Updated** | 2026-09-19 |
 
-Updated By | Kilo — Post-dispatch lifecycle repair
+Updated By | Kilo — VERIFY_RECONCILE (DOC-RECONCILIATION-001)
 
 ---
 
@@ -55,6 +55,7 @@ Updated By | Kilo — Post-dispatch lifecycle repair
 | Chatbox Gateway Ingress | IMPLEMENTED / VERIFIED | Kilo | Authenticated `POST /poc/chatbox` in `routes/poc.js`. OpenAI-compatible request → REVIEW-mode ACP command (read_only, poc/ paths) → `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`. Auth: `x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET` (distinct from all other secrets). Intent preserved in `task` field and `natural_language_intent` field. 23 gateway tests pass; 259 total tests pass. (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001) |
 | VERIFY_RECONCILE operating mode implementation | IMPLEMENTED / VERIFIED | Kilo | Task mode dispatch: REVIEW (read-only), VERIFY_RECONCILE (4 caps, bounded docs/ai paths), FAILOVER_EXECUTE (5 caps, explicit paths). 238 total tests pass. (Issue #145) |
 | Kilo ↔ Gemini post-dispatch result lifecycle repair | IMPLEMENTED / VERIFIED | Kilo | Repaired false-success callback path: `STATUS` now derives from `steps.gemini_run.outcome` instead of hardcoded `"success"`; `RECON_STATUS` follows `determineReconciliationStatus()` contract; callback and artifact steps use `if: always()`; `gemini_output` included in payload. 270 total tests pass. (TASK-KILO-GEMINI-POST-DISPATCH-RESULT-LIFECYCLE-IMPLEMENT-001) |
+| Git-based Kilo completion-signal POC (Issue #162) | IMPLEMENTED / VERIFIED (UNDER VALIDATION) | Kilo | Bounded POC: `poc/github-webhook.js` + `POST /poc/github/webhook` route. Git-based Kilo completion signal via GitHub push webhook. Reuses TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling/callback/orchestration preserved. Commit `bf68116167454d7c42b85e0ac4d627050a89ffd9`. 52 focused tests + 270 regression tests = 322 total pass. Doc-reconciled by TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001. Status: UNDER VALIDATION. |
 
 ---
 

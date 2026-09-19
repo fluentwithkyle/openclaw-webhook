@@ -6,6 +6,68 @@
 
 ---
 
+## 2026-09-19 | Independently Verify and Reconcile Git Completion-Signal POC Documentation (TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001)
+
+**Task**: Independently verify the Git-based Kilo completion-signal POC (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001, Issue #162) against the actual GitHub repository state and reconcile durable documentation with independently verified evidence. Authorized to modify only `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, and `docs/ai/CONTROL_CENTER.md`.
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: VERIFY_RECONCILE
+**Capabilities Authorized**: inspect, modify_files, commit, push
+**Authorized paths**: docs/ai/TASK_LOG.md, docs/ai/STATE.md, docs/ai/CONTROL_CENTER.md
+
+**Architecture Status**: UNDER VALIDATION (unchanged)
+
+**Independent Verification Findings**:
+
+1. **Implementation commit SHA — VERIFIED**: `bf68116167454d7c42b85e0ac4d627050a89ffd9` exists in repository history (confirmed via `git cat-file -t`), is present on `origin/main` (confirmed via `git branch -r --contains`), and is the commit that introduced the Git completion-signal implementation (commit message: "feat(poc): Git-based Kilo completion-signal POC"). The original TASK_LOG entry reported the commit reference as "(pending — self-referencing SHA)" because the SHA could not be known at write time; this was subsequently corrected by `bd09a51` ("docs(ai): record commit SHA for Git completion-signal POC"), which is itself present on `origin/main`. The SHA is valid; it is not nonexistent.
+
+2. **Focused test count — VERIFIED**: 52/52 tests in `test/github-webhook.test.js` pass (32 synchronous `test()` + 20 `testAsync()` = 52), covering all 16 required scenarios. Confirmed by execution.
+
+3. **Regression test count — DISCREPANCY IDENTIFIED**: The original TASK_LOG entry claims "265 existing" with a per-suite breakdown. Independent verification by running all regression test suites reveals:
+
+   - **Per-suite count errors**: task-registry reported as 17 (`test/task-registry.test.js`), actual is 18. Orchestrator reported as 18 (`test/orchestrator.test.js`), actual is 19. These counts are outdated — they predate `90de87d` ("feat(poc): improve task lifecycle transitions and Kilo result handling"), which added 1 test to each suite. The polling-path-gap-closure TASK_LOG entry (fefc65c) correctly reports 18 and 19 respectively, confirming the outdated nature of the Git POC entry's counts.
+
+   - **Total count inconsistency**: The TASK_LOG's per-suite breakdown (20, 17, 18, 11, 14, 23, 15, 10, 18, 52, 19, 23, 23, 5) sums to 268, but the stated total is 265. The actual per-suite counts (20, 18, 19, 11, 14, 23, 15, 10, 18, 52, 19, 23, 23, 5) sum to 270. The stated total of 265 matches the actual count only if `run-poc-tests` (5 tests) is excluded — but the per-suite breakdown explicitly includes `run-poc-tests` (5), creating an internal inconsistency.
+
+   **Actual verified regression test counts** (all passing):
+   | Suite | Actual | TASK_LOG reported |
+   |-------|--------|-------------------|
+   | schema | 20 | 20 |
+   | task-registry | 18 | 17 |
+   | orchestrator | 19 | 18 |
+   | integration | 11 | 11 |
+   | gemini-trigger | 14 | 14 |
+   | gemini-callback | 23 | 23 |
+   | kilo-callback | 15 | 15 |
+   | kilo-polling | 10 | 10 |
+   | kilo-verifier | 18 | 18 |
+   | verify-reconcile | 52 | 52 |
+   | coordinator | 19 | 19 |
+   | workflow-expression | 23 | 23 |
+   | chatbox-gateway | 23 | 23 |
+   | run-poc-tests | 5 | 5 |
+   | **Total** | **270** | **265 (stated)** |
+
+   **Actual verified total**: 270 regression + 52 focused = 322 total tests pass.
+
+**Remaining LIVE validation requirement**: Full end-to-end GitHub push webhook delivery cannot be exercised in this environment (requires live GitHub webhook configuration and GitHub API token with `contents:read` access to `poc/signals/`). The deterministic validation path (signature verification, repository/branch/path/request_id validation, signal schema validation, TaskRegistry correlation, orchestrator integration, idempotency, recursion prevention) is fully tested with mock signal fetch. Live webhook delivery validation remains required before production adoption.
+
+**Reconciliation performed**:
+- `docs/ai/TASK_LOG.md` — This entry appended (original Git completion-signal POC entry preserved unchanged; historical discrepancy documented).
+- `docs/ai/STATE.md` — Header `Updated By` updated; Git completion-signal POC entry in Active Tasks updated with verified commit SHA and test counts.
+- `docs/ai/CONTROL_CENTER.md` — Git completion-signal POC added to Active Work table; header `Updated By` updated.
+- No application code, tests, or workflow files modified.
+- `git diff --check` clean.
+
+**Outcome**: The Git completion-signal POC implementation is verified present and correct on `origin/main` at commit `bf68116167454d7c42b85e0ac4d627050a89ffd9`. The focused test count of 52 is verified (52/52 pass). The regression test count discrepancy is documented: 2 per-suite counts are outdated (task-registry 17→18, orchestrator 18→19) and the stated total of 265 should be 270 (or 265 if excluding run-poc-tests from the regression set). Architecture status remains UNDER VALIDATION. All 322 tests pass (270 regression + 52 focused).
+
+**Commit Reference**: (to be filled with reconciliation commit SHA)
+
+---
+
 ## 2026-09-19 | Implement Git-based Kilo Completion-Signal POC (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001)
 
 **Task**: Implement the bounded proof-of-concept Git-based Kilo completion-signal architecture established by Gemini's architectural research. The implementation validates whether a Git-based Kilo completion signal (via GitHub push webhook) can safely integrate with the existing TaskRegistry correlation and orchestrator completion path, while preserving all existing completion mechanisms as the comparator. (Issue #162)
