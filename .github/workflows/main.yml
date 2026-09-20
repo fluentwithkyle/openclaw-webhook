@@ -187,7 +187,7 @@ jobs:
           printf '%s' "${{ steps.gemini_run.outputs.summary }}" > gemini-acp-report.json
 
       - name: Upload Gemini result artifact
-        if: always()
+        if: always() && github.event_name == 'issue_comment'
         uses: actions/upload-artifact@v4
         with:
           name: gemini-acp-report
@@ -255,6 +255,7 @@ jobs:
           BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
           KILO_EXECUTION_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
           TASK_MODE="${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}"
+          CURRENT_HEAD_SHA="${GITHUB_SHA}"
 
           # Capture Gemini output (stdout from run-gemini-cli)
           GEMINI_OUTPUT="${{ steps.gemini_run.outputs.summary }}"
@@ -293,6 +294,7 @@ jobs:
             --arg task "$TASK" \
             --arg repository "$REPOSITORY" \
             --arg base_branch "$BASE_BRANCH" \
+            --arg current_head_sha "$CURRENT_HEAD_SHA" \
             --arg gemini_output "$GEMINI_OUTPUT" \
             --arg invocation_id "$INVOCATION_ID" \
             --arg run_id "$RUN_ID" \
@@ -307,6 +309,7 @@ jobs:
               task: $task,
               repository: $repository,
               base_branch: $base_branch,
+              current_head_sha: $current_head_sha,
               changed_files: [],
               verification: ["advisory review completed"],
               result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id }, gemini_output: $gemini_output },
@@ -319,6 +322,8 @@ jobs:
                 commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
               }
             }' > callback_payload.json
+
+          cp callback_payload.json gemini-acp-report.json
 
           cat callback_payload.json
 
@@ -356,3 +361,11 @@ jobs:
             echo "::error::Callback failed with HTTP $HTTP_CODE: $BODY"
             exit 1
           fi
+
+      - name: Upload Gemini result artifact
+        if: always() && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-acp-report
+          path: gemini-acp-report.json
+          retention-days: 7
