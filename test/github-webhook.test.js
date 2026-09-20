@@ -254,6 +254,36 @@ test('validateSignal: commit_sha mismatch is rejected', () => {
   assert.ok(result.errors.some(e => e.includes('Commit SHA mismatch')));
 });
 
+test('validateSignal: absent commit_sha is accepted (self-reference hardening)', () => {
+  const signal = makeValidSignal('req-1', COMMIT);
+  delete signal.commit_sha;
+  const result = gitWebhook.validateSignal(signal, 'req-1', COMMIT, {
+    repository: REPO,
+    branch: BRANCH
+  });
+  assert.ok(result.valid, 'Signal without commit_sha should be valid: ' + (result.errors || []).join('; '));
+});
+
+test('validateSignal: null commit_sha is accepted (self-reference hardening)', () => {
+  const signal = makeValidSignal('req-1', COMMIT);
+  signal.commit_sha = null;
+  const result = gitWebhook.validateSignal(signal, 'req-1', COMMIT, {
+    repository: REPO,
+    branch: BRANCH
+  });
+  assert.ok(result.valid, 'Signal with null commit_sha should be valid: ' + (result.errors || []).join('; '));
+});
+
+test('validateSignal: empty commit_sha is accepted (self-reference hardening)', () => {
+  const signal = makeValidSignal('req-1', COMMIT);
+  signal.commit_sha = '';
+  const result = gitWebhook.validateSignal(signal, 'req-1', COMMIT, {
+    repository: REPO,
+    branch: BRANCH
+  });
+  assert.ok(result.valid, 'Signal with empty commit_sha should be valid: ' + (result.errors || []).join('; '));
+});
+
 test('validateSignal: invalid status is rejected', () => {
   const signal = makeValidSignal('req-1', COMMIT, { status: 'unknown' });
   const result = gitWebhook.validateSignal(signal, 'req-1', COMMIT, {
@@ -315,6 +345,23 @@ test('buildCompletionReport: builds valid execution report from signal', () => {
   assert.strictEqual(report.commit, COMMIT);
   assert.strictEqual(report.push, true);
   assert.ok(report.result.execution_metadata.invocation_id);
+});
+
+test('buildCompletionReport: authoritative headCommitSha is assigned to report', () => {
+  const signal = makeValidSignal('req-1', COMMIT);
+  delete signal.commit_sha;
+  delete signal.commit;
+  const authoritativeSha = 'b'.repeat(40);
+  const report = gitWebhook.buildCompletionReport(signal, authoritativeSha);
+  assert.strictEqual(report.commit_sha, authoritativeSha);
+  assert.strictEqual(report.commit, authoritativeSha);
+});
+
+test('buildCompletionReport: fallback uses signal commit_sha when no authoritative SHA', () => {
+  const signal = makeValidSignal('req-1', COMMIT);
+  const report = gitWebhook.buildCompletionReport(signal);
+  assert.strictEqual(report.commit_sha, COMMIT);
+  assert.strictEqual(report.commit, COMMIT);
 });
 
 // --- TEST 2: Signature verification ---
@@ -709,6 +756,27 @@ async function runAsyncTests() {
       config: { repository: REPO, branch: BRANCH, ref: REF }
     });
     assert.strictEqual(result.status, 'ignored');
+  });
+
+  // TEST 12b: Valid signal without commit_sha (self-reference-safe) reaches orchestrator
+  await testAsync('processPushEvent: signal with no commit_sha (self-reference-safe) completes with head_commit.id', async () => {
+    setup();
+    setupTask('req-nocommit');
+    const payload = makePushPayload('req-nocommit', COMMIT);
+    const signal = makeValidSignal('req-nocommit', COMMIT);
+    delete signal.commit_sha;
+    delete signal.commit;
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-nocommit': signal }));
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-nocommit', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: null
+    });
+    assert.strictEqual(result.status, 'completed');
+    assert.strictEqual(result.results[0].status, 'completed');
+    const task = taskRegistry.getTask('req-nocommit');
+    assert.strictEqual(task.kilo.status, 'success');
+    assert.strictEqual(task.kilo.report.commit, COMMIT);
+    assert.strictEqual(task.kilo.report.commit_sha, COMMIT);
   });
 
   // TEST 12: Valid completion reaches the existing completion/orchestration path

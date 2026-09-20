@@ -187,10 +187,12 @@ function validateSignal(signal, requestId, commitSha, config) {
     );
   }
 
-  if (signal.commit_sha !== commitSha) {
-    errors.push(
-      'Commit SHA mismatch: expected ' + commitSha + ', got ' + signal.commit_sha
-    );
+  if (signal.commit_sha) {
+    if (signal.commit_sha !== commitSha) {
+      errors.push(
+        'Commit SHA mismatch: expected ' + commitSha + ', got ' + signal.commit_sha
+      );
+    }
   }
 
   if (signal.repository && signal.repository !== config.repository) {
@@ -260,9 +262,12 @@ function validateSignal(signal, requestId, commitSha, config) {
   return errors.length > 0 ? { valid: false, errors: errors } : { valid: true };
 }
 
-function buildCompletionReport(signal) {
+function buildCompletionReport(signal, headCommitSha) {
   const report = Object.assign({}, signal);
   report.agent = 'Kilo';
+  if (headCommitSha) {
+    report.commit_sha = headCommitSha;
+  }
   if (!report.result || !report.result.execution_metadata) {
     report.result = {
       execution_metadata: {
@@ -369,7 +374,7 @@ async function processSignalFile(signalFile, headCommit, config, token) {
     };
   }
 
-  const report = buildCompletionReport(signal);
+  const report = buildCompletionReport(signal, commitSha);
 
   let orchestratorResult;
   try {
