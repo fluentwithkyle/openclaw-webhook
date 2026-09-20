@@ -64,7 +64,96 @@
 
 **Outcome**: The Git completion-signal POC implementation is verified present and correct on `origin/main` at commit `bf68116167454d7c42b85e0ac4d627050a89ffd9`. The focused test count of 52 is verified (52/52 pass). The regression test count discrepancy is documented: 2 per-suite counts are outdated (task-registry 17→18, orchestrator 18→19) and the stated total of 265 should be 270 (or 265 if excluding run-poc-tests from the regression set). Architecture status remains UNDER VALIDATION. All 322 tests pass (270 regression + 52 focused).
 
-**Commit Reference**: (to be filled with reconciliation commit SHA)
+**Commit Reference**: `8d2446afc02680bf70d6a2058c9cb7a0a4ffa8c6` on `origin/main`; precursor commit `bd09a51e658f150950125db62fb3679a69ff286a` ("docs(ai): record commit SHA for Git completion-signal POC")
+
+---
+
+## 2026-09-20 | Reconcile Git Completion-Signal POC and Commit-SHA Hardening Documentation (TASK-KILO-GIT-COMPLETION-SIGNAL-FULL-DOCUMENTATION-RECONCILIATION-001)
+
+**Task**: Reconcile the repository's durable project documentation and current project-state records with the complete, GitHub-verified history and current state of the Git-based Kilo completion-signal POC and its subsequent commit-SHA hardening. Independently verify the actual GitHub state, commits, diffs, tests, and documentation before reconciling the durable records. Authorized to modify only `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, and `docs/ai/ARCH_DECISIONS.md`. No application-code, test-code, workflow, infrastructure, or secret/configuration files may be modified. (Issue #166)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo — Builder / Implementer / Tester
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: VERIFY_RECONCILE
+**Capabilities Authorized**: inspect, modify_files, commit, push
+**Authorized paths**: docs/ai/TASK_LOG.md, docs/ai/STATE.md, docs/ai/CONTROL_CENTER.md, docs/ai/ARCH_DECISIONS.md
+
+**Architecture Status**: UNDER VALIDATION (unchanged)
+
+**Chronological verification of the complete Git completion-signal history**:
+
+### A. Original Git completion-signal POC (Issue #162 / TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001)
+
+- **Implementation commit SHA — VERIFIED**: `bf68116167454d7c42b85e0ac4d627050a89ffd9` exists in repository history (confirmed via `git cat-file -t` and `git log --all -- poc/github-webhook.js`), is present on `origin/main` (confirmed via `git branch -r --contains`), and is the sole commit that introduced the Git completion-signal implementation (commit message: "feat(poc): Git-based Kilo completion-signal POC (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001)"). No subsequent commit modifies `poc/github-webhook.js` or `test/github-webhook.test.js` on any branch or tag (confirmed via `git log --all -- poc/github-webhook.js test/github-webhook.test.js`).
+- **Original architectural purpose**: Bounded POC validating whether a Git-based Kilo completion signal (via GitHub push webhook) can safely integrate with the existing TaskRegistry correlation and `orchestrator.handleKiloCompletion()` path while preserving all existing completion mechanisms as the comparator.
+- **Request-specific immutable signal design**: Signal artifact at `poc/signals/<request_id>.json`, containing `signal_id`, `request_id`, `repository`, `base_branch`, `commit_sha`, `status`, `result.execution_metadata`, `changed_files`, `verification`, `blockers`, `push`, `timestamp`.
+- **GitHub push webhook integration**: `POST /poc/github/webhook` route in `routes/poc.js`; raw body preservation in `index.js`.
+- **TaskRegistry correlation**: `processSignalFile()` correlates signal via `request_id` → `taskRegistry.getTask(requestId)`.
+- **Existing orchestrator completion path**: Delegates to `orchestrator.handleKiloCompletion(requestId, report)` and `orchestrator.triggerGemini()` — no second state machine.
+- **Idempotency and recursion prevention**: (1) GitHub delivery ID tracked in `poc/delivery-log.json`; (2) orchestrator-level `task.kilo.status !== 'pending'` check; (3) path filtering via `SIGNAL_PATH_REGEX` ensures only `poc/signals/<request_id>.json` files are treated as signals — Gemini reconciliation commits (docs/ai/*, poc/task-registry.json, etc.) never match.
+- **Self-referential commit-SHA defect — CONFIRMED PRESENT (unresolved)**: `validateSignal()` at `poc/github-webhook.js:190-194` contains:
+  ```javascript
+  if (signal.commit_sha !== commitSha) {
+      errors.push('Commit SHA mismatch: expected ' + commitSha + ', got ' + signal.commit_sha);
+  }
+  ```
+  Here `commitSha` is `headCommit.id` from the GitHub push payload — the SHA of the very commit that *contains* the signal artifact itself. Since the signal artifact is written into a file that becomes part of a Git commit, the `commit_sha` it contains cannot equal the SHA of the containing commit until after that commit is created. This creates an impossible self-reference: the signal file must contain the SHA of a commit that does not yet exist. This defect prevents the POC from correctly accepting a real Kilo completion signal.
+- **Original implementation and verification evidence**: 52/52 focused tests in `test/github-webhook.test.js` (32 synchronous `test()` + 20 `testAsync()`); 270 regression tests across all other suites; 322 total tests pass. `git diff --check` clean. No application code, test code, or workflow files modified by the reconciliation.
+- **Architecture status**: UNDER VALIDATION.
+
+### B. Documentation reconciliation (Issue #164 / TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001)
+
+- **Precursor commit — VERIFIED**: `bd09a51e658f150950125db62fb3679a69ff286a` ("docs(ai): record commit SHA for Git completion-signal POC") — corrected the original TASK_LOG entry's commit reference from "(pending — self-referencing SHA)" to the actual SHA `bf68116...`. This was a direct consequence of the self-referential SHA problem: the original TASK_LOG entry was written during Kilo's execution of #162 and could not know its own commit SHA.
+- **Reconciliation commit — VERIFIED**: `8d2446afc02680bf70d6a2058c9cb7a0a4ffa8c6` ("docs(ai): reconcile Git completion-signal POC documentation (DOC-RECONCILIATION-001)") — independent verification of the Git completion-signal POC against the actual GitHub repository state. Changed only `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, and `docs/ai/CONTROL_CENTER.md`. No application code, tests, or workflow files modified. `git diff --check` clean.
+- **Independent verification corrected historical implementation/test evidence**: The original TASK_LOG entry (in `bf68116`) claimed "265 existing" regression tests with per-suite counts for task-registry (17) and orchestrator (18). Independent verification by running all test suites revealed:
+  - Per-suite count errors: task-registry actual is 18 (not 17), orchestrator actual is 19 (not 18) — both predate `90de87d` ("feat(poc): improve task lifecycle transitions and Kilo result handling"), which added 1 test to each suite.
+  - Total count inconsistency: stated 265 but actual per-suite counts sum to 270.
+- **Preserved the fact that discrepancies existed and were reconciled**: The DOC-RECONCILIATION-001 entry in TASK_LOG.md (this file) documents the per-suite count errors and the 265-vs-270 discrepancy with a full discrepancy table.
+
+### C. Commit-SHA hardening (Issue #165 / TASK-KILO-GIT-COMPLETION-SIGNAL-COMMIT-SHA-HARDENING-001)
+
+- **NOT IMPLEMENTED — VERIFIED ABSENT**: No commit exists in the repository history (across all branches and tags) that implements the commit-SHA hardening described by Issue #165. `git log --all -- poc/github-webhook.js test/github-webhook.test.js` returns only `bf68116167454d7c42b85e0ac4d627050a89ffd9`. `git log --all --oneline --grep="hardening" -i` returns no commit related to commit-SHA hardening for the Git completion-signal POC. `grep -rn "makeValidSignalNoSha\|headCommitSha" poc/ test/` returns no matches.
+- **Current behavior on `origin/main` (verified at `8d2446a`)**:
+  - `validateSignal(signal, requestId, commitSha, config)` at `poc/github-webhook.js:177-261` — STILL requires `signal.commit_sha` to exactly match `commitSha` (line 190-194). The commit_sha field remains mandatory and must match. A signal with absent/null/empty `commit_sha` fails the mismatch check because `undefined !== commitSha`. This is the self-referential defect, still present.
+  - `buildCompletionReport(signal)` at `poc/github-webhook.js:263-277` — takes ONLY `signal` as its parameter. Does NOT accept an `headCommitSha` parameter. Uses `report.commit_sha || report.commit` (line 274) as the commit reference — deriving it from the signal artifact, NOT from the GitHub push event's `head_commit.id`.
+  - `processSignalFile(signalFile, headCommit, config, token)` at `poc/github-webhook.js:279-424` — correctly extracts `const commitSha = headCommit.id` (line 282) and passes it to `validateSignal()`, but does NOT pass it to `buildCompletionReport(signal)` (line 372) — the webhook's `head_commit.id` is NOT used as the authoritative completion-report commit SHA.
+- **No hardening implementation commit SHA exists**. No commit in the repository history implements the described changes.
+- **The self-referential commit-SHA defect remains unresolved**.
+- **No `makeValidSignalNoSha` helper exists** in `test/github-webhook.test.js` or any test file.
+- **No 8 additional focused tests exist**: the focused test count is 52 (32 synchronous + 20 asynchronous), all passing — NOT 60. The test file contains no tests for optional/absent `commit_sha` validation.
+
+**Director's report discrepancy**: The Director's supplied hard-reporting report describes the commit-SHA hardening as implemented (validateSignal changed, buildCompletionReport accepting headCommitSha, processSignalFile passing head_commit.id, 8 additional tests, 60/60 focused passing, 330 total passing). Independent GitHub verification confirms **none of these changes exist in the repository**. The actual current state is: the self-referential defect is unresolved, no hardening code exists, no hardening tests exist, 52/52 focused tests pass, 270 regression tests pass, 322 total tests pass.
+
+**Resolution**: The commit-SHA hardening (Issue #165) is a **separate, unimplemented task** requiring code changes to `poc/github-webhook.js` and `test/github-webhook.test.js` — both outside the permitted documentation-only scope of this task. Per the ACP authorization boundary, no application-code or test-code modifications are authorized for this task. This task documents the verified discrepancy accurately and preserves it historically rather than claiming the hardening occurred.
+
+**Remaining LIVE validation requirement**: Full end-to-end GitHub push webhook delivery cannot be exercised in this environment (requires live GitHub webhook configuration and GitHub API token with `contents:read` access to `poc/signals/`). The deterministic validation path (signature verification, repository/branch/path/request_id validation, signal schema validation, TaskRegistry correlation, orchestrator integration, idempotency, recursion prevention) is fully tested with mock signal fetch. Live webhook delivery validation remains required before production adoption.
+
+**Reconciliation performed**:
+- `docs/ai/TASK_LOG.md` — This entry appended (original Git completion-signal POC entry at #162 preserved unchanged; documentation reconciliation entry at #164 preserved unchanged with commit reference retroactively filled; new full-reconciliation entry added for #166).
+- `docs/ai/STATE.md` — Header `Updated By` updated; Git completion-signal POC Active Tasks entry updated to document the self-referential defect, the unimplemented #165 hardening, and the Director's report discrepancy; existing commit SHA and test count entries corrected/preserved.
+- `docs/ai/CONTROL_CENTER.md` — Git completion-signal POC entry in Active Work table updated to reflect the self-referential defect and unimplemented hardening; header `Updated By` updated.
+- `docs/ai/ARCH_DECISIONS.md` — No new ADR created (the commit-SHA contract correction was NOT implemented; no architectural decision was made). Rationale for not creating an ADR recorded here and in STATE.md.
+- No application code, test code, workflow files, secrets, credentials, or infrastructure configuration modified.
+- `git diff --check` clean (to be verified on the new reconciliation commit).
+
+**Verification performed**:
+1. Verified commit `bf68116167454d7c42b85e0ac4d627050a89ffd9` is the sole implementation commit (via `git log --all -- poc/github-webhook.js`).
+2. Verified commit `bd09a51e658f150950125db62fb3679a69ff286a` exists (commit SHA recording).
+3. Verified commit `8d2446afc02680bf70d6a2058c9cb7a0a4ffa8c6` exists (documentation reconciliation).
+4. Verified NO commit implements #165 (commit-SHA hardening) — searched git log by grep, by file modification history, and across all branches/tags.
+5. Verified current implementation: `validateSignal()` still requires `commit_sha` to match (self-referential defect at `poc/github-webhook.js:190`); `buildCompletionReport(signal)` does not accept `headCommitSha`; `processSignalFile()` does not pass `head_commit.id` to `buildCompletionReport()`.
+6. Verified test counts: 52/52 focused tests pass in `test/github-webhook.test.js`; 270/270 regression tests pass across all 14 other test suites; 322 total tests pass.
+7. Verified no `makeValidSignalNoSha` helper exists (`grep -rn "makeValidSignalNoSha" poc/ test/` — no matches).
+8. Verified no 8 additional tests exist (test count is 52, not 60).
+9. `git diff --check` — clean (no whitespace errors).
+
+**Outcome**: SUCCESS — Full GitHub-verified documentation reconciliation of the Git-based Kilo completion-signal POC history completed. The chronology of #162 (POC implementation), #164 (documentation reconciliation), and #165 (commit-SHA hardening) is accurately documented. The self-referential commit-SHA defect is confirmed present and unresolved. The commit-SHA hardening (#165) is confirmed NOT implemented — no hardening commit, no code changes, no test changes exist in the repository. The Director's supplied report claiming the hardening was implemented is reconciled with the actual repository evidence; the discrepancy is preserved historically. Architecture status remains UNDER VALIDATION. No application-code, test-code, workflow, infrastructure, or secret changes made. 322 total tests pass (52 focused + 270 regression). The unimplemented hardening requires a separate authorized code-change task scoped to `poc/github-webhook.js` and `test/github-webhook.test.js`.
+
+**Blockers / Constraints**: The commit-SHA hardening (#165) was NOT implemented and is outside the permitted documentation-only scope of this task. Implementing the hardening would require modifying `poc/github-webhook.js` and `test/github-webhook.test.js`, which are prohibited paths for this task. This task documents the verified discrepancy accurately rather than implementing the hardening.
+
+**Commit Reference**: (to be filled with this reconciliation commit SHA)
 
 ---
 
