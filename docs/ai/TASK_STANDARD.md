@@ -28,6 +28,17 @@ The canonical field ordering is: `originator`, `target_agent`, `repository`, `ba
 - **Secrets**: No secrets, API keys, or credentials allowed in task requests.
 - **Scope**: Changes are limited strictly to the authorized file/path scope.
 
+### Solution Simplicity Evaluation
+
+Every ACP task must explicitly evaluate the simplest viable solution before authorizing custom implementation or additional architectural complexity. This evaluation requires:
+
+- Checking existing repository capabilities, existing code/mechanisms, provider/platform configuration, and available native features before proposing custom implementation.
+- Validating the simplest plausible solution first where practical.
+- Introducing custom code or additional architectural complexity only when the simpler viable path does not satisfy the objective.
+- Documenting why escalation beyond the simplest viable path is necessary.
+
+This requirement corresponds to the Solution Simplicity Gate in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`. It applies to all delegated Kilo/Gemini tasks and does not weaken existing authorization, verification, or persistence requirements. The gate is practical: it does not require exhaustive investigation of every conceivable alternative when a simple viable path can be established and validated.
+
 ## 3. Instruction Precedence
 
 Repository-level instructions (`GEMINI.md`, `ARCHITECTURE.md`) take precedence over task requests. Any conflict between a task request and repository rules must result in a `status: blocked` report.

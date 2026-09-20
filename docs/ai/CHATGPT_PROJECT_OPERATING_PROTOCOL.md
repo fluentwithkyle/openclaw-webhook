@@ -46,7 +46,7 @@ Explicit authorization remains required immediately before consequential actions
 
 The protocol gate establishes the first step of the project operating sequence and preserves all existing project sequences rather than creating a competing workflow:
 
-**Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction → Authorization Gate → Authorized Execution → Independent Verification → Stop**
+**Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution → Independent Verification → Stop**
 
 This gate does not require ChatGPT to expose hidden chain-of-thought or private reasoning. The gate requires confirmation that the applicable protocol requirements were reviewed and satisfied, not disclosure of internal reasoning.
 
@@ -54,12 +54,56 @@ This gate does not require ChatGPT to expose hidden chain-of-thought or private 
 
 The protocol gate is the mandatory precondition for:
 
+- The Solution Simplicity Gate.
 - The Standard Project Flow (Section 3).
 - The Project Status Procedure (Section 4).
 - The ACP Task Protocol including the preparation checklist (Section 8).
 - The Consequential Action Stop Gate (Section 14).
 - The Standard Completion Loop (Section 12).
 - The Human Intent Translation Protocol operating modes (Section 16.4).
+
+## Solution Simplicity Gate
+
+### Mandatory Solution Simplicity Evaluation
+
+Before proposing custom implementation or additional architectural complexity for any project action, the simplest viable solution must be explicitly evaluated and, where practical, validated first.
+
+This gate is mandatory and applies alongside the Protocol Gate. It does **not** replace or weaken the Protocol Gate, the Authorization Gate, authentication, authorization, verification, persistence, or any other project requirement.
+
+The following do **not** satisfy the Solution Simplicity Gate:
+
+- Assuming a custom implementation is required without checking existing capabilities.
+- Proposing new architecture when existing mechanisms or native features suffice.
+- Skipping validation of the simplest plausible solution where practical validation is available.
+- Introducing custom code or architectural complexity without documenting why the simpler path is insufficient.
+
+### Check Existing Capabilities Before Custom Implementation
+
+Before proposing custom code or architectural changes, evaluate:
+
+- Existing repository capabilities and implemented mechanisms.
+- Existing code or configuration that may already satisfy the objective.
+- Provider/platform configuration and available native features.
+
+### Validate the Simplest Viable Solution First
+
+Where practical, the simplest plausible solution must be validated first before introducing custom implementation or additional architectural complexity. Custom code or architectural complexity is introduced **only when** the simpler viable path does not satisfy the objective.
+
+### Escalation Documentation
+
+When escalation beyond the simplest viable path is necessary, document why. The documentation must explain why the simpler path is insufficient and why the additional complexity is required.
+
+### Practical Scope
+
+The gate is intentionally lightweight. It does **not** require exhaustive investigation of every conceivable alternative. The evaluation is satisfied when a simple viable path can be established and validated.
+
+### Integration with the Existing Workflow
+
+The Solution Simplicity Gate is integrated into the existing workflow as an evaluation step within Action Construction and Authorized Execution. It does **not** create a competing process:
+
+**Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution (Solution Simplicity Validation) → Independent Verification → Stop**
+
+The gate preserves all existing protocol requirements, including mandatory protocol review, repository/state verification, explicit capabilities, least privilege, authentication boundaries, specialist lanes, task modes, persistence, and VERIFY_RECONCILE semantics.
 
 1. Purpose
 
