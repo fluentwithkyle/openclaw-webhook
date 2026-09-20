@@ -6,6 +6,101 @@
 
 ---
 
+## 2026-09-20 | Architectural Plan Documentation — Git Completion-Signal Path 2 (TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-ARCHITECTURAL-PLAN-DOCUMENTATION-001)
+
+**Task**: Record the approved architectural direction for the Git-based Kilo completion signal durability problem: pursue Path 2, using Git/GitHub as durable completion/recovery evidence while retaining TaskRegistry as runtime orchestration state, with Git-derived task recovery/rehydration as the preferred solution before introducing external durable persistence. Documentation only — no implementation of recovery/rehydration, TaskRegistry changes, persistence changes, webhook changes, Render changes, GitHub Actions changes, or external infrastructure is authorized. (GitHub Issue #172)
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: EXECUTE
+**Capabilities Authorized**: inspect, modify_files, commit, push
+**Commit Authority**: explicitly authorized
+**Push Authority**: explicitly authorized
+
+**Scope — Permitted Paths**:
+- `docs/ai/ARCH_DECISIONS.md`
+- `docs/ai/STATE.md`
+- `docs/ai/CONTROL_CENTER.md`
+- `docs/ai/TASK_LOG.md`
+
+**Scope — Excluded Paths**: poc/, routes/, .github/, ARCHITECTURE.md, openclaw-render.json
+
+**Architecture Status**: Path 2 = APPROVED / PROPOSED / TARGET (not implemented); Git completion-signal mechanism = IMPLEMENTED / VERIFIED (UNDER VALIDATION)
+
+**Solution Simplicity Evaluation**: Evaluated existing repository capabilities before proposing additional architectural complexity. The Git-based Kilo completion-signal POC (commit `bf68116`) already establishes Git/GitHub as a durable evidence layer (signal artifact at `poc/signals/<request_id>.json`, GitHub push webhook, Git commit metadata). The self-referential commit-SHA defect was already resolved by `f63211d`. No new infrastructure is needed to establish the durable evidence layer — Path 2 extends the existing Git evidence to also support task-context reconstruction. External durable persistence (Postgres/Redis) is an escalation that is deferred until investigation proves Git/GitHub recovery is insufficient. Solution Simplicity Gate satisfied.
+
+**Reconciliation of existing documentation discrepancies** (per task constraint: "if the existing documentation contains contradictory claims, reconcile them to the verified repository state within the permitted documentation scope"):
+
+1. **Commit-SHA hardening status — RECONCILED**: The TASK_LOG entry for #166 (commit `ea6c6c3`) documented the commit-SHA hardening (Issue #165) as "NOT IMPLEMENTED" and stated the self-referential defect "remains unresolved." However, commit `f63211d` (TASK-KILO-GIT-COMPLETION-SIGNAL-COMMIT-SHA-HARDENING-002) **did implement** the hardening after that entry was written. Verified: `validateSignal()` now allows absent/null/empty `commit_sha` (only rejects on non-empty mismatch); `buildCompletionReport(signal, headCommitSha)` accepts authoritative headCommitSha; `processSignalFile()` passes `head_commit.id`. The earlier #166 entry was accurate at the time it was written (the commit `ea6c6c3` pre-dates `f63211d`); the discrepancy is now reconciled by updating the durable records to reflect the current verified state. The #166 TASK_LOG entry itself is preserved unchanged (append-only historical record); STATE.md and CONTROL_CENTER.md Active Tasks entries are updated to reflect the verified implementation.
+
+2. **Focused test count — RECONCILED**: The #166 entry stated 52/52 focused tests pass. The commit `f63211d` added 6 hardening tests (absent/null/empty `commit_sha` validation ×3, `buildCompletionReport` headCommitSha ×2, `processPushEvent` self-reference-safe signal ×1), bringing the total to 58/58 focused tests. The live-validation signal artifact (`poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002.json`, commit `f9d97e5`) confirms "58/58 focused tests pass."
+
+3. **Live validation signal — RECORDED**: Commit `f9d97e5` (TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002) created a controlled validation signal artifact at `poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002.json`. This was not previously recorded in TASK_LOG. The signal is self-reference-safe (`commit_sha: null, commit: null`).
+
+**Git completion-signal POC current implementation state (verified)**:
+
+- **Signal artifact**: `poc/signals/<request_id>.json` — durable Git-backed completion evidence containing `signal_id`, `request_id`, `repository`, `base_branch`, `commit_sha` (nullable), `status` (success/failure/blocked), `result.execution_metadata.invocation_id`/`run_id`, `changed_files`, `verification`, `blockers`, `push`, `timestamp`.
+- **Webhook**: `POST /poc/github/webhook` route in `routes/poc.js`; `processPushEvent()` in `poc/github-webhook.js` performs HMAC-SHA256 signature verification, repository/branch/ref validation, delivery-id idempotency, signal-file detection via `SIGNAL_PATH_REGEX`, and signal validation.
+- **Commit-SHA hardening**: Resolved (commit `f63211d`). `validateSignal()` accepts absent/null/empty `commit_sha`; `buildCompletionReport(signal, headCommitSha)` uses authoritative `head_commit.id`; `processSignalFile()` passes `head_commit.id`.
+- **TaskRegistry correlation**: `taskRegistry.getTask(request_id)` (poc/github-webhook.js:339). **Current architectural defect**: hard dependency on ephemeral TaskRegistry state — signal is rejected at `registry` stage when TaskRegistry entry is absent.
+- **Orchestrator integration**: Delegates to `orchestrator.handleKiloCompletion(requestId, report)` → `orchestrator.triggerGemini()` — no second state machine.
+- **Existing mechanisms preserved**: `poc/kilo-polling.js` (polling), `POST /poc/kilo/callback` (callback), `poc/kilo-verifier.js` (independent verification), `POST /poc/kilo` (Kilo HTTP trigger dispatch).
+- **Test count**: 58/58 focused tests pass (`test/github-webhook.test.js`), 270 regression tests pass across 14 suites, 328 total tests pass. `git diff --check` clean.
+
+**Path 2 architectural direction — APPROVED / PROPOSED / TARGET (not implemented)**:
+
+- **Git/GitHub** = durable completion/recovery evidence layer.
+- **TaskRegistry** = runtime orchestration state (persisted to local file; ephemeral across container restarts).
+- **Normal lifecycle**: Git signal → TaskRegistry correlation → `orchestrator.handleKiloCompletion()` → `orchestrator.triggerGemini()` → Gemini.
+- **Recovery lifecycle** (PROPOSED/TARGET, not implemented): Git signal → TaskRegistry absent → Git-derived task context reconstruction (signal artifact + commit metadata + GitHub issue body for ACP command) → TaskRegistry rehydration → `orchestrator.handleKiloCompletion()` → `orchestrator.triggerGemini()` → Gemini.
+- **TaskRegistry remains** the normal runtime state mechanism, not replaced by Git. The recovery path rehydrates TaskRegistry, not bypasses it.
+- **Current architectural defect**: `processSignalFile()` (poc/github-webhook.js:339-349) rejects when `taskRegistry.getTask(requestId)` returns null — hard dependency on ephemeral state.
+- **Security boundary**: discovering a `request_id` is task identity evidence, not authorization. Recovery must not grant authorization from `request_id` discovery. Authorization remains governed by the ACP command (ARCHITECTURE.md Section 16.5.2).
+- **Render deployment delay insufficient**: only changes timing, not state durability. Does not address the root cause (ephemeral TaskRegistry dependency).
+- **Solution Simplicity**: do not introduce Postgres/Redis unless investigation proves required task/authorization state cannot be safely and deterministically recovered from Git/GitHub.
+- **Escalation condition**: external durable persistence justified only if investigation establishes required task/authorization state cannot be safely recovered from Git/GitHub evidence.
+- **Next implementation phase**: must first establish minimum recoverable TaskRegistry state and validate the recovery model before code changes authorized. Scoped to `poc/`, `test/`.
+- **Preserved**: Kilo → Gemini lifecycle, polling/callback mechanisms, ACP authorization boundary, specialist lane boundaries (Gemini, Security AI, Utility AI).
+
+**Documentation content requirements — all satisfied**:
+
+- [x] Path 2 recorded as selected direction (ADR-016 in ARCH_DECISIONS.md)
+- [x] Git/GitHub = durable evidence; TaskRegistry = runtime orchestration state distinction recorded
+- [x] Target lifecycle (normal + recovery) recorded
+- [x] TaskRegistry remains normal runtime mechanism, not replaced by Git
+- [x] Git completion path must not hard-depend on ephemeral TaskRegistry state — recorded as current defect
+- [x] Unresolved implementation question (minimum recoverable state, authoritative ACP recovery source) recorded
+- [x] Security boundary (request_id = identity, not authorization) recorded
+- [x] Render deployment delay insufficiency recorded
+- [x] External-persistence fallback (Postgres/Redis escalation condition) recorded
+- [x] Next implementation phase requirements (minimum recoverable state, validation before code) recorded
+- [x] Existing Kilo → Gemini lifecycle, polling/callback mechanisms preserved as fallback — recorded
+- [x] Direction clearly marked APPROVED / PROPOSED / TARGET, not IMPLEMENTED — recorded
+- [x] No implementation performed — only documentation files changed
+
+**Verification performed**:
+
+1. **`git diff --check`** — run and clean (no whitespace errors).
+2. **Permitted files verification** — changed files confirmed: `docs/ai/ARCH_DECISIONS.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md` (4 files). No changes to `poc/`, `routes/`, `.github/`, `ARCHITECTURE.md`, `openclaw-render.json`, or any production/excluded files.
+3. **Repository state inspection** — verified current HEAD (`882baf3`), confirmed Git completion-signal POC implementation commit (`bf68116`), confirmed commit-SHA hardening commit (`f63211d`), confirmed live validation signal commit (`f9d97e5`).
+4. **Code verification** — inspected `poc/github-webhook.js` `processSignalFile()` (hard TaskRegistry dependency at lines 339–349), `validateSignal()` (lines 177–263, commit_sha optional after f63211d), `buildCompletionReport(signal, headCommitSha)` (lines 265–282), `orchestrator.handleKiloCompletion()` (delegates to existing completion path), `orchestrator.triggerGemini()` (existing Gemini dispatch).
+5. **Documentation reconciliation** — reconciled outdated TASK_LOG #166 claims (commit-SHA hardening NOT implemented, 52 tests) with verified current state (hardening implemented via f63211d, 58 tests, live validation signal exists).
+6. **No secrets/credentials** introduced — all SHAs, file paths, and function references are public repository state.
+
+**Files changed (4)**:
+- `docs/ai/ARCH_DECISIONS.md` — added ADR-016
+- `docs/ai/STATE.md` — updated header, Active Tasks table entries, added Path 2 architectural direction section
+- `docs/ai/CONTROL_CENTER.md` — updated header, Active Work table entries, Requires Kyle's Attention item
+- `docs/ai/TASK_LOG.md` — appended this historical entry
+
+**Outcome**: SUCCESS — Path 2 architectural direction documented as APPROVED / PROPOSED / TARGET in ADR-016. The distinction between Git/GitHub (durable evidence) and TaskRegistry (runtime orchestration state) is recorded. The current defect (hard dependency on ephemeral TaskRegistry state) is identified. The preferred recovery model (normal TaskRegistry path when available, Git-derived recovery/rehydration when absent) is documented. Security boundary (request_id ≠ authorization), Render deployment delay insufficiency, Solution Simplicity conclusion, external-persistence escalation condition, and next implementation phase requirements are all recorded. Existing Kilo → Gemini lifecycle, polling/callback mechanisms, ACP authorization boundary, and specialist lane boundaries are preserved. Existing documentation discrepancies (TASK_LOG #166 outdated claims) reconciled to verified repository state. No implementation performed — documentation only.
+
+**Commit Reference**: (to be filled with this commit SHA)
+
+---
+
 ## 2026-09-19 | Independently Verify and Reconcile Git Completion-Signal POC Documentation (TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001)
 
 **Task**: Independently verify the Git-based Kilo completion-signal POC (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001, Issue #162) against the actual GitHub repository state and reconcile durable documentation with independently verified evidence. Authorized to modify only `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, and `docs/ai/CONTROL_CENTER.md`.

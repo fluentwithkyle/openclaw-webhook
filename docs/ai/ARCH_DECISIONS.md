@@ -249,4 +249,186 @@
 - The Chatbox authentication mechanism is resolved as a dedicated header/env boundary; the three remaining unresolved architectural items (Qwen Router trigger logic, Security Specialist callback, Security Audit Report persistence) remain open and are tracked in `docs/ai/STATE.md`.
 - No separate orchestration system, second task registry, parallel authorization architecture, or new dependencies were introduced.
 - The gateway issues only REVIEW-mode ACP commands (read_only capability, poc/ permitted paths); it does not grant elevated capabilities directly from natural-language input.
-- A detailed research record is preserved in `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md`.
+  - A detailed research record is preserved in `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md`.
+
+---
+
+## ADR-016: Git Completion Signal Path 2 — Git/GitHub as Durable Evidence with TaskRegistry as Runtime Orchestration State
+
+**Status**: APPROVED / PROPOSED / TARGET (architectural direction approved; implementation not authorized by this task)
+**Date**: 2026-09-20
+**Task**: TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-ARCHITECTURAL-PLAN-DOCUMENTATION-001
+
+### Context
+
+The Git-based Kilo completion-signal POC (Issue #162, commit `bf68116`) is **IMPLEMENTED / VERIFIED (UNDER VALIDATION)**. It allows Kilo to emit a durable completion signal as a Git artifact (`poc/signals/<request_id>.json`) committed and pushed to `main`, which Render receives via a GitHub push webhook (`POST /poc/github/webhook`) in `routes/poc.js`, validates (HMAC-SHA256 signature, repository/branch/ref, request_id, signal schema), and delegates to the existing TaskRegistry correlation and `orchestrator.handleKiloCompletion()` path.
+
+The self-referential commit-SHA defect identified during POC implementation was **RESOLVED** by commit `f63211d` (TASK-KILO-GIT-COMPLETION-SIGNAL-COMMIT-SHA-HARDENING-002): `validateSignal()` now allows `commit_sha` to be absent, null, or empty (rejecting only when a non-empty value mismatches the authoritative `head_commit.id`); `buildCompletionReport(signal, headCommitSha)` accepts and assigns the authoritative `headCommitSha`; `processSignalFile()` passes `headCommit.id` as the authoritative commit SHA.
+
+A controlled live-validation signal artifact exists at `poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002.json` (commit `f9d97e5`).
+
+**Current architectural defect (remains)**: The Git completion-signal processing path retains a hard dependency on **ephemeral TaskRegistry state**. In `poc/github-webhook.js` `processSignalFile()` (lines 339–349), when `taskRegistry.getTask(requestId)` returns `null`, the signal is rejected at the `registry` stage with `error: 'Unknown request_id - not found in TaskRegistry'`. The TaskRegistry (`poc/task-registry.js`) persists to a local file (`poc/task-registry.json`) within the Render container. If that state is lost — for example, a Render container restart without persistent volume mount, deployment replacement, or file-system loss — the TaskRegistry entry is absent, and a valid, durable Git completion signal **cannot be correlated or processed**, even though all durable evidence of the task exists in Git/GitHub.
+
+This defect means: Git/GitHub is the durable evidence layer, but **recovery of the correlation to a task cannot occur without the ephemeral runtime TaskRegistry**. The two are coupled in a way that makes the durable evidence unrecoverable.
+
+### Decision
+
+**Path 2 is the selected architectural direction** for resolving the Git completion-signal durability problem.
+
+Path 2: Use **Git/GitHub as the durable completion/recovery evidence** layer while **retaining TaskRegistry as runtime orchestration state**. When TaskRegistry state is absent, **reconstruct task context from durable Git/GitHub evidence** (Git-derived recovery/rehydration) rather than rejecting the signal.
+
+This is contrasted with the alternative:
+
+**Path 1 (not selected as the first direction)**: External durable persistence (Postgres/Redis) to make TaskRegistry itself durable, eliminating the loss scenario by making the runtime state durable.
+
+The Solution Simplicity Gate is satisfied: Path 2 reuses the existing Git evidence layer already established by the POC rather than introducing new infrastructure. External durable persistence (Path 1) is deferred until investigation proves it necessary (see Escalation Condition).
+
+**Status distinction**: Path 2 is **APPROVED / PROPOSED / TARGET**. The recovery/rehydration mechanism is **NOT IMPLEMENTED**. The existing Git completion-signal mechanism (signal artifact, webhook, correlation, orchestrator delegation) **IS IMPLEMENTED (UNDER VALIDATION)**. This task documents the approved direction; it does not implement recovery.
+
+### Durable Evidence vs. Runtime Orchestration State
+
+| Layer | Role | Current Implementation | Durability |
+|-------|------|----------------------|------------|
+| **Git/GitHub** | Durable completion/recovery evidence | Signal artifact at `poc/signals/<request_id>.json`; GitHub push webhook delivery; Git commit metadata | Durable — persisted in GitHub |
+| **TaskRegistry** | Runtime orchestration state | `poc/task-registry.js` persisted to `poc/task-registry.json` (local file) | Ephemeral — lost on container restart without persistent volume |
+
+**Key distinction**: Git/GitHub provides the durable evidence that a task exists and completed. TaskRegistry provides the runtime orchestration correlation state (task lifecycle, current agent, next action, capabilities, permitted paths). These are distinct concerns that must not be conflated.
+
+### Target Lifecycle
+
+**Normal path** (TaskRegistry state present — current implemented behavior):
+
+```
+Kilo completes authorized work
+    → Kilo commit/push to main
+    → GitHub push event
+    → Route: POST /poc/github/webhook
+    → Git signal artifact (poc/signals/<request_id>.json) detected
+    → TaskRegistry correlation (taskRegistry.getTask(request_id))
+    → orchestrator.handleKiloCompletion(requestId, report)
+    → orchestrator.triggerGemini(requestId) → GitLab workflow_dispatch → Gemini
+```
+
+**Recovery path** (TaskRegistry state absent — PROPOSED/TARGET, not implemented):
+
+```
+Kilo completes authorized work
+    → Kilo commit/push to main
+    → GitHub push event
+    → Route: POST /poc/github/webhook
+    → Git signal artifact (poc/signals/<request_id>.json) detected
+    → TaskRegistry absent (state lost)
+    → [PROPOSED] Git-derived task context reconstruction:
+         • Extract request_id, repository, base_branch from signal artifact
+         • Recover ACP task/authorization context from durable Git evidence:
+           - GitHub issue body (the ACP task envelope)
+           - Commit metadata (author, timestamp, commit message markers)
+           - Signal artifact contents (status, changed_files, verification, blockers, push)
+    → [PROPOSED] TaskRegistry rehydration (reconstruct minimal task entry)
+    → orchestrator.handleKiloCompletion(requestId, report)
+    → orchestrator.triggerGemini(requestId) → GitHub workflow_dispatch → Gemini
+```
+
+The recovery path must preserve the existing orchestrator, state machine, and Kilo→Gemini handoff. The TaskRegistry remains the normal runtime state mechanism; recovery is the fallback when it is absent.
+
+### TaskRegistry as Runtime State (Not Replacement Target)
+
+TaskRegistry should remain the normal runtime orchestration state mechanism rather than being replaced by Git. TaskRegistry provides:
+
+- Task lifecycle state (PENDING → SELECTED → PLANNED → EXECUTING → VERIFIED → COMPLETE)
+- Current agent and next agent tracking
+- Capabilities and permitted paths per task
+- Verification requirements propagation
+- Idempotency guards (kilo.status / gemini.status)
+
+Git/GitHub does not replace these runtime functions. Git/GitHub provides the durable evidence for recovery **into** TaskRegistry. The recovery path rehydrates TaskRegistry state from durable Git/GitHub evidence; it does not bypass TaskRegistry.
+
+### The Git Completion Path Must Not Retain a Hard Dependency on Ephemeral TaskRegistry State
+
+The current defect is that `processSignalFile()` requires `taskRegistry.getTask(requestId)` to return a non-null task. If absent, the signal is rejected at the `registry` stage. Path 2 requires that this hard dependency be broken: when TaskRegistry state is absent, the Git completion path should fall back to Git-derived recovery rather than rejecting the signal.
+
+This does not mean removing TaskRegistry from the normal path. It means adding a recovery path so the Git completion signal can be processed even when the ephemeral TaskRegistry state has been lost.
+
+### Unresolved Implementation Question
+
+**What minimum task state is required for safe reconstruction, and where can the authoritative ACP task/authorization context be recovered from?**
+
+Safe reconstruction of a TaskRegistry entry from Git/GitHub evidence requires:
+
+1. **Minimum recoverable task fields**: The TaskRegistry entry (`poc/schemas/acp-schema.js` `TASK_REGISTRY_REQUIRED_FIELDS`) requires: `request_id`, `parent_request_id`, `originator`, `current_agent`, `next_agent`, `repository`, `base_branch`, `task`, `status`, `created_at`, `updated_at`, `kilo`, `gemini`, `next_action`, `verification`. The recovery path must determine which of these can be deterministically reconstructed from Git evidence vs. which require reconstruction from context.
+
+2. **Authoritative ACP task/authorization recovery source**: The ACP command envelope (including `capabilities`, `permitted_paths`, `task_mode`, `verification`) must be recoverable. Candidates:
+   - **GitHub issue body**: The ACP task is embedded in the GitHub issue body (e.g., issue #172's `body` field contains the full ACP command). This is durable Git/GitHub evidence.
+   - **Commit metadata**: The commit message may contain request_id markers (e.g., `[request_id: ...]`).
+    - **Signal artifact**: The signal artifact contains the completion report fields (`status`, `changed_files`, `verification`, `blockers`, `push`, `result`), but does **not** contain the original ACP command's `capabilities`, `permitted_paths`, or `task_mode`.
+
+    Whether the issue body is the authoritative recovery source (vs. the signal artifact alone) requires validation.
+
+3. **Authorization vs. identity boundary**: The recovered task context must establish task identity. It must **not** establish authorization. Authorization must be re-derived from the ACP command, not from the request_id discovery.
+
+This question must be resolved during the implementation phase: determining the minimum recoverable state and validating that it can be safely and deterministically reconstructed from Git/GitHub before any code changes proceed.
+
+### Security Boundary: request_id Is Identity Evidence, Not Authorization
+
+**Discovering a `request_id` in a Git completion signal is task identity evidence, not authorization.**
+
+The recovery path must preserve the ACP authorization boundary established in `ARCHITECTURE.md` Section 16.5.2:
+
+- Successful authentication of the Kilo trigger does NOT authorize arbitrary repository activity.
+- The ACP command must explicitly establish: permitted repository paths, permitted capabilities, task scope, verification requirements, reporting requirements.
+- A valid authorization token/capability never grants unrestricted access beyond the explicitly listed capabilities.
+- Recovery must not grant authorization merely from discovery of a `request_id` in Git history or from recovered task metadata.
+
+The recovery path reconstructs task **state** (identity, context, prior status), not task **authorization**. Authorization remains governed by the original ACP command. If the ACP command cannot be recovered from durable evidence, the recovery path must fail closed rather than proceed without authorization.
+
+### Why Render Deployment Delay Is Insufficient
+
+A Render deployment timing/delay is **not** considered a fundamental solution to this durability problem.
+
+The architectural defect is not a timing problem — it is a **state durability** problem. Render deployment delay only changes **when** the Git signal is processed; it does not establish **whether** the required TaskRegistry state is durably available. If the TaskRegistry state is lost (container restart, file-system loss), delaying the processing of the Git signal does not recover the state. The signal would still be rejected at the `registry` stage.
+
+Delay therefore does not address the root cause: the hard dependency of Git-signal processing on ephemeral runtime state. Only making the state itself durable (either by recovering it from Git evidence per Path 2, or by introducing external durable persistence per Path 1) addresses the defect.
+
+### Solution Simplicity Conclusion
+
+Do **not** introduce Postgres/Redis (or any external durable persistence) unless investigation proves that the required task or authorization state cannot be safely and deterministically recovered from Git/GitHub evidence.
+
+Path 2 is the simplest viable solution that addresses the defect: the durable evidence layer (Git/GitHub) already exists via the POC signal artifact and webhook. The recovery path extends the existing Git evidence to also carry task-context reconstruction, without introducing new infrastructure. External durable persistence is an escalation that must be justified by evidence that Git/GitHub recovery is insufficient.
+
+### External-Persistence Fallback (Escalation Condition)
+
+External durable persistence (Postgres/Redis) becomes justified **only if** investigation establishes that:
+
+- The required task state needed for safe reconstruction cannot be deterministically recovered from Git/GitHub evidence, **and**
+- The required ACP task/authorization context cannot be authoritatively recovered from the durable Git evidence (e.g., GitHub issue body, commit metadata, signal artifact), **and**
+- This insufficiency is demonstrated through validation of the Git-derived recovery model.
+
+Path 2 must be attempted and validated first. External persistence is the fallback, not the default.
+
+### Next Implementation Phase
+
+The next implementation phase (separate task) must:
+
+1. **Establish the minimum recoverable TaskRegistry state**: Determine which task fields can be safely reconstructed from Git/GitHub evidence and which require additional durable evidence.
+2. **Validate the recovery model**: Implement and test the Git-derived recovery/rehydration path against the existing test suite, ensuring it does not bypass the ACP authorization boundary or grant authorization from `request_id` discovery.
+3. **Implement only after validation**: No code changes to the recovery path are authorized by this documentation task. The next phase requires its own ACP authorization scoped to `poc/github-webhook.js`, `poc/orchestrator.js`, `poc/task-registry.js`, `poc/schemas/acp-schema.js`, and `test/`.
+
+### Preserved Boundaries
+
+This architectural direction preserves:
+
+- **Kilo → Gemini lifecycle**: The existing completion flow (TaskRegistry correlation → `orchestrator.handleKiloCompletion()` → `orchestrator.triggerGemini()` → GitHub Actions `workflow_dispatch` → Gemini execution → callback/result processing).
+- **Existing polling mechanism**: `poc/kilo-polling.js` repository-controlled polling path.
+- **Existing callback mechanism**: `POST /poc/kilo/callback` endpoint and `poc/kilo-verifier.js` independent verification lane.
+- **Existing Kilo HTTP trigger dispatch**: `POST /poc/kilo` route dispatching to Kilo via `getDispatcher()`.
+- **ACP authorization boundary**: Authorization remains governed by the ACP command envelope, not by task identity recovery.
+- **Specialist lane boundaries**: Gemini (Architect/Reviewer), Security AI (Security Specialist), Utility AI (General Utility Specialist) remain distinct; the Kilo↔Gemini orchestration backbone is not replaced.
+
+### Consequences
+
+- Path 2 is **APPROVED / PROPOSED / TARGET**. The recovery/rehydration mechanism is **not implemented**.
+- The existing Git completion-signal mechanism remains **IMPLEMENTED / UNDER VALIDATION** (commit `bf68116`), with the commit-SHA defect **resolved** by `f63211d`.
+- The architectural defect (hard dependency on ephemeral TaskRegistry state) remains **unresolved** and is the target of the Path 2 recovery model.
+- No code, infrastructure, or workflow changes are authorized by this task.
+- The Git completion-signal POC test count is **58/58 focused tests pass** (52 original + 6 commit-SHA hardening tests from `f63211d`), 270 regression tests pass, 328 total tests pass. The TASK_LOG entry for #166 (commit `ea6c6c3`) which stated 52/52 and "NOT IMPLEMENTED" for the commit-SHA hardening is **outdated and reconciled** (see `docs/ai/TASK_LOG.md` current task entry and `docs/ai/STATE.md`).
+- This decision aligns with ADR-005 (Specialist Lanes with ACP Boundary), ADR-006 (Persistent AI Project State), ADR-013 (Kilo Activation Mechanism), and ADR-015 (Chatbox Gateway).

@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-20
-**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-GIT-COMPLETION-SIGNAL-FULL-DOCUMENTATION-RECONCILIATION-001)
+**Updated By**: Kilo — EXECUTE (TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-ARCHITECTURAL-PLAN-DOCUMENTATION-001)
 
 ---
 
@@ -34,12 +34,74 @@
 | Kilo → Gemini Completion Handoff — Polling Path Closure | **IMPLEMENTED / VERIFIED** | Kilo | Closed polling path gaps so Kilo completions are delivered via repository-controlled polling. Three fixes: (1) `poc/task-registry.js` `updateAgentResult` preserves `provider_session_id`/`provider_message_id`/`provider_invocation_id` via spread merge instead of overwriting; (2) `poc/orchestrator.js` `handleKiloCompletion` extracts `execution_id` from `report.result.execution_metadata.invocation_id` (guaranteed string per ACP schema); (3) `routes/poc.js` transitions task PENDING → SELECTED → PLANNED → EXECUTING after successful dispatch (`/kilo`, `/chatbox`, `/coordinator`) so `poc/kilo-polling.js` picks up tasks. Provider IDs remain sufficient for polling path (used as identifiers in `getCompletionStatus`, as fallbacks for report `invocation_id`/`run_id`). EXECUTING transition follows valid state-machine path. 237 tests pass. Commit `90de87d`. |
 | Kilo ↔ Gemini post-dispatch result lifecycle repair | **IMPLEMENTED / VERIFIED** | Kilo | Repaired false-success path in `.github/workflows/main.yml`: callback payload now reflects actual Gemini execution result via `steps.gemini_run.outcome` instead of hardcoded `status: "success"`. Added `gemini_result` step with `if: always()` to determine STATUS/VERIFICATION_STATUS/BLOCKER_MSG/RECON_STATUS from real outcome; callback and artifact persistence steps now use `if: always()`. Callback payload now includes `gemini_output`. RECON_STATUS conditional on VERIFICATION_STATUS=PASS per `determineReconciliationStatus()` contract. 9 new workflow-expression tests + 3 new gemini-callback tests; all 270 total tests pass. (TASK-KILO-GEMINI-POST-DISPATCH-RESULT-LIFECYCLE-IMPLEMENT-001) |
 | Kilo → Gemini End-to-End System Test (Issue #161) | **EXECUTING (Kilo phase)** | Kilo | SYSTEM TEST (TASK-KILO-GEMINI-END-TO-END-SYSTEM-TEST-001). Exercises the existing Kilo → repository-controlled polling → TaskRegistry → handleKiloCompletion() → orchestrator.triggerGemini() → Gemini workflow_dispatch → Gemini execution → callback path end-to-end. Authorized change: `docs/ai/STATE.md` only. |
-| Git-based Kilo completion-signal POC (Issue #162) | **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** | Kilo | Bounded POC implementing Git-based Kilo completion signal via GitHub push webhook. Implemented `poc/github-webhook.js` (HMAC-SHA256 signature verification, repository/branch/path/request_id validation, signal artifact fetch, delivery-id + task-level idempotency, explicit recursion prevention excluding Gemini reconciliation commits) and `POST /poc/github/webhook` route. Reuses existing TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling, callback, verification, and Kilo→Gemini orchestration preserved. Implementation commit: `bf68116167454d7c42b85e0ac4d627050a89ffd9`. Documentation reconciled by TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001 (commit `8d2446a`) and full reconciliation by TASK-KILO-GIT-COMPLETION-SIGNAL-FULL-DOCUMENTATION-RECONCILIATION-001 (committed 2026-09-20). **Commit-SHA hardening (Issue #165) NOT IMPLEMENTED**: `validateSignal()` at `poc/github-webhook.js:190-194` still requires `signal.commit_sha` to match the head commit SHA — the self-referential defect (signal artifact inside the commit it references) remains unresolved. `buildCompletionReport(signal)` does not accept an authoritative `headCommitSha` parameter; `processSignalFile()` does not pass the GitHub `head_commit.id` into report construction. No `makeValidSignalNoSha` helper, no 8 additional tests. Director's reported 60/60 focused tests and 330 total DO NOT match actual repository state: 52/52 focused tests pass, 270 regression tests pass, 322 total tests pass. Remaining LIVE validation requirement: full end-to-end GitHub push webhook delivery requires live webhook configuration and GitHub API token with `contents:read` access. Architecture status remains UNDER VALIDATION. (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001) |
+| Git-based Kilo completion-signal POC (Issue #162) | **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** | Kilo | Bounded POC implementing Git-based Kilo completion signal via GitHub push webhook. Implemented `poc/github-webhook.js` (HMAC-SHA256 signature verification, repository/branch/path/request_id validation, signal artifact fetch, delivery-id + task-level idempotency, explicit recursion preventing excluding Gemini reconciliation commits) and `POST /poc/github/webhook` route. Reuses existing TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling, callback, verification, and Kilo→Gemini orchestration preserved. Implementation commit: `bf68116167454d7c42b85e0ac4d627050a89ffd9`. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`, TASK-KILO-GIT-COMPLETION-SIGNAL-COMMIT-SHA-HARDENING-002): resolved the self-referential defect — `validateSignal()` now allows absent/null/empty `commit_sha` (rejects only on non-empty mismatch); `buildCompletionReport(signal, headCommitSha)` accepts authoritative headCommitSha; `processSignalFile()` passes `head_commit.id` into report construction. **Live validation signal** created (commit `f9d97e5`, TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002) at `poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002.json`. Test count: 58/58 focused tests pass (52 original + 6 commit-SHA hardening), 270 regression tests pass, 328 total tests pass. The prior TASK_LOG #166 entry (commit `ea6c6c3`) which stated 52/52 focused tests and "NOT IMPLEMENTED" for commit-SHA hardening is RECONCILED: the hardening was implemented after that entry was written by a subsequent authorized task (`f63211d`). Current architectural defect (target of Path 2): Git-signal processing retains a hard dependency on ephemeral TaskRegistry state — `processSignalFile()` rejects when `taskRegistry.getTask(requestId)` returns null (poc/github-webhook.js:339-349), so loss of TaskRegistry state prevents processing of otherwise-valid durable Git signals. Path 2 architectural direction APPROVED / PROPOSED / TARGET (ADR-016). Remaining LIVE validation requirement: full end-to-end GitHub push webhook delivery requires live webhook configuration and GitHub API token with `contents:read` access. Architecture status remains UNDER VALIDATION. (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001) |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
 | Email template ownership migration | **BACKLOG** | — | Move template selection to Render, retain Gmail delivery in Apps Script |
 | Automated testing infrastructure | **BACKLOG** | — | Tests, fixtures, contract tests, formal test script |
+| Git completion-signal Path 2 architectural direction (Issue #172) | **APPROVED / PROPOSED / TARGET** | Kilo | Path 2 documentation task recording Git/GitHub as durable completion/recovery evidence while retaining TaskRegistry as runtime orchestration state, with Git-derived task recovery/rehydration as the preferred solution before external durable persistence. ADR-016. Documentation only — no implementation authorized. |
+
+---
+
+## Git Completion-Signal Path 2 — Architectural Direction (APPROVED / PROPOSED / TARGET)
+
+**Issue**: #172
+**Task**: TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-ARCHITECTURAL-PLAN-DOCUMENTATION-001
+**Status**: APPROVED / PROPOSED / TARGET (documentation complete; implementation not authorized)
+**ADR**: ADR-016 in `docs/ai/ARCH_DECISIONS.md`
+
+### Context
+
+The Git-based Kilo completion-signal POC (Issue #162, commit `bf68116`) is **IMPLEMENTED / VERIFIED (UNDER VALIDATION)**. The self-referential commit-SHA defect was **RESOLVED** by commit `f63211d` (TASK-KILO-GIT-COMPLETION-SIGNAL-COMMIT-SHA-HARDENING-002). A controlled live-validation signal exists (commit `f9d97e5`).
+
+**Current architectural defect**: The Git completion-signal processing path (`poc/github-webhook.js` `processSignalFile()`) has a hard dependency on **ephemeral TaskRegistry state**. When `taskRegistry.getTask(requestId)` returns `null` (TaskRegistry state lost), the signal is rejected at the `registry` stage (poc/github-webhook.js:339-349), even though all durable evidence of the task exists in Git/GitHub.
+
+### Durable Evidence vs. Runtime Orchestration State
+
+| Layer | Role | Implementation | Durability |
+|-------|------|---------------|------------|
+| **Git/GitHub** | Durable completion/recovery evidence | Signal artifact `poc/signals/<request_id>.json`; GitHub push webhook; Git commit metadata | Durable — persisted in GitHub |
+| **TaskRegistry** | Runtime orchestration state | `poc/task-registry.js` → `poc/task-registry.json` (local file) | Ephemeral — lost on container restart |
+
+### Path 2 (Selected Direction)
+
+Use **Git/GitHub as durable completion/recovery evidence** while **retaining TaskRegistry as runtime orchestration state**. When TaskRegistry state is absent, **reconstruct task context from durable Git/GitHub evidence** (Git-derived recovery/rehydration) rather than rejecting the signal.
+
+**Path 1 (not selected as first direction)**: External durable persistence (Postgres/Redis) to make TaskRegistry itself durable. Deferred per Solution Simplicity Gate — Path 2 reuses the existing Git evidence layer without new infrastructure.
+
+### Target Lifecycle
+
+**Normal path** (TaskRegistry present — current implemented behavior):
+```
+Kilo completes → Kilo commit/push → GitHub push event → POST /poc/github/webhook
+→ signal artifact detected → TaskRegistry correlation → orchestrator.handleKiloCompletion()
+→ orchestrator.triggerGemini() → GitHub workflow_dispatch → Gemini
+```
+
+**Recovery path** (TaskRegistry absent — PROPOSED/TARGET, not implemented):
+```
+Kilo completes → Kilo commit/push → GitHub push event → POST /poc/github/webhook
+→ signal artifact detected → TaskRegistry absent → [PROPOSED] Git-derived task
+   context reconstruction → TaskRegistry rehydration → orchestrator.handleKiloCompletion()
+   → orchestrator.triggerGemini() → GitHub workflow_dispatch → Gemini
+```
+
+### Security Boundary
+
+Discovering a `request_id` in a Git signal is **task identity evidence, not authorization**. Recovery must not grant authorization merely from `request_id` discovery. Authorization remains governed by the ACP command (ARCHITECTURE.md Section 16.5.2). This is currently documented only as APPROVED/PROPOSED/TARGET — the security boundary is not yet enforced in code.
+
+### Escalation Condition
+
+External durable persistence (Postgres/Redis) becomes justified **only if** investigation establishes that required task state or ACP authorization context cannot be safely and deterministically recovered from Git/GitHub evidence. Path 2 must be attempted and validated first.
+
+### Next Implementation Phase
+
+Must first: (1) establish the minimum recoverable TaskRegistry state; (2) validate the recovery model end-to-end; (3) determine where the authoritative ACP task/authorization context can be recovered from. No code changes authorized by this task. See ADR-016 for full detail.
+
+### Preserved
+
+Existing Kilo → Gemini lifecycle, polling (`poc/kilo-polling.js`), callback (`POST /poc/kilo/callback`), Kilo HTTP trigger dispatch (`POST /poc/kilo`), ACP authorization boundary, and specialist lane boundaries (Gemini, Security AI, Utility AI) are all preserved. Path 2 does not replace or bypass TaskRegistry — it adds a recovery path into it.
 
 ---
 
