@@ -97,7 +97,7 @@
 
 **Outcome**: SUCCESS — Path 2 architectural direction documented as APPROVED / PROPOSED / TARGET in ADR-016. The distinction between Git/GitHub (durable evidence) and TaskRegistry (runtime orchestration state) is recorded. The current defect (hard dependency on ephemeral TaskRegistry state) is identified. The preferred recovery model (normal TaskRegistry path when available, Git-derived recovery/rehydration when absent) is documented. Security boundary (request_id ≠ authorization), Render deployment delay insufficiency, Solution Simplicity conclusion, external-persistence escalation condition, and next implementation phase requirements are all recorded. Existing Kilo → Gemini lifecycle, polling/callback mechanisms, ACP authorization boundary, and specialist lane boundaries are preserved. Existing documentation discrepancies (TASK_LOG #166 outdated claims) reconciled to verified repository state. No implementation performed — documentation only.
 
-**Commit Reference**: 8ad597c
+**Commit Reference**: 030f888
 
 ---
 
@@ -158,7 +158,7 @@
 
 **Outcome**: SUCCESS — Path 2 recovery implemented, tested, and verified. The hard dependency on ephemeral TaskRegistry state is broken: when TaskRegistry state is absent, `recoverTaskFromGitHub()` retrieves the authoritative ACP task from the GitHub issue body, validates it (ACP command + authorization + execution-path), rehydrates a TaskRegistry entry, and continues through the existing completion/orchestration path. When TaskRegistry state exists, the existing normal path is preserved. Fail-closed behavior is enforced on all failure modes. Idempotency is preserved at both the delivery-ID level and the orchestrator/task level.
 
-**Commit Reference**: 8ad597c (TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001)
+**Commit Reference**: 030f888 (TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001)
 
 **Task**: Independently verify the Git-based Kilo completion-signal POC (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001, Issue #162) against the actual GitHub repository state and reconcile durable documentation with independently verified evidence. Authorized to modify only `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, and `docs/ai/CONTROL_CENTER.md`.
 
