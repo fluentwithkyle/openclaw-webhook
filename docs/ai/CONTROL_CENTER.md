@@ -16,9 +16,9 @@ Designed for Kyle checking the project from a phone.
 | **Branch** | main |
 | **Deploy** | Render (Node.js/Express) |
 | **Google Adapter** | Google Apps Script |
-| **Last Updated** | 2026-09-20 |
+| **Last Updated** | 2026-09-21 |
 
-Updated By | Kilo — EXECUTE (TASK-KILO-GEMINI-ACP-ARTIFACT-REPORTING-FIX-001)
+Updated By | Kilo — EXECUTE (TASK-KILO-GEMINI-ACP-ARTIFACT-ISSUE-COMMENT-FIX-002)
 
 ---
 
@@ -58,7 +58,8 @@ Updated By | Kilo — EXECUTE (TASK-KILO-GEMINI-ACP-ARTIFACT-REPORTING-FIX-001)
 | Kilo ↔ Gemini post-dispatch result lifecycle repair | IMPLEMENTED / VERIFIED | Kilo | Repaired false-success callback path: `STATUS` now derives from `steps.gemini_run.outcome` instead of hardcoded `"success"`; `RECON_STATUS` follows `determineReconciliationStatus()` contract; callback and artifact steps use `if: always()`; `gemini_output` included in payload. 270 total tests pass. (TASK-KILO-GEMINI-POST-DISPATCH-RESULT-LIFECYCLE-IMPLEMENT-001) |
 | Git-based Kilo completion-signal POC (Issue #162) | IMPLEMENTED / VERIFIED (UNDER VALIDATION) | Kilo | Bounded POC: `poc/github-webhook.js` + `POST /poc/github/webhook` route. Git-based Kilo completion signal via GitHub push webhook. Reuses TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling/callback/orchestration preserved. Commit `bf68116167454d7c42b85e0ac4d627050a89ffd9`. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`): self-referential defect resolved; `validateSignal()` allows absent/null/empty `commit_sha`; `buildCompletionReport(signal, headCommitSha)` accepts authoritative headCommitSha; `processSignalFile()` passes `head_commit.id`. **Live validation signal** created (commit `f9d97e5`) at `poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002.json`. Test count reconciled: 58/58 focused tests pass (52 original + 6 hardening), 270 regression tests pass, 328 total tests pass. Prior TASK_LOG #166 entry (claiming hardening NOT implemented, 52 tests) reconciled as outdated (hardening was implemented by a subsequent authorized task `f63211d` after that entry was written). Current architectural defect: hard dependency of Git-signal processing on ephemeral TaskRegistry state — `processSignalFile()` rejects when `taskRegistry.getTask(requestId)` returns null (poc/github-webhook.js:339-349). **Path 2 architectural direction APPROVED / PROPOSED / TARGET** (ADR-016, Issue #172): Git/GitHub as durable evidence, TaskRegistry as runtime orchestration state, Git-derived recovery/rehydration when TaskRegistry is absent. Documentation only — no implementation authorized. Full reconciliation: TASK-KILO-GIT-COMPLETION-SIGNAL-FULL-DOCUMENTATION-RECONCILIATION-001. Status: UNDER VALIDATION. |
 | Git completion-signal Path 2 architectural plan (Issue #172) | APPROVED / PROPOSED / TARGET | Kilo | Path 2 direction documented in ADR-016: Git/GitHub as durable completion/recovery evidence; TaskRegistry retained as runtime orchestration state; Git-derived task recovery/rehydration when TaskRegistry is absent. Current defect (hard TaskRegistry dependency in `processSignalFile`) identified. Recovery/rehydration NOT implemented. Postgres/Redis fallback only if investigation proves Git/GitHub recovery insufficient. Documentation only — no implementation authorized. |
-| Gemini ACP artifact reporting fix (Issue #173) | IMPLEMENTED / VERIFIED | Kilo | Fixed `gemini-acp-report.json` to contain the structured ACP envelope from `callback_payload.json` (with `current_head_sha`) instead of raw Gemini CLI summary. Added `current_head_sha` to callback jq; added `cp callback_payload.json` sync; restricted first Upload to `issue_comment`; added final `workflow_dispatch` Upload step for structured artifact. 328 total tests pass. (TASK-KILO-GEMINI-ACP-ARTIFACT-REPORTING-FIX-001) |
+| Gemini ACP artifact reporting fix (Issue #173) | IMPLEMENTED / VERIFIED | Kilo | Fixed `gemini-acp-report.json` to contain the structured ACP envelope from `callback_payload.json` (with `current_head_sha`) instead of raw Gemini CLI summary **for the `workflow_dispatch` path**. NOTE: `issue_comment` path remained defective (raw Markdown persist step not removed). Fixed by Issue #174. 328 total tests pass. (TASK-KILO-GEMINI-ACP-ARTIFACT-REPORTING-FIX-001) |
+| Gemini ACP artifact reporting fix — issue_comment path (Issue #174) | IMPLEMENTED / VERIFIED | Kilo | Unified structured ACP artifact reporting across both trigger paths. Removed raw Markdown persist step; generalized payload step to run for both `workflow_dispatch` and `issue_comment` (`if: always()`); derived `task`/`repository`/`base_branch` from issue_comment context; `request_id` set to `null` when unavailable; unified single artifact upload step. Preserved Render callback (workflow_dispatch-only), `@gemini-cli` triggering, Gemini CLI execution, ACP authorization, recursion-prevention, artifact name/file. 29 tests pass. (TASK-KILO-GEMINI-ACP-ARTIFACT-ISSUE-COMMENT-FIX-002) |
 
 ---
 
@@ -84,6 +85,7 @@ Substantially complete:
 - VERIFY_RECONCILE operating mode — **IMPLEMENTED / VERIFIED** (238 total tests pass)
 - Kilo ↔ Gemini post-dispatch result lifecycle repair — **IMPLEMENTED / VERIFIED** (270 total tests pass; repaired false-success callback path in `main.yml`)
 - Chatbox Gateway Ingress — **IMPLEMENTED / VERIFIED** (23 gateway tests pass; 259 total tests pass)
+- Gemini ACP artifact reporting — issue_comment path unified (Issue #174) — **IMPLEMENTED / VERIFIED** (29 workflow-expression tests pass)
 
 Remaining pending items:
 - Remaining Part 2.1 (authenticated Gemini → Render return path) — PROPOSED / TARGET, not yet implemented (Gemini investigation result)

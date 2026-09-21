@@ -226,46 +226,104 @@ runTest('Determine Gemini execution result step exists and reads gemini_run.outc
   assert.ok(raw.includes('steps.gemini_run.outcome'), 'gemini_run.outcome reference missing');
 });
 
-runTest('artifact persistence steps use if: always()', () => {
-  const persistIdx = raw.indexOf('Persist Gemini result as artifact');
-  assert.ok(persistIdx !== -1, 'Persist step missing');
-  const persistSlice = raw.slice(persistIdx, raw.indexOf('Upload Gemini result artifact'));
-  assert.ok(/if:\s*always\(\)/.test(persistSlice), 'Persist step missing if: always()');
+runTest('raw Markdown persist step is removed (no printf of gemini_run.outputs.summary to gemini-acp-report.json)', () => {
+  assert.ok(!raw.includes('Persist Gemini result as artifact'), 'Persist raw Markdown step should be removed');
+  assert.ok(!raw.includes("printf '%s' \"${{ steps.gemini_run.outputs.summary }}\" > gemini-acp-report.json"), 'raw summary should not be written directly to gemini-acp-report.json');
+});
+
+runTest('single unified artifact upload covers both trigger paths', () => {
+  const uploadCount = (raw.match(/name: Upload Gemini result artifact/g) || []).length;
+  assert.equal(uploadCount, 1, `expected exactly 1 Upload step, found ${uploadCount}`);
   const uploadIdx = raw.indexOf('Upload Gemini result artifact');
   assert.ok(uploadIdx !== -1, 'Upload step missing');
-  const uploadSlice = raw.slice(uploadIdx, raw.indexOf('Determine Gemini execution result'));
-  assert.ok(/if:\s*always\(\)/.test(uploadSlice), 'Upload step missing if: always()');
+  const uploadSlice = raw.slice(uploadIdx);
+  assert.ok(/if:\s*always\(\)/.test(uploadSlice), 'Upload step should use if: always()');
+  assert.ok(!/if:\s*always\(\).*github\.event_name/.test(uploadSlice), 'Upload step should not be gated on event_name');
 });
 
 runTest('Determine Gemini execution result step uses if: always()', () => {
   const resultIdx = raw.indexOf('Determine Gemini execution result');
   assert.ok(resultIdx !== -1, 'gemini_result step missing');
-  const resultSlice = raw.slice(resultIdx, raw.indexOf('Prepare callback payload'));
+  const resultSlice = raw.slice(resultIdx, raw.indexOf('Prepare ACP report payload'));
   assert.ok(/if:\s*always\(\)/.test(resultSlice), 'gemini_result step missing if: always()');
 });
 
-runTest('callback payload step uses if: always() with workflow_dispatch', () => {
-  assert.ok(raw.includes("if: always() && github.event_name == 'workflow_dispatch'"), 'callback payload step missing always() condition');
+runTest('ACP report payload step runs for all trigger paths (no event_name gate)', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  assert.ok(payloadIdx !== -1, 'ACP report payload step missing');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(/if:\s*always\(\)/.test(payloadSection), 'payload step missing if: always()');
+  assert.ok(!/workflow_dispatch/.test(payloadSection.split('shell:')[0]), 'payload step should not be gated on workflow_dispatch');
 });
 
-runTest('send callback step uses if: always() with workflow_dispatch', () => {
+runTest('Send callback to Render remains workflow_dispatch-only', () => {
   const sendIdx = raw.indexOf('Send callback to Render');
   assert.ok(sendIdx !== -1, 'send callback step missing');
-  assert.ok(/if:\s*always\(\)\s*&&\s*github\.event_name\s*==\s*'workflow_dispatch'/.test(raw.slice(sendIdx)), 'send callback step missing always() condition');
+  assert.ok(/if:\s*always\(\)\s*&&\s*github\.event_name\s*==\s*'workflow_dispatch'/.test(raw.slice(sendIdx)), 'send callback step should remain workflow_dispatch-only');
 });
 
-runTest('STATUS is not hardcoded to success in callback payload step', () => {
-  const callbackIdx = raw.indexOf('Prepare callback payload');
+runTest('callback payload handles issue_comment with GITHUB_EVENT_NAME conditional', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
   const sendIdx = raw.indexOf('Send callback to Render');
-  const callbackSection = raw.slice(callbackIdx, sendIdx);
-  assert.ok(!callbackSection.includes('STATUS="success"'), 'STATUS should not be hardcoded to success in callback payload step');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(payloadSection.includes('"$GITHUB_EVENT_NAME" = "issue_comment"'), 'payload step should check GITHUB_EVENT_NAME for issue_comment');
+  assert.ok(payloadSection.includes('steps.request_comment.outputs.request'), 'payload step should use request_comment output for issue_comment task');
+  assert.ok(payloadSection.includes('github.repository'), 'payload step should use github.repository for issue_comment repository');
+  assert.ok(payloadSection.includes('github.ref_name'), 'payload step should use github.ref_name for issue_comment base_branch');
 });
 
 runTest('callback payload derives STATUS from gemini_result step', () => {
-  const callbackIdx = raw.indexOf('Prepare callback payload');
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
   const sendIdx = raw.indexOf('Send callback to Render');
-  const callbackSection = raw.slice(callbackIdx, sendIdx);
-  assert.ok(callbackSection.includes('steps.gemini_result.outputs.gemini_status'), 'STATUS should be derived from steps.gemini_result.outputs.gemini_status');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(payloadSection.includes('steps.gemini_result.outputs.gemini_status'), 'STATUS should be derived from steps.gemini_result.outputs.gemini_status');
+});
+
+runTest('STATUS is not hardcoded to success in callback payload step', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(!payloadSection.includes('STATUS="success"'), 'STATUS should not be hardcoded to success in callback payload step');
+});
+
+runTest('request_id is null when empty (issue_comment path)', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(payloadSection.includes('if $request_id == "" then null else $request_id end'), 'request_id should be null when empty');
+});
+
+runTest('callback_payload.json is copied to gemini-acp-report.json', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(payloadSection.includes('cp callback_payload.json gemini-acp-report.json'), 'callback_payload.json should be copied to gemini-acp-report.json');
+});
+
+runTest('ACP report payload contains required JSON envelope fields', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  for (const field of ['request_id', 'agent', 'status', 'task', 'repository', 'base_branch', 'current_head_sha', 'changed_files', 'verification', 'result', 'commit', 'push', 'blockers']) {
+    assert.ok(payloadSection.includes(field), `ACP envelope field '${field}' missing from payload step`);
+  }
+});
+
+runTest('jq is used to build the structured ACP payload', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(payloadSection.includes('jq -n'), 'jq should be used to build structured payload');
+  assert.ok(payloadSection.includes('callback_payload.json'), 'payload should write to callback_payload.json');
+});
+
+runTest('gemini_output is included in ACP report payload', () => {
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const payloadSection = raw.slice(payloadIdx, sendIdx);
+  assert.ok(payloadSection.includes('--arg gemini_output'), 'gemini_output arg missing from jq');
+  assert.ok(payloadSection.includes('gemini_output: $gemini_output'), 'gemini_output field missing from jq output');
 });
 
 runTest('VERIFY_RECONCILE recon_status is conditional on verification PASS', () => {
@@ -273,12 +331,4 @@ runTest('VERIFY_RECONCILE recon_status is conditional on verification PASS', () 
   assert.ok(completedIdx !== -1, 'RECON_STATUS="COMPLETED" should be present');
   const passIdx = raw.lastIndexOf('VERIFICATION_STATUS="PASS"', completedIdx);
   assert.ok(passIdx !== -1, 'RECON_STATUS="COMPLETED" must be conditional on VERIFICATION_STATUS="PASS"');
-});
-
-runTest('gemini_output is included in callback result', () => {
-  const callbackIdx = raw.indexOf('Prepare callback payload');
-  const sendIdx = raw.indexOf('Send callback to Render');
-  const callbackSection = raw.slice(callbackIdx, sendIdx);
-  assert.ok(callbackSection.includes('--arg gemini_output'), 'gemini_output arg missing from jq');
-  assert.ok(callbackSection.includes('gemini_output: $gemini_output'), 'gemini_output field missing from jq output');
 });

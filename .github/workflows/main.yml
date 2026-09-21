@@ -178,22 +178,6 @@ jobs:
             Distinguish observations from recommendations.
             Return a concrete, actionable response for the project.
 
-      - name: Persist Gemini result as artifact
-        id: gemini_artifact
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "${{ steps.gemini_run.outputs.summary }}" > gemini-acp-report.json
-
-      - name: Upload Gemini result artifact
-        if: always() && github.event_name == 'issue_comment'
-        uses: actions/upload-artifact@v4
-        with:
-          name: gemini-acp-report
-          path: gemini-acp-report.json
-          retention-days: 7
-
       - name: Determine Gemini execution result
         id: gemini_result
         if: always()
@@ -242,19 +226,30 @@ jobs:
           echo "blocker_message=$BLOCKER_MSG" >> "$GITHUB_OUTPUT"
           echo "recon_status=$RECON_STATUS" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare callback payload (workflow_dispatch only)
+      - name: Prepare ACP report payload
         id: callback_payload
-        if: always() && github.event_name == 'workflow_dispatch'
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
 
-          REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
-          TASK="${{ steps.orchestration_context.outputs.task }}"
-          REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
-          BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
-          KILO_EXECUTION_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
-          TASK_MODE="${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}"
+          # Derive ACP envelope fields based on trigger path.
+          # workflow_dispatch: all fields from orchestration_context.
+          # issue_comment: request_id and kilo_execution_id are genuinely
+          # unavailable; task, repository, and base_branch are derived from
+          # the comment body and execution context.
+          if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
+            REQUEST_ID=""
+            TASK="${{ steps.request_comment.outputs.request }}"
+            REPOSITORY="${{ github.repository }}"
+            BASE_BRANCH="${{ github.ref_name }}"
+          else
+            REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
+            TASK="${{ steps.orchestration_context.outputs.task }}"
+            REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
+            BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+          fi
+
           CURRENT_HEAD_SHA="${GITHUB_SHA}"
 
           # Capture Gemini output (stdout from run-gemini-cli)
@@ -303,7 +298,7 @@ jobs:
             --argjson recon_changed_files "$RECON_CHANGED_FILES" \
             --arg recon_commit_sha "$RECON_COMMIT_SHA" \
             '{
-              request_id: $request_id,
+              request_id: (if $request_id == "" then null else $request_id end),
               agent: $agent,
               status: $status,
               task: $task,
@@ -363,7 +358,7 @@ jobs:
           fi
 
       - name: Upload Gemini result artifact
-        if: always() && github.event_name == 'workflow_dispatch'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gemini-acp-report
