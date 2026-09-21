@@ -172,6 +172,44 @@ function resetRegistry() {
   return { success: true };
 }
 
+function rehydrateTask(command) {
+  const requestId = command.request_id;
+
+  const existing = getTask(requestId);
+  if (existing) {
+    if (existing.status === 'EXECUTING' && existing.kilo.status === 'pending') {
+      return { success: true, entry: existing, rehydrated: false };
+    }
+    return {
+      success: false,
+      error:
+        'Task exists in state ' +
+        existing.status +
+        ' with kilo status ' +
+        existing.kilo.status +
+        ' (expected absent or EXECUTING with pending kilo result)'
+    };
+  }
+
+  const createResult = createTask(command);
+  if (!createResult.success) {
+    return createResult;
+  }
+
+  const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
+  for (const status of transitions) {
+    const r = updateTaskStatus(requestId, status);
+    if (!r.success) {
+      return {
+        success: false,
+        error: 'Failed to transition to ' + status + ': ' + r.error
+      };
+    }
+  }
+
+  return { success: true, entry: getTask(requestId), rehydrated: true };
+}
+
 module.exports = {
   createTask,
   getTask,
@@ -182,6 +220,7 @@ module.exports = {
   getTasksByStatus,
   deleteTask,
   resetRegistry,
+  rehydrateTask,
   loadFromFile,
   persistCache,
   REGISTRY_FILE

@@ -97,11 +97,68 @@
 
 **Outcome**: SUCCESS — Path 2 architectural direction documented as APPROVED / PROPOSED / TARGET in ADR-016. The distinction between Git/GitHub (durable evidence) and TaskRegistry (runtime orchestration state) is recorded. The current defect (hard dependency on ephemeral TaskRegistry state) is identified. The preferred recovery model (normal TaskRegistry path when available, Git-derived recovery/rehydration when absent) is documented. Security boundary (request_id ≠ authorization), Render deployment delay insufficiency, Solution Simplicity conclusion, external-persistence escalation condition, and next implementation phase requirements are all recorded. Existing Kilo → Gemini lifecycle, polling/callback mechanisms, ACP authorization boundary, and specialist lane boundaries are preserved. Existing documentation discrepancies (TASK_LOG #166 outdated claims) reconciled to verified repository state. No implementation performed — documentation only.
 
-**Commit Reference**: (to be filled with this commit SHA)
+**Commit Reference**: 8ad597c
 
 ---
 
-## 2026-09-19 | Independently Verify and Reconcile Git Completion-Signal POC Documentation (TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001)
+## 2026-09-21 | Implement Path 2 Recovery — Git/GitHub Durable Evidence TaskRegistry Rehydration (TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-RECOVERY-IMPLEMENTATION-001)
+
+**Task**: Implement the approved Path 2 recovery behavior for the Git completion-signal POC so that a valid Kilo completion signal can recover orchestration state when the TaskRegistry entry is missing, without replacing TaskRegistry as runtime state and without treating request_id or signal contents as authorization. (GitHub Issue #175)
+
+**Originator**: ChatGPT
+**Target Agent**: Kilo
+**Repository**: fluentwithkyle/openclaw-webhook
+**Base Branch**: main
+**Task Mode**: FAILOVER_EXECUTE
+
+**Scope — Permitted Paths**:
+- `poc/github-webhook.js`
+- `poc/task-registry.js`
+- `poc/schemas/acp-schema.js` (used for validation, not modified)
+- `poc/orchestrator.js` (inspected, no modifications required — existing `handleKiloCompletion` works with rehydrated task)
+- `test/github-webhook.test.js`
+
+**Scope — Excluded Paths**: `routes/poc.js`, `.github/`, `ARCHITECTURE.md`, `AGENTS.md`, `GEMINI.md`, `openclaw-render.json`, production code (`index.js`, `routes/`, `poc/*.js` except as listed)
+
+**Implementation**:
+
+- **`poc/github-webhook.js`**: Added `recoverTaskFromGitHub(requestId, githubToken)` which (1) searches GitHub issues by title matching exact `request_id`; (2) fetches the issue body; (3) calls `parseACPCommandFromIssueBody()` to parse the ACP Envelope (key-value pairs), Capabilities (list items), permitted paths (from Required Implementation Areas backtick-quoted paths), Objective (task), and Verification sections from the issue body markdown; (4) validates exact `request_id` correlation; (5) validates via `validateACPCommand()`; (6) validates via `validateAuthorization()`; (7) executes-path authorization check requiring `commit` and `push` capabilities; (8) calls `taskRegistry.rehydrateTask()` to construct the minimum valid TaskRegistry entry and transition to `EXECUTING`. Modified `processSignalFile()` to attempt recovery when `taskRegistry.getTask(requestId)` returns null, then continue through the existing completion/orchestration path. Added injection point `setFetchACPCommand()`/`getFetchACPCommand()` for testability. Added `defaultFetchACPCommandFromGitHub()` using GitHub Search API. Fail-closed on GitHub issue absence, request_id mismatch, ACP validation failure, authorization failure, execution-path check failure, and missing token.
+
+- **`poc/task-registry.js`**: Added `rehydrateTask(command)` which creates a TaskRegistry entry via `createTask()` and transitions it PENDING → SELECTED → PLANNED → EXECUTING, returning the rehydrated entry. Handles existing-task edge case (if already EXECUTING with pending kilo result, returns without re-rehydration).
+
+- **`test/github-webhook.test.js`**: Added 19 new tests covering: (1) parser unit tests (`extractMarkdownSection`, `parseMarkdownKeyValueList`, `parseMarkdownList`, `extractPermittedPaths`, `parseACPCommandFromIssueBody` with valid body, request_id override, empty body defaults); (2) recovery path success — task rehydrated, Kilo completion processed, `kilo.status='success'`, `next_action='trigger_gemini'`; (3) recovery fails closed — GitHub issue not found; (4) recovery fails — ACP command validation failure (invalid task_mode); (5) recovery fails — authorization validation failure (missing capability); (6) recovery fails — execution-path check failure (REVIEW mode with read_only only); (7) recovery fails — request_id mismatch in issue body; (8) recovery end-to-end — rehydrated task triggers Gemini via `orchestrator.triggerGemini()`; (9) idempotency — replayed delivery ID ignored; (10) idempotency — re-delivered signal (new delivery ID) ignored via orchestrator; (11) normal path preserved when TaskRegistry state exists (fetcher not called); (12) no token fails closed. Updated existing "unknown request_id" test to expect `stage: 'recovery'` instead of `stage: 'registry'` and to assert fail-closed behavior.
+
+**Constraints satisfied**:
+- Did not replace TaskRegistry — recovery only when TaskRegistry absent (Constraint 2)
+- Did not treat `request_id` as authorization — required ACP command validation (Constraint 3)
+- Normal path preserved when TaskRegistry state exists (Constraint 4)
+- Recovery retrieves authoritative ACP task from GitHub, validates as ACP command, requires authorization (Constraint 5)
+- No missing authorization inferred — all values must be present and validated in the ACP command (Constraint 6)
+- Fail-closed on all failure modes (Constraint 7)
+- Idempotency preserved — delivery-id and orchestrator-level (Constraint 8)
+- Head-commit SHA authority preserved (Constraint 9)
+- Within existing POC architecture, simplest solution (Constraint 10)
+- No deployment, secret, config, or unrelated behavior changes (Constraint 11)
+
+**Verification**:
+1. 77/77 focused tests pass in `test/github-webhook.test.js` (58 original + 19 new Path 2 recovery tests)
+2. 270 regression tests pass across 14 suites
+3. 347 total tests pass
+4. `git diff --check` clean
+5. `npm start` / module load OK
+6. `test/run-poc-tests.js` passes (5/5)
+
+**Files changed (4)**:
+- `poc/github-webhook.js` — recovery functions, `processSignalFile` modification
+- `poc/task-registry.js` — `rehydrateTask` method
+- `test/github-webhook.test.js` — 19 new tests + 1 existing test updated
+- `docs/ai/TASK_LOG.md` — this historical entry
+
+**Files inspected, not modified**: `poc/orchestrator.js`, `poc/schemas/acp-schema.js`
+
+**Outcome**: SUCCESS — Path 2 recovery implemented, tested, and verified. The hard dependency on ephemeral TaskRegistry state is broken: when TaskRegistry state is absent, `recoverTaskFromGitHub()` retrieves the authoritative ACP task from the GitHub issue body, validates it (ACP command + authorization + execution-path), rehydrates a TaskRegistry entry, and continues through the existing completion/orchestration path. When TaskRegistry state exists, the existing normal path is preserved. Fail-closed behavior is enforced on all failure modes. Idempotency is preserved at both the delivery-ID level and the orchestrator/task level.
+
+**Commit Reference**: 8ad597c (TASK-KILO-GIT-COMPLETION-SIGNAL-DOCS-RECONCILIATION-001)
 
 **Task**: Independently verify the Git-based Kilo completion-signal POC (TASK-KILO-GIT-COMPLETION-SIGNAL-POC-IMPLEMENT-001, Issue #162) against the actual GitHub repository state and reconcile durable documentation with independently verified evidence. Authorized to modify only `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, and `docs/ai/CONTROL_CENTER.md`.
 

@@ -145,6 +145,97 @@ function createMockFetcher(signalMap) {
   };
 }
 
+function makeValidACPCommand(requestId) {
+  return {
+    protocol_version: 'ACP-1.0',
+    request_id: requestId,
+    source: 'ChatGPT',
+    target: 'Kilo',
+    task_type: 'implementation',
+    repository: REPO,
+    base_branch: BRANCH,
+    task: 'Implement Path 2 recovery behavior for Git completion-signal POC',
+    task_mode: 'FAILOVER_EXECUTE',
+    constraints: { permitted_paths: ['poc/', 'test/'] },
+    authorization: {
+      capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push']
+    },
+    verification: 'Run applicable tests and git diff --check clean',
+    reporting: 'structured-json',
+    originator: 'Kyle'
+  };
+}
+
+function buildIssueBody(command) {
+  var lines = [];
+  lines.push('# ACP Task');
+  lines.push('');
+  lines.push('## ACP Envelope');
+  lines.push('');
+  lines.push('- protocol_version: ' + command.protocol_version);
+  lines.push('- request_id: ' + command.request_id);
+  lines.push('- source: ' + command.source);
+  lines.push('- target: ' + command.target);
+  lines.push('- task_type: ' + command.task_type);
+  lines.push('- repository: ' + command.repository);
+  lines.push('- base_branch: ' + command.base_branch);
+  lines.push('- task_mode: ' + command.task_mode);
+  lines.push('');
+  lines.push('## Capabilities');
+  lines.push('');
+  command.authorization.capabilities.forEach(function(cap) {
+    lines.push('- ' + cap);
+  });
+  lines.push('');
+  lines.push('## Objective');
+  lines.push('');
+  lines.push(command.task);
+  lines.push('');
+  lines.push('## Required Implementation Areas');
+  lines.push('');
+  lines.push('Inspect and modify only what is necessary, centered on:');
+  lines.push('');
+  command.constraints.permitted_paths.forEach(function(p) {
+    lines.push('- `' + p + '`');
+  });
+  lines.push('');
+  lines.push('## Verification');
+  lines.push('');
+  lines.push(command.verification);
+  lines.push('');
+  lines.push('## Authorization');
+  lines.push('');
+  lines.push('This task authorizes implementation, tests, commit, and push to ' + command.base_branch + ' within the scope above.');
+  return lines.join('\n');
+}
+
+function makeMockIssue(requestId, commandOverrides) {
+  var command = makeValidACPCommand(requestId);
+  if (commandOverrides) {
+    Object.keys(commandOverrides).forEach(function(key) {
+      command[key] = commandOverrides[key];
+    });
+  }
+  return {
+    success: true,
+    issue: {
+      number: 175,
+      title: requestId,
+      body: buildIssueBody(command),
+      html_url: 'https://github.com/' + REPO + '/issues/175'
+    }
+  };
+}
+
+function createMockACPCommandFetcher(issueMap) {
+  return async function(requestId, githubToken) {
+    if (issueMap[requestId]) {
+      return issueMap[requestId];
+    }
+    return { success: false, error: 'No GitHub issue found for request_id: ' + requestId };
+  };
+}
+
 function signPayload(rawBody, secret) {
   return 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 }
@@ -154,6 +245,7 @@ const DELIVERY_LOG_PATH = path.join(__dirname, '..', 'poc', 'delivery-log.json')
 function setup() {
   taskRegistry.resetRegistry();
   gitWebhook.setFetchSignalArtifact(null);
+  gitWebhook.setFetchACPCommand(null);
   gitWebhook.setGithubToken(null);
   try { fs.unlinkSync(DELIVERY_LOG_PATH); } catch (e) {}
   try { fs.unlinkSync(DELIVERY_LOG_PATH + '.bak'); } catch (e) {}
@@ -489,6 +581,86 @@ test('delivery log: does not track empty delivery IDs', () => {
 });
 
 // ========================================================================
+// Path 2 Recovery — Parser unit tests
+// ========================================================================
+
+test('extractMarkdownSection: extracts a named section from markdown', () => {
+  const body = '# Title\n\n## ACP Envelope\n\n- foo: bar\n- baz: qux\n\n## Other\n\nstuff\n';
+  const section = gitWebhook.extractMarkdownSection(body, 'ACP Envelope');
+  assert.ok(section.includes('foo: bar'));
+  assert.ok(section.includes('baz: qux'));
+  assert.ok(!section.includes('stuff'));
+});
+
+test('parseMarkdownKeyValueList: parses key-value pairs from markdown list', () => {
+  const fields = gitWebhook.parseMarkdownKeyValueList(
+    '- protocol_version: ACP-1.0\n- request_id: task-001\n- target: Kilo\n'
+  );
+  assert.strictEqual(fields.protocol_version, 'ACP-1.0');
+  assert.strictEqual(fields.request_id, 'task-001');
+  assert.strictEqual(fields.target, 'Kilo');
+});
+
+test('parseMarkdownList: parses list items and strips backticks', () => {
+  const items = gitWebhook.parseMarkdownList(
+    '- read_only\n- modify_files\n- `poc/file.js`\n'
+  );
+  assert.strictEqual(items.length, 3);
+  assert.strictEqual(items[0], 'read_only');
+  assert.strictEqual(items[1], 'modify_files');
+  assert.strictEqual(items[2], 'poc/file.js');
+});
+
+test('extractPermittedPaths: extracts backtick-quoted paths', () => {
+  const paths = gitWebhook.extractPermittedPaths(
+    '- `poc/github-webhook.js`\n- `poc/task-registry.js`\n- existing tests\n'
+  );
+  assert.ok(paths.includes('poc/github-webhook.js'));
+  assert.ok(paths.includes('poc/task-registry.js'));
+  assert.ok(paths.includes('test/'));
+});
+
+test('extractPermittedPaths: defaults to poc/ when no paths found', () => {
+  const paths = gitWebhook.extractPermittedPaths('');
+  assert.strictEqual(paths.length, 1);
+  assert.strictEqual(paths[0], 'poc/');
+});
+
+test('parseACPCommandFromIssueBody: valid issue body parses to valid ACP command', () => {
+  const command = makeValidACPCommand('task-parse-test');
+  const body = buildIssueBody(command);
+  const parsed = gitWebhook.parseACPCommandFromIssueBody(body, 'task-parse-test');
+
+  assert.strictEqual(parsed.request_id, 'task-parse-test');
+  assert.strictEqual(parsed.repository, REPO);
+  assert.strictEqual(parsed.base_branch, BRANCH);
+  assert.strictEqual(parsed.task_mode, 'FAILOVER_EXECUTE');
+  assert.ok(Array.isArray(parsed.authorization.capabilities));
+  assert.ok(parsed.authorization.capabilities.includes('read_only'));
+  assert.ok(parsed.authorization.capabilities.includes('commit'));
+  assert.ok(parsed.authorization.capabilities.includes('push'));
+  assert.ok(Array.isArray(parsed.constraints.permitted_paths));
+  assert.ok(parsed.constraints.permitted_paths.length > 0);
+  assert.ok(parsed.task.length > 0);
+  assert.ok(parsed.verification.length > 0);
+  assert.strictEqual(parsed.reporting, 'structured-json');
+});
+
+test('parseACPCommandFromIssueBody: exact request_id from envelope overrides fallback', () => {
+  const command = makeValidACPCommand('task-in-body');
+  const body = buildIssueBody(command);
+  const parsed = gitWebhook.parseACPCommandFromIssueBody(body, 'different-request-id');
+  assert.strictEqual(parsed.request_id, 'task-in-body');
+});
+
+test('parseACPCommandFromIssueBody: empty body uses defaults and requestId fallback', () => {
+  const parsed = gitWebhook.parseACPCommandFromIssueBody('', 'fallback-id');
+  assert.strictEqual(parsed.request_id, 'fallback-id');
+  assert.strictEqual(parsed.task_mode, 'FAILOVER_EXECUTE');
+  assert.ok(parsed.constraints.permitted_paths.length > 0);
+});
+
+// ========================================================================
 // Async tests — run sequentially
 // ========================================================================
 
@@ -556,8 +728,8 @@ async function runAsyncTests() {
     assert.strictEqual(result.results[0].stage, 'validation');
   });
 
-  // TEST 7: Unknown request_id is handled safely
-  await testAsync('processPushEvent: unknown request_id (not in TaskRegistry) is rejected', async () => {
+  // TEST 7: Unknown request_id is handled safely (recovery fails closed without token)
+  await testAsync('processPushEvent: unknown request_id (not in TaskRegistry) fails closed at recovery stage', async () => {
     setup();
     const payload = makePushPayload('unknown-req', COMMIT);
     const signal = makeValidSignal('unknown-req', COMMIT);
@@ -567,8 +739,8 @@ async function runAsyncTests() {
     });
     assert.strictEqual(result.status, 'completed');
     assert.strictEqual(result.results[0].status, 'rejected');
-    assert.strictEqual(result.results[0].stage, 'registry');
-    assert.ok(result.results[0].error.includes('TaskRegistry'));
+    assert.strictEqual(result.results[0].stage, 'recovery');
+    assert.ok(result.results[0].error.includes('TaskRegistry') || result.results[0].error.includes('recovery'));
   });
 
   // TEST 8: Malformed completion signal is rejected
@@ -884,6 +1056,317 @@ async function runAsyncTests() {
     } finally {
       orchestrator.triggerGemini = originalTrigger;
     }
+  });
+
+  // ========================================================================
+  // Path 2 Recovery — Async tests
+  // ========================================================================
+
+  await testAsync('processPushEvent: recovery path rehydrates task when TaskRegistry absent', async () => {
+    setup();
+    const requestId = 'req-recovery';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: makeMockIssue(requestId)
+    }));
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-recovery', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+
+    assert.strictEqual(result.status, 'completed');
+    assert.strictEqual(result.results[0].status, 'completed');
+
+    const task = taskRegistry.getTask(requestId);
+    assert.ok(task, 'Task should be rehydrated in TaskRegistry');
+    assert.strictEqual(task.status, 'EXECUTING');
+    assert.strictEqual(task.kilo.status, 'success');
+    assert.strictEqual(task.next_action, 'trigger_gemini');
+    assert.strictEqual(task.kilo.report.commit, COMMIT);
+    assert.strictEqual(task.kilo.report.commit_sha, COMMIT);
+  });
+
+  await testAsync('processPushEvent: recovery path fails closed when GitHub issue not found', async () => {
+    setup();
+    const requestId = 'req-no-issue';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({}));
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-no-issue', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+
+    assert.strictEqual(result.results[0].status, 'rejected');
+    assert.strictEqual(result.results[0].stage, 'recovery');
+    assert.ok(result.results[0].error.includes('GitHub issue') || result.results[0].error.includes('issue not found'));
+  });
+
+  await testAsync('processPushEvent: recovery path fails when ACP command fails validation', async () => {
+    setup();
+    const requestId = 'req-invalid-mode';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    var invalidCommand = makeValidACPCommand(requestId);
+    invalidCommand.task_mode = 'INVALID_MODE';
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: {
+        success: true,
+        issue: {
+          number: 175,
+          title: requestId,
+          body: buildIssueBody(invalidCommand),
+          html_url: 'https://github.com/' + REPO + '/issues/175'
+        }
+      }
+    }));
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-invalid', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+
+    assert.strictEqual(result.results[0].status, 'rejected');
+    assert.strictEqual(result.results[0].stage, 'recovery');
+    assert.ok(result.results[0].error.includes('validation') || result.results[0].error.includes('authorization'));
+  });
+
+  await testAsync('processPushEvent: recovery path fails when authorization validation fails (missing capability)', async () => {
+    setup();
+    const requestId = 'req-bad-caps';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    var badCapsCommand = makeValidACPCommand(requestId);
+    badCapsCommand.authorization = { capabilities: ['read_only'] };
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: {
+        success: true,
+        issue: {
+          number: 175,
+          title: requestId,
+          body: buildIssueBody(badCapsCommand),
+          html_url: 'https://github.com/' + REPO + '/issues/175'
+        }
+      }
+    }));
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-bad-caps', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+
+    assert.strictEqual(result.results[0].status, 'rejected');
+    assert.strictEqual(result.results[0].stage, 'recovery');
+    assert.ok(result.results[0].error.includes('validation') || result.results[0].error.includes('authorization'));
+  });
+
+  await testAsync('processPushEvent: recovery path fails when recovered task does not authorize execution path', async () => {
+    setup();
+    const requestId = 'req-review-mode';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    var reviewCommand = makeValidACPCommand(requestId);
+    reviewCommand.task_mode = 'REVIEW';
+    reviewCommand.authorization = { capabilities: ['read_only'] };
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: {
+        success: true,
+        issue: {
+          number: 175,
+          title: requestId,
+          body: buildIssueBody(reviewCommand),
+          html_url: 'https://github.com/' + REPO + '/issues/175'
+        }
+      }
+    }));
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-review', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+
+    assert.strictEqual(result.results[0].status, 'rejected');
+    assert.strictEqual(result.results[0].stage, 'recovery');
+    assert.ok(result.results[0].error.includes('execution path'));
+  });
+
+  await testAsync('processPushEvent: recovery path fails on request_id mismatch in issue body', async () => {
+    setup();
+    const requestId = 'req-mismatch';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    var mismatchedCommand = makeValidACPCommand('different-id-in-issue');
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: {
+        success: true,
+        issue: {
+          number: 175,
+          title: requestId,
+          body: buildIssueBody(mismatchedCommand),
+          html_url: 'https://github.com/' + REPO + '/issues/175'
+        }
+      }
+    }));
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-mismatch', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+
+    assert.strictEqual(result.results[0].status, 'rejected');
+    assert.strictEqual(result.results[0].stage, 'recovery');
+    assert.ok(result.results[0].error.includes('Request ID mismatch'));
+  });
+
+  await testAsync('processPushEvent: recovery path rehydrated task triggers Gemini flow end-to-end', async () => {
+    setup();
+    const requestId = 'req-gemini-recovery';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: makeMockIssue(requestId)
+    }));
+
+    let dispatched = false;
+    const originalTrigger = orchestrator.triggerGemini;
+    orchestrator.triggerGemini = async function(requestIdArg, token) {
+      dispatched = true;
+      return { success: true, message: 'Gemini dispatched to workflow' };
+    };
+
+    try {
+      const result = await gitWebhook.processPushEvent(payload, 'delivery-gemini-recovery', {
+        config: { repository: REPO, branch: BRANCH, ref: REF },
+        githubToken: 'fake-token'
+      });
+
+      assert.strictEqual(result.results[0].status, 'completed');
+      assert.strictEqual(result.results[0].nextAction, 'trigger_gemini');
+      assert.ok(dispatched, 'Gemini should have been triggered via orchestrator after recovery');
+
+      const task = taskRegistry.getTask(requestId);
+      assert.strictEqual(task.kilo.status, 'success');
+      assert.strictEqual(task.next_action, 'trigger_gemini');
+    } finally {
+      orchestrator.triggerGemini = originalTrigger;
+    }
+  });
+
+  await testAsync('processPushEvent: recovery path - replayed delivery ID is idempotent', async () => {
+    setup();
+    const requestId = 'req-idempotent-1';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: makeMockIssue(requestId)
+    }));
+
+    const result1 = await gitWebhook.processPushEvent(payload, 'delivery-idempotent-1', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+    assert.strictEqual(result1.results[0].status, 'completed');
+
+    const result2 = await gitWebhook.processPushEvent(payload, 'delivery-idempotent-1', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+    assert.strictEqual(result2.status, 'processed');
+    assert.ok(result2.message.includes('already processed'));
+  });
+
+  await testAsync('processPushEvent: recovery path - re-delivered signal (new delivery ID) is idempotent via orchestrator', async () => {
+    setup();
+    const requestId = 'req-idempotent-2';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    gitWebhook.setFetchACPCommand(createMockACPCommandFetcher({
+      [requestId]: makeMockIssue(requestId)
+    }));
+
+    const result1 = await gitWebhook.processPushEvent(payload, 'delivery-idempotent-a', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+    assert.strictEqual(result1.results[0].status, 'completed');
+
+    const result2 = await gitWebhook.processPushEvent(payload, 'delivery-idempotent-b', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: 'fake-token'
+    });
+    assert.strictEqual(result2.results[0].status, 'ignored');
+    assert.ok(result2.results[0].message.includes('already recorded'));
+  });
+
+  await testAsync('processPushEvent: recovery path - normal path preserved when TaskRegistry state exists (no recovery attempted)', async () => {
+    setup();
+    const requestId = 'req-normal-path';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    setupTask(requestId);
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+
+    let fetchCalled = false;
+    gitWebhook.setFetchACPCommand(async function(requestIdArg, githubTokenArg) {
+      fetchCalled = true;
+      return makeMockIssue(requestIdArg);
+    });
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-normal', {
+      config: { repository: REPO, branch: BRANCH, ref: REF },
+      githubToken: null
+    });
+
+    assert.strictEqual(result.results[0].status, 'completed');
+    assert.strictEqual(fetchCalled, false, 'ACP command fetcher should not be called when TaskRegistry state exists');
+
+    const task = taskRegistry.getTask(requestId);
+    assert.strictEqual(task.kilo.status, 'success');
+    assert.strictEqual(task.next_action, 'trigger_gemini');
+  });
+
+  await testAsync('processPushEvent: recovery path - no token fails closed', async () => {
+    setup();
+    const requestId = 'req-no-token';
+    const payload = makePushPayload(requestId, COMMIT);
+    const signal = makeValidSignal(requestId, COMMIT);
+
+    gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
+    // No mock ACP command fetcher set — default fetcher requires token
+
+    const result = await gitWebhook.processPushEvent(payload, 'delivery-no-token', {
+      config: { repository: REPO, branch: BRANCH, ref: REF }
+    });
+
+    assert.strictEqual(result.results[0].status, 'rejected');
+    assert.strictEqual(result.results[0].stage, 'recovery');
+    assert.ok(result.results[0].error.includes('token') || result.results[0].error.includes('recovery'));
   });
 }
 
