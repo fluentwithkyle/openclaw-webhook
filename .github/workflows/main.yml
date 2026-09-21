@@ -229,6 +229,9 @@ jobs:
       - name: Prepare ACP report payload
         id: callback_payload
         if: always()
+        env:
+          GEMINI_SUMMARY: ${{ steps.gemini_run.outputs.summary }}
+          REQUEST_TASK: ${{ steps.request_comment.outputs.request }}
         shell: bash
         run: |
           set -euo pipefail
@@ -240,7 +243,7 @@ jobs:
           # the comment body and execution context.
           if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
             REQUEST_ID=""
-            TASK="${{ steps.request_comment.outputs.request }}"
+            TASK="$REQUEST_TASK"
             REPOSITORY="${{ github.repository }}"
             BASE_BRANCH="${{ github.ref_name }}"
           else
@@ -252,8 +255,10 @@ jobs:
 
           CURRENT_HEAD_SHA="${GITHUB_SHA}"
 
-          # Capture Gemini output (stdout from run-gemini-cli)
-          GEMINI_OUTPUT="${{ steps.gemini_run.outputs.summary }}"
+          # Capture Gemini output (stdout from run-gemini-cli).
+          # Transported via env: (GEMINI_SUMMARY) to avoid shell-interpolation
+          # of uncontrolled/multiline Gemini content inside the Bash source.
+          GEMINI_OUTPUT="$GEMINI_SUMMARY"
 
           # Use status determined from actual Gemini execution outcome.
           # Do NOT hardcode status=success: a green workflow does not
@@ -365,6 +370,7 @@ jobs:
           name: gemini-acp-report
           path: gemini-acp-report.json
           retention-days: 7
+          if-no-files-found: error
 
       - name: Report artifact filing status
         id: report_filing_status
