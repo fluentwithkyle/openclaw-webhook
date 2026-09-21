@@ -238,11 +238,12 @@ jobs:
 
           # Derive ACP envelope fields based on trigger path.
           # workflow_dispatch: all fields from orchestration_context.
-          # issue_comment: request_id and kilo_execution_id are genuinely
-          # unavailable; task, repository, and base_branch are derived from
-          # the comment body and execution context.
+          # issue_comment: request_id is derived from the GitHub-native
+          # comment ID (a stable, traceable execution identifier available
+          # in the issue_comment event context). task, repository, and
+          # base_branch are derived from the comment body and execution context.
           if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
-            REQUEST_ID=""
+            REQUEST_ID="${{ github.event.comment.id }}"
             TASK="$REQUEST_TASK"
             REPOSITORY="${{ github.repository }}"
             BASE_BRANCH="${{ github.ref_name }}"
