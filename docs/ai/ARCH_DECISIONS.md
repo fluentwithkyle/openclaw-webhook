@@ -283,7 +283,7 @@ This is contrasted with the alternative:
 
 The Solution Simplicity Gate is satisfied: Path 2 reuses the existing Git evidence layer already established by the POC rather than introducing new infrastructure. External durable persistence (Path 1) is deferred until investigation proves it necessary (see Escalation Condition).
 
-**Status distinction**: Path 2 is **APPROVED / PROPOSED / TARGET**. The recovery/rehydration mechanism is **NOT IMPLEMENTED**. The existing Git completion-signal mechanism (signal artifact, webhook, correlation, orchestrator delegation) **IS IMPLEMENTED (UNDER VALIDATION)**. This task documents the approved direction; it does not implement recovery.
+**Status distinction**: Path 2 is **APPROVED / IMPLEMENTED / VERIFIED**. The recovery/rehydration mechanism is **IMPLEMENTED** via `recoverTaskFromGitHub()` in `poc/github-webhook.js` and `rehydrateTask()` in `poc/task-registry.js`. The existing Git completion-signal mechanism (signal artifact, webhook, correlation, orchestrator delegation) **IS IMPLEMENTED (UNDER VALIDATION)** — unchanged. This ADR documents the architectural direction and records its implementation.
 
 ### Durable Evidence vs. Runtime Orchestration State
 
@@ -383,7 +383,7 @@ A Render deployment timing/delay is **not** considered a fundamental solution to
 
 The architectural defect is not a timing problem — it is a **state durability** problem. Render deployment delay only changes **when** the Git signal is processed; it does not establish **whether** the required TaskRegistry state is durably available. If the TaskRegistry state is lost (container restart, file-system loss), delaying the processing of the Git signal does not recover the state. The signal would still be rejected at the `registry` stage.
 
-Delay therefore does not address the root cause: the hard dependency of Git-signal processing on ephemeral runtime state. Only making the state itself durable (either by recovering it from Git evidence per Path 2, or by introducing external durable persistence per Path 1) addresses the defect.
+Delay therefore does not address the root cause: the historical hard dependency of Git-signal processing on ephemeral runtime state. Path 2 has resolved this by adding a recovery path that reconstructs TaskRegistry state from Git/GitHub evidence when the ephemeral state is absent. Only making the state itself durable (either by recovering it from Git evidence per Path 2, or by introducing external durable persistence per Path 1) addresses the defect.
 
 ### Solution Simplicity Conclusion
 
