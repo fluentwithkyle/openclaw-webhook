@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-21
-**Updated By**: Gemini — VERIFY_RECONCILE (TASK-GEMINI-ACP-REPORT-FILING-STATUS-VERIFY-RECONCILE-001)
+**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-PROJECT-STATE-LOGS-RECONCILE-001)
 
 ---
 
@@ -37,7 +37,8 @@
 | Gemini ACP artifact reporting fix (Issue #173) — Independent Verification | **IMPLEMENTED / VERIFIED** | Gemini | Independently verified Kilo's implementation (commit `72ad118`). Confirmed structured artifact `gemini-acp-report.json` correctly derives from `callback_payload.json` (containing `current_head_sha` from `$GITHUB_SHA`), artifact upload restrictions applied, and all verification requirements met. (TASK-GEMINI-ACP-ARTIFACT-REPORTING-FIX-VERIFY-RECONCILE-001, commit `72ad118`) |
 | Gemini ACP artifact reporting fix (Issue #173) | **IMPLEMENTED / VERIFIED** | Kilo | Fixed defect where `gemini-acp-report.json` artifact contained raw Gemini CLI summary instead of the structured ACP envelope. Changes to `.github/workflows/main.yml`: (1) Added `current_head_sha` field (sourced from `$GITHUB_SHA`) to `callback_payload.json` jq construction; (2) Added `cp callback_payload.json gemini-acp-report.json` in the callback payload step so the artifact file syncs with the authoritative structured envelope; (3) Restricted first Upload step to `issue_comment` only (preserves raw summary artifact for ad-hoc requests — NOTE: the `issue_comment` path was left unchanged in Issue #173; the separate "Persist Gemini result as artifact" step continued to write raw `steps.gemini_run.outputs.summary` to `gemini-acp-report.json` for `issue_comment` triggers; this remaining defect was fixed by Issue #174); (4) Added final Upload step for `workflow_dispatch` that persists the structured ACP envelope as the `gemini-acp-report` artifact. The persisted artifact now contains request_id, agent, status, task, repository, base_branch, current_head_sha, changed_files, verification, result, commit, push, blockers. All 328 tests pass. (TASK-KILO-GEMINI-ACP-ARTIFACT-REPORTING-FIX-001) |
 | Gemini ACP artifact reporting fix — issue_comment path (Issue #174) | **IMPLEMENTED / VERIFIED** | Gemini | Independently verified Kilo's implementation (commit `1842f58`). Confirmed structured artifact `gemini-acp-report.json` correctly derives from structured ACP payload (unified across trigger paths), raw Markdown artifact persistence removed, and all verification requirements met. Live validation: NOT PERFORMED. (TASK-GEMINI-ACP-ARTIFACT-ISSUE-COMMENT-VERIFY-RECONCILE-002, commit `1842f58`) |
-| Git-based Kilo completion-signal POC (Issue #162) | **IMPLEMENTED / VERIFIED** | Kilo | Bounded POC implementing Git-based Kilo completion signal via GitHub push webhook. Implemented `poc/github-webhook.js` (HMAC-SHA256 signature verification, repository/branch/path/request_id validation, signal artifact fetch, delivery-id + task-level idempotency, explicit recursion preventing excluding Gemini reconciliation commits) and `POST /poc/github/webhook` route. Reuses existing TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling, callback, verification, and Kilo→Gemini orchestration preserved. Implementation commit: `bf68116167454d7c42b85e0ac4d627050a89ffd9`. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`, TASK-KILO-GIT-COMPLETION-SIGNAL-COMMIT-SHA-HARDENING-002): resolved the self-referential defect. **Live validation signal** (commit `f9d97e5`). **Path 2 recovery IMPLEMENTED / VERIFIED** (TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-RECOVERY-IMPLEMENTATION-001): when TaskRegistry state is absent, `recoverTaskFromGitHub()` retrieves the authoritative ACP task from the GitHub issue body (correlated by exact `request_id`), validates via `validateACPCommand` + `validateAuthorization`, requires commit/push capabilities for execution path authorization, rehydrates via `taskRegistry.rehydrateTask()`, then continues through the existing Kilo-completion → Gemini flow. Fail-closed on GitHub issue absence, request_id mismatch, validation/authorization failure, and missing token. Test count: 77/77 focused tests pass (58 original + 6 commit-SHA hardening + 13 Path 2 recovery), 270 regression tests pass, 347 total tests pass. Independent verification by Gemini performed in TASK-GEMINI-PATH-2-TASKREGISTRY-RECOVERY-IMPLEMENTATION-VERIFY-RECONCILE-001. |
+| Git-based Kilo completion-signal POC (Issue #162) | **IMPLEMENTED / VERIFIED** | Kilo | Bounded POC implementing Git-based Kilo completion signal via GitHub push webhook. Implemented `poc/github-webhook.js` (HMAC-SHA256 signature verification, repository/branch/path/request_id validation, signal artifact fetch, delivery-id + task-level idempotency, explicit recursion preventing excluding Gemini reconciliation commits) and `POST /poc/github/webhook` route. Reuses existing TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling, callback, verification, and Kilo→Gemini orchestration preserved. Implementation commit: `bf68116167454d7c42b85e0ac4d627050a89ffd9`. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`, TASK-KILO-GIT-COMPLETION-SIGNAL-COMMIT-SHA-HARDENING-002): resolved the self-referential defect. **Live validation signal** (commit `f9d97e5`). **Path 2 recovery IMPLEMENTED / VERIFIED** (TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-RECOVERY-IMPLEMENTATION-001): when TaskRegistry state is absent, `recoverTaskFromGitHub()` retrieves the authoritative ACP task from the GitHub issue body (correlated by exact `request_id`), validates via `validateACPCommand` + `validateAuthorization`, requires commit/push capabilities for execution path authorization, rehydrates via `taskRegistry.rehydrateTask()`, then continues through the existing Kilo-completion → Gemini flow. Fail-closed on GitHub issue absence, request_id mismatch, validation/authorization failure, and missing token. Test count: 77/77 focused tests pass (58 original + 6 commit-SHA hardening + 13 Path 2 recovery), 270 regression tests pass, 347 total tests pass. Independent verification by Gemini performed in TASK-GEMINI-PATH-2-TASKREGISTRY-RECOVERY-IMPLEMENTATION-VERIFY-RECONCILE-001. Follow-on: signal emitter implemented in Issue #180 (commit `7bec058`) — see active task entry above. |
+| Git-based Kilo completion-signal emitter (Issue #180) | **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** | Kilo | Commit `7bec058`: `poc/signal-emitter.js` builds, validates via `validateSignal()` from `poc/github-webhook.js`, and writes `poc/signals/<request_id>.json` completion signals (success/failure/blocked) with duplicate/conflict prevention. Committed signal artifact at `poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-EMITTER-IMPLEMENT-001.json` (`commit_sha: null`, `push: true`). Signal emitter focused tests: 41/41 pass (`test/signal-emitter.test.js`). Existing github-webhook regression tests: 77/77 pass. Consumer/emitter relationship verified via code inspection: emitter sets `commit_sha: null`; consumer assigns authoritative SHA via `head_commit.id` in `buildCompletionReport(signal, headCommitSha)` (consistent with commit-SHA hardening commit `f63211d`). Test count discrepancy: signal artifact claims 337 regression across 12 suites (total 378) but actual regression count is 369 across 16 test suites (total 410); the reported 379-test result is NOT verified against available evidence. Live end-to-end validation (GitHub push ↠ Render webhook ↠ Gemini dispatch): NOT verified — tests use mocks, not live API calls. `git diff --check` clean. No protected files modified. |
 | Apps Script authentication hardening | **BACKLOG** | — | Require shared secret for Node → Apps Script action boundary |
 | Abandoned-booking idempotency | **BACKLOG** | — | Durable duplicate-alert prevention needed |
 | Webhook signature verification | **BACKLOG** | — | Tally / Cal.com event-ID deduplication |
@@ -117,6 +118,44 @@ If any check fails, recovery fails closed and the signal is rejected. Authorizat
 ### Preserved
 
 Existing Kilo → Gemini lifecycle, polling (`poc/kilo-polling.js`), callback (`POST /poc/kilo/callback`), Kilo HTTP trigger dispatch (`POST /poc/kilo`), ACP authorization boundary, and specialist lane boundaries (Gemini, Security AI, Utility AI) are all preserved. Path 2 does not replace or bypass TaskRegistry — it adds a recovery path into it.
+
+---
+
+## Git-Based Kilo Completion-Signal Emitter (Issue #180) — IMPLEMENTED / VERIFIED (UNDER VALIDATION)
+
+**Issue**: #180
+**Task**: TASK-KILO-GIT-COMPLETION-SIGNAL-EMITTER-IMPLEMENT-001
+**Status**: IMPLEMENTED / VERIFIED (UNDER VALIDATION)
+**Commit**: `7bec05817e9209bf934d6f73babccdcfe93492c5` on `main`
+
+**Objective**: Implement the Kilo completion-signal emitter identified by Gemini research. At Kilo task completion, the emitter creates a durable Git evidence file at `poc/signals/<request_id>.json` containing the completion signal, which is then committed and pushed to `main` so the existing GitHub push webhook consumer (`poc/github-webhook.js`) can correlate the completion and trigger the existing Gemini handoff.
+
+**Implementation verified**:
+- `poc/signal-emitter.js` (185 lines) — `buildSignal()` constructs a compliant completion signal envelope with `commit_sha: null` (the emitter does not know its own commit SHA; the consumer assigns the authoritative SHA from `head_commit.id`); `validateSignalConformance()` calls `validateSignal()` from `poc/github-webhook.js` to enforce the existing consumer contract; `checkForConflict()` enforces duplicate/conflicting signal prevention; `emitCompletionSignal()` validates, checks conflicts, and writes the signal file.
+- `poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-EMITTER-IMPLEMENT-001.json` (39 lines) — committed signal artifact containing a `status: "success"` signal with `commit_sha: null`, `push: true`, and verification claims.
+- `test/signal-emitter.test.js` (468 lines) — 41 focused tests covering signal construction, contract conformance, file writing, duplicate/conflict prevention, path regex consistency, and end-to-end integration with the consumer's `findSignalFiles()` and `validateSignal()`.
+
+**Consumer/emitter relationship — VERIFIED via code inspection**:
+- Emitter writes `commit_sha: null` (poc/signal-emitter.js:36). Consumer assigns authoritative SHA via `buildCompletionReport(signal, headCommitSha)` where `headCommitSha = head_commit.id` from the GitHub push event (poc/github-webhook.js:265-282). This is consistent with commit `f63211d` commit-SHA hardening.
+- Signal path regex and `findSignalFiles()` in the consumer are consistent with the emitter's file write location (`poc/signals/<request_id>.json`).
+- `validateSignal()` in the consumer is imported by the emitter, ensuring the signal conforms to the consumer's validation contract before it is written.
+
+**Test verification — VERIFIED (with discrepancy noted)**:
+- Signal emitter focused tests: **41/41 pass** (`test/signal-emitter.test.js`).
+- Existing github-webhook regression tests: **77/77 pass**.
+- Total across all test suites: **410 tests pass** (369 regression + 41 signal-emitter), distributed across 17 test files:
+  - `test/schema.test.js` (20), `test/task-registry.test.js` (18), `test/orchestrator.test.js` (19), `test/integration.test.js` (11), `test/gemini-trigger.test.js` (14), `test/gemini-callback.test.js` (23), `test/kilo-callback.test.js` (15), `test/kilo-polling.test.js` (10), `test/kilo-verifier.test.js` (18), `test/verify-reconcile.test.js` (52), `test/github-webhook.test.js` (77), `test/coordinator.test.js` (19), `test/chatbox-gateway.test.js` (23), `test/workflow-expression.test.js` (29), `test/signal-emitter.test.js` (41), `poc/test.js` (16), `test/run-poc-tests.js` (5).
+- **Test count discrepancy**: The committed signal artifact (`poc/signals/TASK-KILO-GIT-COMPLETION-SIGNAL-EMITTER-IMPLEMENT-001.json`) claims "337 total tests across 12 suites" for regression (total 378). The independently verified actual regression count is 369 across 16 test files (total 410). The "379-test result" referenced in Issue #181 does not match either the artifact's 378 or the actual 410. The discrepancy is not reconciled — likely a counting error in Kilo's original test run.
+
+**Live end-to-end validation — NOT VERIFIED**:
+- The signal artifact was committed and pushed to `main` in commit `7bec058`, but this does not prove the full end-to-end flow (GitHub push webhook ↠ Render webhook ↠ signal processing ↠ Gemini dispatch) was exercised.
+- All signal-emitter tests use mock fetch and file-system interactions, not live GitHub API calls.
+- The existing live validation signal (`TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002.json`, commit `f9d97e5`) committed and pushed a signal file but did not independently verify webhook consumer processing.
+- Live end-to-end validation remains an outstanding validation requirement.
+
+**`git diff --check` — clean (no whitespace errors).**
+
+**Protected files — none modified**: `AGENTS.md`, `GEMINI.md`, `ARCHITECTURE.md`, production code (`index.js`, `routes/poc.js`), GitHub workflows (`.github/workflows/*.yml`), `openclaw-render.json` — all unchanged by commit `7bec058`.
 
 ---
 
@@ -463,10 +502,14 @@ openclaw-webhook/
 │   ├── kilo-polling.js           # Idempotent Kilo completion/result polling
 │   ├── kilo-verifier.js          # Independent Kilo delivery verification
 │   ├── github-webhook.js         # Git-based Kilo completion-signal POC receiver
+│   ├── signal-emitter.js         # Kilo completion-signal emitter (Issue #180)
 │   ├── command.json              # POC ACP command fixture
 │   ├── main.js                   # POC entry point
 │   ├── test.js                   # POC unit tests
 │   ├── mock-kilo-provider.js     # Mock Kilo provider for testing
+│   ├── signals/                  # Durable Git-backed completion signal artifacts
+│   │   ├── TASK-KILO-GIT-COMPLETION-SIGNAL-EMITTER-IMPLEMENT-001.json
+│   │   └── TASK-KILO-GIT-COMPLETION-SIGNAL-LIVE-VALIDATION-002.json
 │   ├── schemas/
 │   │   └── acp-schema.js         # ACP/task contract validation
 │   └── test-transport.js         # Mock transport for testing
@@ -484,6 +527,10 @@ openclaw-webhook/
 │   ├── kilo-verifier.test.js
 │   ├── verify-reconcile.test.js
 │   ├── github-webhook.test.js
+│   ├── signal-emitter.test.js
+│   ├── coordinator.test.js
+│   ├── chatbox-gateway.test.js
+│   ├── workflow-expression.test.js
 │   ├── mock-kilo-transport.js
 │   └── run-poc-tests.js
 ├── docs/
