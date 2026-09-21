@@ -309,9 +309,15 @@ When Gemini is executed through the repository GitHub Actions workflow (`.github
 
 The project-wide interpretation of natural-language references such as "Gemini's report" or "Gemini's results" is defined in `docs/ai/README.md` — *Terminology and Artifact Retrieval*. This section provides the ChatGPT-specific rule that implements that project-wide definition; it does not establish a second or conflicting definition.
 
-After a completed Gemini run, ChatGPT SHOULD retrieve and inspect that artifact directly when verification or result access is required.
+After a completed Gemini run, ChatGPT MUST retrieve and inspect that artifact directly when verification or result access is required.
 
-ChatGPT SHOULD NOT require Kyle to copy/paste the Gemini response when the artifact is available.
+ChatGPT MUST NOT require Kyle to copy/paste the Gemini response when the artifact can be retrieved through the documented procedure. ChatGPT must never ask Kyle to locate or provide a Gemini result before exhausting the repository's documented retrieval procedure.
+
+**Completion gate.** Gemini execution is not independently verified until the `gemini-acp-report` artifact has been retrieved and `gemini-acp-report.json` has been inspected. This is a mandatory completion gate for any task whose objective involves verifying, reporting, or establishing project state from a Gemini execution.
+
+**Prohibited substitutes.** The following are NOT substitutes for inspecting the canonical `gemini-acp-report` artifact and `gemini-acp-report.json`: Gemini's chat/comment response; Gemini's completion report; GitHub issue comments; workflow conclusion (pass/fail); workflow annotations; Job Summary; artifact-upload status; or an assistant's prior memory of the execution.
+
+**Fail-closed state.** If the canonical artifact has not been retrieved and `gemini-acp-report.json` has not been inspected, the Gemini execution status MUST be reported as **NOT YET VERIFIED**. This fail-closed state takes precedence over any secondary signal — workflow conclusion, Job Summary, issue comment, self-report, or otherwise — that might otherwise suggest the execution is complete, verified, or resolved.
 
 This rule preserves the existing distinction between:
 
@@ -363,14 +369,15 @@ Gemini
 
 This chain is the documented, authoritative retrieval path. The procedure MUST be performed in this sequence:
 
-1. Identify the completed `Gemini Architect and Reviewer` GitHub Actions workflow run associated with the requested Gemini execution (via `.github/workflows/main.yml`).
-2. Inspect that workflow run's artifacts.
-3. Locate the artifact named `gemini-acp-report`.
-4. Download the artifact.
-5. Extract `gemini-acp-report.json`.
-6. Read and review the report.
-7. Use that retrieved report as the authoritative Gemini result for the requested execution.
-8. Only if the documented artifact cannot be located, cannot be downloaded, has expired, or the workflow did not produce the expected artifact should ChatGPT investigate another documented result location or report that retrieval is blocked.
+1. Identify the exact `Gemini Architect and Reviewer` GitHub Actions workflow run associated with the requested Gemini execution (via `.github/workflows/main.yml`). Discovery is deterministic and proceeds by correlating available durable identifiers in priority order: the orchestration `request_id`, then the issue number / issue-comment event, then the Kilo commit SHA, then the event type (`issue_comment` vs. `workflow_dispatch`), then the workflow run timestamp. ChatGPT MUST use whichever durable identifiers are available and MUST NOT invent missing identifiers.
+2. If the first lookup against the available identifiers does not locate the execution, continue through the documented GitHub discovery chain (issues, recent workflow runs, artifact listings, commit history) rather than concluding the artifact does not exist. A failed first lookup is NOT evidence that the execution or artifact is absent.
+3. Inspect that workflow run's artifacts.
+4. Locate the artifact named `gemini-acp-report`.
+5. Download the artifact.
+6. Extract `gemini-acp-report.json`.
+7. Read and review the report.
+8. Use that retrieved report as the authoritative Gemini result for the requested execution.
+9. Only if the documented artifact cannot be located after exhausting the discovery chain, cannot be downloaded, has expired, or the workflow did not produce the expected artifact should ChatGPT report the Gemini result as NOT YET VERIFIED.
 
 > **Mandatory retrieval behavior.** When Kyle says "find Gemini's report," "get Gemini's results," "retrieve Gemini's report," or equivalent wording (see the project-wide terminology mapping in `docs/ai/README.md` — *Terminology and Artifact Retrieval*), ChatGPT MUST interpret this as a GitHub Actions artifact retrieval task and MUST independently perform the documented retrieval procedure above. ChatGPT MUST NOT ask Kyle where Gemini stored the result or ask Kyle to copy/paste the result unless the documented retrieval procedure has already been independently attempted and is unavailable or blocked.
 

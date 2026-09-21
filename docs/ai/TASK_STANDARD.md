@@ -25,6 +25,7 @@ The canonical field ordering is: `originator`, `target_agent`, `repository`, `ba
 - **Principle of least privilege**: Agents are only authorized for the specific capabilities listed in the task request.
 - **Explicit authorization**: Capabilities are never implied.
 - **Fail-closed**: Any missing, ambiguous, or unauthorized capability or scope results in a blocked status.
+- **Fail-closed artifact verification**: When a task involves verifying Gemini's result or establishing project state from a Gemini execution, the canonical `gemini-acp-report` artifact and its `gemini-acp-report.json` payload are the sole authoritative source. No secondary signal — Gemini self-report, GitHub issue comment, workflow conclusion, workflow annotations, Job Summary, artifact-upload status, or an assistant's prior memory — may substitute for inspecting the canonical artifact. If the artifact has not been retrieved and inspected, the result is NOT YET VERIFIED. This rule is implemented in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 5) and defined project-wide in `docs/ai/README.md` (*Terminology and Artifact Retrieval*); this standard does not establish a second or competing retrieval mechanism.
 - **Secrets**: No secrets, API keys, or credentials allowed in task requests.
 - **Scope**: Changes are limited strictly to the authorized file/path scope.
 

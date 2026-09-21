@@ -80,7 +80,13 @@ Gemini
 
 ### Resolving the Relevant Run
 
-When multiple completed Gemini workflow runs exist, the **relevant run** is resolved from the **immediately preceding Gemini execution / task context** — the Gemini workflow run associated with the most recent Gemini task, activation, or execution relevant to the current request.
+When multiple completed Gemini workflow runs exist, the **relevant run** is resolved deterministically from the immediately preceding Gemini execution / task context — the Gemini workflow run associated with the most recent Gemini task, activation, or execution relevant to the current request. Correlation uses available durable identifiers in priority order: the orchestration `request_id`, then the issue number / issue-comment event, then the Kilo commit SHA, then the event type (`issue_comment` vs. `workflow_dispatch`), then the workflow run timestamp. Identifiers are never invented; only identifiers present in the durable GitHub state are used. If the first lookup does not locate the execution, the discovery chain must be continued rather than concluding the artifact does not exist. The relevant run is the run that yields the canonical `gemini-acp-report` artifact.
+
+### Fail-Closed Verification Gate
+
+**Gemini execution is not independently verified until the `gemini-acp-report` artifact has been retrieved and `gemini-acp-report.json` has been inspected.** This is a mandatory, project-wide completion gate. If the canonical artifact has not been retrieved and `gemini-acp-report.json` has not been inspected, the result MUST be reported as **NOT YET VERIFIED** regardless of any secondary signal.
+
+The canonical `gemini-acp-report` artifact and `gemini-acp-report.json` payload are the sole authoritative source for Gemini-generated reports. The following are NOT substitutes for inspecting the canonical artifact: Gemini's chat/comment response; Gemini's completion report; GitHub issue comments; workflow conclusion; workflow annotations; Job Summary; artifact-upload status; or an assistant's prior memory of the execution. This rule is the single project-wide definition; the ChatGPT-specific procedural implementation lives in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 5). No second or competing retrieval mechanism is established.
 
 ### ChatGPT Procedural Retrieval
 
