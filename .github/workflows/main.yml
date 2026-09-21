@@ -358,9 +358,41 @@ jobs:
           fi
 
       - name: Upload Gemini result artifact
+        id: upload_gemini_result
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gemini-acp-report
           path: gemini-acp-report.json
           retention-days: 7
+
+      - name: Report artifact filing status
+        id: report_filing_status
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          UPLOAD_OUTCOME="${{ steps.upload_gemini_result.outcome }}"
+
+          case "$UPLOAD_OUTCOME" in
+            success)
+              STATUS="SUCCESS"
+              ;;
+            failure)
+              STATUS="FAILED"
+              ;;
+            *)
+              STATUS="UNKNOWN"
+              ;;
+          esac
+
+          {
+            echo "## Gemini ACP Report Artifact Filing Status"
+            echo ""
+            echo "The \`gemini-acp-report\` artifact upload step outcome was: \`${UPLOAD_OUTCOME:-unavailable}\`"
+            echo ""
+            echo "filing_status: ${STATUS}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "filing_status=${STATUS}" >> "$GITHUB_OUTPUT"
