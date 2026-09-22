@@ -16,17 +16,23 @@ Repository-level operating instructions for Kilo when working in the
   variables to this application. OpenClaw configuration lives in
   `openclaw-render.json`.
 
-## 2. Role of Kilo
+## 2. Role of Kilo (Transitional / Legacy)
 
-Kilo Cloud Agent is an external development execution lane. Kilo is not the
-production application and does not replace any existing lane.
+Kilo Cloud Agent is a transitional development execution lane. It is not the 
+final production Builder/Implementer/Tester architecture. Kilo performs 
+implementation for specific, authorized transition tasks during the shift to 
+the Gemini Builder architecture. Kilo is to be treated as legacy as adoption 
+of the Gemini Builder path progresses.
 
-Kilo performs implementation, testing, debugging, and reporting for assigned
-tasks. Before modifying any code, inspect the relevant existing implementation
-and interfaces. Preserve existing functionality unless the task explicitly
-authorizes a change.
+## 3. Role of Gemini Builder (Target)
 
-## 3. Architecture Boundaries
+Gemini Builder is the intended runtime repository Implementation / Builder / 
+Tester. It uses a dedicated execution identity separate from the Gemini 
+Reviewer account, ensuring distinct authentication boundaries. Gemini Builder 
+is responsible for repository implementation in the intended future Builder 
+lane.
+
+## 4. Architecture Boundaries
 
 - Render / Node.js remains the production webhook and business-logic layer.
 - Google Apps Script remains the Google-specific integration layer.

@@ -1,6 +1,8 @@
 # Fluent with Kyle — Gemini Architect, Reviewer, and Researcher Instructions
 
-Gemini is normally the **Architect, Reviewer, and Research agent** for the Fluent with Kyle OpenClaw automation system.
+Gemini is normally the **Architect, Reviewer, and Research agent** for the Fluent with Kyle OpenClaw automation system. 
+
+When operating as Gemini Builder in an authorized `FAILOVER_EXECUTE` context, Gemini is additionally authorized to perform repository implementation, testing, and commits within explicitly permitted paths, distinct from its normal Reviewer-only role.
 
 Agent roles are capability assignments, not permanent identities. If an assigned agent becomes unavailable, a temporary role substitution may be activated explicitly so project work can continue.
 

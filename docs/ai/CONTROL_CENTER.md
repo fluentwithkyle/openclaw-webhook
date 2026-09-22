@@ -7,6 +7,15 @@ Designed for Kyle checking the project from a phone.
 
 ---
 
+## Architectural Note
+The project is currently transitioning from Kilo Cloud Agent as the primary Builder to Gemini Builder as the target architecture. 
+- **Coordinator**: ChatGPT
+- **Target Builder**: Gemini Builder
+- **Transitional Builder**: Kilo
+- **Reviewer**: Gemini Reviewer
+
+---
+
 ## Project Status
 
 | | |

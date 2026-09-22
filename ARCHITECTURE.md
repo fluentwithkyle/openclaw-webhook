@@ -655,7 +655,7 @@ The specialist layer contains three distinct lanes:
 * Security AI — Security Specialist
 * Utility AI — General Utility Specialist
 
-Kilo remains the primary Builder / Implementer / Tester.
+Gemini Builder is the intended replacement for Kilo as the runtime repository Builder / Implementer / Tester. Kilo remains the transitional implementation agent for authorized tasks while the Gemini Builder architecture is finalized and validated.
 
 Label this entire multi-agent architecture:
 
@@ -1044,7 +1044,9 @@ Kyle should not need to manually move between:
 * Gemini — Architect / Planner / Reviewer;
 * Security AI — Security Specialist;
 * Utility AI — General Utility Specialist;
-* Kilo — Builder / Implementer / Tester;
+* Gemini Builder (Target) — Runtime repository Implementation / Builder / Tester;
+* Gemini Reviewer (Independent) — Review lane;
+* Kilo (Transitional/Legacy) — Transitional implementation agent;
 * GitHub / CI — Source of Truth;
 * Render;
 * Google Apps Script;
@@ -1084,7 +1086,7 @@ The specialist layer contains three distinct lanes:
 * Security AI — Security Specialist
 * Utility AI — General Utility Specialist
 
-Kilo remains the primary Builder / Implementer / Tester.
+Gemini Builder is the intended replacement for Kilo as the runtime repository Builder / Implementer / Tester. Kilo remains the transitional implementation agent for authorized tasks while the Gemini Builder architecture is finalized and validated.
 
 GitHub Actions may serve as an ephemeral AI execution plane within this architecture.
 
@@ -2332,7 +2334,9 @@ Enable complex tasks involving:
 * Gemini — Architect / Planner / Reviewer;
 * Security AI — Security Specialist;
 * Utility AI — General Utility Specialist;
-* Kilo — Builder / Implementer / Tester;
+* Gemini Builder (Target) — Runtime repository Implementation / Builder / Tester;
+* Gemini Reviewer (Independent) — Review lane;
+* Kilo (Transitional/Legacy) — Transitional implementation agent;
 * GitHub Actions;
 * approved production capabilities.
 

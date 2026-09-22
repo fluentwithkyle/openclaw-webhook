@@ -5,9 +5,16 @@
 
 ---
 
-## Project Status: ACTIVE
+## Project Status: ACTIVE (Transitional)
 
 **Repository**: `fluentwithkyle/openclaw-webhook`
+
+**Architectural State**: Under transition from Kilo Cloud Agent (transitional/legacy) to Gemini Builder (target/proposed).
+- Kilo is being phased out as the primary Builder/Implementer/Tester.
+- Gemini Builder is the approved target architectural lane for runtime repository implementation.
+- Gemini Reviewer remains the independent review lane.
+- ChatGPT serves as the project coordinator and control/verification layer.
+- GitHub serves as the durable source of truth.
 **Default Branch**: `main`
 **Production Deployment**: Render (Node.js/Express webhook listener)
 **Google Adapter**: Google Apps Script (versioned in `google-apps-script/`)
