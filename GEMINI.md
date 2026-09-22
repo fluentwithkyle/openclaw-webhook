@@ -52,6 +52,23 @@ is explicitly documented. Gemini is authorized with full capabilities (`read_onl
 `modify_files`, `run_tests`, `commit`, `push`) within explicitly permitted paths.
 This mode is distinct from the normal Architect/Reviewer role.
 
+### BUILDER (runtime Builder / Implementer / Tester)
+
+When invoked as the Gemini Builder lane, Gemini operates with full execution
+capabilities (`read_only`, `modify_files`, `run_tests`, `commit`, `push`) within
+explicitly permitted paths. The Gemini Builder uses a separate credential
+(`GEMINI_BUILDER_API_KEY`) from the Gemini Reviewer (`GEMINI_API_KEY`).
+
+The Builder is authorized to:
+- Implement the requested task within the authorized `permitted_paths`;
+- Run tests, lint, or typecheck commands within `permitted_paths`;
+- Commit and push changes in the same execution;
+- Produce a canonical `gemini-acp-report` artifact.
+
+The Builder is distinct from the Gemini Reviewer. After Builder completion, the
+Reviewer reviews the Builder's committed work. The Builder must never modify
+credentials, secrets, or files outside `permitted_paths`.
+
 ## Task Activation
 
 Task requests initiated by the Director must conform to `docs/ai/TASK_STANDARD.md`.

@@ -92,10 +92,11 @@ test('handleKiloCompletion - valid success report', () => {
   setupTask();
   const result = orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
   assertEqual(result.success, true);
-  assertEqual(result.next_action, 'trigger_gemini');
+  assertEqual(result.next_action, 'trigger_builder');
   const task = taskRegistry.getTask('test-orch-1');
   assertEqual(task.status, 'EXECUTING');
   assertEqual(task.kilo.status, 'success');
+  assertEqual(task.builder.status, 'pending');
   assertEqual(task.current_agent, 'Gemini');
   cleanup();
 });
@@ -279,7 +280,120 @@ test('determineNextAction - returns next action', () => {
   orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
   const result = orchestrator.determineNextAction('test-orch-1');
   assertEqual(result.success, true);
+  assertEqual(result.next_action, 'trigger_builder');
+  cleanup();
+});
+
+const validBuilderReport = {
+  request_id: 'test-orch-1',
+  agent: 'Gemini Builder',
+  status: 'success',
+  task: 'test-task',
+  changed_files: ['poc/new-file.js'],
+  verification: ['tests passed', 'lint passed'],
+  result: { execution_metadata: { invocation_id: 'inv-builder-1', run_id: 'run-builder-1' } },
+  commit: 'builder-commit-sha',
+  push: true,
+  blockers: []
+};
+
+test('handleGeminiBuilderCompletion - valid success report', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  const result = orchestrator.handleGeminiBuilderCompletion('test-orch-1', validBuilderReport);
+  assertEqual(result.success, true);
   assertEqual(result.next_action, 'trigger_gemini');
+  const task = taskRegistry.getTask('test-orch-1');
+  assertEqual(task.builder.status, 'success');
+  assertEqual(task.gemini.status, 'pending');
+  assertEqual(task.status, 'EXECUTING');
+  cleanup();
+});
+
+test('handleGeminiBuilderCompletion - failure transitions to FAILED', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  const failureReport = { ...validBuilderReport, status: 'failure', blockers: ['Build failed'] };
+  const result = orchestrator.handleGeminiBuilderCompletion('test-orch-1', failureReport);
+  assertEqual(result.success, true);
+  assertEqual(result.next_action, 'human_review');
+  const task = taskRegistry.getTask('test-orch-1');
+  assertEqual(task.status, 'FAILED');
+  assertEqual(task.builder.status, 'failure');
+  cleanup();
+});
+
+test('handleGeminiBuilderCompletion - idempotency prevents duplicate', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  orchestrator.handleGeminiBuilderCompletion('test-orch-1', validBuilderReport);
+  const result = orchestrator.handleGeminiBuilderCompletion('test-orch-1', validBuilderReport);
+  assertEqual(result.success, false);
+  assert(result.error.includes('already recorded'));
+  assertEqual(result.duplicate, true);
+  cleanup();
+});
+
+test('handleGeminiBuilderCompletion - invalid report fails validation', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  const invalidReport = { ...validBuilderReport, agent: 'Gemini' };
+  const result = orchestrator.handleGeminiBuilderCompletion('test-orch-1', invalidReport);
+  assertEqual(result.success, false);
+  assert(result.error.includes('Expected Gemini Builder report'));
+  cleanup();
+});
+
+test('canTriggerGeminiBuilder - returns true after Kilo success', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  const result = orchestrator.canTriggerGeminiBuilder('test-orch-1');
+  assertEqual(result.canTrigger, true);
+  cleanup();
+});
+
+test('canTriggerGeminiBuilder - returns true with Kilo pending (direct ACP dispatch)', () => {
+  setupTask();
+  const result = orchestrator.canTriggerGeminiBuilder('test-orch-1');
+  assertEqual(result.canTrigger, true);
+  cleanup();
+});
+
+test('canTriggerGeminiBuilder - returns false when Kilo not success or pending', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'failure', execution_id: 'exec-1', report: {} });
+  const result = orchestrator.canTriggerGeminiBuilder('test-orch-1');
+  assertEqual(result.canTrigger, false);
+  cleanup();
+});
+
+test('canTriggerGeminiBuilder - returns false when Builder already run', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  taskRegistry.updateAgentResult('test-orch-1', 'Gemini Builder', { status: 'success', execution_id: 'exec-2', report: {} });
+  const result = orchestrator.canTriggerGeminiBuilder('test-orch-1');
+  assertEqual(result.canTrigger, false);
+  assert(result.reason.includes('already'));
+  cleanup();
+});
+
+test('canTriggerGeminiBuilder - returns false when Reviewer already run', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  taskRegistry.updateAgentResult('test-orch-1', 'Gemini', { status: 'success', execution_id: 'exec-2', report: {} });
+  const result = orchestrator.canTriggerGeminiBuilder('test-orch-1');
+  assertEqual(result.canTrigger, false);
+  assert(result.reason.includes('already'));
+  cleanup();
+});
+
+test('canTriggerGeminiBuilder - returns false when task not EXECUTING', () => {
+  setupTask();
+  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  taskRegistry.updateTaskStatus('test-orch-1', 'VERIFIED');
+  const result = orchestrator.canTriggerGeminiBuilder('test-orch-1');
+  assertEqual(result.canTrigger, false);
+  assert(result.reason.includes('not EXECUTING'));
   cleanup();
 });
 

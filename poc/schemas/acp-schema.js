@@ -85,6 +85,7 @@ function getRequiredCapabilitiesForMode(taskMode) {
   switch (mode) {
     case 'VERIFY_RECONCILE': return VERIFY_RECONCILE_CAPABILITIES;
     case 'FAILOVER_EXECUTE': return FAILOVER_EXECUTE_CAPABILITIES;
+    case 'BUILDER': return BUILDER_CAPABILITIES;
     case 'REVIEW':
     default: return REVIEW_CAPABILITIES.slice();
   }
@@ -384,12 +385,17 @@ function createInitialTaskRegistryEntry(requestId, command) {
       provider_message_id: null,
       provider_invocation_id: null
     },
-    gemini: {
-      status: 'pending',
-      execution_id: null,
-      report: null
-    },
-    next_action: null,
+     gemini: {
+       status: 'pending',
+       execution_id: null,
+       report: null
+     },
+     builder: {
+       status: 'pending',
+       execution_id: null,
+       report: null
+     },
+     next_action: null,
     verification: command.verification,
     capabilities: capabilities,
     permitted_paths: permittedPaths
@@ -408,8 +414,9 @@ module.exports = {
   VALID_CAPABILITIES,
   REVIEW_CAPABILITIES,
   VERIFY_RECONCILE_CAPABILITIES,
-  FAILOVER_EXECUTE_CAPABILITIES,
-  VERIFY_RECONCILE_PATHS,
+   FAILOVER_EXECUTE_CAPABILITIES,
+   BUILDER_CAPABILITIES,
+   VERIFY_RECONCILE_PATHS,
   VALID_RECONCILIATION_STATUSES,
   getRequiredCapabilitiesForMode,
   getAuthorizedPathsForMode,

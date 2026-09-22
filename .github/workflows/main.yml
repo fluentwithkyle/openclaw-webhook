@@ -24,8 +24,12 @@ on:
         required: true
         type: string
       kilo_execution_id:
-        description: 'Kilo execution identifier from completed Kilo run'
-        required: true
+        description: 'Optional Kilo execution identifier from completed Kilo run (if Builder was triggered after Kilo completion)'
+        required: false
+        type: string
+      builder_execution_id:
+        description: 'Optional Builder execution identifier (for correlation with Gemini Builder workflow)'
+        required: false
         type: string
       verification:
         description: 'Original ACP task verification requirements for Gemini review'
@@ -104,7 +108,10 @@ jobs:
             printf '%s\n' "${{ github.event.inputs.base_branch }}"
             echo 'EOF'
             echo 'kilo_execution_id<<EOF'
-            printf '%s\n' "${{ github.event.inputs.kilo_execution_id }}"
+            printf '%s\n' "${{ github.event.inputs.kilo_execution_id || '' }}"
+            echo 'EOF'
+            echo 'builder_execution_id<<EOF'
+            printf '%s\n' "${{ github.event.inputs.builder_execution_id || '' }}"
             echo 'EOF'
             echo 'verification<<EOF'
             printf '%s\n' "${{ github.event.inputs.verification }}"
@@ -131,6 +138,7 @@ jobs:
           ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context.outputs.repository }}
           ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
           ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context.outputs.kilo_execution_id }}
+          ORCHESTRATION_BUILDER_EXECUTION_ID: ${{ steps.orchestration_context.outputs.builder_execution_id }}
           ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context.outputs.verification }}
           ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
           ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}

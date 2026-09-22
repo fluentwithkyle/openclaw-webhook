@@ -26,6 +26,10 @@ tasks. Before modifying any code, inspect the relevant existing implementation
 and interfaces. Preserve existing functionality unless the task explicitly
 authorizes a change.
 
+**Note**: As of the Gemini Builder transition, the Gemini Builder execution
+lane is the primary Builder / Implementer / Tester (see Section 4). Kilo
+remains an available execution lane for tasks that explicitly target it.
+
 ## 3. Architecture Boundaries
 
 - Render / Node.js remains the production webhook and business-logic layer.
@@ -37,8 +41,9 @@ authorizes a change.
 
 ## 4. Existing AI Lanes
 
-- Kilo Cloud Agent is the primary Builder / Implementer / Tester.
-- Gemini remains the Architect / Planner / Reviewer lane.
+- Gemini Builder is the primary Builder / Implementer / Tester (separate Google account credential: `GEMINI_BUILDER_API_KEY`).
+- Kilo Cloud Agent remains an available execution lane for tasks that explicitly target it.
+- Gemini remains the Architect / Planner / Reviewer lane (separate credential: `GEMINI_API_KEY`).
 - Security Specialist — Independent specialist lane for dedicated security analysis and security-focused work (PROPOSED / TARGET).
 - Do not replace, disable, or rewrite Gemini workflows unless
   explicitly authorized.

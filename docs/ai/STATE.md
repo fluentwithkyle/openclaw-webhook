@@ -50,10 +50,14 @@
 
 | Capability | Status | Notes |
 |------------|--------|-------|
-| Gemini execution infrastructure | **VERIFIED** | Proven operational by live workflow_dispatch validation |
-| Gemini Builder modify/commit/push | **UNDER VALIDATION** | Currently being exercised by TASK-GEMINI-RECONCILE-BUILDER-TRANSITION-RESEARCH-PLAN-001 |
-| Separate Builder/Reviewer identities | **IMPLEMENTATION DIRECTION** | Independent lanes established |
-| ACP/provider independence | **IMPLEMENTATION DIRECTION** | Builder execution substrate remains replaceable |
+| Gemini Builder execution infrastructure | **IMPLEMENTED** | `.github/workflows/gemini-builder.yml` created with `GEMINI_BUILDER_API_KEY`; `gemini-acp-report` artifact, git commit/push, and callback to Render in same execution |
+| Gemini Builder modify/commit/push | **IMPLEMENTED** | BUILDER mode with `read_only,modify_files,run_tests,commit,push` capabilities; commit and push step in workflow |
+| Separate Builder/Reviewer identities | **IMPLEMENTED** | Builder uses `GEMINI_BUILDER_API_KEY` / `BUILDER_CALLBACK_SECRET` / `RENDER_BUILDER_CALLBACK_URL`; Reviewer uses `GEMINI_API_KEY` / `GEMINI_CALLBACK_SECRET` / `RENDER_GEMINI_CALLBACK_URL` |
+| ACP/provider independence | **IMPLEMENTED** | Builder dispatch does not require `kilo_execution_id`; `builder_execution_id` input added to both workflows |
+| Builder dispatch without Kilo prerequisite | **IMPLEMENTED** | `poc/gemini-builder-trigger.js` dispatches `gemini-builder.yml` without `kilo_execution_id` required; `validateDispatchInputs` does not require `kilo_execution_id` |
+| Orchestrator Builder lifecycle | **IMPLEMENTED** | `canTriggerGeminiBuilder`, `triggerGeminiBuilder`, `handleGeminiBuilderCompletion` added; Kilo completion triggers Builder; Builder completion triggers Reviewer |
+| Builder callback route | **IMPLEMENTED** | `POST /poc/builder/callback` with `x-builder-callback-secret` authentication; `/poc/builder/dispatch` for direct ACP → Builder dispatch |
+| Task registry builder slot | **IMPLEMENTED** | `builder` slot added to task registry entry and `updateAgentResult` |
 
 ---
 
@@ -424,8 +428,9 @@ Do not describe the Control Gate as currently implemented or operational.
 | Role | Agent | Status |
 |------|-------|--------|
 | Director / Final Authority | Kyle | **ACTIVE** |
-| Primary Builder / Implementer / Tester | Kilo | **ACTIVE** |
+| Primary Builder / Implementer / Tester | Gemini Builder | **ACTIVE** (transition complete) |
 | Architect / Planner / Reviewer | Gemini | **ACTIVE** |
+| Execution Agent (available lane) | Kilo | **ACTIVE** (available for tasks that explicitly target it) |
 | Router | Qwen | **PLANNED** (UNDER VALIDATION) |
 | Security Specialist | — | **PROPOSED / TARGET** (architectural foundation established) |
 | Utility Specialist | — | **PROPOSED** |
@@ -471,11 +476,12 @@ This principle applies to all AI agents operating in this repository (Kilo, Gemi
 
 This principle is documented in detail in `docs/ai/KILO_INTEGRATION.md` Section 13 (Kilo External Agent Operating Model) and enforced through `docs/ai/TASK_STANDARD.md` Section 5 (Persistence Expectations for Implementation Tasks).
 
-Authority boundaries remain unchanged:
+Authority boundaries:
 - Kyle — Director / Final Authorization Authority
 - ChatGPT — Coordinator / Verification Layer
-- Kilo — Builder / Implementer / Tester
-- Gemini — Architect / Planner / Reviewer
+- Gemini Builder — Primary Builder / Implementer / Tester (uses `GEMINI_BUILDER_API_KEY`)
+- Kilo — Execution Agent (available lane for explicitly targeted tasks)
+- Gemini — Architect / Planner / Reviewer (uses `GEMINI_API_KEY`)
 - GitHub — Durable Repository Source of Truth
 
 ---

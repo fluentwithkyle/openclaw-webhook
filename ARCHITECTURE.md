@@ -655,7 +655,7 @@ The specialist layer contains three distinct lanes:
 * Security AI — Security Specialist
 * Utility AI — General Utility Specialist
 
-Kilo remains the primary Builder / Implementer / Tester.
+Gemini Builder is the primary Builder / Implementer / Tester.
 
 Label this entire multi-agent architecture:
 
@@ -904,11 +904,15 @@ Do not give Utility AI unrestricted repository authority.
 
 ⸻
 
-12.9 Kilo — Builder / Implementer / Tester
+12.9 Kilo — Execution Agent (available lane)
 
-CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE + PROPOSED / TARGET EXTENSIONS
+CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
 
-Kilo is the primary execution agent.
+Kilo is an execution agent available for tasks that explicitly target it.
+
+As of the Gemini Builder transition, the Gemini Builder lane is the primary
+Builder / Implementer / Tester (using GEMINI_BUILDER_API_KEY). Kilo remains
+an available execution lane for tasks that explicitly target it.
 
 Kilo is responsible for:
 
@@ -1008,7 +1012,7 @@ Verification
 ↓
 Execution Report
 
-Kilo is the primary Builder / Implementer / Tester.
+Gemini Builder is the primary Builder / Implementer / Tester.
 
 Specialist routing:
 
@@ -1084,7 +1088,7 @@ The specialist layer contains three distinct lanes:
 * Security AI — Security Specialist
 * Utility AI — General Utility Specialist
 
-Kilo remains the primary Builder / Implementer / Tester.
+Gemini Builder is the primary Builder / Implementer / Tester.
 
 GitHub Actions may serve as an ephemeral AI execution plane within this architecture.
 
@@ -1871,7 +1875,7 @@ Verification
 ↓
 Execution Report
 
-Kilo is the primary Builder / Implementer / Tester.
+Gemini Builder is the primary Builder / Implementer / Tester.
 
 SPECIALIST FAILOVER
 
@@ -1883,14 +1887,11 @@ A specialist failure must produce a clear failure or blocked result when an auth
 
 BUILDER FAILOVER
 
-Kilo is the primary Builder / Implementer / Tester.
+Gemini Builder is the primary Builder / Implementer / Tester (using GEMINI_BUILDER_API_KEY,
+distinct from the Gemini Reviewer's GEMINI_API_KEY).
 
-If Kilo is unavailable, fails, or becomes blocked, the system must distinguish:
-
-* Kilo unavailable;
-* Kilo execution failure;
-* Kilo blocked;
-* task requiring human intervention.
+If the Gemini Builder is unavailable, fails, or becomes blocked, Kilo Cloud Agent remains
+an available Builder / Implementer / Tester lane for tasks that explicitly target it:
 
 A failed execution must never be represented as successful.
 

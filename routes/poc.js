@@ -60,6 +60,20 @@ const authenticateGeminiCallback = (req, res, next) => {
     next();
 };
 
+// Gemini Builder Callback Authentication Middleware
+const authenticateBuilderCallback = (req, res, next) => {
+    const secret = req.headers['x-builder-callback-secret'];
+    if (!secret || secret !== process.env.BUILDER_CALLBACK_SECRET) {
+        return res.status(401).json({
+            request_id: req.body?.request_id || 'unknown',
+            status: 'authentication blocked',
+            stage: 'authentication blocked',
+            error: 'Invalid or missing callback secret'
+        });
+    }
+    next();
+};
+
 // DeepSeek Coordinator Authentication Middleware
 const authenticateDeepSeekCoordinator = (req, res, next) => {
     const secret = req.headers['x-deepseek-coordinator-secret'];
@@ -197,6 +211,93 @@ router.post('/kilo', authenticatePoc, async (req, res) => {
     }
 });
 
+router.post('/builder/dispatch', authenticatePoc, async (req, res) => {
+    const command = req.body;
+
+    if (!command || typeof command !== 'object') {
+        return res.status(400).json({
+            request_id: 'unknown',
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing or invalid request body'
+        });
+    }
+
+    const validation = validateACPCommand(command);
+    if (!validation.valid) {
+        return res.status(400).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Invalid ACP command: ${validation.error}`
+        });
+    }
+
+    try {
+        const result = taskRegistry.createTask(command);
+        if (!result.success) {
+            if (result.duplicate) {
+                return res.status(409).json({
+                    request_id: command.request_id,
+                    status: 'duplicate',
+                    stage: 'conflict',
+                    error: result.error
+                });
+            }
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'Task registration failed',
+                stage: 'failed'
+            });
+        }
+
+        const transitionResult = transitionToExecuting(command.request_id);
+        if (!transitionResult.success) {
+            console.error('Failed to transition Builder task to EXECUTING:', transitionResult.error);
+        }
+
+        const githubToken = process.env.ORCHESTRATOR_GH_TOKEN;
+        const builderApiKey = process.env.GEMINI_BUILDER_API_KEY;
+        if (!githubToken) {
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'Builder dispatch blocked - missing ORCHESTRATOR_GH_TOKEN',
+                stage: 'authentication blocked'
+            });
+        }
+
+        const dispatchResult = await orchestrator.triggerGeminiBuilder(command.request_id, githubToken, builderApiKey);
+
+        if (!dispatchResult.success) {
+            return res.status(500).json({
+                request_id: command.request_id,
+                status: 'Builder dispatch failed',
+                stage: 'failed',
+                error: dispatchResult.error,
+                task_status: result.entry.status
+            });
+        }
+
+        res.status(202).json({
+            request_id: command.request_id,
+            status: 'Builder dispatched',
+            stage: 'dispatched',
+            task_status: result.entry.status,
+            builder_status: result.entry.builder.status,
+            next_action: result.entry.next_action,
+            dispatch_result: dispatchResult.dispatch_result
+        });
+    } catch (error) {
+        console.error('Error in /poc/builder/dispatch:', error);
+        return res.status(500).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'dispatch failed',
+            stage: 'failed',
+            error: error.message
+        });
+    }
+});
+
 router.post('/kilo/callback', authenticateKiloCallback, async (req, res) => {
     const requestId = req.body?.request_id;
 
@@ -275,14 +376,15 @@ router.post('/kilo/callback', authenticateKiloCallback, async (req, res) => {
         });
     }
 
-    // Automatically trigger Gemini if next_action indicates it
-    let geminiTriggerResult = null;
-    if (result.next_action === 'trigger_gemini') {
+    // Automatically trigger Gemini Builder if next_action indicates it
+    let builderTriggerResult = null;
+    if (result.next_action === 'trigger_builder') {
         const githubToken = process.env.ORCHESTRATOR_GH_TOKEN;
+        const builderApiKey = process.env.GEMINI_BUILDER_API_KEY;
         if (githubToken) {
-            geminiTriggerResult = await orchestrator.triggerGemini(requestId, githubToken);
+            builderTriggerResult = await orchestrator.triggerGeminiBuilder(requestId, githubToken, builderApiKey);
         } else {
-            console.warn('[Kilo Callback] ORCHESTRATOR_GH_TOKEN not configured, skipping Gemini trigger');
+            console.warn('[Kilo Callback] ORCHESTRATOR_GH_TOKEN not configured, skipping Builder trigger');
         }
     }
 
@@ -293,10 +395,10 @@ router.post('/kilo/callback', authenticateKiloCallback, async (req, res) => {
         next_action: result.next_action,
         task_status: result.task.status,
         kilo_status: result.task.kilo.status,
-        gemini_trigger: geminiTriggerResult ? {
-            success: geminiTriggerResult.success,
-            message: geminiTriggerResult.message,
-            error: geminiTriggerResult.error
+        builder_trigger: builderTriggerResult ? {
+            success: builderTriggerResult.success,
+            message: builderTriggerResult.message,
+            error: builderTriggerResult.error
         } : null
     });
 });
@@ -386,6 +488,104 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
         next_action: result.next_action,
         task_status: result.task.status,
         gemini_status: result.task.gemini.status
+    });
+});
+
+router.post('/builder/callback', authenticateBuilderCallback, async (req, res) => {
+    const requestId = req.body?.request_id;
+
+    if (!requestId) {
+        return res.status(400).json({
+            request_id: 'unknown',
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Missing request_id in callback body'
+        });
+    }
+
+    const validation = validateExecutionReport(req.body);
+    if (!validation.valid) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Invalid execution report: ${validation.error}`
+        });
+    }
+
+    if (req.body.agent !== 'Gemini Builder') {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Expected Gemini Builder report, got ${req.body.agent}`
+        });
+    }
+
+    const task = taskRegistry.getTask(requestId);
+    if (!task) {
+        return res.status(404).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: 'Unknown request_id'
+        });
+    }
+
+    if (req.body.repository && req.body.repository !== task.repository) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Repository mismatch: expected ${task.repository}, got ${req.body.repository}`
+        });
+    }
+
+    if (req.body.base_branch && req.body.base_branch !== task.base_branch) {
+        return res.status(400).json({
+            request_id: requestId,
+            status: 'validation blocked',
+            stage: 'validation blocked',
+            error: `Base branch mismatch: expected ${task.base_branch}, got ${req.body.base_branch}`
+        });
+    }
+
+    const result = orchestrator.handleGeminiBuilderCompletion(requestId, req.body);
+
+    if (!result.success) {
+        const httpStatus = result.duplicate ? 409 : 400;
+        return res.status(httpStatus).json({
+            request_id: requestId,
+            status: result.duplicate ? 'duplicate' : 'validation blocked',
+            stage: result.stage,
+            error: result.error,
+            duplicate: result.duplicate || false
+        });
+    }
+
+    // Automatically trigger Gemini Reviewer if next_action indicates it
+    let geminiTriggerResult = null;
+    if (result.next_action === 'trigger_gemini') {
+        const githubToken = process.env.ORCHESTRATOR_GH_TOKEN;
+        if (githubToken) {
+            geminiTriggerResult = await orchestrator.triggerGemini(requestId, githubToken);
+        } else {
+            console.warn('[Builder Callback] ORCHESTRATOR_GH_TOKEN not configured, skipping Gemini Reviewer trigger');
+        }
+    }
+
+    res.status(200).json({
+        request_id: requestId,
+        status: 'Gemini Builder completion recorded',
+        stage: 'completed',
+        next_action: result.next_action,
+        task_status: result.task.status,
+        builder_status: result.task.builder.status,
+        gemini_trigger: geminiTriggerResult ? {
+            success: geminiTriggerResult.success,
+            message: geminiTriggerResult.message,
+            error: geminiTriggerResult.error
+        } : null
     });
 });
 
