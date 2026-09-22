@@ -115,6 +115,14 @@ function updateAgentResult(requestId, agent, result) {
     };
     entry.current_agent = 'Gemini';
     entry.next_agent = 'Gemini';
+   } else if (agent === 'Gemini Builder') {
+    entry.builder = {
+      status: result.status,
+      execution_id: result.execution_id || null,
+      report: result.report || null
+    };
+    entry.current_agent = 'Gemini';
+    entry.next_agent = 'Gemini';
   } else if (agent === 'Gemini') {
     entry.gemini = {
       status: result.status,

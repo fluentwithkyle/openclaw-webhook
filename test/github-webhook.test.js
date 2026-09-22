@@ -12,6 +12,8 @@ const { SIGNAL_PATH_REGEX } = gitWebhook;
 const REPO = 'fluentwithkyle/openclaw-webhook';
 const BRANCH = 'main';
 const REF = 'refs/heads/main';
+process.env.GEMINI_BUILDER_API_KEY = 'test-builder-api-key';
+process.env.GEMINI_API_KEY = 'test-gemini-api-key';
 const COMMIT = 'a'.repeat(40);
 const WEBHOOK_SECRET = 'test-webhook-secret';
 
@@ -510,7 +512,7 @@ test('handleKiloCompletion: rejects duplicate via orchestrator idempotency', () 
 
   const result1 = orchestrator.handleKiloCompletion('req-dup', report);
   assert.ok(result1.success);
-  assert.strictEqual(result1.next_action, 'trigger_gemini');
+  assert.strictEqual(result1.next_action, 'trigger_builder');
 
   const result2 = orchestrator.handleKiloCompletion('req-dup', report);
   assert.ok(!result2.success);
@@ -970,7 +972,7 @@ async function runAsyncTests() {
     const task = taskRegistry.getTask('req-orch');
     assert.strictEqual(task.kilo.status, 'success');
     assert.strictEqual(task.status, 'EXECUTING');
-    assert.strictEqual(task.next_action, 'trigger_gemini');
+    assert.strictEqual(task.next_action, 'trigger_builder');
     assert.strictEqual(task.kilo.execution_id, 'kilo-inv-req-orch');
     assert.strictEqual(task.kilo.report.commit, COMMIT);
     assert.strictEqual(task.kilo.report.status, 'success');
@@ -1030,18 +1032,18 @@ async function runAsyncTests() {
     assert.strictEqual(result.status, 'completed');
   });
 
-  // TEST 14: Existing Kilo → Gemini orchestration remains intact
-  await testAsync('gitWebhook module: reuses existing orchestrator.triggerGemini for Gemini dispatch', async () => {
+  // TEST 14: Existing Kilo → Builder orchestration remains intact
+  await testAsync('gitWebhook module: reuses existing orchestrator.triggerGeminiBuilder for Builder dispatch', async () => {
     setup();
     setupTask('req-gemini');
     const payload = makePushPayload('req-gemini', COMMIT);
     const signal = makeValidSignal('req-gemini', COMMIT);
 
     let dispatched = false;
-    const originalTrigger = orchestrator.triggerGemini;
-    orchestrator.triggerGemini = async function(requestId, token) {
+    const originalTrigger = orchestrator.triggerGeminiBuilder;
+    orchestrator.triggerGeminiBuilder = async function(requestId, token, builderApiKey) {
       dispatched = true;
-      return { success: true, message: 'Gemini dispatched' };
+      return { success: true, message: 'Builder dispatched' };
     };
 
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-gemini': signal }));
@@ -1052,9 +1054,9 @@ async function runAsyncTests() {
         githubToken: 'fake-token'
       });
       assert.strictEqual(result.results[0].status, 'completed');
-      assert.ok(dispatched, 'Gemini should have been triggered via orchestrator');
+      assert.ok(dispatched, 'Builder should have been triggered via orchestrator');
     } finally {
-      orchestrator.triggerGemini = originalTrigger;
+      orchestrator.triggerGeminiBuilder = originalTrigger;
     }
   });
 
@@ -1085,7 +1087,7 @@ async function runAsyncTests() {
     assert.ok(task, 'Task should be rehydrated in TaskRegistry');
     assert.strictEqual(task.status, 'EXECUTING');
     assert.strictEqual(task.kilo.status, 'success');
-    assert.strictEqual(task.next_action, 'trigger_gemini');
+    assert.strictEqual(task.next_action, 'trigger_builder');
     assert.strictEqual(task.kilo.report.commit, COMMIT);
     assert.strictEqual(task.kilo.report.commit_sha, COMMIT);
   });
@@ -1248,10 +1250,10 @@ async function runAsyncTests() {
     }));
 
     let dispatched = false;
-    const originalTrigger = orchestrator.triggerGemini;
-    orchestrator.triggerGemini = async function(requestIdArg, token) {
+    const originalTrigger = orchestrator.triggerGeminiBuilder;
+    orchestrator.triggerGeminiBuilder = async function(requestIdArg, token, builderApiKey) {
       dispatched = true;
-      return { success: true, message: 'Gemini dispatched to workflow' };
+      return { success: true, message: 'Builder dispatched to workflow' };
     };
 
     try {
@@ -1261,14 +1263,14 @@ async function runAsyncTests() {
       });
 
       assert.strictEqual(result.results[0].status, 'completed');
-      assert.strictEqual(result.results[0].nextAction, 'trigger_gemini');
-      assert.ok(dispatched, 'Gemini should have been triggered via orchestrator after recovery');
+      assert.strictEqual(result.results[0].nextAction, 'trigger_builder');
+      assert.ok(dispatched, 'Builder should have been triggered via orchestrator after recovery');
 
       const task = taskRegistry.getTask(requestId);
       assert.strictEqual(task.kilo.status, 'success');
-      assert.strictEqual(task.next_action, 'trigger_gemini');
+      assert.strictEqual(task.next_action, 'trigger_builder');
     } finally {
-      orchestrator.triggerGemini = originalTrigger;
+      orchestrator.triggerGeminiBuilder = originalTrigger;
     }
   });
 
@@ -1348,7 +1350,7 @@ async function runAsyncTests() {
 
     const task = taskRegistry.getTask(requestId);
     assert.strictEqual(task.kilo.status, 'success');
-    assert.strictEqual(task.next_action, 'trigger_gemini');
+    assert.strictEqual(task.next_action, 'trigger_builder');
   });
 
   await testAsync('processPushEvent: recovery path - no token fails closed', async () => {

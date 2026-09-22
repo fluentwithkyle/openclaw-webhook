@@ -7,7 +7,10 @@ const {
   createInitialTaskRegistryEntry,
   VALID_STATE_TRANSITIONS,
   VALID_AGENTS,
-  VALID_STATUSES
+  VALID_STATUSES,
+  VALID_TASK_MODES,
+  BUILDER_CAPABILITIES,
+  getRequiredCapabilitiesForMode
 } = require('../poc/schemas/acp-schema');
 
 function runTest(name, fn) {
@@ -32,6 +35,14 @@ function assertDeepEqual(actual, expected, msg) {
   const e = JSON.stringify(expected);
   if (a !== e) {
     throw new Error(`${msg || 'Deep assertion failed'}: expected ${e}, got ${a}`);
+  }
+}
+
+function assertArrayIncludes(arr, expected) {
+  for (const item of expected) {
+    if (!arr.includes(item)) {
+      throw new Error(`Expected array to include '${item}'. Array: ${JSON.stringify(arr)}`);
+    }
   }
 }
 
@@ -232,9 +243,47 @@ test('createInitialTaskRegistryEntry creates correct structure', () => {
   assertEqual(entry.status, 'PENDING');
   assertEqual(entry.kilo.status, 'pending');
   assertEqual(entry.gemini.status, 'pending');
+  assertEqual(entry.builder.status, 'pending');
   assertEqual(entry.next_action, null);
   assert(entry.created_at);
   assert(entry.updated_at);
+});
+
+test('VALID_AGENTS includes Gemini Builder', () => {
+  assert(VALID_AGENTS.includes('Gemini Builder'), 'Gemini Builder should be a valid agent');
+  assert(VALID_AGENTS.includes('Kilo'), 'Kilo should remain a valid agent');
+  assert(VALID_AGENTS.includes('Gemini'), 'Gemini should remain a valid agent');
+});
+
+test('VALID_TASK_MODES includes BUILDER', () => {
+  assert(VALID_TASK_MODES.includes('BUILDER'), 'BUILDER should be a valid task mode');
+  assert(VALID_TASK_MODES.includes('REVIEW'), 'REVIEW should still be a valid task mode');
+  assert(VALID_TASK_MODES.includes('VERIFY_RECONCILE'), 'VERIFY_RECONCILE should still be a valid task mode');
+  assert(VALID_TASK_MODES.includes('FAILOVER_EXECUTE'), 'FAILOVER_EXECUTE should still be a valid task mode');
+});
+
+test('BUILDER_CAPABILITIES includes all execution capabilities', () => {
+  assertArrayIncludes(BUILDER_CAPABILITIES, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+});
+
+test('getRequiredCapabilitiesForMode returns BUILDER_CAPABILITIES for BUILDER mode', () => {
+  const caps = getRequiredCapabilitiesForMode('BUILDER');
+  assertArrayIncludes(caps, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+});
+
+test('Execution report with agent Gemini Builder is valid', () => {
+  const report = {
+    ...validReport,
+    agent: 'Gemini Builder'
+  };
+  const result = validateExecutionReport(report);
+  assertEqual(result.valid, true);
+});
+
+test('Execution report with invalid agent fails', () => {
+  const report = { ...validReport, agent: 'Invalid' };
+  const result = validateExecutionReport(report);
+  assertEqual(result.valid, false);
 });
 
 console.log(`\n=== Schema Tests: ${passCount} passed, ${failCount} failed ===`);

@@ -1,0 +1,382 @@
+name: Gemini Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: 'Correlation request ID for ACP orchestration'
+        required: true
+        type: string
+      task:
+        description: 'Task description for Builder execution'
+        required: true
+        type: string
+      repository:
+        description: 'Repository name (owner/repo)'
+        required: true
+        type: string
+      base_branch:
+        description: 'Base branch for the task'
+        required: true
+        type: string
+      builder_execution_id:
+        description: 'Builder execution identifier'
+        required: true
+        type: string
+      kilo_execution_id:
+        description: 'Optional Kilo execution identifier (if Builder is triggered after Kilo completion)'
+        required: false
+        type: string
+      verification:
+        description: 'Original ACP task verification requirements for Builder review'
+        required: false
+        type: string
+      task_mode:
+        description: 'Operating mode: BUILDER (full execution with commit/push)'
+        required: false
+        type: string
+        default: 'BUILDER'
+      capabilities:
+        description: 'Comma-separated authorized capabilities (e.g. read_only,modify_files,run_tests,commit,push)'
+        required: false
+        type: string
+        default: 'read_only,modify_files,run_tests,commit,push'
+      permitted_paths:
+        description: 'Comma-separated authorized file paths for Builder execution'
+        required: false
+        type: string
+
+jobs:
+  builder:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare orchestration context
+        id: orchestration_context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo 'request_id<<EOF'
+            printf '%s\n' "${{ github.event.inputs.request_id }}"
+            echo 'EOF'
+            echo 'task<<EOF'
+            printf '%s\n' "${{ github.event.inputs.task }}"
+            echo 'EOF'
+            echo 'repository<<EOF'
+            printf '%s\n' "${{ github.event.inputs.repository }}"
+            echo 'EOF'
+            echo 'base_branch<<EOF'
+            printf '%s\n' "${{ github.event.inputs.base_branch }}"
+            echo 'EOF'
+            echo 'builder_execution_id<<EOF'
+            printf '%s\n' "${{ github.event.inputs.builder_execution_id }}"
+            echo 'EOF'
+            echo 'kilo_execution_id<<EOF'
+            printf '%s\n' "${{ github.event.inputs.kilo_execution_id || '' }}"
+            echo 'EOF'
+            echo 'verification<<EOF'
+            printf '%s\n' "${{ github.event.inputs.verification }}"
+            echo 'EOF'
+            echo 'task_mode<<EOF'
+            printf '%s\n' "${{ github.event.inputs.task_mode || 'BUILDER' }}"
+            echo 'EOF'
+            echo 'capabilities<<EOF'
+            printf '%s\n' "${{ github.event.inputs.capabilities || 'read_only,modify_files,run_tests,commit,push' }}"
+            echo 'EOF'
+            echo 'permitted_paths<<EOF'
+            printf '%s\n' "${{ github.event.inputs.permitted_paths || '' }}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure git identity
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "Gemini Builder"
+          git config user.email "gemini-builder@users.noreply.github.com"
+
+      - name: Run Gemini Builder
+        id: gemini_builder_run
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+          ORCHESTRATION_REQUEST_ID: ${{ steps.orchestration_context.outputs.request_id }}
+          ORCHESTRATION_TASK: ${{ steps.orchestration_context.outputs.task }}
+          ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context.outputs.repository }}
+          ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
+          ORCHESTRATION_BUILDER_EXECUTION_ID: ${{ steps.orchestration_context.outputs.builder_execution_id }}
+          ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context.outputs.kilo_execution_id }}
+          ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context.outputs.verification }}
+          ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
+          ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}
+          ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_BUILDER_API_KEY }}
+          gemini_model: gemini-3.1-flash-lite
+          prompt: |
+            You are Gemini Builder, the Fluent with Kyle OpenClaw project's dedicated runtime Builder / Implementer / Tester.
+
+            OPERATING MODE: BUILDER
+
+            MODE: BUILDER (FULL EXECUTION). You are authorized to:
+            - Inspect and analyze the repository within permitted_paths: ${{ steps.orchestration_context.outputs.permitted_paths || '(all)' }}
+            - Implement the requested task within the authorized permitted_paths scope
+            - Run tests, lint, or typecheck commands within permitted_paths
+            - Commit changes to the base_branch (${{ steps.orchestration_context.outputs.base_branch }})
+            - Push commits to the authorized remote/repository
+
+            Authorized capabilities: ${{ steps.orchestration_context.outputs.capabilities }}
+
+            BOUNDARIES:
+            - You must ONLY modify files within the authorized permitted_paths scope
+            - You must NOT modify credentials, secrets, or sensitive configuration
+            - You must NOT modify GitHub Actions workflow files unless explicitly within permitted_paths
+            - You must NOT modify AGENTS.md, GEMINI.md, ARCHITECTURE.md unless explicitly within permitted_paths
+            - Commit and push in the SAME execution — do not leave uncommitted changes
+            - Produce a canonical gemini-acp-report artifact
+
+            ORCHESTRATION CONTEXT:
+            - request_id: ${{ steps.orchestration_context.outputs.request_id }}
+            - repository: ${{ steps.orchestration_context.outputs.repository }}
+            - base_branch: ${{ steps.orchestration_context.outputs.base_branch }}
+            - builder_execution_id: ${{ steps.orchestration_context.outputs.builder_execution_id }}
+            - kilo_execution_id: ${{ steps.orchestration_context.outputs.kilo_execution_id || '(none)' }}
+            - verification_requirements: ${{ steps.orchestration_context.outputs.verification || 'Not specified' }}
+            - task_mode: ${{ steps.orchestration_context.outputs.task_mode || 'BUILDER' }}
+            - capabilities: ${{ steps.orchestration_context.outputs.capabilities }}
+            - permitted_paths: ${{ steps.orchestration_context.outputs.permitted_paths || '(none)' }}
+
+            --- TASK START ---
+            ${{ steps.orchestration_context.outputs.task }}
+            --- TASK END ---
+
+            VERIFICATION REQUIREMENTS (from original ACP task):
+            ${{ steps.orchestration_context.outputs.verification || 'No specific verification requirements provided. Evaluate based on standard implementation criteria.' }}
+
+            IMPORTANT: Implement the task, test your changes, commit them with a descriptive message, and push to the base_branch. All changes must be within permitted_paths. Your result will be reviewed by the Gemini Reviewer after completion.
+
+      - name: Commit and push Builder changes
+        id: commit_push
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          CHANGED_FILES=$(git diff --name-only HEAD)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=null" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+
+            git add -A
+            git commit -m "BUILDER: Implement task (request_id: ${{ steps.orchestration_context.outputs.request_id }})"
+
+            COMMIT_SHA=$(git rev-parse HEAD)
+            echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+            git push origin "${{ steps.orchestration_context.outputs.base_branch }}"
+
+            echo "Pushed commit: $COMMIT_SHA"
+          fi
+
+      - name: Determine Builder execution result
+        id: builder_result
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          BUILDER_OUTCOME="${{ steps.gemini_builder_run.outcome }}"
+
+          if [ "$BUILDER_OUTCOME" = "success" ] && [ "${{ steps.commit_push.outputs.has_changes }}" = "true" ]; then
+            STATUS="success"
+            VERIFICATION_STATUS="PASS"
+            BLOCKER_MSG=""
+          elif [ "$BUILDER_OUTCOME" = "success" ] && [ "${{ steps.commit_push.outputs.has_changes }}" = "false" ]; then
+            STATUS="success"
+            VERIFICATION_STATUS="PASS"
+            BLOCKER_MSG="Builder completed with no file changes"
+          elif [ "$BUILDER_OUTCOME" = "failure" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Gemini Builder CLI execution failed (step outcome: failure)"
+          else
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Builder workflow did not execute successfully (step outcome: ${BUILDER_OUTCOME:-none})"
+          fi
+
+          echo "builder_status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "verification_status=$VERIFICATION_STATUS" >> "$GITHUB_OUTPUT"
+          echo "blocker_message=$BLOCKER_MSG" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=${{ steps.commit_push.outputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare ACP report payload
+        id: callback_payload
+        if: always()
+        env:
+          BUILDER_SUMMARY: ${{ steps.gemini_builder_run.outputs.summary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
+          TASK="${{ steps.orchestration_context.outputs.task }}"
+          REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
+          BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+          BUILDER_EXEC_ID="${{ steps.orchestration_context.outputs.builder_execution_id }}"
+          KILO_EXEC_ID="${{ steps.orchestration_context.outputs.kilo_execution_id || '' }}"
+          BUILDER_OUTPUT="$BUILDER_SUMMARY"
+
+          CURRENT_HEAD_SHA="${GITHUB_SHA}"
+          STATUS="${{ steps.builder_result.outputs.builder_status }}"
+          VERIFICATION_STATUS="${{ steps.builder_result.outputs.verification_status }}"
+          BLOCKER_MSG="${{ steps.builder_result.outputs.blocker_message }}"
+          COMMIT_SHA="${{ steps.builder_result.outputs.commit_sha }}"
+
+          CHANGED_FILES_JSON="[]"
+
+          if [ "$STATUS" = "failure" ]; then
+            BLOCKERS=$(jq -n --arg msg "$BLOCKER_MSG" '[$msg]')
+          else
+            BLOCKERS="[]"
+          fi
+
+          if [ "$COMMIT_SHA" = "null" ] || [ -z "$COMMIT_SHA" ]; then
+            RECON_COMMIT_SHA="null"
+            PUSH_STATUS=false
+          else
+            RECON_COMMIT_SHA="$COMMIT_SHA"
+            PUSH_STATUS=true
+          fi
+
+          INVOCATION_ID="gemini-builder-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          RUN_ID="${GITHUB_RUN_ID}"
+
+          jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg agent "Gemini Builder" \
+            --arg status "$STATUS" \
+            --arg task "$TASK" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            --arg current_head_sha "$CURRENT_HEAD_SHA" \
+            --arg builder_output "$BUILDER_OUTPUT" \
+            --arg invocation_id "$INVOCATION_ID" \
+            --arg run_id "$RUN_ID" \
+            --argjson blockers "$BLOCKERS" \
+            --arg recon_status "SKIPPED" \
+            --argjson recon_changed_files "$CHANGED_FILES_JSON" \
+            --arg recon_commit_sha "$RECON_COMMIT_SHA" \
+            --argjson push "$PUSH_STATUS" \
+            --arg commit "$COMMIT_SHA" \
+            '{
+              request_id: (if $request_id == "" then null else $request_id end),
+              agent: $agent,
+              status: $status,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              current_head_sha: $current_head_sha,
+              changed_files: [],
+              verification: ["builder execution completed"],
+              result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id }, builder_output: $builder_output },
+              commit: (if $commit == "null" then null else $commit end),
+              push: $push,
+              blockers: $blockers,
+              reconciliation: {
+                status: $recon_status,
+                changed_files: $recon_changed_files,
+                commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
+              }
+            }' > callback_payload.json
+
+          cp callback_payload.json gemini-acp-report.json
+
+          cat callback_payload.json
+
+      - name: Send callback to Render
+        if: always()
+        env:
+          CALLBACK_URL: ${{ secrets.RENDER_BUILDER_CALLBACK_URL }}
+          CALLBACK_SECRET: ${{ secrets.BUILDER_CALLBACK_SECRET }}
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          if [ -z "$CALLBACK_URL" ] || [ -z "$CALLBACK_SECRET" ]; then
+            echo "::warning::Builder callback URL or secret not configured, skipping callback"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "x-builder-callback-secret: $CALLBACK_SECRET" \
+            -d @callback_payload.json)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "Callback response: $HTTP_CODE"
+          echo "Callback body: $BODY"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "callback_sent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Builder callback failed with HTTP $HTTP_CODE: $BODY"
+            exit 1
+          fi
+
+      - name: Upload Builder result artifact
+        id: upload_artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-acp-report
+          path: gemini-acp-report.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Report artifact filing status
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          UPLOAD_OUTCOME="${{ steps.upload_artifact.outcome }}"
+
+          case "$UPLOAD_OUTCOME" in
+            success)
+              STATUS="SUCCESS"
+              ;;
+            failure)
+              STATUS="FAILED"
+              ;;
+            *)
+              STATUS="UNKNOWN"
+              ;;
+          esac
+
+          {
+            echo "## Gemini Builder ACP Report Artifact Filing Status"
+            echo ""
+            echo "The \`gemini-acp-report\` artifact upload step outcome was: \`${UPLOAD_OUTCOME:-unavailable}\`"
+            echo ""
+            echo "filing_status: ${STATUS}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "filing_status=${STATUS}" >> "$GITHUB_OUTPUT"

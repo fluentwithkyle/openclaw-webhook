@@ -157,6 +157,22 @@ test('updateAgentResult - Gemini success', () => {
   cleanup();
 });
 
+test('updateAgentResult - Gemini Builder success', () => {
+  cleanup();
+  taskRegistry.createTask(validCommand);
+  taskRegistry.updateTaskStatus('test-reg-1', 'EXECUTING');
+  taskRegistry.updateAgentResult('test-reg-1', 'Kilo', { status: 'success', execution_id: 'exec-123', report: {} });
+  const result = taskRegistry.updateAgentResult('test-reg-1', 'Gemini Builder', {
+    status: 'success',
+    execution_id: 'exec-builder-1',
+    report: { agent: 'Gemini Builder', status: 'success' }
+  });
+  assertEqual(result.success, true);
+  assertEqual(result.entry.builder.status, 'success');
+  assertEqual(result.entry.builder.execution_id, 'exec-builder-1');
+  cleanup();
+});
+
 test('updateAgentResult - unknown agent fails', () => {
   cleanup();
   taskRegistry.createTask(validCommand);

@@ -111,20 +111,45 @@ async function main() {
     task = taskRegistry.getTask('integration-test-1');
     assertEqual(task.status, 'EXECUTING');
 
-    // 5. Kilo completion -> triggers Gemini
+    // 5. Kilo completion -> triggers Builder
     result = orchestrator.handleKiloCompletion('integration-test-1', kiloReport);
     assertEqual(result.success, true);
-    assertEqual(result.next_action, 'trigger_gemini');
+    assertEqual(result.next_action, 'trigger_builder');
     task = taskRegistry.getTask('integration-test-1');
     assertEqual(task.status, 'EXECUTING');
     assertEqual(task.kilo.status, 'success');
+    assertEqual(task.builder.status, 'pending');
     assertEqual(task.current_agent, 'Gemini');
 
-    // 6. Verify Gemini can be triggered
-    let canTrigger = orchestrator.canTriggerGemini('integration-test-1');
+    // 6. Verify Builder can be triggered
+    let canTrigger = orchestrator.canTriggerGeminiBuilder('integration-test-1');
     assertEqual(canTrigger.canTrigger, true);
 
-    // 7. Gemini completion -> VERIFIED
+    // 7. Builder completion -> triggers Reviewer
+    const builderReport = {
+      request_id: 'integration-test-1',
+      agent: 'Gemini Builder',
+      status: 'success',
+      task: 'full-orchestration-test',
+      changed_files: ['poc/new-file.js'],
+      verification: ['tests passed', 'lint passed'],
+      result: { implementation: 'complete', execution_metadata: { invocation_id: 'inv-builder-1', run_id: 'run-builder-1' } },
+      commit: 'builder-commit-sha',
+      push: true,
+      blockers: []
+    };
+    result = orchestrator.handleGeminiBuilderCompletion('integration-test-1', builderReport);
+    assertEqual(result.success, true);
+    assertEqual(result.next_action, 'trigger_gemini');
+    task = taskRegistry.getTask('integration-test-1');
+    assertEqual(task.builder.status, 'success');
+    assertEqual(task.gemini.status, 'pending');
+
+    // 8. Verify Reviewer can be triggered
+    canTrigger = orchestrator.canTriggerGemini('integration-test-1');
+    assertEqual(canTrigger.canTrigger, true);
+
+    // 9. Gemini completion -> VERIFIED
     result = orchestrator.handleGeminiCompletion('integration-test-1', geminiReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'complete');
@@ -133,7 +158,7 @@ async function main() {
     assertEqual(task.gemini.status, 'success');
     assertEqual(task.current_agent, null);
 
-    // 8. Final transition to COMPLETE
+    // 10. Final transition to COMPLETE
     result = taskRegistry.updateTaskStatus('integration-test-1', 'COMPLETE');
     assertEqual(result.success, true);
     task = taskRegistry.getTask('integration-test-1');
@@ -315,10 +340,10 @@ async function main() {
     cleanup();
   });
 
-  await test('Automatic Gemini trigger after Kilo success - orchestrator.triggerGemini called', async () => {
+  await test('Automatic Builder trigger after Kilo success - orchestrator.triggerGeminiBuilder called', async () => {
     cleanup();
 
-    const geminiTrigger = require('../poc/gemini-trigger');
+    const geminiBuilderTrigger = require('../poc/gemini-builder-trigger');
 
     // Create command with the correct request_id
     const cmd = { ...validCommand, request_id: 'auto-trigger-1' };
@@ -327,32 +352,32 @@ async function main() {
     taskRegistry.updateTaskStatus('auto-trigger-1', 'PLANNED');
     taskRegistry.updateTaskStatus('auto-trigger-1', 'EXECUTING');
 
-    // Handle Kilo completion - this sets next_action to 'trigger_gemini'
+    // Handle Kilo completion - this sets next_action to 'trigger_builder'
     const kiloResult = orchestrator.handleKiloCompletion('auto-trigger-1', { ...kiloReport, request_id: 'auto-trigger-1' });
     assertEqual(kiloResult.success, true);
-    assertEqual(kiloResult.next_action, 'trigger_gemini');
+    assertEqual(kiloResult.next_action, 'trigger_builder');
 
-    // Verify canTriggerGemini returns true
-    const canTrigger = orchestrator.canTriggerGemini('auto-trigger-1');
+    // Verify canTriggerGeminiBuilder returns true
+    const canTrigger = orchestrator.canTriggerGeminiBuilder('auto-trigger-1');
     assertEqual(canTrigger.canTrigger, true);
 
-    // Mock the dispatchGemini to return success so task state gets updated
-    const originalDispatch = geminiTrigger.dispatchGemini;
-    geminiTrigger.dispatchGemini = async () => {
-      return { success: true, message: 'Workflow dispatch accepted', status_code: 204 };
+    // Mock the dispatchGeminiBuilder to return success so task state gets updated
+    const originalDispatch = geminiBuilderTrigger.dispatchGeminiBuilder;
+    geminiBuilderTrigger.dispatchGeminiBuilder = async () => {
+      return { success: true, message: 'Builder workflow dispatch accepted', status_code: 204 };
     };
 
     try {
-      // Call triggerGemini directly (simulating what the callback/polling would do)
-      const triggerResult = await orchestrator.triggerGemini('auto-trigger-1', 'fake-token');
+      // Call triggerGeminiBuilder directly (simulating what the callback/polling would do)
+      const triggerResult = await orchestrator.triggerGeminiBuilder('auto-trigger-1', 'fake-token', 'fake-builder-key');
       assertEqual(triggerResult.success, true);
 
-      // Verify task state was updated to 'running' for Gemini
+      // Verify task state was updated to 'running' for Builder
       const task = taskRegistry.getTask('auto-trigger-1');
-      assertEqual(task.gemini.status, 'running');
-      assertEqual(task.next_action, 'waiting_gemini_callback');
+      assertEqual(task.builder.status, 'running');
+      assertEqual(task.next_action, 'waiting_builder_callback');
     } finally {
-      geminiTrigger.dispatchGemini = originalDispatch;
+      geminiBuilderTrigger.dispatchGeminiBuilder = originalDispatch;
     }
 
     cleanup();

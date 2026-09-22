@@ -215,7 +215,7 @@ async function main() {
     }, report);
     assertEqual(res.status, 200);
     assertEqual(res.body.status, 'Kilo completion recorded');
-    assertEqual(res.body.next_action, 'trigger_gemini');
+    assertEqual(res.body.next_action, 'trigger_builder');
     assertEqual(res.body.task_status, 'EXECUTING');
     assertEqual(res.body.kilo_status, 'success');
 
@@ -225,7 +225,7 @@ async function main() {
     assertEqual(task.kilo.status, 'success');
     assertEqual(task.current_agent, 'Gemini');
     assertEqual(task.next_agent, 'Gemini');
-    assertEqual(task.next_action, 'trigger_gemini');
+    assertEqual(task.next_action, 'trigger_builder');
   });
 
   // Test 10: Kilo failure callback

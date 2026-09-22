@@ -706,7 +706,20 @@ async function processSignalFile(signalFile, headCommit, config, token) {
   }
 
   let geminiResult = null;
-  if (orchestratorResult.next_action === 'trigger_gemini') {
+  if (orchestratorResult.next_action === 'trigger_builder') {
+    if (token) {
+      const builderApiKey = process.env.GEMINI_BUILDER_API_KEY;
+      try {
+        geminiResult = await orchestrator.triggerGeminiBuilder(requestId, token, builderApiKey);
+      } catch (err) {
+        geminiResult = {
+          success: false,
+          error: err.message,
+          stage: 'builder_dispatch'
+        };
+      }
+    }
+  } else if (orchestratorResult.next_action === 'trigger_gemini') {
     if (token) {
       try {
         geminiResult = await orchestrator.triggerGemini(requestId, token);

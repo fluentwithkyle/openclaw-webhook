@@ -119,7 +119,7 @@ async function main() {
         const result = await kiloPolling.pollAndProcess('poll-test-5');
         assertEqual(result.success, true);
         assertEqual(result.terminal, true);
-        assertEqual(result.next_action, 'trigger_gemini');
+        assertEqual(result.next_action, 'trigger_builder');
         const task = taskRegistry.getTask('poll-test-5');
         assertEqual(task.kilo.status, 'success');
     });

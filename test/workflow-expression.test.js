@@ -332,3 +332,65 @@ runTest('VERIFY_RECONCILE recon_status is conditional on verification PASS', () 
   const passIdx = raw.lastIndexOf('VERIFICATION_STATUS="PASS"', completedIdx);
   assert.ok(passIdx !== -1, 'RECON_STATUS="COMPLETED" must be conditional on VERIFICATION_STATUS="PASS"');
 });
+
+// --- Gemini Builder workflow tests ---
+
+const BUILDER_WF_PATH = path.join(__dirname, '..', '.github', 'workflows', 'gemini-builder.yml');
+const builderRaw = fs.readFileSync(BUILDER_WF_PATH, 'utf8');
+
+runTest('Gemini Builder workflow file exists and has workflow_dispatch trigger', () => {
+  assert.ok(builderRaw.includes('workflow_dispatch:'), 'gemini-builder.yml should have workflow_dispatch trigger');
+});
+
+runTest('Gemini Builder workflow uses GEMINI_BUILDER_API_KEY', () => {
+  assert.ok(builderRaw.includes('GEMINI_BUILDER_API_KEY'), 'gemini-builder.yml should use GEMINI_BUILDER_API_KEY');
+  assert.ok(!builderRaw.includes('secrets.GEMINI_API_KEY'), 'gemini-builder.yml should NOT use GEMINI_API_KEY');
+});
+
+runTest('Gemini Builder workflow does not require kilo_execution_id', () => {
+  assert.ok(builderRaw.includes('kilo_execution_id'), 'kilo_execution_id input should exist (optional)');
+  assert.ok(builderRaw.includes('required: false'), 'kilo_execution_id should be optional (required: false)');
+});
+
+runTest('Gemini Builder workflow has builder_execution_id input', () => {
+  assert.ok(builderRaw.includes('builder_execution_id'), 'builder_execution_id input should be present');
+});
+
+runTest('Gemini Builder workflow has BUILDER mode in prompt', () => {
+  assert.ok(builderRaw.includes('BUILDER'), 'gemini-builder.yml should reference BUILDER mode');
+});
+
+runTest('Gemini Builder workflow has commit and push steps', () => {
+  assert.ok(builderRaw.includes('git commit'), 'gemini-builder.yml should have a git commit step');
+  assert.ok(builderRaw.includes('git push'), 'gemini-builder.yml should have a git push step');
+});
+
+runTest('Gemini Builder workflow produces gemini-acp-report artifact', () => {
+  assert.ok(builderRaw.includes('gemini-acp-report'), 'gemini-builder.yml should produce gemini-acp-report artifact');
+  assert.ok(builderRaw.includes('gemini-acp-report.json'), 'gemini-builder.yml should produce gemini-acp-report.json');
+  assert.ok(/uses: actions\/upload-artifact@v4/.test(builderRaw), 'gemini-builder.yml should have artifact upload step');
+});
+
+runTest('Gemini Builder workflow uses contents: write permission', () => {
+  assert.ok(builderRaw.includes('contents: write'), 'gemini-builder.yml should have contents: write permission');
+});
+
+runTest('Gemini Builder workflow sends callback to Render', () => {
+  assert.ok(builderRaw.includes('RENDER_BUILDER_CALLBACK_URL'), 'gemini-builder.yml should reference RENDER_BUILDER_CALLBACK_URL');
+  assert.ok(builderRaw.includes('BUILDER_CALLBACK_SECRET'), 'gemini-builder.yml should reference BUILDER_CALLBACK_SECRET');
+  assert.ok(builderRaw.includes('x-builder-callback-secret'), 'gemini-builder.yml should use x-builder-callback-secret header');
+});
+
+runTest('Gemini Builder workflow ACP report uses agent Gemini Builder', () => {
+  assert.ok(builderRaw.includes('Gemini Builder'), 'gemini-builder.yml ACP report should use agent "Gemini Builder"');
+});
+
+runTest('Gemini Builder workflow has no bare + operators in expressions', () => {
+  const builderExprs = extractExpressions(builderRaw);
+  const offenders = [];
+  for (const e of builderExprs) {
+    const n = barePlusOperators(e);
+    if (n > 0) offenders.push({ expr: e.slice(0, 80), plus: n });
+  }
+  assert.equal(offenders.length, 0, `found bare '+' operators in builder workflow: ${JSON.stringify(offenders)}`);
+});

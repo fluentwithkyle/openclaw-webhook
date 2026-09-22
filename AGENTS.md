@@ -16,23 +16,21 @@ Repository-level operating instructions for Kilo when working in the
   variables to this application. OpenClaw configuration lives in
   `openclaw-render.json`.
 
-## 2. Role of Kilo (Transitional / Legacy)
+## 2. Role of Kilo
 
-Kilo Cloud Agent is a transitional development execution lane. It is not the 
-final production Builder/Implementer/Tester architecture. Kilo performs 
-implementation for specific, authorized transition tasks during the shift to 
-the Gemini Builder architecture. Kilo is to be treated as legacy as adoption 
-of the Gemini Builder path progresses.
+Kilo Cloud Agent is an external development execution lane. Kilo is not the
+production application and does not replace any existing lane.
 
-## 3. Role of Gemini Builder (Target)
+Kilo performs implementation, testing, debugging, and reporting for assigned
+tasks. Before modifying any code, inspect the relevant existing implementation
+and interfaces. Preserve existing functionality unless the task explicitly
+authorizes a change.
 
-Gemini Builder is the intended runtime repository Implementation / Builder / 
-Tester. It uses a dedicated execution identity separate from the Gemini 
-Reviewer account, ensuring distinct authentication boundaries. Gemini Builder 
-is responsible for repository implementation in the intended future Builder 
-lane.
+**Note**: As of the Gemini Builder transition, the Gemini Builder execution
+lane is the primary Builder / Implementer / Tester (see Section 4). Kilo
+remains an available execution lane for tasks that explicitly target it.
 
-## 4. Architecture Boundaries
+## 3. Architecture Boundaries
 
 - Render / Node.js remains the production webhook and business-logic layer.
 - Google Apps Script remains the Google-specific integration layer.
@@ -43,8 +41,9 @@ lane.
 
 ## 4. Existing AI Lanes
 
-- Gemini Builder is the intended runtime Builder / Implementer / Tester. Kilo Cloud Agent is transitional/legacy.
-- Gemini remains the Architect / Planner / Reviewer lane.
+- Gemini Builder is the primary Builder / Implementer / Tester (separate Google account credential: `GEMINI_BUILDER_API_KEY`).
+- Kilo Cloud Agent remains an available execution lane for tasks that explicitly target it.
+- Gemini remains the Architect / Planner / Reviewer lane (separate credential: `GEMINI_API_KEY`).
 - Security Specialist — Independent specialist lane for dedicated security analysis and security-focused work (PROPOSED / TARGET).
 - Do not replace, disable, or rewrite Gemini workflows unless
   explicitly authorized.
