@@ -6,6 +6,7 @@ const path = require('path');
 const taskRegistry = require('../poc/task-registry');
 const { setDispatcher } = require('../services/transport-provider');
 const { dispatch } = require('../poc/kilo-transport');
+const geminiBuilderTrigger = require('../poc/gemini-builder-trigger');
 
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
@@ -52,11 +53,14 @@ function makeOpenAiRequest(messages, model) {
     return { model: model || 'gpt-4', messages };
 }
 
-function validChatboxBody() {
-    return makeOpenAiRequest([
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: 'I would like to automate client lesson prep. Go create the system that can accomplish this.' }
-    ]);
+function validChatboxBody(target) {
+    return {
+        ...makeOpenAiRequest([
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: 'I would like to automate client lesson prep. Go create the system that can accomplish this.' }
+        ]),
+        target: target || 'Kilo'
+    };
 }
 
 async function makeRequest(options, data = {}) {

@@ -27,7 +27,7 @@ function makeVerifyReconcileCommand(requestId) {
     protocol_version: '0.1',
     request_id: requestId,
     source: 'CHATGPT',
-    target: 'KILO',
+    target: 'Kilo',
     task_type: 'implementation',
     repository: 'fluentwithkyle/openclaw-webhook',
     base_branch: 'main',

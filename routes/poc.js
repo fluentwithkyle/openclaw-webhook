@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const { getDispatcher } = require('../services/transport-provider');
 const orchestrator = require('../poc/orchestrator');
-const { validateExecutionReport, validateACPCommand } = require('../poc/schemas/acp-schema');
+const { validateExecutionReport, validateACPCommand, VALID_AGENTS } = require('../poc/schemas/acp-schema');
 const taskRegistry = require('../poc/task-registry');
 const gitWebhook = require('../poc/github-webhook');
 
@@ -113,6 +113,11 @@ function buildChatboxCommand(requestBody) {
         return { valid: false, error: 'No user message content found in request' };
     }
 
+    const target = requestBody.target;
+    if (!target || !VALID_AGENTS.includes(target)) {
+        return { valid: false, error: 'Missing or invalid target field in Chatbox request' };
+    }
+
     const requestId = `chatbox-${Date.now()}`;
 
     return {
@@ -121,7 +126,7 @@ function buildChatboxCommand(requestBody) {
             protocol_version: '0.1',
             request_id: requestId,
             source: 'Chatbox',
-            target: 'Kilo',
+            target: target,
             task_type: 'natural-language-ingress',
             repository: 'fluentwithkyle/openclaw-webhook',
             base_branch: 'main',

@@ -368,7 +368,7 @@ function createInitialTaskRegistryEntry(requestId, command) {
     request_id: requestId,
     parent_request_id: command.parent_request_id || null,
     originator: command.originator || 'Kyle',
-    current_agent: 'Kilo',
+    current_agent: command.target,
     next_agent: 'Gemini',
     repository: command.repository,
     base_branch: command.base_branch,
