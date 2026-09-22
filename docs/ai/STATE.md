@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-22
-**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-VERIFY-RECONCILE-001)
+**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-DEEPSEEK-CHATBOX-PROGRESS-LOG-VERIFY-RECONCILE-001)
 
 ---
 
@@ -272,8 +272,10 @@ represent implemented functionality.
 ## Current Blockers
 
 1. **Apps Script trust boundary** — Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication. Hardening required before other reliability work.
-2. **No automated test suite** — Changes verified by manual review only.
-3. **Legacy abandoned-booking code** — `google-apps-script/AbandonedBookings.js` exists but architectural status unclear; needs deployment verification before retirement.
+2. **Chatbox → Render integration gap (Live)** — Chatbox returned `Network Error: Load failed (openclaw-webhook-iz6s.onrender.com)` when sending a message through `CHATBOX_GATEWAY` to `POST /poc/chatbox`. Root cause: **UNKNOWN**. This is an observed live test result, not a verified repository defect. The `/poc/chatbox` route is implemented and 26/26 gateway tests pass, but no end-to-end Chatbox → Render request is verified as successful. See the DeepSeek + Chatbox Integration State section above for the required investigation plan.
+3. **OpenRouter DeepSeek V4 Pro token/credit issue (Live)** — OpenRouter test requests for DeepSeek V4 Pro request up to 131,072 tokens despite the Chatbox editor displaying 8,000 Max Output Tokens, and are rejected with HTTP 402 due to insufficient OpenRouter credits. **VERIFIED externally observed**; not a repository defect (no repository code controls Chatbox max-token behavior or OpenRouter credit allocation).
+4. **Automated test suite** — **IMPLEMENTED**. 450/450 tests pass across 18 test files (correcting the prior stale entry). See Task Status above.
+5. **Legacy abandoned-booking code** — `google-apps-script/AbandonedBookings.js` exists but architectural status unclear; needs deployment verification before retirement.
 
 ---
 
@@ -288,6 +290,13 @@ represent implemented functionality.
 - Complete webhook signature verification for Tally and Cal.com
 - Resolve duplicate `sendClientEmail` in Code.js and Email.js
 - Build automated testing infrastructure
+
+### DeepSeek + Chatbox Integration (Pending Investigation)
+- **What does Chatbox actually send?** — Capture the actual HTTP request (method, URL/path, auth header, body, model field, messages structure, max-token behavior) when using `CHATBOX_GATEWAY`. (Investigation Q1)
+- **What does `/poc/chatbox` expect vs. return?** — Document the exact request contract and confirm whether the success response is an OpenAI chat-completion response or an ACP task-dispatch acknowledgement. (Investigation Q2, Q3, Q4)
+- **Contract mismatch analysis** — Compare the Chatbox OpenAI-compatible provider contract with the current `/poc/chatbox` implementation to determine whether the intended bridge already exists or whether there is a contract mismatch. (Investigation Q5, Q6)
+- **Intended operational path validation** — Determine whether the intended path `Chatbox → OpenRouter → DeepSeek → authenticated control-plane bridge → ACP → Gemini Builder/Kilo → GitHub` is realized, and document any verified deviation. (Investigation Q8)
+- **OpenRouter credit resolution** — Resolve the 131,072-token vs. 8,000-displayed discrepancy and the resulting HTTP 402 rejection for DeepSeek V4 Pro.
 
 ### Lower Priority / Architectural
 - Kilo ↔ Gemini orchestration backbone implementation — **Part 1 Foundation IMPLEMENTED**; **Part 2 Automatic Gemini trigger after Kilo completion IMPLEMENTED / VERIFIED** (source commit `6c92a9a`, 103/103 tests pass); **Part 2.2 Kilo completion/result delivery IMPLEMENTED / VERIFIED** (source commit `2e9355d`, main commit `ebb8e9e`, 133/133 tests pass); see `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`. Part 2.1b (Gemini workflow dispatch) IMPLEMENTED / VERIFIED (commit `5f49f99`, 14 Gemini trigger tests pass); remaining Part 2.1 items (authenticated Gemini return path to Render) remain PROPOSED / TARGET per `KILO_GEMINI_ORCHESTRATION_PLAN.md`.
@@ -430,6 +439,179 @@ Do not replace the existing activation architecture with it.
 - Existing Kilo/Gemini architecture: **PROTECTED**
 
 Do not describe the Control Gate as currently implemented or operational.
+
+---
+
+## DeepSeek + Chatbox Integration State (Current)
+
+**Status**: Configuration complete; live end-to-end bridge NOT yet verified.
+**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-DEEPSEEK-CHATBOX-PROGRESS-LOG-VERIFY-RECONCILE-001)
+
+### State Classification Convention
+
+All entries below use one of four status labels to distinguish evidence classes:
+
+- **VERIFIED repository state** — Present and confirmed in current repository code or Git state.
+- **VERIFIED externally observed** — Confirmed by an authorized agent inspecting live external configuration/testing (Chatbox UI, OpenRouter dashboard, live test output). Not repository code.
+- **INFERRED** — Reasoned from verified facts but not directly confirmed by code inspection or external observation.
+- **UNKNOWN** — Not yet determined; requires investigation.
+
+### Current Operational Path (Externally Observed)
+
+**VERIFIED externally observed** — Chatbox iOS currently reaches DeepSeek via OpenRouter using an OpenAI-compatible interface:
+
+```
+Chatbox iOS → OpenRouter → DeepSeek
+```
+
+This existing path is **not** the repository's `/poc/chatbox` gateway ingress. The repository DeepSeek Coordinator ingress is the separate `POST /poc/coordinator` endpoint (`routes/poc.js`), documented in `ARCHITECTURE.md` Section 16.6 and ADR-016 of `ARCH_DECISIONS.md`.
+
+### CHATBOX_GATEWAY Custom Provider Configuration (Externally Observed)
+
+**VERIFIED externally observed** — Kyle created a separate Chatbox custom provider named `CHATBOX_GATEWAY` to bridge Chatbox directly to the repository's Render-hosted ingress:
+
+| Field | Value |
+|-------|-------|
+| **API Mode** | OpenAI API Compatible |
+| **API Host** | `https://openclaw-webhook-iz6s.onrender.com` |
+| **API Path** | `/poc/chatbox` |
+| **Preview endpoint** | `https://openclaw-webhook-iz6s.onrender.com/poc/chatbox` |
+
+**Note**: The `API Host` and `Preview endpoint` values are observed Render deployment URLs. They are recorded here as configuration observations and must not be treated as secret values. The Render environment variable `CHATBOX_GATEWAY_SECRET` is configured as the gateway authentication boundary. **The secret value is NOT recorded anywhere in this documentation.**
+
+### DeepSeek V4 Pro Model Configuration (Externally Observed)
+
+**VERIFIED externally observed** — DeepSeek V4 Pro was configured in Chatbox under the `CHATBOX_GATEWAY` provider:
+
+| Field | Value |
+|-------|-------|
+| **Model ID** | `deepseek/deepseek-v4-pro` |
+| **Nickname** | DeepSeek V4 Pro |
+| **Model Type** | Chat |
+| **Context Window** | 1,048,576 |
+| **Max Output Tokens (displayed in editor)** | 8,000 |
+| **Reasoning** | enabled |
+| **Tool use** | enabled |
+
+**Important distinction**: Configuring `deepseek/deepseek-v4-pro` under `CHATBOX_GATEWAY` does **NOT** mean Chatbox is using the existing OpenRouter connection. The `CHATBOX_GATEWAY` provider endpoint routes requests to the repository's Render-hosted `/poc/chatbox` route, which is a separate ingress from OpenRouter. The model identifier is configured at the Chatbox provider level, but the network path is distinct from the OpenRouter path.
+
+### OpenRouter Token Discrepancy (Externally Observed Integration Issue)
+
+**VERIFIED externally observed** — Despite the Chatbox editor displaying a Max Output Tokens setting of 8,000 for DeepSeek V4 Pro, OpenRouter test requests for DeepSeek V4 Pro are still actually requesting up to **131,072 tokens** (max) and are rejected with **HTTP 402** because the available OpenRouter credits are insufficient for that requested maximum.
+
+This is recorded as an **observed Chatbox/OpenRouter configuration integration issue**, not a repository defect. No code in the repository controls Chatbox's max-token behavior or OpenRouter's credit allocation. Repository evidence does not establish that this discrepancy is a repository-side defect.
+
+### DeepSeek Flash — OpenRouter Path Verification (Externally Observed)
+
+**VERIFIED externally observed** — DeepSeek Flash was successfully tested through the existing OpenRouter provider in Chatbox and returned a response. This verifies the external path:
+
+```
+Chatbox → OpenRouter → DeepSeek Flash  (VERIFIED — returned a response)
+```
+
+### DeepSeek Flash Under CHATBOX_GATEWAY — Live Test Result (Externally Observed)
+
+**VERIFIED externally observed** — DeepSeek Flash was then selected under `CHATBOX_GATEWAY` and a message was sent. Chatbox returned:
+
+```
+API Error: Error from Custom OpenAI: Network Error: Load failed (openclaw-webhook-iz6s.onrender.com)
+```
+
+This is recorded as the **current observed live Chatbox → Render test result**. **Do NOT claim this error establishes its root cause.** The root cause is not determined by this task and requires the investigation outlined below.
+
+### Repository-Verified Implementation State of `/poc/chatbox`
+
+The current repository implementation of `/poc/chatbox` (`routes/poc.js`) is an authenticated Chatbox gateway and includes the following repository-verified behavior:
+
+- **Authentication boundary**: `authenticateChatboxGateway` middleware authenticates the caller via the `x-chatbox-gateway-secret` request header checked against `process.env.CHATBOX_GATEWAY_SECRET`. Fail-closed: missing or invalid secret returns HTTP 401. This env var is the authentication boundary for the gateway. (`routes/poc.js:92-103`)
+- **OpenAI-compatible request-shape validation**: requires `model` (string), `messages` (array, non-empty), each message must contain `role` and `content`, and at least one `user` message must be present to preserve intent. (`routes/poc.js:609-655`)
+- **User-message validation and intent preservation**: `buildChatboxCommand` extracts user-message content from `messages` and joins it as natural-language intent, rejecting requests with no user-message content. (`routes/poc.js:105-114`)
+- **ACP command construction**: `buildChatboxCommand` builds a bounded ACP command in `REVIEW` mode with `read_only` capability and `poc/` permitted paths; preserves natural-language intent in the `task` field and a `natural_language_intent` structured field. (`routes/poc.js:105-151`)
+- **ACP validation**: the constructed command is validated via `validateACPCommand` from `poc/schemas/acp-schema.js`. (`routes/poc.js:669`)
+- **TaskRegistry registration**: validated commands are registered via `taskRegistry.createTask`. (`routes/poc.js:680`)
+- **Dispatch through the existing dispatcher**: dispatched via `getDispatcher()` from `services/transport-provider.js`, the same mechanism used by `/poc/kilo` and `/poc/coordinator`. (`routes/poc.js:699`)
+- **Target-aware dispatch**: `buildChatboxCommand` reads `target` from the request body and validates it against `VALID_AGENTS` (`['Kilo', 'Gemini', 'Gemini Builder']`) with fail-closed behavior. The previous hardcoded `target: 'Kilo'` was removed. (`routes/poc.js:116-129`; `poc/schemas/acp-schema.js:32`)
+- **Chatbox remains a non-authorizing REVIEW / read_only / poc/ ingress**: the gateway issues only REVIEW-mode ACP commands and does NOT grant `modify_files`, `commit`, `push`, or `FAILOVER_EXECUTE`. (`routes/poc.js:134-139`)
+- **CHATBOX_GATEWAY_SECRET as authentication boundary**: confirmed as the env-var/header boundary, distinct from `KILO_CALLBACK_SECRET`, `GEMINI_CALLBACK_SECRET`, `DEEPSEEK_COORDINATOR_SECRET`, and `ACP_POC_TRIGGER_SECRET`. (`routes/poc.js:94`)
+
+### Critical Contract Distinction
+
+The documentation must not assume `/poc/chatbox` is a complete OpenAI-compatible model-completion service. The following four concerns are **distinct** and must be preserved:
+
+1. **Accepting an OpenAI-compatible request format** — `POST /poc/chatbox` accepts an OpenAI-shaped request body (`model` + `messages`). VERIFIED in repository code.
+2. **The response actually returned by `/poc/chatbox`** — On dispatch SUCCESS, the route returns HTTP 202 with a JSON task-dispatch acknowledgement (`request_id`, `status`, `stage`, `execution_initiated`, `task_status`, `current_agent`, `next_agent`). It does **NOT** return an OpenAI-compatible `chat-completion` response with `choices` / `delta` streaming tokens. This is repository-verified behavior, not an inference.
+3. **Dispatching an ACP task** — The route constructs and dispatches a REVIEW-mode ACP command (`read_only`, `poc/` paths) through the existing control plane. VERIFIED in repository code.
+4. **Providing an actual AI-model completion response** — `/poc/chatbox` does NOT provide an AI-model completion response. It dispatches an ACP task. Whether or not an AI-model completion is ultimately produced is determined by downstream orchestration (Kilo/Gemini), which is outside the `/poc/chatbox` route itself.
+
+**VERIFIED repository fact**: The current `/poc/chatbox` success response is an ACP task-dispatch acknowledgement, **not** an OpenAI-compatible chat-completion response.
+
+### Test Status (Repository-Verified)
+
+**VERIFIED repository state** — Current test suite (HEAD `bf532c7`):
+- `test/chatbox-gateway.test.js`: 26/26 tests pass (includes tests for missing target → 400, invalid target → 400, Gemini Builder target passthrough, fail-closed auth)
+- All 450 tests pass across 18 test files (per commit `8a56fe6` and subsequent target-aware dispatch commits `7e46b78`, `e558910`, `bf532c7`)
+
+### Required Next Investigation Plan
+
+The following investigation questions must be answered before further DeepSeek integration work can proceed. These are recorded as explicit next steps; **no implementation is authorized by this reconciliation task**.
+
+1. **What does Chatbox actually send?**
+   Determine the actual HTTP request Chatbox sends when using `CHATBOX_GATEWAY`, including: HTTP method; URL/path; authentication header; request body; `model` field; `messages` structure; relevant OpenAI-compatible parameters; max-token behavior. Do not infer the actual request solely from Chatbox's UI settings.
+
+2. **What does `/poc/chatbox` currently expect?**
+   Inspect the actual route and validation behavior and document its current request contract.
+
+3. **What does `/poc/chatbox` currently return?**
+   Inspect the actual success and failure response bodies and status codes. Determine whether its successful response is an OpenAI-compatible chat-completion response or an ACP/task-dispatch acknowledgement.
+
+4. **What does Chatbox require from an OpenAI-compatible custom provider?**
+   Determine the relevant request/response contract required by Chatbox's Custom OpenAI provider, particularly what response structure it expects after sending a chat-completion request.
+
+5. **Does the existing `/poc/chatbox` implementation already provide the intended bridge?**
+   Compare the Chatbox contract with the current `/poc/chatbox` implementation. Determine whether the existing implementation already bridges the intended architecture or whether there is a contract mismatch.
+
+6. **If there is a mismatch, identify the smallest viable integration path.**
+   Do not redesign the architecture automatically. First determine whether the existing components can be composed with a minimal change or configuration adjustment.
+
+7. **Preserve the intended architectural separation:**
+   - DeepSeek/OpenRouter = model/reasoning layer;
+   - Render/OpenClaw = authenticated control-plane / ACP execution layer;
+   - GitHub = source of truth and execution infrastructure.
+
+8. **Determine whether the intended operational path is:**
+   ```
+   Chatbox → OpenRouter → DeepSeek → authenticated control-plane bridge → ACP → Gemini Builder/Kilo → GitHub
+   ```
+   Document any verified deviation from this intended path.
+
+9. **Do not authorize implementation changes as part of this task.**
+   The output of this reconciliation is the reconciled project state and investigation plan for the next authorized action.
+
+### Architectural Separation (Intended)
+
+The intended separation of concerns is:
+
+- **DeepSeek/OpenRouter** = model/reasoning layer (provides model completions).
+- **Render/OpenClaw** = authenticated control-plane / ACP execution layer (validates, registers, dispatches authorized ACP tasks; Chatbox remains a non-authorizing ingress).
+- **GitHub** = source of truth and execution infrastructure (durable commits, workflow execution, verification).
+
+Any future Chatbox → Render integration work must preserve this separation.
+
+### Current Integration Gap
+
+**UNKNOWN root cause**: Chatbox returned `Network Error: Load failed` when sending a message through `CHATBOX_GATEWAY` to `https://openclaw-webhook-iz6s.onrender.com/poc/chatbox`. The root cause is undetermined. No Chatbox gateway request is considered end-to-end verified merely because the provider is configured.
+
+**Open questions (root cause for the Network Error)**:
+- Did Chatbox actually reach the Render endpoint (DNS, TLS, connectivity)?
+- Did the request reach the `authenticateChatboxGateway` middleware (header present and matching)?
+- Did the request pass OpenAI-compatible shape validation?
+- Did the request reach `buildChatboxCommand` / `validateACPCommand`?
+- Was the task registered in TaskRegistry?
+- Was the command dispatched through `getDispatcher()`?
+- Is the Render deployment reachable and healthy?
+- Was there a timeout, authentication rejection, or application error?
+
+These must be answered by the investigation plan above (questions 1–4 and 8) before any integration change is authorized.
 
 ---
 

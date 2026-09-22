@@ -25,7 +25,7 @@ The project has completed the transition from Kilo Cloud Agent (transitional/leg
 | **Google Adapter** | Google Apps Script |
 | **Last Updated** | 2026-09-22 |
 
-Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-VERIFY-RECONCILE-001)
+Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-DEEPSEEK-CHATBOX-PROGRESS-LOG-VERIFY-RECONCILE-001)
 
 ---
 
@@ -38,6 +38,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-
 5. **Automated test suite** — **IMPLEMENTED**. 18 test files with 450 tests covering ACP schema, TaskRegistry, Orchestrator, integration, Gemini trigger, Builder trigger, callbacks, polling, verifier, POC, coordinator, chatbox gateway, and verify-reconcile modes.
 6. **DeepSeek Coordinator Project** — **HIGH PRIORITY**. Authenticated `POST /poc/coordinator` ingress implemented and verified in `routes/poc.js`. After successful registration, the command is dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Registration failure prevents dispatch; provider identifiers persisted on successful dispatch. 19 coordinator tests pass; 170 total tests pass. (IMPLEMENTED / VERIFIED)
 7. **Git completion-signal emitter and Path 2** — Signal emitter implemented (Issue #180, commit `7bec058`): `poc/signal-emitter.js` with `poc/signals/<request_id>.json` artifact. **Path 2 recovery IMPLEMENTED / VERIFIED** (Issue #175, commit `030f888`): `recoverTaskFromGitHub()` reconstructs task context from GitHub issue body when TaskRegistry is absent. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`). Architectural direction (Issue #172, ADR-016) APPROVED / PROPOSED / TARGET — fully documented. Remaining gap: **live end-to-end validation (GitHub push ↠ Render webhook ↠ Gemini dispatch) NOT verified**; tests use mocks. Test count discrepancy: signal artifact claims 337 regression (total 378); independently verified actual is 369 regression (total 410). See STATE.md for full details.
+8. **Chatbox → Render live integration gap** — `CHATBOX_GATEWAY` custom provider configured in Chatbox iOS (OpenAI API Compatible; host `/poc/chatbox`; `CHATBOX_GATEWAY_SECRET` auth boundary in Render). DeepSeek Flash test through OpenRouter succeeded; DeepSeek Flash test under `CHATBOX_GATEWAY` returned `Network Error: Load failed`. `/poc/chatbox` route is implemented (26/26 gateway tests pass); root cause of the live network error is **UNKNOWN**. Investigation questions recorded in STATE.md — next authorized action pending your direction.
 
 ---
 
@@ -61,8 +62,8 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-
 | Gemini result artifact observability | IMPLEMENTED / VERIFIED | Kilo | Artifact persistence + ChatGPT retrieval + non-empty capture VERIFIED (run 35090491295, artifact ID 10444246441, 1120 bytes, commit `793d083`) |
 | Render Control Gatekeeper documentation reconciliation | IMPLEMENTED | Kilo | Documentation reconciled: Render = future Control Gate/gatekeeper (PROPOSED/TARGET); Layer 1 → Layer 2 sequencing; Kilo/Gemini architecture protected |
 | DeepSeek Coordinator Project establishment | ACTIVE / IMPLEMENTED / VERIFIED | Kilo | HIGH PRIORITY project implemented. Authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`. ACP validation via `validateACPCommand`; registration via `taskRegistry.createTask`; dispatch via existing `getDispatcher()` (same mechanism as `/poc/kilo`). Implementation commits: `5613214` (ingress), `950983a` (dispatch bridge). 19 coordinator tests pass; 170 total tests pass. |
-| Chatbox Gateway Ingress | IMPLEMENTED / VERIFIED | Kilo | Authenticated `POST /poc/chatbox` in `routes/poc.js`. OpenAI-compatible request → REVIEW-mode ACP command (read_only, poc/ paths) → `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`. Auth: `x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET` (distinct from all other secrets). Intent preserved in `task` field and `natural_language_intent` field. 23 gateway tests pass; 259 total tests pass. (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001) |
-| Chatbox target-aware ACP dispatch | IMPLEMENTED / VERIFIED | Kilo | Removed hardcoded `target: 'Kilo'` from `buildChatboxCommand`; target flows through trusted control path via request body `target` field validated against `VALID_AGENTS` (fail-closed). `createInitialTaskRegistryEntry` now sets `current_agent` from `command.target`. Chatbox remains REVIEW/read_only/poc/. Existing target-aware dispatcher routes Kilo→`dispatchKilo`, Gemini Builder→`dispatchBuilder`, unrecognized→BLOCKED. 26/26 chatbox Gateway tests pass. Merged `kilo/misty-hatch-7j7` into `main`. |
+| Chatbox Gateway Ingress | IMPLEMENTED / VERIFIED | Kilo | Authenticated `POST /poc/chatbox` in `routes/poc.js`. OpenAI-compatible request → REVIEW-mode ACP command (read_only, poc/ paths) → `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()`. Auth: `x-chatbox-gateway-secret` / `CHATBOX_GATEWAY_SECRET` (distinct from all other secrets). Intent preserved in `task` field and `natural_language_intent` field. **Live end-to-end NOT verified** — Chatbox returned `Network Error: Load failed (openclaw-webhook-iz6s.onrender.com)` when sending through `CHATBOX_GATEWAY`; root cause UNKNOWN. Gateway route itself: 26/26 gateway tests pass. Full project suite: 450/450 tests pass across 18 test files. (TASK-KILO-CHATBOX-GATEWAY-IMPLEMENT-001, TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-VERIFY-RECONCILE-001) |
+| Chatbox target-aware ACP dispatch | IMPLEMENTED / VERIFIED | Kilo | Removed hardcoded `target: 'Kilo'` from `buildChatboxCommand` in `routes/poc.js`; target flows through trusted control path via request body `target` field validated against `VALID_AGENTS` (fail-closed). `createInitialTaskRegistryEntry` in `poc/schemas/acp-schema.js` now sets `current_agent` from `command.target`. Chatbox remains REVIEW/read_only/poc/. Existing target-aware dispatcher in `services/transport-provider.js` routes Kilo→`dispatchKilo`, Gemini Builder→`dispatchBuilder`, unrecognized→BLOCKED. 26/26 chatbox Gateway tests pass; full regression 450/450 tests pass across 18 test files. Merged `kilo/misty-hatch-7j7` (commits `7e46b78`, `e558910`) into `main`. |
 | VERIFY_RECONCILE operating mode implementation | IMPLEMENTED / VERIFIED | Kilo | Task mode dispatch: REVIEW (read-only), VERIFY_RECONCILE (4 caps, bounded docs/ai paths), FAILOVER_EXECUTE (5 caps, explicit paths). 238 total tests pass. (Issue #145) |
 | Kilo ↔ Gemini post-dispatch result lifecycle repair | IMPLEMENTED / VERIFIED | Kilo | Repaired false-success callback path: `STATUS` now derives from `steps.gemini_run.outcome` instead of hardcoded `"success"`; `RECON_STATUS` follows `determineReconciliationStatus()` contract; callback and artifact steps use `if: always()`; `gemini_output` included in payload. 270 total tests pass. (TASK-KILO-GEMINI-POST-DISPATCH-RESULT-LIFECYCLE-IMPLEMENT-001) |
 | Git-based Kilo completion-signal POC (Issue #162) | IMPLEMENTED / VERIFIED | Kilo | Bounded POC: `poc/github-webhook.js` + `POST /poc/github/webhook` route. Git-based Kilo completion signal via GitHub push webhook. Reuses TaskRegistry correlation and `orchestrator.handleKiloCompletion()`. Existing polling/callback/orchestration preserved. Commit `bf68116167454d7c42b85e0ac4d627050a89ffd9`. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`). **Live validation signal** created (commit `f9d97e5`). **Path 2 recovery IMPLEMENTED / VERIFIED** (commit `030f888`): `recoverTaskFromGitHub()` retrieves task context from GitHub issue body when TaskRegistry is absent; fail-closed on issue absence, request_id mismatch, validation/authorization failure, missing token. Follow-on: signal emitter implemented in Issue #180 (commit `7bec058`). Status: UNDER VALIDATION (live end-to-end not verified). |
@@ -76,7 +77,9 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-
 ## Blockers
 
 1. **Apps Script trust boundary** — Hardening required before other reliability work.
-2. **Legacy abandoned-booking code** — `google-apps-script/AbandonedBookings.js` needs deployment verification before retirement.
+2. **Chatbox → Render integration gap (Live)** — Chatbox returned `Network Error: Load failed` when sending through `CHATBOX_GATEWAY` to `/poc/chatbox`. Root cause: **UNKNOWN**. Gateway route implemented (26/26 tests pass); no end-to-end Chatbox → Render request verified as successful. See STATE.md DeepSeek + Chatbox Integration State section for investigation plan.
+3. **OpenRouter DeepSeek V4 Pro token/credit issue (Live)** — 131,072-token requests rejected with HTTP 402 despite 8,000-token display. VERIFIED externally observed; not a repository defect.
+4. **Legacy abandoned-booking code** — `google-apps-script/AbandonedBookings.js` needs deployment verification before retirement.
 
 ---
 
@@ -93,7 +96,7 @@ Substantially complete:
 - Automated Kilo delivery verification lane — IMPLEMENTED
 - VERIFY_RECONCILE operating mode — **IMPLEMENTED / VERIFIED** (238 total tests pass)
 - Kilo ↔ Gemini post-dispatch result lifecycle repair — **IMPLEMENTED / VERIFIED** (270 total tests pass; repaired false-success callback path in `main.yml`)
-- Chatbox Gateway Ingress — **IMPLEMENTED / VERIFIED** (23 gateway tests pass; 259 total tests pass)
+- Chatbox Gateway Ingress — **IMPLEMENTED / VERIFIED** (26 gateway tests pass; 450 total tests pass). **Live end-to-end NOT verified** — Chatbox `Network Error: Load failed` on `/poc/chatbox` when using `CHATBOX_GATEWAY`; root cause UNKNOWN.
 - Gemini ACP artifact reporting — issue_comment path unified (Issue #174) — **IMPLEMENTED / VERIFIED** (29 workflow-expression tests pass)
 - Git completion-signal emitter (Issue #180, commit `7bec058`) — **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** (41 emitter tests pass; 77 webhook regression tests pass; 410 total tests pass)
 
@@ -101,6 +104,8 @@ Remaining pending items:
 - Remaining Part 2.1 (authenticated Gemini → Render return path) — PROPOSED / TARGET, not yet implemented (Gemini investigation result)
 - Full automated Kilo delivery verification integration — PARTIAL / PROPOSED / PENDING; persistence gate remains PROPOSED / TARGET
 - **Live end-to-end validation of Git completion-signal flow** — NOT verified. Signal file committed and pushed to `main`, but no evidence of live GitHub push webhook ↠ Render webhook ↠ signal processing ↠ Gemini dispatch. Tests use mocks, not live API calls.
+- **Chatbox → Render live integration** — NOT verified. Chatbox returned `Network Error: Load failed` through `CHATBOX_GATEWAY`; root cause UNKNOWN. Investigation plan recorded in STATE.md (9 questions: what Chatbox sends, what `/poc/chatbox` expects/returns, what Chatbox requires, contract comparison, smallest viable path, architectural separation, intended operational path). No implementation authorized.
+- **OpenRouter DeepSeek V4 Pro token discrepancy** — VERIFIED externally observed; 131,072-token requests rejected with HTTP 402 despite 8,000-token display. Not a repository defect.
 - Render Control Gate — PROPOSED / TARGET (blocked on Layer 1 stabilization)
 - ChatGPT Control Gate architecture — RESEARCH COMPLETE / PROPOSED / PENDING
 
