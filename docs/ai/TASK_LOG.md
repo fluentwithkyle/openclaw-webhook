@@ -6,10 +6,78 @@
 
 ---
 
+2026-09-22 | TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-VERIFY-RECONCILE-001 | Remove hardcoded Chatbox Kilo target; make ACP target selection explicit through the trusted control path | SUCCESS | Merge commit on main
 2026-09-22 | TASK-GEMINI-RECONCILE-BUILDER-TRANSITION-RESEARCH-PLAN-001 | Reconcile durable project documentation with Gemini Builder transition research and implementation plan | SUCCESS | Commit SHA: d1cc444
 2026-09-21 | TASK-KILO-PROJECT-STATE-LOGS-RECONCILE-001 | Reconcile project state and logs after Issue #180 signal emitter implementation | See detailed entry | Commit SHA: pending
 2026-09-21 | TASK-KILO-GIT-COMPLETION-SIGNAL-EMITTER-IMPLEMENT-001 | Kilo implemented Git completion-signal emitter (Issue #180, commit 7bec058) | SUCCESS | Commit SHA: 7bec05817e9209bf934d6f73babccdcfe93492c5
 2026-09-21 | TASK-GEMINI-ACP-REPORT-FILING-STATUS-VERIFY-RECONCILE-001 | Independently verify the completed Kilo implementation for TASK-KILO-ACP-REPORT-FILING-STATUS-IMPLEMENT-001 (Issue #176) | Verification COMPLETED with scope-violation defect reported | Commit SHA: 2b711cc... (implementation)
+
+---
+
+## 2026-09-22 | Remove Hardcoded Chatbox Kilo Target (TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-VERIFY-RECONCILE-001)
+
+**Task**: Remove the implicit Chatbox Kilo target assumption from the `buildChatboxCommand` function in `routes/poc.js` so that the trusted authenticated control path can intentionally select an ACP target (Kilo or Gemini Builder). Make `createInitialTaskRegistryEntry` in `poc/schemas/acp-schema.js` target-aware so the TaskRegistry `current_agent` reflects the command's actual target.
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo
+**Repository**: `fluentwithkyle/openclaw-webhook`
+**Base Branch**: `main`
+**Task Mode**: VERIFY_RECONCILE
+**Capabilities Authorized**: inspect, modify_files, run_tests, commit, push
+**Permitted Paths**: `routes/poc.js`, `poc/schemas/acp-schema.js`, `test/`, `docs/ai/`
+
+**Objective**: The Chatbox gateway (`POST /poc/chatbox`) previously hardcoded `target: 'Kilo'` in `buildChatboxCommand()`, implicitly defaulting every Chatbox ingress to the Kilo agent. This is removed so that the target is selected explicitly by the trusted control path through the request body's `target` field, validated against `VALID_AGENTS` (case-sensitive: `'Kilo'`, `'Gemini'`, `'Gemini Builder'`). The Chatbox gateway remains REVIEW/read_only/poc/ — it does not grant Builder authorization or elevate capabilities. Fail-closed when no valid target is provided.
+
+**Changes made**:
+
+1. **`routes/poc.js`** (`buildChatboxCommand`):
+   - Imported `VALID_AGENTS` from `poc/schemas/acp-schema.js`
+   - Added fail-closed target validation: if `requestBody.target` is missing or not in `VALID_AGENTS`, returns `{ valid: false, error: 'Missing or invalid target field in Chatbox request' }`
+   - Replaced hardcoded `target: 'Kilo'` with `target: requestBody.target` (the validated value from the request body)
+
+2. **`poc/schemas/acp-schema.js`** (`createInitialTaskRegistryEntry`):
+   - Replaced hardcoded `current_agent: 'Kilo'` with `current_agent: command.target` so the registry entry reflects the actual ACP target
+
+3. **`test/verify-reconcile.test.js`** (`makeVerifyReconcileCommand`):
+   - Fixed invalid target casing: `target: 'KILO'` → `target: 'Kilo'` (VALID_AGENTS is case-sensitive)
+
+4. **`test/chatbox-gateway.test.js`**:
+   - Updated `validChatboxBody()` to accept an optional `target` parameter (defaults to `'Kilo'`) so existing tests include an explicit target
+   - Updated Test 9 and Test 21 to include `target: 'Kilo'` in request bodies
+   - Added Test 24: missing target field returns 400 (fail-closed)
+   - Added Test 25: invalid target returns 400
+   - Added Test 26: Gemini Builder target passes through to Builder dispatch (mocks `geminiBuilderTrigger.dispatchGeminiBuilder`, verifies `current_agent: 'Gemini Builder'` and Builder dispatch invocation)
+
+5. **`test/schema.test.js`**:
+   - Added test: `current_agent` reflects `command.target` for Gemini Builder target
+   - Added test: `current_agent` reflects `command.target` for Gemini target
+
+6. **`test/task-registry.test.js`**:
+   - Added test: `createTask` with Gemini Builder target sets `current_agent` to `'Gemini Builder'`
+
+**Verification performed**:
+1. All 14 test suites pass with 0 failures (chatbox-gateway 26/26, schema 28/28, task-registry 20/20, verify-reconcile 52/52, transport-provider 10/10, integration 11/11, coordinator 19/19, gemini-callback 26/26, kilo-callback 15/15, kilo-polling 10/10, signal-emitter 41/41, gemini-builder-trigger 9/9, kilo-verifier 18/18, workflow-expression 40/40)
+2. `git diff --check` clean (no whitespace errors)
+3. No protected files modified: `AGENTS.md`, `GEMINI.md`, `ARCHITECTURE.md`, production code (`index.js`), GitHub workflows, `openclaw-render.json`, `poc/github-webhook.js`, `poc/main.js` — all unchanged
+
+**Architecture preserved**:
+- Chatbox remains REVIEW mode with read_only capability and poc/ permitted paths — no Builder authorization granted
+- The trusted control path (trusted caller providing `target` in request body) remains responsible for authorization
+- `services/transport-provider.js` existing target-aware dispatcher is reused unchanged
+- Gemini Builder remains the primary Builder target; Kilo retained as the available failover target
+- No new ingress, dispatcher, workflow, or control plane created
+
+**Files changed (6 source + 3 test)**:
+- `routes/poc.js` — target-aware `buildChatboxCommand`
+- `poc/schemas/acp-schema.js` — target-aware `createInitialTaskRegistryEntry`
+- `test/verify-reconcile.test.js` — fixed invalid target casing
+- `test/chatbox-gateway.test.js` — explicit target in existing tests, 3 new tests
+- `test/schema.test.js` — 2 new target-aware tests
+- `test/task-registry.test.js` — 1 new Builder target test
+
+**Outcome**: SUCCESS — Chatbox Kilo target is no longer hardcoded; target selection flows through the trusted control path (request body `target` field validated against `VALID_AGENTS`); TaskRegistry `current_agent` is target-aware; Chatbox remains a non-authorizing REVIEW/read_only/poc/ ingress; all tests pass; `git diff --check` clean.
+
+**Commit Reference**: Merge of `kilo/misty-hatch-7j7` (commits `7e46b78` and `e558910`) into `main`
 
 ---
 
