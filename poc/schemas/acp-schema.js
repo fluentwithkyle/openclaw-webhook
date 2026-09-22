@@ -29,7 +29,7 @@ const EXECUTION_REPORT_REQUIRED_FIELDS = [
   'blockers'
 ];
 
-const VALID_AGENTS = ['Kilo', 'Gemini'];
+const VALID_AGENTS = ['Kilo', 'Gemini', 'Gemini Builder'];
 const VALID_STATUSES = ['success', 'failure', 'blocked'];
 
 const TASK_REGISTRY_REQUIRED_FIELDS = [
@@ -44,9 +44,10 @@ const TASK_REGISTRY_REQUIRED_FIELDS = [
   'status',
   'created_at',
   'updated_at',
-  'kilo',
-  'gemini',
-  'next_action',
+   'kilo',
+   'gemini',
+   'builder',
+   'next_action',
   'verification'
 ];
 
@@ -61,7 +62,7 @@ const VALID_STATE_TRANSITIONS = {
   'COMPLETE': []
 };
 
-const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE'];
+const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE', 'BUILDER'];
 const DEFAULT_TASK_MODE = 'REVIEW';
 
 const VALID_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push', 'run_tests'];
@@ -69,6 +70,7 @@ const VALID_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push', 'run_
 const REVIEW_CAPABILITIES = ['read_only'];
 const VERIFY_RECONCILE_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push'];
 const FAILOVER_EXECUTE_CAPABILITIES = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+const BUILDER_CAPABILITIES = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
 
 const VERIFY_RECONCILE_PATHS = [
   'docs/ai/TASK_LOG.md',
