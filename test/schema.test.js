@@ -249,6 +249,24 @@ test('createInitialTaskRegistryEntry creates correct structure', () => {
   assert(entry.updated_at);
 });
 
+test('createInitialTaskRegistryEntry - current_agent reflects command.target for Gemini Builder', () => {
+  const builderCommand = { ...validCommand, target: 'Gemini Builder' };
+  const entry = createInitialTaskRegistryEntry('req-builder', builderCommand);
+  assertEqual(entry.current_agent, 'Gemini Builder');
+  assertEqual(entry.next_agent, 'Gemini');
+  const result = validateTaskRegistryEntry(entry);
+  assertEqual(result.valid, true);
+});
+
+test('createInitialTaskRegistryEntry - current_agent reflects command.target for Gemini', () => {
+  const geminiCommand = { ...validCommand, target: 'Gemini' };
+  const entry = createInitialTaskRegistryEntry('req-gemini', geminiCommand);
+  assertEqual(entry.current_agent, 'Gemini');
+  assertEqual(entry.next_agent, 'Gemini');
+  const result = validateTaskRegistryEntry(entry);
+  assertEqual(result.valid, true);
+});
+
 test('VALID_AGENTS includes Gemini Builder', () => {
   assert(VALID_AGENTS.includes('Gemini Builder'), 'Gemini Builder should be a valid agent');
   assert(VALID_AGENTS.includes('Kilo'), 'Kilo should remain a valid agent');

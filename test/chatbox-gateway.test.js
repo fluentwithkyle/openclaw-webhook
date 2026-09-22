@@ -258,7 +258,7 @@ async function main() {
     await runTest('Chatbox - natural-language intent preserved in ACP command task field', async () => {
         cleanup();
         const intent = 'I would like to automate client lesson prep. Go create the system.';
-        const body = makeOpenAiRequest([{ role: 'user', content: intent }], 'gpt-4');
+        const body = { ...makeOpenAiRequest([{ role: 'user', content: intent }], 'gpt-4'), target: 'Kilo' };
 
         let dispatchedCommand = null;
         setDispatcher((cmd) => {
@@ -533,11 +533,11 @@ async function main() {
     // Test 21: Intent with multiple user messages — all concatenated and preserved
     await runTest('Chatbox - multiple user messages concatenated in task field', async () => {
         cleanup();
-        const body = makeOpenAiRequest([
+        const body = { ...makeOpenAiRequest([
             { role: 'system', content: 'You are helpful.' },
             { role: 'user', content: 'First intent sentence.' },
             { role: 'user', content: 'Second intent sentence.' }
-        ], 'gpt-4');
+        ], 'gpt-4'), target: 'Kilo' };
 
         let dispatchedCommand = null;
         setDispatcher((cmd) => {
@@ -607,6 +607,90 @@ async function main() {
         } finally {
             setDispatcher(dispatch);
         }
+        cleanup();
+    });
+
+    // Test 24: Missing target field -> 400 (fail-closed, no default target)
+    await runTest('Chatbox - missing target field returns 400 (fail-closed)', async () => {
+        cleanup();
+        const body = {
+            model: 'gpt-4',
+            messages: [{ role: 'user', content: 'Test intent without target' }]
+        };
+
+        const res = await makeRequest({
+            hostname: 'localhost', port: 3005, path: '/poc/chatbox', method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...chatboxAuth }
+        }, body);
+        assertEqual(res.status, 400);
+        assertEqual(res.body.status, 'validation blocked');
+        assert(res.body.error.includes('target'));
+
+        cleanup();
+    });
+
+    // Test 25: Invalid target -> 400
+    await runTest('Chatbox - invalid target returns 400', async () => {
+        cleanup();
+        const body = {
+            model: 'gpt-4',
+            messages: [{ role: 'user', content: 'Test intent with invalid target' }],
+            target: 'InvalidAgent'
+        };
+
+        const res = await makeRequest({
+            hostname: 'localhost', port: 3005, path: '/poc/chatbox', method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...chatboxAuth }
+        }, body);
+        assertEqual(res.status, 400);
+        assertEqual(res.body.status, 'validation blocked');
+        assert(res.body.error.includes('target'));
+
+        cleanup();
+    });
+
+    // Test 26: Gemini Builder target passes through to Builder dispatch path
+    await runTest('Chatbox - Gemini Builder target passes through to Builder dispatch', async () => {
+        cleanup();
+        const intent = 'Create the client lesson prep system.';
+        const body = {
+            ...makeOpenAiRequest([{ role: 'user', content: intent }] , 'gpt-4'),
+            target: 'Gemini Builder'
+        };
+
+        process.env.GEMINI_BUILDER_API_KEY = 'test-builder-key';
+        process.env.ORCHESTRATOR_GH_TOKEN = 'test-gh-token';
+
+        let builderReceivedArgs = null;
+        const originalDispatch = geminiBuilderTrigger.dispatchGeminiBuilder;
+        geminiBuilderTrigger.dispatchGeminiBuilder = async function () {
+            builderReceivedArgs = Array.from(arguments);
+            return { success: true, message: 'Builder dispatch accepted', status_code: 204 };
+        };
+
+        try {
+            const res = await makeRequest({
+                hostname: 'localhost', port: 3005, path: '/poc/chatbox', method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...chatboxAuth }
+            }, body);
+            assertEqual(res.status, 202);
+            assertEqual(res.body.execution_initiated, true);
+            assertEqual(res.body.current_agent, 'Gemini Builder');
+            assertEqual(res.body.next_agent, 'Gemini');
+
+            assert(builderReceivedArgs !== null, 'Builder dispatch should have been called');
+            assertEqual(builderReceivedArgs[0], res.body.request_id);
+            assertEqual(builderReceivedArgs[1], intent);
+
+            const task = taskRegistry.getTask(res.body.request_id);
+            assert(task !== null, 'Task should be registered');
+            assertEqual(task.current_agent, 'Gemini Builder');
+        } finally {
+            geminiBuilderTrigger.dispatchGeminiBuilder = originalDispatch;
+            delete process.env.GEMINI_BUILDER_API_KEY;
+            delete process.env.ORCHESTRATOR_GH_TOKEN;
+        }
+
         cleanup();
     });
 

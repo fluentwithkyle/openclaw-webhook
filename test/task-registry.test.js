@@ -82,6 +82,16 @@ test('createTask - duplicate request_id returns error', () => {
   cleanup();
 });
 
+test('createTask - Gemini Builder target sets current_agent to Gemini Builder', () => {
+  cleanup();
+  const builderCommand = { ...validCommand, request_id: 'builder-task-1', target: 'Gemini Builder' };
+  const result = taskRegistry.createTask(builderCommand);
+  assertEqual(result.success, true);
+  assertEqual(result.entry.current_agent, 'Gemini Builder');
+  assertEqual(result.entry.next_agent, 'Gemini');
+  cleanup();
+});
+
 test('getTask - retrieves existing task', () => {
   cleanup();
   taskRegistry.createTask(validCommand);
