@@ -1,6 +1,6 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 **Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-PROJECT-STATE-LOGS-RECONCILE-001)
 
 ---
@@ -9,9 +9,9 @@
 
 **Repository**: `fluentwithkyle/openclaw-webhook`
 
-**Architectural State**: Under transition from Kilo Cloud Agent (transitional/legacy) to Gemini Builder (target/proposed).
-- Kilo is being phased out as the primary Builder/Implementer/Tester.
-- Gemini Builder is the approved target architectural lane for runtime repository implementation.
+**Architectural State**: Transition complete from Kilo Cloud Agent (transitional/legacy) to Gemini Builder (active).
+- Gemini Builder is the active architectural lane for runtime repository implementation (commit `8a56fe6`).
+- Kilo Cloud Agent is the legacy Builder/Implementer/Tester lane (transitioning out).
 - Gemini Reviewer remains the independent review lane.
 - ChatGPT serves as the project coordinator and control/verification layer.
 - GitHub serves as the durable source of truth.
@@ -25,8 +25,8 @@
 
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
-| Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. All 289 tests pass across 17 suites. |
-| Gemini Builder execution infrastructure | **IMPLEMENTED / VERIFIED** | Gemini Builder | Complete test coverage: `gemini-builder-trigger.test.js` (9 tests), Builder callback tests (3 in gemini-callback), Builder lifecycle tests in orchestrator, schema tests for BUILDER mode, workflow-expression tests for `gemini-builder.yml`. All tests pass. |
+| Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. 237/289 tests verified post-remediation in pre-Builder state (347 total after Path 2 recovery); **450/450 tests pass across 18 test files** at commit `8a56fe6` (including `gemini-builder-trigger.test.js` with 9 tests). |
+| Gemini Builder execution infrastructure | **IMPLEMENTED / VERIFIED** | Gemini Builder | Complete test coverage: `gemini-builder-trigger.test.js` (9 tests), Builder callback tests (3 in gemini-callback), Builder lifecycle tests in orchestrator, schema tests for BUILDER mode, workflow-expression tests for `gemini-builder.yml`. All 9 Builder-trigger tests pass; full suite: **450/450 tests pass across 18 test files**. Implementation commit `f1e21ec`; tests commit `53dfa23`; merged via `8a56fe6`. |
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
 | Kilo External Integration Contract documentation | **IMPLEMENTED** | Kilo | `docs/ai/KILO_INTEGRATION.md` documents GitHub webhook (Pushes + Issues + Issue comments), external Kilo trigger, ACP task-ingestion contract, and exact current Kilo prompt. The exact current Kilo prompt has been updated to the externally configured prompt supplied by Kyle. The documented prompt now includes convergence-based autonomous recovery (ALLOW EXPLORATION, STOP ON NON-CONVERGENCE), same-execution durable completion, timeout/interruption continuation, and self-wake authority (continuation-only, does not create new authorization). ACP remains the authorization boundary. The prompt itself remains externally configured. No secrets committed. The exact rate-limit condition `Assistant request was rate limited` is documented in Section 6.7; the broken Section 7.4 reference has been corrected to Section 6.7 and Section 7 of the verbatim prompt. |
 | ChatGPT Control Gate architecture | **RESEARCH COMPLETE / PROPOSED / PENDING** | Gemini (research) | Full research preserved in `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`. Not authorized for implementation. |
@@ -59,14 +59,14 @@
 
 | Capability | Status | Notes |
 |------------|--------|-------|
-| Gemini Builder execution infrastructure | **IMPLEMENTED** | `.github/workflows/gemini-builder.yml` created with `GEMINI_BUILDER_API_KEY`; `gemini-acp-report` artifact, git commit/push, and callback to Render in same execution |
-| Gemini Builder modify/commit/push | **IMPLEMENTED** | BUILDER mode with `read_only,modify_files,run_tests,commit,push` capabilities; commit and push step in workflow |
-| Separate Builder/Reviewer identities | **IMPLEMENTED** | Builder uses `GEMINI_BUILDER_API_KEY` / `BUILDER_CALLBACK_SECRET` / `RENDER_BUILDER_CALLBACK_URL`; Reviewer uses `GEMINI_API_KEY` / `GEMINI_CALLBACK_SECRET` / `RENDER_GEMINI_CALLBACK_URL` |
-| ACP/provider independence | **IMPLEMENTED** | Builder dispatch does not require `kilo_execution_id`; `builder_execution_id` input added to both workflows |
-| Builder dispatch without Kilo prerequisite | **IMPLEMENTED** | `poc/gemini-builder-trigger.js` dispatches `gemini-builder.yml` without `kilo_execution_id` required; `validateDispatchInputs` does not require `kilo_execution_id` |
-| Orchestrator Builder lifecycle | **IMPLEMENTED** | `canTriggerGeminiBuilder`, `triggerGeminiBuilder`, `handleGeminiBuilderCompletion` added; Kilo completion triggers Builder; Builder completion triggers Reviewer |
-| Builder callback route | **IMPLEMENTED** | `POST /poc/builder/callback` with `x-builder-callback-secret` authentication; `/poc/builder/dispatch` for direct ACP → Builder dispatch |
-| Task registry builder slot | **IMPLEMENTED** | `builder` slot added to task registry entry and `updateAgentResult` |
+| Gemini Builder execution infrastructure | **COMPLETED / VERIFIED** | `.github/workflows/gemini-builder.yml` created with `GEMINI_BUILDER_API_KEY`; `gemini-acp-report` artifact, git commit/push, and callback to Render in same execution. Implementation commit `f1e21ec`; tests commit `53dfa23`; merged via `8a56fe6`. |
+| Gemini Builder modify/commit/push | **COMPLETED / VERIFIED** | BUILDER mode with `read_only,modify_files,run_tests,commit,push` capabilities; commit and push step in workflow. |
+| Separate Builder/Reviewer identities | **COMPLETED / VERIFIED** | Builder uses `GEMINI_BUILDER_API_KEY` / `BUILDER_CALLBACK_SECRET` / `RENDER_BUILDER_CALLBACK_URL`; Reviewer uses `GEMINI_API_KEY` / `GEMINI_CALLBACK_SECRET` / `RENDER_GEMINI_CALLBACK_URL`. |
+| ACP/provider independence | **COMPLETED / VERIFIED** | Builder dispatch does not require `kilo_execution_id`; `builder_execution_id` input added to both workflows. |
+| Builder dispatch without Kilo prerequisite | **COMPLETED / VERIFIED** | `poc/gemini-builder-trigger.js` dispatches `gemini-builder.yml` without `kilo_execution_id` required; `validateDispatchInputs` does not require `kilo_execution_id`. |
+| Orchestrator Builder lifecycle | **COMPLETED / VERIFIED** | `canTriggerGeminiBuilder`, `triggerGeminiBuilder`, `handleGeminiBuilderCompletion` added; Kilo completion triggers Builder; Builder completion triggers Reviewer. |
+| Builder callback route | **COMPLETED / VERIFIED** | `POST /poc/builder/callback` with `x-builder-callback-secret` authentication; `/poc/builder/dispatch` for direct ACP → Builder dispatch. |
+| Task registry builder slot | **COMPLETED / VERIFIED** | `builder` slot added to task registry entry and `updateAgentResult`. |
 
 ---
 

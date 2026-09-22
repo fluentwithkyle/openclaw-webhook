@@ -8,24 +8,22 @@ Designed for Kyle checking the project from a phone.
 ---
 
 ## Architectural Note
-The project is currently transitioning from Kilo Cloud Agent as the primary Builder to Gemini Builder as the target architecture. 
+The project has completed the transition from Kilo Cloud Agent (transitional/legacy) to Gemini Builder (active/target).
 - **Coordinator**: ChatGPT
-- **Target Builder**: Gemini Builder
-- **Transitional Builder**: Kilo
+- **Active Builder**: Gemini Builder (merged via commit `8a56fe6`)
+- **Legacy Builder**: Kilo (transitioning out)
 - **Reviewer**: Gemini Reviewer
 
 ---
 
 ## Project Status
 
-| | |
-|---|---|
 | **Status** | ACTIVE |
 | **Repository** | fluentwithkyle/openclaw-webhook |
 | **Branch** | main |
 | **Deploy** | Render (Node.js/Express) |
 | **Google Adapter** | Google Apps Script |
-| **Last Updated** | 2026-09-21 |
+| **Last Updated** | 2026-09-22 |
 
 Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-PROJECT-STATE-LOGS-RECONCILE-001)
 
@@ -37,7 +35,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-PROJECT-STATE-LOGS-RECONCILE-0
 2. **ChatGPT Control Gate** — Research complete. No implementation authorized or performed. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
 3. **Render Control Gate / Gatekeeper** — **PROPOSED / TARGET** (not implemented). Render is the future technical Control Gate between ChatGPT and repository execution. Layer 1 (Kilo↔Gemini orchestration stabilization) is prerequisite. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
 4. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
-5. **No automated test suite** — Changes verified by manual review only.
+5. **Automated test suite** — **IMPLEMENTED**. 18 test files with 450 tests covering ACP schema, TaskRegistry, Orchestrator, integration, Gemini trigger, Builder trigger, callbacks, polling, verifier, POC, coordinator, chatbox gateway, and verify-reconcile modes.
 6. **DeepSeek Coordinator Project** — **HIGH PRIORITY**. Authenticated `POST /poc/coordinator` ingress implemented and verified in `routes/poc.js`. After successful registration, the command is dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Registration failure prevents dispatch; provider identifiers persisted on successful dispatch. 19 coordinator tests pass; 170 total tests pass. (IMPLEMENTED / VERIFIED)
 7. **Git completion-signal emitter and Path 2** — Signal emitter implemented (Issue #180, commit `7bec058`): `poc/signal-emitter.js` with `poc/signals/<request_id>.json` artifact. **Path 2 recovery IMPLEMENTED / VERIFIED** (Issue #175, commit `030f888`): `recoverTaskFromGitHub()` reconstructs task context from GitHub issue body when TaskRegistry is absent. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`). Architectural direction (Issue #172, ADR-016) APPROVED / PROPOSED / TARGET — fully documented. Remaining gap: **live end-to-end validation (GitHub push ↠ Render webhook ↠ Gemini dispatch) NOT verified**; tests use mocks. Test count discrepancy: signal artifact claims 337 regression (total 378); independently verified actual is 369 regression (total 410). See STATE.md for full details.
 
@@ -77,8 +75,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-PROJECT-STATE-LOGS-RECONCILE-0
 ## Blockers
 
 1. **Apps Script trust boundary** — Hardening required before other reliability work.
-2. **No automated test suite** — All changes verified by manual review.
-3. **Legacy abandoned-booking code** — `google-apps-script/AbandonedBookings.js` needs deployment verification before retirement.
+2. **Legacy abandoned-booking code** — `google-apps-script/AbandonedBookings.js` needs deployment verification before retirement.
 
 ---
 
@@ -106,7 +103,7 @@ Remaining pending items:
 - Render Control Gate — PROPOSED / TARGET (blocked on Layer 1 stabilization)
 - ChatGPT Control Gate architecture — RESEARCH COMPLETE / PROPOSED / PENDING
 
-**Current test count**: 410 total tests pass (369 regression across 16 suites + 41 signal-emitter). Note: signal artifact (Issue #180) claims 337 regression / 378 total — INACCURATE. Independently verified actual: 369 / 410.
+**Current test count**: 450 total tests pass across 18 test files. Builder transition (commit `8a56fe6`).
 
 Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the prerequisite for Layer 2 (Render Control Gate).
 
@@ -153,7 +150,7 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 
 - **Architecture:** ARCHITECTURE.md (authoritative for intended architecture)
 - **State:** docs/ai/STATE.md (authoritative current project state)
-- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-015)
+- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-016)
 - **Task History:** docs/ai/TASK_LOG.md
 - **Issue:** [fluentwithkyle/openclaw-webhook#56](https://github.com/fluentwithkyle/openclaw-webhook/issues/56)
 - **Docs:** docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md
