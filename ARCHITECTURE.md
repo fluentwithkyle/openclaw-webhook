@@ -637,7 +637,8 @@ ACP
 ↓
 Specialist AI Lane
 ↓
-Kilo
+Gemini Builder
+(transitional: Kilo)
 ↓
 GitHub / CI
 ↓
@@ -655,7 +656,7 @@ The specialist layer contains three distinct lanes:
 * Security AI — Security Specialist
 * Utility AI — General Utility Specialist
 
-Gemini Builder is the intended replacement for Kilo as the runtime repository Builder / Implementer / Tester. Kilo remains the transitional implementation agent for authorized tasks while the Gemini Builder architecture is finalized and validated.
+Gemini Builder is the intended runtime repository Builder / Implementer / Tester. Kilo remains the transitional/legacy implementation agent for authorized tasks during the transition.
 
 Label this entire multi-agent architecture:
 
@@ -1000,7 +1001,8 @@ ACP
 ↓
 Appropriate Specialist
 ↓
-Kilo
+Gemini Builder
+(transitional: Kilo)
 ↓
 GitHub / CI
 ↓
@@ -1068,7 +1070,8 @@ ACP
 ↓
 Specialist AI Lane
 ↓
-Kilo
+Gemini Builder
+(transitional: Kilo)
 ↓
 GitHub / CI
 ↓
@@ -1086,7 +1089,7 @@ The specialist layer contains three distinct lanes:
 * Security AI — Security Specialist
 * Utility AI — General Utility Specialist
 
-Gemini Builder is the intended replacement for Kilo as the runtime repository Builder / Implementer / Tester. Kilo remains the transitional implementation agent for authorized tasks while the Gemini Builder architecture is finalized and validated.
+Gemini Builder is the intended runtime repository Builder / Implementer / Tester. Kilo remains the transitional/legacy implementation agent for authorized tasks during the transition.
 
 GitHub Actions may serve as an ephemeral AI execution plane within this architecture.
 
@@ -1158,7 +1161,8 @@ ACP
 ↓
 Specialist AI Lane
 ↓
-Kilo
+Gemini Builder
+(transitional: Kilo)
 ↓
 GitHub / CI
 ↓
@@ -1412,7 +1416,8 @@ Qwen Router
 ↓
 ACP command
 ↓
-Kilo
+Gemini Builder
+(transitional: Kilo)
 ↓
 GitHub / CI
 ↓
@@ -1865,7 +1870,8 @@ ACP
 ↓
 Appropriate Specialist
 ↓
-Kilo
+Gemini Builder
+(transitional: Kilo)
 ↓
 GitHub / CI
 ↓

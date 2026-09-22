@@ -109,7 +109,7 @@ Example addition to task request:
 These persistence expectations reinforce, but do not alter, the existing authority boundaries:
 - Kyle remains Director and final authorization authority.
 - ChatGPT remains coordinator and verification layer.
-- Kilo remains Builder/Implementer/Tester.
+- Gemini Builder is the intended runtime Builder/Implementer/Tester, with Kilo as transitional.
 - Gemini remains Architect/Planner/Reviewer.
 - GitHub remains the durable repository source of truth.
 
