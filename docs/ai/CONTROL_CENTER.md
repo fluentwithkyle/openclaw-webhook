@@ -37,6 +37,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-PROJECT-STATE-LOGS-RECONCILE-0
 ## Active Work
 
 | Task | Status | Owner |
+| Gemini Builder transition documentation reconciliation | ACTIVE | Gemini | TASK-GEMINI-RECONCILE-BUILDER-TRANSITION-RESEARCH-PLAN-001 |
 |------|--------|-------|
 | Persistent AI project state system | IMPLEMENTED | Kilo |
 | Kilo External Integration Contract documentation | IMPLEMENTED | Kilo |
