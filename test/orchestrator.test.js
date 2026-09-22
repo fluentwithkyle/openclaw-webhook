@@ -271,7 +271,8 @@ test('getOrchestrationState - returns current state', () => {
   assertEqual(result.success, true);
   assertEqual(result.state.kilo_status, 'success');
   assertEqual(result.state.gemini_status, 'pending');
-  assertEqual(result.state.next_action, 'trigger_gemini');
+  assertEqual(result.state.builder_status, 'pending');
+  assertEqual(result.state.next_action, 'trigger_builder');
   cleanup();
 });
 

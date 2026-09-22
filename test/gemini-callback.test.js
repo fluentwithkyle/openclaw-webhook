@@ -18,6 +18,7 @@ app.use(express.json());
 // Set environment for auth
 process.env.ACP_POC_TRIGGER_SECRET = 'test-secret';
 process.env.GEMINI_CALLBACK_SECRET = 'test-gemini-secret';
+process.env.BUILDER_CALLBACK_SECRET = 'test-builder-secret';
 
 // Load the routes
 const { router: pocRouter } = require('../routes/poc');
@@ -88,6 +89,21 @@ function makeGeminiReport(requestId, task = 'test-task', status = 'success') {
   };
 }
 
+function makeBuilderReport(requestId, task = 'test-task', status = 'success') {
+  return {
+    request_id: requestId,
+    agent: 'Gemini Builder',
+    status: status,
+    task: task,
+    changed_files: ['poc/new-file.js'],
+    verification: ['tests passed', 'lint passed'],
+    result: { execution_metadata: { invocation_id: 'inv-builder-1', run_id: 'run-builder-1' } },
+    commit: 'builder-commit-sha',
+    push: true,
+    blockers: status === 'blocked' ? ['Needs design decision'] : (status === 'failure' ? ['Build failed'] : [])
+  };
+}
+
 function setupTask(requestId, task = 'test-task') {
   cleanup();
   taskRegistry.createTask(makeCommand(requestId, task));
@@ -114,6 +130,13 @@ async function makeRequest(options, data = {}) {
     req.write(JSON.stringify(data));
     req.end();
   });
+}
+
+async function postRequest(path, data, secret = process.env.BUILDER_CALLBACK_SECRET) {
+  return makeRequest({
+    hostname: 'localhost', port: 3002, path: path, method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-builder-callback-secret': secret }
+  }, data);
 }
 
 async function runTest(name, fn) {
@@ -437,6 +460,40 @@ async function main() {
     assert(payload.hasOwnProperty('commit'));
     assert(payload.hasOwnProperty('push'));
     assert(payload.hasOwnProperty('blockers'));
+  });
+
+  await runTest('Builder callback: success report updates task status', async () => {
+    const requestId = 'builder-success-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'success'));
+
+    const task = taskRegistry.getTask(requestId);
+    assert.strictEqual(task.builder.status, 'success');
+    assert.strictEqual(task.status, 'EXECUTING');
+    assert.strictEqual(task.current_agent, 'Gemini');
+    assert.strictEqual(task.next_action, 'trigger_gemini');
+  });
+
+  await runTest('Builder callback: failure report sets blockers', async () => {
+    const requestId = 'builder-failure-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'failure'));
+
+    const task = taskRegistry.getTask(requestId);
+    assert.strictEqual(task.builder.status, 'failure');
+    assert.strictEqual(task.status, 'FAILED');
+    assert.deepStrictEqual(task.builder.report.blockers, ['Build failed']);
+  });
+
+  await runTest('Builder callback: invalid signature returns 401', async () => {
+    const requestId = 'builder-sig-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const result = await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'success'), 'wrong-secret');
+    assert.strictEqual(result.status, 401);
+    assert.strictEqual(result.body.status, 'authentication blocked');
   });
 
   server.close();

@@ -209,6 +209,8 @@ function handleGeminiBuilderCompletion(requestId, report) {
     message: `Gemini Builder completion recorded. Next: ${nextAction}`
   };
 }
+
+function determineNextAction(requestId) {
   const task = taskRegistry.getTask(requestId);
   if (!task) {
     return { success: false, error: 'Task not found' };
