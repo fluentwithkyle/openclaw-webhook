@@ -8,11 +8,15 @@ const {
   getRequiredEvidenceForTransition,
   createEvidenceRecord,
   validateEvidenceRecord,
+  validateAgentEvidenceType,
+  verifyConfiguration,
+  isConfigurationAuthoritativelyVerified,
   validateACPCompliance,
   validateActivationSyntax,
   validateActivationSurface,
   AGENT_EVIDENCE_TYPE,
-  EVIDENCE_TYPES
+  EVIDENCE_TYPES,
+  CONFIG_VERIFICATION_STATES
 } = require('../poc/schemas/acp-schema');
 
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
@@ -68,7 +72,9 @@ const failoverCommand = {
   authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] },
   verification: 'All tests must pass; lint must pass; no security vulnerabilities',
   reporting: 'json',
-  originator: 'Kyle'
+  originator: 'Kyle',
+  activation_syntax: '@kilo',
+  activation_surface: 'github_issue_comment'
 };
 
 const validKiloReport = {
