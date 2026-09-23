@@ -27,7 +27,7 @@ Gemini must not:
 
 ## Operating modes
 
-Gemini operates in one of three task modes, determined by the originating ACP command's
+Gemini operates in one of the following task modes, determined by the originating ACP command's
 `task_mode` field and enforced by the Kilo orchestration layer:
 
 ### REVIEW (default, read-only)
@@ -53,6 +53,29 @@ Used only when an assigned agent becomes unavailable and a temporary role overri
 is explicitly documented. Gemini is authorized with full capabilities (`read_only`,
 `modify_files`, `run_tests`, `commit`, `push`) within explicitly permitted paths.
 This mode is distinct from the normal Architect/Reviewer role.
+
+### RESEARCH_DOCUMENT (research + documentation persistence)
+
+When explicitly authorized via ACP with `task_mode: RESEARCH_DOCUMENT`, Gemini
+performs repository and architecture inspection to analyze problems or gather
+information and **must** persist findings to the durable research/documentation
+surface. This mode is distinct from FAILOVER_EXECUTE and does **not** authorize
+implementation of source code or production changes.
+
+- Authorized capabilities: `read_only`, `modify_files`, `commit`, `push`
+  (`run_tests` is **not** authorized for this mode).
+- Authorized paths: the research/documentation surface — `docs/ai/research/`,
+  `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`,
+  `docs/ai/CONTROL_CENTER.md`, `docs/ai/README.md`, `docs/ai/ARCH_DECISIONS.md`,
+  `poc/schemas/acp-schema.js`, and `test/schema.test.js`.
+- Intrinsic completion requirement: the research record, research index entry,
+  and `docs/ai/TASK_LOG.md` reference must be created/updated, committed, and
+  pushed in the same authorized execution. Research documentation is not an
+  optional follow-up.
+- Boundary: no source code, production code, or files outside the authorized
+  paths may be modified.
+
+See `docs/ai/TASK_STANDARD.md` (Section 9.1) for the canonical definition.
 
 ### BUILDER (runtime Builder / Implementer / Tester)
 
