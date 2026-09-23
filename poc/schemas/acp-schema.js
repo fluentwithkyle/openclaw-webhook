@@ -75,10 +75,20 @@ const STATE_TRANSITION_EVIDENCE = {
 
 const CONFIG_VERIFICATION_STATES = ['VERIFIED', 'UNVERIFIED', 'PROPOSED', 'UNKNOWN'];
 
-const KILO_ACTIVATION_PATTERN = /^@kilo\b/i;
-const GEMINI_CLI_ACTIVATION_PATTERN = /^@gemini-cli\b/i;
-const GEMINI_BARE_PATTERN = /^@Gemini\b/i;
-const ARBITRARY_MENTION_PATTERN = /@gemini\b/i;
+// Activation syntax is matched EXACTLY (case-sensitive). No regex flags that
+// would normalize case, because the repository protocol requires the exact
+// lowercase forms "@kilo" and "@gemini-cli".
+const KILO_ACTIVATION_PATTERN = /^@kilo\b/;
+const GEMINI_CLI_ACTIVATION_PATTERN = /^@gemini-cli\b/;
+const GEMINI_BARE_PATTERN = /^@Gemini\b/;
+const ARBITRARY_MENTION_PATTERN = /@gemini\b/;
+
+// Task modes that represent externally activated execution artifacts and
+// therefore require activation_syntax + activation_surface at the ACP
+// compliance boundary. REVIEW / VERIFY_RECONCILE / RESEARCH_DOCUMENT are not
+// externally activated execution artifacts and do not require activation
+// metadata.
+const EXECUTION_TASK_MODES = ['FAILOVER_EXECUTE', 'BUILDER'];
 
 const VALID_ACTIVATION_SURFACES = {
   'Kilo': ['github_issue_comment', 'github_issue_body', 'github_push_event'],
@@ -491,10 +501,27 @@ function createInitialTaskRegistryEntry(requestId, command) {
      return { valid: false, error: 'evidence.timestamp is required and must be a string' };
    }
 
-   return { valid: true };
- }
+    return { valid: true };
+  }
 
- function getRequiredEvidenceForTransition(from, to) {
+  function validateAgentEvidenceType(agent, evidenceType) {
+    if (!VALID_AGENTS.includes(agent)) {
+      return { valid: false, error: 'Unknown agent: ' + agent };
+    }
+    const expected = AGENT_EVIDENCE_TYPE[agent];
+    if (!expected) {
+      return { valid: false, error: 'No evidence type registered for agent: ' + agent };
+    }
+    if (evidenceType !== expected) {
+      return {
+        valid: false,
+        error: 'Agent ' + agent + ' may not record ' + evidenceType + ' evidence. ' + agent + ' is restricted to ' + expected
+      };
+    }
+    return { valid: true };
+  }
+
+  function getRequiredEvidenceForTransition(from, to) {
    if (STATE_TRANSITION_EVIDENCE[from] && STATE_TRANSITION_EVIDENCE[from][to]) {
      return STATE_TRANSITION_EVIDENCE[from][to];
    }
@@ -586,18 +613,22 @@ function createInitialTaskRegistryEntry(requestId, command) {
    return { valid: false, error: 'Unknown target for activation validation: ' + expectedTarget };
  }
 
- function validateActivationSurface(surface, target) {
-   const allowed = VALID_ACTIVATION_SURFACES[target];
-   if (!allowed) {
-     return { valid: false, error: 'No activation surfaces defined for target: ' + target };
-   }
-   if (!surface || !allowed.includes(surface)) {
-     return { valid: false, error: 'Unauthorized activation surface for ' + target + ': ' + surface + '. Authorized: ' + allowed.join(', ') };
-   }
-   return { valid: true };
- }
+function validateActivationSurface(surface, target) {
+    const allowed = VALID_ACTIVATION_SURFACES[target];
+    if (!allowed) {
+      return { valid: false, error: 'No activation surfaces defined for target: ' + target };
+    }
+    if (!surface || !allowed.includes(surface)) {
+      return { valid: false, error: 'Unauthorized activation surface for ' + target + ': ' + surface + '. Authorized: ' + allowed.join(', ') };
+    }
+    return { valid: true };
+}
 
- function validateACPCompliance(command) {
+function taskModeRequiresActivation(taskMode) {
+  return EXECUTION_TASK_MODES.includes(taskMode || DEFAULT_TASK_MODE);
+}
+
+function validateACPCompliance(command) {
    const basicValidation = validateACPCommand(command);
    if (!basicValidation.valid) {
      return basicValidation;
@@ -668,22 +699,31 @@ function createInitialTaskRegistryEntry(requestId, command) {
      return { valid: false, error: 'run_tests capability requires modify_files capability (contradictory authorization)' };
    }
 
-   if (command.activation_syntax) {
-     const activationValidation = validateActivationSyntax(command.activation_syntax, command.target);
-     if (!activationValidation.valid) {
-       return { valid: false, error: activationValidation.error };
-     }
-   }
+    if (taskModeRequiresActivation(taskMode)) {
+      if (!command.activation_syntax) {
+        return { valid: false, error: 'Execution artifact requires activation_syntax for task_mode ' + taskMode };
+      }
+      if (!command.activation_surface) {
+        return { valid: false, error: 'Execution artifact requires activation_surface for task_mode ' + taskMode };
+      }
+    }
 
-   if (command.activation_surface) {
-     const surfaceValidation = validateActivationSurface(command.activation_surface, command.target);
-     if (!surfaceValidation.valid) {
-       return surfaceValidation;
-     }
-   }
+    if (command.activation_syntax) {
+      const activationValidation = validateActivationSyntax(command.activation_syntax, command.target);
+      if (!activationValidation.valid) {
+        return { valid: false, error: activationValidation.error };
+      }
+    }
 
-   return { valid: true, task_mode: taskMode };
- }
+    if (command.activation_surface) {
+      const surfaceValidation = validateActivationSurface(command.activation_surface, command.target);
+      if (!surfaceValidation.valid) {
+        return surfaceValidation;
+      }
+    }
+
+    return { valid: true, task_mode: taskMode };
+  }
 
 module.exports = {
   ACP_COMMAND_REQUIRED_FIELDS,
@@ -700,9 +740,10 @@ module.exports = {
   GEMINI_BARE_PATTERN,
   ARBITRARY_MENTION_PATTERN,
   VALID_ACTIVATION_SURFACES,
-  AGENT_EVIDENCE_TYPE,
-  VALID_TASK_MODES,
-  DEFAULT_TASK_MODE,
+   AGENT_EVIDENCE_TYPE,
+   VALID_TASK_MODES,
+   EXECUTION_TASK_MODES,
+   DEFAULT_TASK_MODE,
   VALID_CAPABILITIES,
   REVIEW_CAPABILITIES,
   VERIFY_RECONCILE_CAPABILITIES,
@@ -727,10 +768,12 @@ module.exports = {
   isValidStateTransition,
   getRequiredEvidenceForTransition,
   validateStateTransitionWithEvidence,
-  validateEvidenceRecord,
-  createEvidenceRecord,
-  validateActivationSyntax,
-  validateActivationSurface,
-  validateACPCompliance,
+   validateEvidenceRecord,
+   validateAgentEvidenceType,
+   createEvidenceRecord,
+   validateActivationSyntax,
+   validateActivationSurface,
+   taskModeRequiresActivation,
+   validateACPCompliance,
   createInitialTaskRegistryEntry
 };
