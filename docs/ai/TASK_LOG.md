@@ -2263,3 +2263,5 @@ The reconciled documentation distinguishes:
 **Research Record**: `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md`
 **ADR**: `docs/ai/ARCH_DECISIONS.md` — ADR-017
 **Commit Reference**: `89bf546` on `main`
+
+- 2026-09-23: TASK-GEMINI-CHATBOX-ACP-ARCHITECTURE-RECOVERY-001 - Recovered and preserved historical Chatbox → DeepSeek → ACP architecture research verbatim from repository. Created research record: `docs/ai/research/research-TASK-GEMINI-CHATBOX-ACP-ARCHITECTURE-RECOVERY-001.md`. Added index entry to `docs/ai/RESEARCH_INDEX.md`.
