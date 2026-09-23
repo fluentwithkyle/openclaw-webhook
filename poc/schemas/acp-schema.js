@@ -482,7 +482,6 @@ function createInitialTaskRegistryEntry(requestId, command) {
 
   function verifyConfiguration(configKey, options) {
     options = options || {};
-    const env = options.env;
     const task = options.task;
     const claimed = options.claimed;
 
@@ -490,7 +489,8 @@ function createInitialTaskRegistryEntry(requestId, command) {
       return { state: 'UNKNOWN', verified: false, source: null, key: configKey };
     }
 
-    if (env && Object.prototype.hasOwnProperty.call(env, configKey)) {
+    const runtimeEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
+    if (Object.prototype.hasOwnProperty.call(runtimeEnv, configKey)) {
       return { state: 'VERIFIED', verified: true, source: 'runtime_env', key: configKey };
     }
 
@@ -501,7 +501,7 @@ function createInitialTaskRegistryEntry(requestId, command) {
       if (configKey === 'base_branch' && task.base_branch === claimed) {
         return { state: 'VERIFIED', verified: true, source: 'task_registry', key: configKey };
       }
-      if (configKey === 'target' && task.target === claimed) {
+      if (configKey === 'target' && task.current_agent === claimed) {
         return { state: 'VERIFIED', verified: true, source: 'task_registry', key: configKey };
       }
     }
