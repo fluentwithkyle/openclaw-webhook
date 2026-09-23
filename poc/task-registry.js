@@ -238,10 +238,23 @@ function recordConfigVerification(requestId, configKey, verificationResult) {
   if (!entry) {
     return { success: false, error: 'Task not found' };
   }
+
+  // Enforce authoritative verification source
+  let finalState = verificationResult.state;
+  let finalVerified = Boolean(verificationResult.verified);
+
+  if (finalState === 'VERIFIED') {
+    const allowedSources = ['runtime_env', 'task_registry'];
+    if (!allowedSources.includes(verificationResult.source)) {
+      finalState = 'UNVERIFIED';
+      finalVerified = false;
+    }
+  }
+
   entry.config_verification = entry.config_verification || {};
   entry.config_verification[configKey] = {
-    state: verificationResult.state,
-    verified: Boolean(verificationResult.verified),
+    state: finalState,
+    verified: finalVerified,
     source: verificationResult.source || null,
     timestamp: new Date().toISOString()
   };
