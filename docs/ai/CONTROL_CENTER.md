@@ -23,9 +23,9 @@ The project has completed the transition from Kilo Cloud Agent (transitional/leg
 | **Branch** | main |
 | **Deploy** | Render (Node.js/Express) |
 | **Google Adapter** | Google Apps Script |
-| **Last Updated** | 2026-09-22 |
+| **Last Updated** | 2026-09-23 |
 
-Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-DEEPSEEK-CHATBOX-PROGRESS-LOG-VERIFY-RECONCILE-001)
+Updated By | Kilo — RESEARCH_DOCUMENT (TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001)
 
 ---
 
@@ -132,6 +132,7 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 | **Authorization State** | Implementation authorized and executed via ACP task TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001 (capabilities: inspect, modify, test, commit, push). Commit and push to main authorized. |
 | **Details** | See `docs/ai/STATE.md` → DeepSeek Coordinator Project section |
 | **Test Results** | 19/19 coordinator tests pass. 170 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator). |
+| **Future Target (Documented, Not Implemented)** | A complementary future path — a server-side execution runtime hosting the OpenRouter/DeepSeek tool-calling loop with a narrow `control_plane` tool, submitting to the existing `/poc/coordinator` boundary — is documented (ADR-017; `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md`) but NOT implemented. Direct ACP (Agreed Architecture above) remains the implemented DeepSeek control-plane path. |
 
 ---
 

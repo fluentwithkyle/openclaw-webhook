@@ -27,7 +27,9 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
+| TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001 | 2026-09-23 | Kilo | `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md` | `docs/ai/TASK_LOG.md` — summary row (line ~10) and detailed entry |
 | TASK-GEMINI-COORDINATOR-RELIABILITY-CONTROL-RESEARCH-001 | 2026-09-23 | Gemini | `docs/ai/research/research-TASK-GEMINI-COORDINATOR-RELIABILITY-CONTROL-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
+| TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001 | 2026-09-23 | Kilo | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 
 ## Update Rules
 

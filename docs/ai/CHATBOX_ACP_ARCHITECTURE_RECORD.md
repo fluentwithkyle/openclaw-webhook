@@ -54,7 +54,9 @@ The current working mobile interaction is:
 Chatbox iOS → OpenRouter → DeepSeek
 ```
 
-This is **not yet** the repository's production/control-plane integration.
+This is **not yet** the repository's production/control-plane integration. The **current, implemented** DeepSeek control-plane path is **Direct ACP** (see Section 4): DeepSeek emits canonical ACP JSON directly to the authenticated `POST /poc/coordinator` ingress. DeepSeek does **not** currently make model tool calls against this repository, and the repository contains no OpenRouter model integration or tool-calling loop (verified; see Section 17 and `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md`).
+
+The **future target** (newly documented architecture, **not implemented**): a server-side execution runtime that hosts the OpenRouter/DeepSeek tool-calling loop and a narrow `control_plane` tool, submitting validated results to the existing `POST /poc/coordinator` boundary. See Section 17.
 
 ### 2.2 Purpose of the Proposed Gateway
 
@@ -511,10 +513,11 @@ This task does **NOT**:
 
 | Label | Meaning | Applies To |
 |-------|---------|------------|
-| **VERIFIED** | Present and confirmed in current repository code/state | Chatbox gateway (`POST /poc/chatbox`), Chatbox authentication, ACP, TaskRegistry, Orchestrator, DeepSeek Coordinator ingress, Kilo/Gemini lanes, existing execution modes |
+| **VERIFIED** | Present and confirmed in current repository code/state | Chatbox gateway (`POST /poc/chatbox`), Chatbox authentication, ACP, TaskRegistry, Orchestrator, DeepSeek Coordinator ingress (Direct ACP), Kilo/Gemini lanes, existing execution modes |
 | **INFERRED** | Reasoned from verified architecture but not explicitly documented as the Chatbox path | Two-stage authorization model for Chatbox, Direct ACP ingress pattern for Chatbox |
-| **PROPOSED / TARGET** | Agreed architectural direction not yet implemented | Qwen Router classification/trigger, Security Specialist callback |
-| **UNKNOWN** | Unresolved items requiring future authorized work | Exact Qwen trigger logic, Security Specialist callback, Security Audit Report persistence |
+| **PROPOSED / TARGET** | Agreed architectural direction not yet implemented | Qwen Router classification/trigger, Security Specialist callback, server-side DeepSeek execution runtime hosting the OpenRouter tool-calling loop, narrow `control_plane` tool (see Section 17) |
+| **NOT YET IMPLEMENTED** | Documented architectural direction; no repository implementation | OpenRouter model integration, `control_plane` tool/schema, server-side execution runtime endpoint/deployment, Chatbox production integration with the future runtime |
+| **UNKNOWN** | Unresolved items requiring future authorized work | Exact Qwen trigger logic, Security Specialist callback, Security Audit Report persistence, exact `control_plane` schema, minimal tool-loop vs. OpenRouter Agent SDK, MCP applicability |
 
 ---
 
@@ -522,12 +525,89 @@ This task does **NOT**:
 
 | Document | Purpose |
 |----------|---------|
-| `ARCHITECTURE.md` | Authoritative architecture (Sections 12–17, 19) |
+| `ARCHITECTURE.md` | Authoritative architecture (Section 16.6 DeepSeek Coordinator; Direct ACP) |
 | `docs/ai/README.md` | AI project-state system operating rules |
-| `docs/ai/ARCH_DECISIONS.md` | ADR-001 through ADR-015 (including ADR-015 Chatbox Gateway, now IMPLEMENTED / VERIFIED) |
-| `docs/ai/STATE.md` | Current project state (to be updated by this task) |
-| `docs/ai/TASK_LOG.md` | Historical task record (to be appended by this task) |
+| `docs/ai/ARCH_DECISIONS.md` | ADR-001 through ADR-017 (ADR-015 Chatbox Gateway IMPLEMENTED / VERIFIED; ADR-017 DeepSeek control-plane tool-execution direction PROPOSED / TARGET) |
+| `docs/ai/STATE.md` | Current project state (updated by this task) |
+| `docs/ai/TASK_LOG.md` | Historical task record (appended by this task) |
+| `docs/ai/RESEARCH_INDEX.md` | Index of research records |
+| `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md` | RESEARCH_DOCUMENT task-mode & research-system SOP (first record) |
+| `docs/ai/research/research-TASK-GEMINI-COORDINATOR-RELIABILITY-CONTROL-RESEARCH-001.md` | Durable controls for ChatGPT coordinator failure modes |
+| `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md` | This record's companion research record: DeepSeek control-plane tool-execution architecture |
 | `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` | Prior Control Gate research (related concepts) |
 | `docs/ai/CONTROL_CENTER.md` | Human-facing presentation of project state |
 | ADR-014 | Security Specialist architectural foundation (related) |
 | ADR-005 | AI Development System — Specialist Lanes with ACP Boundary (related) |
+
+---
+
+## 17. DEEPSEEK CONTROL-PLANE TOOL-EXECUTION ARCHITECTURE (FUTURE TARGET)
+
+This section reconciles this record with the **newly discovered** server-side execution-runtime architecture, distinguishing the **current, implemented** DeepSeek path (Direct ACP) from the **future target** (model tool calling via an execution runtime). The full story, evidence, and verification are in `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md` and `docs/ai/ARCH_DECISIONS.md` (ADR-017).
+
+### 17.1 Key Discovery
+
+The obstacle was **tool execution**, not DeepSeek's intelligence or OpenRouter's ability to expose tools:
+
+- DeepSeek can request a tool through OpenRouter's tool-calling interface.
+- The model itself does **not** execute the HTTP request.
+- The application that hosts the model interaction executes the requested tool and returns the result to the model (OpenRouter official documentation, `https://openrouter.ai/docs` and `https://openrouter.ai/docs/agent-sdk/overview`).
+- Therefore Chatbox (a mobile conversational client) must **not** be the trusted tool executor; a **server-side application runtime** is required to host the model-interaction loop.
+
+### 17.2 Current Implemented Path (Direct ACP) — NOT changed by this research
+
+```
+DeepSeek emits canonical ACP JSON
+  → authenticated POST /poc/coordinator (x-deepseek-coordinator-secret / DEEPSEEK_COORDINATOR_SECRET)
+  → validateACPCommand (poc/schemas/acp-schema.js)
+  → taskRegistry.createTask (poc/task-registry.js)
+  → getDispatcher() (services/transport-provider.js) → Kilo / Gemini Builder
+  → existing Kilo execution path
+```
+
+This path is `VERIFIED` / `IMPLEMENTED` and is the current DeepSeek control-plane integration. It is **not** a model tool-calling integration; DeepSeek does not currently call `control_plane` tooling, and no OpenRouter model integration exists in repository source (verified; see companion research record Section 15). This research documents a **future, additional** ingress that feeds the **same** `/poc/coordinator` boundary — it does not replace or bypass Direct ACP.
+
+### 17.3 Future Target — Server-Side Execution Runtime
+
+The future path adds **one** trusted component — the **server-side execution runtime** that hosts the OpenRouter/DeepSeek tool-calling loop and the narrow `control_plane` tool. It executes the tool and submits to the **existing** `/poc/coordinator` boundary; it is an executor, **not** a second control plane.
+
+```
+Chatbox iOS → conversation
+   ↓
+server-side execution runtime
+   │ OpenRouter model interaction  (POST /api/v1/chat/completions)
+   │ + control_plane executor      (bounded tool loop)
+   ↓ model request
+OpenRouter → DeepSeek
+   ↓ tool_call(control_plane(...))
+server-side execution runtime     (validates args; never model-supplied secrets/capabilities/target)
+   ↓ authenticated POST /poc/coordinator  (canonical ACP command)
+existing ACP → TaskRegistry → dispatcher → Gemini Builder / Kilo
+   ↓ tool result / final response
+DeepSeek → final natural-language response → Chatbox
+```
+
+Relationship among components (future target):
+
+- **Chatbox** = user-facing client (unchanged).
+- **DeepSeek** = intelligence / decision of *when* to call a tool.
+- **OpenRouter** = model API / provider-routing layer (unchanged).
+- **Server-side execution runtime** = trusted executor of `control_plane`; hosts the model loop and a bounded tool loop.
+- **`control_plane`** = narrow, server-defined tool (NOT `http_post(url, headers, body)`).
+- **`/poc/coordinator`** = existing authorization / control-plane boundary (unchanged) — the runtime submits ACP commands here.
+- **Existing ACP / TaskRegistry / Dispatcher** = unchanged; the runtime must feed into them, not parallel them.
+- **Gemini Builder / Kilo** = existing execution agents (unchanged).
+
+### 17.4 What Changes vs. Current
+
+- **None** of the existing components are replaced. `/poc/coordinator`, ACP validation, TaskRegistry, dispatcher, Kilo, Gemini Builder, and the Chatbox gateway remain exactly as implemented.
+- **Added (future, authorized only by a separate implementation task)**: a trusted server-side execution runtime exposing `control_plane` and the OpenRouter model-loop host.
+- The runtime is **trust-isolated**: DeepSeek receives only the narrow `control_plane` interface; coordinator secrets, GitHub/Render credentials, endpoints, targets, capabilities, and permitted paths remain server-side.
+
+### 17.5 Prohibited (Explicit, Perpetuated)
+
+There must be **no**: a second `TaskRegistry`; a second orchestrator (`poc/orchestrator.js` remains sole); a second dispatcher (`getDispatcher()` remains sole); a parallel control plane; a generic unrestricted HTTP executor; any bypass around ACP validation (`validateAuthorization`); model-supplied secrets, credentials, capabilities, endpoints, targets, or paths.
+
+### 17.6 Open Questions (To Be Resolved by a Future Implementation Task)
+
+Exact runtime placement, `control_plane` argument schema, the exact ACP translation strategy, and whether the minimal application-side tool loop, the OpenRouter Agent SDK (`callModel` + stop conditions), or MCP best serves this narrowly-scoped requirement. See the companion research record (Sections 17–19, 24) and ADR-017.

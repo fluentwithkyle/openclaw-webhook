@@ -427,3 +427,56 @@ This architectural direction preserves:
 - The architectural defect (hard dependency on ephemeral TaskRegistry state) is **resolved** — the recovery path now breaks the hard dependency while preserving TaskRegistry as the normal runtime state mechanism.
 - The Git completion-signal POC test count is **77/77 focused tests pass** (58 original + 6 commit-SHA hardening + 13 Path 2 recovery), 270 regression tests pass, 347 total tests pass. The prior STATE.md/ARCH_DECISIONS.md entries stating the recovery mechanism is "not implemented" are **reconciled** by this implementation.
 - This decision aligns with ADR-005 (Specialist Lanes with ACP Boundary), ADR-006 (Persistent AI Project State), ADR-013 (Kilo Activation Mechanism), and ADR-015 (Chatbox Gateway).
+
+---
+
+## ADR-017: DeepSeek Control-Plane Tool-Execution via a Trusted Server-Side Execution Runtime
+
+### Status
+
+**PROPOSED / TARGET** — Research documented. Implementation NOT authorized by this task. The decision records the architectural direction; the runtime and `control_plane` tool are not yet implemented.
+
+### Date
+
+2026-09-23
+
+### Context
+
+The goal is to allow DeepSeek (reached from Chatbox on a phone via OpenRouter) to perform authorized control-plane operations, such as requesting a Builder/Kilo task, through a narrowly scoped `control_plane` tool.
+
+The repository already provides a DeepSeek control-plane ingress via **Direct ACP** (`POST /poc/coordinator`, `routes/poc.js:772`, `ARCHITECTURE.md` Section 16.6): DeepSeek emits canonical ACP JSON directly to the coordinator, which runs `validateACPCommand` → `taskRegistry.createTask` → `getDispatcher()` → Kilo/Builder. This is the **current, implemented** path.
+
+The research question was whether DeepSeek could instead drive control-plane operations through OpenRouter's tool-calling interface. Investigation established:
+
+- A model (including DeepSeek via OpenRouter) **never executes its own tool calls over the network**. The model returns a structured `tool_calls` request; the application that hosts the model interaction executes the requested tool and returns the result (OpenRouter official documentation, `https://openrouter.ai/docs`).
+- OpenRouter is a model/API provider-routing proxy. It returns model outputs (including `tool_calls`) but does **not** execute this project's custom `control_plane` function.
+- Chatbox was not to be treated as the arbitrary HTTP tool executor (that would invert the trust boundary).
+- A repository-wide search confirmed **no** existing OpenRouter/DeepSeek tool-execution implementation exists in source code (no `OPENROUTER_API_KEY`, no `tool_calls` handling, no `@openrouter/agent`, no MCP, no `execution runtime`, no `control_plane` symbol). (See `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md` Section 15.)
+
+### Decision
+
+A future, explicitly-scoped implementation task (not this research task) may introduce a single new trusted component: a **server-side execution runtime** that hosts the DeepSeek/OpenRouter tool-calling loop and exposes a narrow `control_plane` tool. The runtime:
+
+- Is the **executor** of `control_plane` tool calls (the model decides *when*; the runtime executes *how*), not a replacement for DeepSeek and not a second control plane.
+- Translates the validated tool request into a canonical ACP command and authenticates `POST /poc/coordinator` using the **server-side** secret (`x-deepseek-coordinator-secret` / `DEEPSEEK_COORDINATOR_SECRET`), never a model-supplied value.
+- Feeds the **existing** ACP boundary (`validateACPCommand` → `TaskRegistry.createTask` → `getDispatcher()` → Kilo/Builder) — reusing `poc/schemas/acp-schema.js`, `poc/acp-engine.js`, `poc/task-registry.js`, `services/transport-provider.js`.
+- Retains server-side authority over endpoint, authentication, ACP construction (`task_mode`, `capabilities`, `permitted_paths`), target, validation, and execution policy (bounded loop, iteration limits, safe logging).
+- Exposes `control_plane(...)` — **not** a generic `http_post(url, headers, body)` primitive.
+
+This decision does **not** approve implementation. It constrains any future implementation to the boundary above and explicitly forbids the prohibited items in the Consequences.
+
+### Rationale
+
+- The tool-calling protocol is by design application-side: the model cannot reach `/poc/coordinator` itself. Without a server-side runtime hosting the loop, DeepSeek has no trusted executor for a `control_plane` tool.
+- Reusing `/poc/coordinator` (Direct ACP) as the single control-plane boundary avoids a parallel orchestrator/TaskRegistry/dispatcher and preserves ACP authorization as the authoritative boundary.
+- DeepSeek must not receive coordinator secrets, GitHub/Render credentials, arbitrary HTTP, unrestricted filesystem access, or unrestricted ACP capabilities. The runtime is the trusted validation/translation layer between untrusted model output and the trusted coordinator.
+- The narrow `control_plane` tool (vs. generic HTTP) ensures the model cannot dictate endpoint, authentication, target, capabilities, or paths — the runtime determines those.
+- Simplicity: a minimal application-side OpenRouter tool loop over `POST /api/v1/chat/completions` (with `max_iterations`, argument validation, ACP construction, and authenticated coordinator submission) satisfies the functional requirement without introducing an additional agent framework. The OpenRouter Agent SDK adds multi-model/MCP/streaming/ stop-condition facilities that are not required for this narrow requirement; MCP is, per OpenRouter's documentation, a build-time data-retrieval facility for assistants, not a control-plane runtime.
+
+### Consequences
+
+- **Not implemented by this decision**: server-side execution runtime; OpenRouter integration in the repository; `control_plane` tool definition/schema; runtime endpoint/interface and deployment topology; Chatbox production integration with the future runtime. These require a separate, explicitly-authorized implementation task (capabilities, permitted paths, verification) — they are **not** authorized under `RESEARCH_DOCUMENT`.
+- **Current DeepSeek path unchanged**: Direct ACP (`POST /poc/coordinator`) remains the implemented, verified DeepSeek control-plane path. The future tool-calling runtime is a **complementary, future** ingress that submits to the SAME coordinator; it does not replace Direct ACP.
+- **Prohibited** (no exceptions): a second `TaskRegistry`; a second orchestrator (`poc/orchestrator.js` remains sole); a second dispatcher (`getDispatcher()` remains sole); a parallel control plane; a generic unrestricted HTTP executor; any bypass around ACP validation (`poc/acp-engine.js` / schema `validateAuthorization`); model-supplied secrets, credentials, capabilities, endpoints, targets, or paths.
+- **Security boundary**: DeepSeek receives only the narrow `control_plane` tool interface; all secrets, credentials, and ACP authority remain server-side.
+- This decision aligns with ADR-005 (Specialist Lanes with ACP Boundary), ADR-006 (Persistent AI Project State), ADR-010 (Qwen Router Activation), ADR-015 (Chatbox Gateway), and ADR-016 (Git Completion-Signal Path 2 Recovery).
