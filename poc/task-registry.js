@@ -8,6 +8,7 @@ const {
   getRequiredEvidenceForTransition,
   createEvidenceRecord,
   validateEvidenceRecord,
+  validateAgentEvidenceType,
   EVIDENCE_TYPES,
   AGENT_EVIDENCE_TYPE,
   VALID_STATE_TRANSITIONS
@@ -71,6 +72,14 @@ function createTask(command) {
     };
   }
 
+  const parentId = command.parent_request_id;
+  if (parentId) {
+    const lineageCheck = validateLineageForCreate(parentId, requestId);
+    if (!lineageCheck.valid) {
+      return { success: false, error: lineageCheck.error };
+    }
+  }
+
   const entry = createInitialTaskRegistryEntry(requestId, command);
   const validation = validateTaskRegistryEntry(entry);
   if (!validation.valid) {
@@ -116,6 +125,64 @@ function getTasksByParent(parentRequestId) {
   return Array.from(cache.values()).filter(t => t.parent_request_id === parentRequestId);
 }
 
+function validateLineageForCreate(parentId, newRequestId) {
+  const cache = getCache();
+  const parent = cache.get(parentId);
+  if (!parent) {
+    return { valid: false, error: 'Parent task not found in registry: ' + parentId };
+  }
+
+  if (isCancelled(parentId)) {
+    return { valid: false, error: 'Cannot create child of cancelled task: ' + parentId };
+  }
+
+  if (isSuperseded(parentId)) {
+    const designated = parent.lineage && parent.lineage.superseded_by;
+    if (designated !== newRequestId) {
+      return {
+        valid: false,
+        error: 'Cannot create child of superseded task; only the designated replacement (' + designated + ') is permitted: ' + parentId
+      };
+    }
+    return { valid: true };
+  }
+
+  if (activeTaskExists(parentId)) {
+    return {
+      valid: false,
+      error: 'Cannot create child while parent task is still active; supersede the parent first: ' + parentId
+    };
+  }
+
+  const siblings = getTasksByParent(parentId);
+  for (const sibling of siblings) {
+    if (activeTaskExists(sibling.request_id)) {
+      return {
+        valid: false,
+        error: 'Conflicting active lineage: parent ' + parentId + ' already has an active child task ' + sibling.request_id
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
+function resolveCurrentLineage(requestId) {
+  const cache = getCache();
+  let currentId = requestId;
+  const seen = new Set();
+  while (cache.has(currentId) && !seen.has(currentId)) {
+    seen.add(currentId);
+    const entry = cache.get(currentId);
+    const next = entry && entry.lineage && entry.lineage.superseded_by;
+    if (!next || seen.has(next) || next === currentId) {
+      break;
+    }
+    currentId = next;
+  }
+  return currentId;
+}
+
 function addEvidence(requestId, evidenceType, agent, reportData) {
   const cache = getCache();
   const entry = cache.get(requestId);
@@ -125,6 +192,11 @@ function addEvidence(requestId, evidenceType, agent, reportData) {
 
   if (!EVIDENCE_TYPES.includes(evidenceType)) {
     return { success: false, error: 'Invalid evidence_type: ' + evidenceType };
+  }
+
+  const agentEvidenceValidation = validateAgentEvidenceType(agent, evidenceType);
+  if (!agentEvidenceValidation.valid) {
+    return { success: false, error: agentEvidenceValidation.error };
   }
 
   const evidence = createEvidenceRecord(requestId, evidenceType, agent, reportData, entry);
@@ -166,6 +238,10 @@ function supersedeTask(requestId, reason) {
 
   if (isSuperseded(requestId)) {
     return { success: false, error: 'Task already superseded', superseded: true };
+  }
+
+  if (isCancelled(requestId)) {
+    return { success: false, error: 'Task already cancelled, cannot supersede', cancelled: true };
   }
 
   if (entry.status === 'COMPLETE') {
