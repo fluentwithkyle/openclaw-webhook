@@ -792,11 +792,13 @@ test('F4: agent-claimed configuration is not verified', () => {
 });
 
 test('F4: authoritative env-existence verification is VERIFIED and never exposes secret value', () => {
-  const secretEnv = { MY_SECRET_PROVIDER: 'super-secret-value-12345' };
-  const r = verifyConfiguration('MY_SECRET_PROVIDER', { env: secretEnv });
+  const ENV_KEY = 'ACP_TEST_ENV_' + Date.now();
+  process.env[ENV_KEY] = 'super-secret-value-12345';
+  const r = verifyConfiguration(ENV_KEY, {});
   assertEqual(r.state, 'VERIFIED');
   assertEqual(r.verified, true);
   assert(!JSON.stringify(r).includes('super-secret-value-12345'));
+  delete process.env[ENV_KEY];
 });
 
 test('F4: authoritative task-registry config matches claim -> VERIFIED', () => {
@@ -855,12 +857,15 @@ test('F4: VERIFIED configuration satisfies execution prerequisite', () => {
 
 test('F4: config verification records state but never records raw secret values', () => {
   setupTask();
-  taskRegistry.verifyConfig('test-rel-1', 'REPO_TOKEN', { env: { REPO_TOKEN: 'secret-token-xyz' } });
+  const ENV_KEY = 'ACP_TEST_TOKEN_' + Date.now();
+  process.env[ENV_KEY] = 'secret-token-xyz';
+  taskRegistry.verifyConfig('test-rel-1', ENV_KEY, {});
   const task = taskRegistry.getTask('test-rel-1');
-  const rec = task.config_verification && task.config_verification['REPO_TOKEN'];
+  const rec = task.config_verification && task.config_verification[ENV_KEY];
   assert(rec);
   assertEqual(rec.state, 'VERIFIED');
   assert(!JSON.stringify(task).includes('secret-token-xyz'));
+  delete process.env[ENV_KEY];
   cleanup();
 });
 

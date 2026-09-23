@@ -76,16 +76,7 @@ function createTask(command) {
   }
 
   const parentId = command.parent_request_id;
-  const taskMode = command.task_mode || 'REVIEW';
-  const executionModes = ['FAILOVER_EXECUTE', 'BUILDER'];
-  
-  if (executionModes.includes(taskMode)) {
-    const activeTasks = getAllTasks().filter(t => activeTaskExists(t.request_id));
-    if (activeTasks.length > 0 && !parentId) {
-      return { success: false, error: 'Execution-mode tasks require a valid parent_request_id when an active task exists to maintain lineage' };
-    }
-  }
-  
+
   if (parentId) {
     const lineageCheck = validateLineageForCreate(parentId, requestId);
     if (!lineageCheck.valid) {
@@ -142,7 +133,7 @@ function validateLineageForCreate(parentId, newRequestId) {
   const cache = getCache();
   const parent = cache.get(parentId);
   if (!parent) {
-    return { valid: true, lineage_established: false, reason: 'parent not present in registry (no existing work to protect)' };
+    return { valid: false, error: 'parent_request_id ' + parentId + ' does not exist in registry; lineage cannot be established' };
   }
 
   if (isCancelled(parentId)) {
@@ -242,16 +233,16 @@ function hasEvidenceOfType(requestId, evidenceType) {
   return result.evidence.length > 0;
 }
 
-function recordConfigVerification(requestId, configKey, verificationResult, claimed, env) {
+function recordConfigVerification(requestId, configKey, verificationResult, claimed) {
   const cache = getCache();
   const entry = cache.get(requestId);
   if (!entry) {
     return { success: false, error: 'Task not found' };
   }
 
-  // Authoritative check
+  const runtimeEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
   const authoritativeResult = verifyConfiguration(configKey, {
-    env: env || (typeof process !== 'undefined' ? process.env : {}),
+    env: runtimeEnv,
     task: entry,
     claimed: claimed
   });
@@ -296,16 +287,15 @@ function requireConfigVerified(requestId, configKey) {
 
 function verifyConfig(requestId, configKey, options) {
   const entry = getTask(requestId);
-  const opts = Object.assign({}, options || {});
-  if (!opts.env && typeof process !== 'undefined' && process.env) {
-    opts.env = process.env;
-  }
+  const runtimeEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
+  const claimed = options ? options.claimed : undefined;
+  const result = verifyConfiguration(configKey, {
+    env: runtimeEnv,
+    task: entry,
+    claimed: claimed
+  });
   if (entry) {
-    opts.task = entry;
-  }
-  const result = verifyConfiguration(configKey, opts);
-  if (entry) {
-    recordConfigVerification(requestId, configKey, result, opts.claimed, opts.env);
+    recordConfigVerification(requestId, configKey, result, claimed);
   }
   return result;
 }
