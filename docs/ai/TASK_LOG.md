@@ -6,7 +6,7 @@
 
 ---
 
-2026-09-23 | TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001 | Implement RESEARCH_DOCUMENT task mode: added mode to ACP schema with fixed capability set and restricted paths, removed RESEARCH from canonical standard, created research documentation system (docs/ai/research/, RESEARCH_INDEX.md, research record) | SUCCESS | Commit SHA: a92d5ec; research record: `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md`
+2026-09-23 | TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001 | Implement RESEARCH_DOCUMENT task mode: added mode to ACP schema with fixed capability set and restricted paths, removed RESEARCH from canonical standard, created research documentation system (docs/ai/research/, RESEARCH_INDEX.md, research record) | SUCCESS | Commit SHA: 4f24c70; research record: `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md`
 
 2026-09-22 | TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-VERIFY-RECONCILE-001 | Remove hardcoded Chatbox Kilo target; make ACP target selection explicit through the trusted control path | SUCCESS | Merge commit on main
 2026-09-22 | TASK-GEMINI-RECONCILE-BUILDER-TRANSITION-RESEARCH-PLAN-001 | Reconcile durable project documentation with Gemini Builder transition research and implementation plan | SUCCESS | Commit SHA: d1cc444
@@ -2219,4 +2219,4 @@ The reconciled documentation distinguishes:
 **Research Record**: `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md`
 **Research Index**: `docs/ai/RESEARCH_INDEX.md`
 
-**Commit Reference**: `a92d5ec` on `main`
+**Commit Reference**: `4f24c70` on `main`
