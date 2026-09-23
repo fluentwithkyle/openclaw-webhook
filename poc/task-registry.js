@@ -4,6 +4,12 @@ const {
   validateTaskRegistryEntry,
   createInitialTaskRegistryEntry,
   isValidStateTransition,
+  validateStateTransitionWithEvidence,
+  getRequiredEvidenceForTransition,
+  createEvidenceRecord,
+  validateEvidenceRecord,
+  EVIDENCE_TYPES,
+  AGENT_EVIDENCE_TYPE,
   VALID_STATE_TRANSITIONS
 } = require('./schemas/acp-schema');
 
@@ -81,6 +87,165 @@ function getTask(requestId) {
   return cache.get(requestId) || null;
 }
 
+function isCancelled(requestId) {
+  const entry = getTask(requestId);
+  if (!entry) return false;
+  return entry.lineage && entry.lineage.cancelled === true;
+}
+
+function isSuperseded(requestId) {
+  const entry = getTask(requestId);
+  if (!entry) return false;
+  return entry.lineage && entry.lineage.superseded_by !== null;
+}
+
+function activeTaskExists(requestId) {
+  const entry = getTask(requestId);
+  if (!entry) return false;
+
+  const terminatedStates = ['COMPLETE', 'FAILED', 'BLOCKED'];
+  if (terminatedStates.includes(entry.status)) return false;
+  if (isCancelled(requestId)) return false;
+  if (isSuperseded(requestId)) return false;
+
+  return true;
+}
+
+function getTasksByParent(parentRequestId) {
+  const cache = getCache();
+  return Array.from(cache.values()).filter(t => t.parent_request_id === parentRequestId);
+}
+
+function addEvidence(requestId, evidenceType, agent, reportData) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found' };
+  }
+
+  if (!EVIDENCE_TYPES.includes(evidenceType)) {
+    return { success: false, error: 'Invalid evidence_type: ' + evidenceType };
+  }
+
+  const evidence = createEvidenceRecord(requestId, evidenceType, agent, reportData, entry);
+  const validation = validateEvidenceRecord(evidence);
+  if (!validation.valid) {
+    return { success: false, error: validation.error };
+  }
+
+  entry.evidence = entry.evidence || [];
+  entry.evidence.push(evidence);
+  entry.updated_at = new Date().toISOString();
+  cache.set(requestId, entry);
+  persistCache();
+  return { success: true, entry, evidence_record: evidence };
+}
+
+function getEvidenceByType(requestId, evidenceType) {
+  const entry = getTask(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found' };
+  }
+  const evidenceList = entry.evidence || [];
+  const filtered = evidenceList.filter(e => e.evidence_type === evidenceType);
+  return { success: true, evidence: filtered };
+}
+
+function hasEvidenceOfType(requestId, evidenceType) {
+  const result = getEvidenceByType(requestId, evidenceType);
+  if (!result.success) return false;
+  return result.evidence.length > 0;
+}
+
+function supersedeTask(requestId, reason) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found' };
+  }
+
+  if (isSuperseded(requestId)) {
+    return { success: false, error: 'Task already superseded', superseded: true };
+  }
+
+  if (entry.status === 'COMPLETE') {
+    return { success: false, error: 'Cannot supersede a completed task' };
+  }
+
+  const newRequestId = requestId + '-superseded-' + Date.now();
+
+  entry.lineage = entry.lineage || {};
+  entry.lineage.superseded_by = newRequestId;
+  entry.lineage.superseded_at = new Date().toISOString();
+  entry.lineage.supersede_reason = reason || 'no reason provided';
+  cache.set(requestId, entry);
+
+  const command = {
+    request_id: newRequestId,
+    target: entry.current_agent || 'Kilo',
+    task: entry.task,
+    repository: entry.repository,
+    base_branch: entry.base_branch,
+    constraints: { permitted_paths: entry.permitted_paths || [] },
+    authorization: { capabilities: entry.capabilities || ['read_only'] },
+    verification: entry.verification,
+    reporting: 'json',
+    task_mode: entry.task_mode,
+    originator: entry.originator,
+    parent_request_id: requestId
+  };
+
+  const createResult = createTask(command);
+  if (!createResult.success) {
+    return createResult;
+  }
+
+  const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
+  for (const status of transitions) {
+    const r = updateTaskStatus(newRequestId, status);
+    if (!r.success) {
+      return {
+        success: false,
+        error: 'Failed to transition to ' + status + ': ' + r.error
+      };
+    }
+  }
+
+  persistCache();
+  return {
+    success: true,
+    new_request_id: newRequestId,
+    new_entry: getTask(newRequestId),
+    superseded_entry: getTask(requestId)
+  };
+}
+
+function cancelTask(requestId, reason) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found' };
+  }
+
+  if (isCancelled(requestId)) {
+    return { success: false, error: 'Task already cancelled', cancelled: true };
+  }
+
+  if (entry.status === 'COMPLETE') {
+    return { success: false, error: 'Cannot cancel a completed task' };
+  }
+
+  entry.lineage = entry.lineage || {};
+  entry.lineage.cancelled = true;
+  entry.lineage.cancelled_at = new Date().toISOString();
+  entry.lineage.cancel_reason = reason || 'no reason provided';
+  entry.status = 'FAILED';
+  entry.updated_at = new Date().toISOString();
+  cache.set(requestId, entry);
+  persistCache();
+  return { success: true, entry };
+}
+
 function updateTaskStatus(requestId, newStatus) {
   const cache = getCache();
   const entry = cache.get(requestId);
@@ -88,8 +253,25 @@ function updateTaskStatus(requestId, newStatus) {
     return { success: false, error: 'Task not found' };
   }
 
-  if (!isValidStateTransition(entry.status, newStatus)) {
-    return { success: false, error: `Invalid state transition: ${entry.status} -> ${newStatus}` };
+  if (isCancelled(requestId)) {
+    return { success: false, error: 'Cannot update status of a cancelled task' };
+  }
+
+  if (isSuperseded(requestId)) {
+    return { success: false, error: 'Cannot update status of a superseded task' };
+  }
+
+  const evidenceValidation = validateStateTransitionWithEvidence(
+    entry.status,
+    newStatus,
+    entry.evidence || []
+  );
+  if (!evidenceValidation.valid) {
+    return {
+      success: false,
+      error: evidenceValidation.error,
+      missing_evidence: evidenceValidation.missing_evidence
+    };
   }
 
   entry.status = newStatus;
@@ -106,6 +288,11 @@ function updateAgentResult(requestId, agent, result) {
     return { success: false, error: 'Task not found' };
   }
 
+  const evidenceType = AGENT_EVIDENCE_TYPE[agent];
+  if (!evidenceType) {
+    return { success: false, error: 'Unknown agent: ' + agent };
+  }
+
   if (agent === 'Kilo') {
     entry.kilo = {
       ...entry.kilo,
@@ -115,7 +302,7 @@ function updateAgentResult(requestId, agent, result) {
     };
     entry.current_agent = 'Gemini';
     entry.next_agent = 'Gemini';
-   } else if (agent === 'Gemini Builder') {
+  } else if (agent === 'Gemini Builder') {
     entry.builder = {
       status: result.status,
       execution_id: result.execution_id || null,
@@ -131,14 +318,23 @@ function updateAgentResult(requestId, agent, result) {
     };
     entry.current_agent = null;
     entry.next_agent = null;
-  } else {
-    return { success: false, error: `Unknown agent: ${agent}` };
+  }
+
+  const reportData = result.report || {};
+  if (result.execution_id) reportData.execution_id = result.execution_id;
+  if (result.status) reportData.status = result.status;
+
+  const evidence = createEvidenceRecord(requestId, evidenceType, agent, reportData, entry);
+  const evidenceValidation = validateEvidenceRecord(evidence);
+  if (evidenceValidation.valid) {
+    entry.evidence = entry.evidence || [];
+    entry.evidence.push(evidence);
   }
 
   entry.updated_at = new Date().toISOString();
   cache.set(requestId, entry);
   persistCache();
-  return { success: true, entry };
+  return { success: true, entry, evidence_record: evidence };
 }
 
 function setNextAction(requestId, nextAction) {
@@ -185,17 +381,71 @@ function rehydrateTask(command) {
 
   const existing = getTask(requestId);
   if (existing) {
-    if (existing.status === 'EXECUTING' && existing.kilo.status === 'pending') {
-      return { success: true, entry: existing, rehydrated: false };
+    const state = existing.status;
+
+    if (state === 'COMPLETE') {
+      return { success: true, entry: existing, rehydrated: false, action: 'none' };
     }
+
+    if (state === 'VERIFIED') {
+      return { success: true, entry: existing, rehydrated: false, action: 'complete' };
+    }
+
+    if (state === 'EXECUTING') {
+      if (existing.kilo.status === 'pending') {
+        return { success: true, entry: existing, rehydrated: false, action: 'kilo_execution' };
+      }
+      if (existing.kilo.status === 'success' && existing.builder.status === 'pending' && existing.next_action === 'trigger_builder') {
+        return { success: true, entry: existing, rehydrated: false, action: 'trigger_builder' };
+      }
+      if (existing.builder.status === 'success' && existing.gemini.status === 'pending' && existing.next_action === 'trigger_gemini') {
+        return { success: true, entry: existing, rehydrated: false, action: 'trigger_gemini' };
+      }
+      if (existing.gemini.status === 'pending' && existing.next_action === 'waiting_gemini_callback') {
+        return { success: true, entry: existing, rehydrated: false, action: 'waiting_gemini' };
+      }
+      return { success: true, entry: existing, rehydrated: false, action: 'continue' };
+    }
+
+    if (state === 'FAILED' || state === 'BLOCKED') {
+      return {
+        success: false,
+        error: 'Task in terminal state ' + state + ', requires human review',
+        entry: existing
+      };
+    }
+
+    if (state === 'PENDING' || state === 'SELECTED' || state === 'PLANNED') {
+      if (isCancelled(requestId) || isSuperseded(requestId)) {
+        return {
+          success: false,
+          error: 'Task is cancelled or superseded, cannot rehydrate',
+          entry: existing
+        };
+      }
+
+      const transitions = [];
+      if (state === 'PENDING') transitions.push('SELECTED', 'PLANNED', 'EXECUTING');
+      else if (state === 'SELECTED') transitions.push('PLANNED', 'EXECUTING');
+      else if (state === 'PLANNED') transitions.push('EXECUTING');
+
+      for (const status of transitions) {
+        const r = updateTaskStatus(requestId, status);
+        if (!r.success) {
+          return {
+            success: false,
+            error: 'Failed to transition to ' + status + ': ' + r.error
+          };
+        }
+      }
+
+      return { success: true, entry: getTask(requestId), rehydrated: true, action: 'kilo_execution' };
+    }
+
     return {
       success: false,
-      error:
-        'Task exists in state ' +
-        existing.status +
-        ' with kilo status ' +
-        existing.kilo.status +
-        ' (expected absent or EXECUTING with pending kilo result)'
+      error: 'Cannot rehydrate task in state ' + state,
+      entry: existing
     };
   }
 
@@ -215,7 +465,7 @@ function rehydrateTask(command) {
     }
   }
 
-  return { success: true, entry: getTask(requestId), rehydrated: true };
+  return { success: true, entry: getTask(requestId), rehydrated: true, action: 'kilo_execution' };
 }
 
 module.exports = {
@@ -231,5 +481,14 @@ module.exports = {
   rehydrateTask,
   loadFromFile,
   persistCache,
-  REGISTRY_FILE
+  REGISTRY_FILE,
+  isCancelled,
+  isSuperseded,
+  activeTaskExists,
+  getTasksByParent,
+  addEvidence,
+  getEvidenceByType,
+  hasEvidenceOfType,
+  supersedeTask,
+  cancelTask
 };

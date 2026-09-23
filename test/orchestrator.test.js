@@ -257,7 +257,7 @@ test('canTriggerGemini - returns false when Gemini already run', () => {
 test('canTriggerGemini - returns false when task not EXECUTING', () => {
   setupTask();
   taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
-  taskRegistry.updateTaskStatus('test-orch-1', 'VERIFIED');
+  taskRegistry.updateTaskStatus('test-orch-1', 'FAILED');
   const result = orchestrator.canTriggerGemini('test-orch-1');
   assertEqual(result.canTrigger, false);
   assert(result.reason.includes('not EXECUTING'));
@@ -391,7 +391,7 @@ test('canTriggerGeminiBuilder - returns false when Reviewer already run', () => 
 test('canTriggerGeminiBuilder - returns false when task not EXECUTING', () => {
   setupTask();
   taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
-  taskRegistry.updateTaskStatus('test-orch-1', 'VERIFIED');
+  taskRegistry.updateTaskStatus('test-orch-1', 'FAILED');
   const result = orchestrator.canTriggerGeminiBuilder('test-orch-1');
   assertEqual(result.canTrigger, false);
   assert(result.reason.includes('not EXECUTING'));

@@ -2,6 +2,11 @@ const {
   validateExecutionReport,
   validateTaskRegistryEntry,
   isValidStateTransition,
+  validateStateTransitionWithEvidence,
+  getRequiredEvidenceForTransition,
+  createEvidenceRecord,
+  AGENT_EVIDENCE_TYPE,
+  EVIDENCE_TYPES,
   VALID_STATE_TRANSITIONS,
   BUILDER_CAPABILITIES
 } = require('./schemas/acp-schema');
@@ -60,7 +65,6 @@ function handleKiloCompletion(requestId, report) {
 
   if (report.status === 'success') {
     nextAction = 'trigger_builder';
-    // Task remains in EXECUTING - no state transition needed
   } else if (report.status === 'failure') {
     nextAction = 'human_review';
     const statusResult = taskRegistry.updateTaskStatus(requestId, 'FAILED');
@@ -117,6 +121,15 @@ function handleGeminiCompletion(requestId, report) {
 
   if (!updateResult.success) {
     return { success: false, error: updateResult.error, stage: 'update' };
+  }
+
+  const evidenceCheck = taskRegistry.hasEvidenceOfType(requestId, AGENT_EVIDENCE_TYPE['Gemini']);
+  if (report.status === 'success' && !evidenceCheck) {
+    return {
+      success: false,
+      error: 'Gemini completion did not record INDEPENDENT_VERIFICATION evidence; transition blocked (fail closed)',
+      stage: 'evidence'
+    };
   }
 
   let nextStatus;
@@ -400,13 +413,14 @@ function getOrchestrationState(requestId) {
       request_id: task.request_id,
       status: task.status,
       current_agent: task.current_agent,
-           next_agent: task.next_agent,
-       task_mode: task.task_mode || 'REVIEW',
-       capabilities: task.capabilities || ['read_only'],
-        kilo_status: task.kilo.status,
-       gemini_status: task.gemini.status,
-       builder_status: task.builder ? task.builder.status : null,
-       next_action: task.next_action,
+      next_agent: task.next_agent,
+      task_mode: task.task_mode || 'REVIEW',
+      capabilities: task.capabilities || ['read_only'],
+      kilo_status: task.kilo.status,
+      gemini_status: task.gemini.status,
+      builder_status: task.builder ? task.builder.status : null,
+      next_action: task.next_action,
+      evidence_count: task.evidence ? task.evidence.length : 0,
       created_at: task.created_at,
       updated_at: task.updated_at
     }
@@ -426,5 +440,8 @@ module.exports = {
   triggerGeminiBuilder,
   getOrchestrationState,
   SUPPORTED_TRANSITIONS,
-  validateRepositoryContext
+  validateRepositoryContext,
+  validateStateTransitionWithEvidence,
+  getRequiredEvidenceForTransition,
+  createEvidenceRecord
 };

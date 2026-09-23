@@ -66,6 +66,22 @@ function validate(command) {
     return { status: 'SUCCESS' };
 }
 
+function validateACPCompliance(command) {
+    return schema.validateACPCompliance(command);
+}
+
+function validateActivationSyntax(activationText, expectedTarget) {
+    return schema.validateActivationSyntax(activationText, expectedTarget);
+}
+
+function validateActivationSurface(surface, target) {
+    return schema.validateActivationSurface(surface, target);
+}
+
+function getRequiredEvidenceForTransition(from, to) {
+    return schema.getRequiredEvidenceForTransition(from, to);
+}
+
 function execute(command) {
     const v = validate(command);
     if (v.status !== 'SUCCESS') {
@@ -93,4 +109,12 @@ function execute(command) {
     }
 }
 
-module.exports = { validate, execute, normalizePath };
+module.exports = {
+  validate,
+  execute,
+  normalizePath,
+  validateACPCompliance,
+  validateActivationSyntax,
+  validateActivationSurface,
+  getRequiredEvidenceForTransition
+};
