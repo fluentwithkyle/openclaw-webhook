@@ -494,5 +494,375 @@ test('validateActivationSurface accepts authorized surfaces and rejects unauthor
   assert(badSurface.error.includes('Unauthorized'));
 });
 
+const execCmd = (overrides) => Object.assign({}, failoverCommand, overrides);
+
+// === FAILURE 1: Mandatory activation syntax/surface — exact case-sensitive ===
+
+test('F1: FAILOVER_EXECUTE missing activation_syntax is blocked', () => {
+  const cmd = { ...failoverCommand };
+  delete cmd.activation_syntax;
+  const result = validateACPCompliance(cmd);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('activation_syntax'));
+});
+
+test('F1: FAILOVER_EXECUTE missing activation_surface is blocked', () => {
+  const cmd = { ...failoverCommand };
+  delete cmd.activation_surface;
+  const result = validateACPCompliance(cmd);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('activation_surface'));
+});
+
+test('F1: exact @kilo accepted for Kilo execution artifact', () => {
+  const result = validateACPCompliance(failoverCommand);
+  assertEqual(result.valid, true);
+});
+
+test('F1: @Kilo casing rejected (exact lowercase required)', () => {
+  const result = validateACPCompliance({ ...failoverCommand, activation_syntax: '@Kilo' });
+  assertEqual(result.valid, false);
+});
+
+test('F1: @kilo on unauthorized surface (workflow_dispatch) rejected', () => {
+  const result = validateACPCompliance({ ...failoverCommand, activation_surface: 'workflow_dispatch' });
+  assertEqual(result.valid, false);
+  assert(result.error.includes('Unauthorized'));
+});
+
+test('F1: target/surface/target-syntax mismatch — Kilo surface for Gemini target rejected', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'BUILDER',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment'
+  });
+  assertEqual(result.valid, false);
+});
+
+test('F1: exact @gemini-cli accepted for Gemini Builder execution artifact', () => {
+  const cmd = execCmd({
+    request_id: 'builder-cmd-1', task_mode: 'BUILDER', target: 'Gemini Builder',
+    activation_syntax: '@gemini-cli', activation_surface: 'workflow_dispatch'
+  });
+  const result = validateACPCompliance(cmd);
+  assertEqual(result.valid, true);
+});
+
+test('F1: @Gemini bare rejected for Gemini target', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'BUILDER',
+    activation_syntax: '@Gemini', activation_surface: 'workflow_dispatch'
+  });
+  assertEqual(result.valid, false);
+});
+
+test('F1: @GEMINI-CLI rejected (case-sensitive exact)', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'BUILDER',
+    activation_syntax: '@GEMINI-CLI', activation_surface: 'workflow_dispatch'
+  });
+  assertEqual(result.valid, false);
+});
+
+test('F1: bare @gemini mention rejected for Gemini target', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'BUILDER',
+    activation_syntax: 'please @gemini review this', activation_surface: 'workflow_dispatch'
+  });
+  assertEqual(result.valid, false);
+});
+
+test('F1: Gemini target with Kilo activation (@kilo) rejected', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'BUILDER',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment'
+  });
+  assertEqual(result.valid, false);
+});
+
+test('F1: Kilo target with Gemini activation (@gemini-cli) rejected', () => {
+  const result = validateACPCompliance({ ...failoverCommand, activation_syntax: '@gemini-cli' });
+  assertEqual(result.valid, false);
+});
+
+test('F1: REVIEW mode does not require activation metadata', () => {
+  const result = validateACPCompliance(validCommand);
+  assertEqual(result.valid, true);
+});
+
+// === FAILURE 2: Agent-to-evidence-type mapping enforced at addEvidence boundary ===
+
+test('F2: Kilo + AGENT_REPORT accepted by addEvidence', () => {
+  setupTask();
+  const result = taskRegistry.addEvidence('test-rel-1', 'AGENT_REPORT', 'Kilo', { status: 'success' });
+  assertEqual(result.success, true);
+  cleanup();
+});
+
+test('F2: Kilo + INDEPENDENT_VERIFICATION rejected by addEvidence', () => {
+  setupTask();
+  const result = taskRegistry.addEvidence('test-rel-1', 'INDEPENDENT_VERIFICATION', 'Kilo', { status: 'success' });
+  assertEqual(result.success, false);
+  assert(result.error.includes('INDEPENDENT_VERIFICATION'));
+  cleanup();
+});
+
+test('F2: Gemini Builder + AGENT_REPORT accepted by addEvidence', () => {
+  setupTask();
+  const result = taskRegistry.addEvidence('test-rel-1', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' });
+  assertEqual(result.success, true);
+  cleanup();
+});
+
+test('F2: Gemini Builder + INDEPENDENT_VERIFICATION rejected by addEvidence', () => {
+  setupTask();
+  const result = taskRegistry.addEvidence('test-rel-1', 'INDEPENDENT_VERIFICATION', 'Gemini Builder', { status: 'success' });
+  assertEqual(result.success, false);
+  assert(result.error.includes('INDEPENDENT_VERIFICATION'));
+  cleanup();
+});
+
+test('F2: Gemini Reviewer + INDEPENDENT_VERIFICATION accepted by addEvidence (verification path)', () => {
+  setupTask();
+  const result = taskRegistry.addEvidence('test-rel-1', 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' });
+  assertEqual(result.success, true);
+  cleanup();
+});
+
+test('F2: invalid agent/evidence combinations blocked (WORKFLOW_SUCCESS from Kilo)', () => {
+  setupTask();
+  const result = taskRegistry.addEvidence('test-rel-1', 'WORKFLOW_SUCCESS', 'Kilo', { status: 'success' });
+  assertEqual(result.success, false);
+  cleanup();
+});
+
+test('F2: Kilo self-report (AGENT_REPORT) cannot satisfy EXECUTING->VERIFIED', () => {
+  setupTask();
+  taskRegistry.addEvidence('test-rel-1', 'AGENT_REPORT', 'Kilo', { status: 'success' });
+  const result = taskRegistry.updateTaskStatus('test-rel-1', 'VERIFIED');
+  assertEqual(result.success, false);
+  assertEqual(result.missing_evidence, 'INDEPENDENT_VERIFICATION');
+  cleanup();
+});
+
+test('F2: workflow-success evidence cannot satisfy independent verification', () => {
+  setupTask();
+  const entry = taskRegistry.getTask('test-rel-1');
+  const ws = createEvidenceRecord('test-rel-1', 'WORKFLOW_SUCCESS', 'Kilo', { status: 'success' }, entry);
+  entry.evidence = entry.evidence || [];
+  entry.evidence.push(ws);
+  taskRegistry.persistCache();
+  const result = taskRegistry.updateTaskStatus('test-rel-1', 'VERIFIED');
+  assertEqual(result.success, false);
+  assertEqual(result.missing_evidence, 'INDEPENDENT_VERIFICATION');
+  cleanup();
+});
+
+// === FAILURE 3: Duplicate active-task / lineage protection ===
+
+test('F3: identical active request_id rejected', () => {
+  setupTask();
+  const result = taskRegistry.createTask(validCommand);
+  assertEqual(result.success, false);
+  assertEqual(result.duplicate, true);
+  cleanup();
+});
+
+test('F3: child of active parent (distinct request_id) blocked unless supersede-authorized', () => {
+  setupTask();
+  const result = taskRegistry.createTask({
+    ...validCommand, request_id: 'child-active-parent', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment', parent_request_id: 'test-rel-1'
+  });
+  assertEqual(result.success, false);
+  assert(result.error.includes('active'));
+  cleanup();
+});
+
+test('F3: valid parent/child lineage (child of completed parent) accepted', () => {
+  setupTask();
+  taskRegistry.addEvidence('test-rel-1', 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' });
+  taskRegistry.updateTaskStatus('test-rel-1', 'VERIFIED');
+  taskRegistry.updateTaskStatus('test-rel-1', 'COMPLETE');
+  const result = taskRegistry.createTask({
+    ...validCommand, request_id: 'child-of-complete', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment', parent_request_id: 'test-rel-1'
+  });
+  assertEqual(result.success, true);
+  assertEqual(result.entry.parent_request_id, 'test-rel-1');
+  cleanup();
+});
+
+test('F3: superseded task cannot resume (rehydrate redirects to replacement, original untouched)', () => {
+  setupTask();
+  const sup = taskRegistry.supersedeTask('test-rel-1', 'needs re-run');
+  assertEqual(sup.success, true);
+  const original = taskRegistry.getTask('test-rel-1');
+  const rehydrated = taskRegistry.getTask(sup.new_request_id);
+  assertEqual(original.lineage.superseded_by, sup.new_request_id);
+  assertEqual(original.status, 'EXECUTING');
+  assertEqual(rehydrated.status, 'EXECUTING');
+  const attempt = taskRegistry.rehydrateTask({ ...validCommand, request_id: 'test-rel-1' });
+  assertEqual(attempt.lineage_current, sup.new_request_id);
+  assertEqual(attempt.entry.request_id, sup.new_request_id);
+  assertEqual(taskRegistry.getTask('test-rel-1').status, 'EXECUTING');
+  cleanup();
+});
+
+test('F3: cancelled task cannot resume', () => {
+  setupTask();
+  taskRegistry.cancelTask('test-rel-1', 'manual cancel');
+  const result = taskRegistry.rehydrateTask({ ...validCommand, request_id: 'test-rel-1' });
+  assertEqual(result.success, false);
+  assert(result.error.includes('cancelled'));
+  cleanup();
+});
+
+test('F3: child of cancelled parent blocked', () => {
+  setupTask();
+  taskRegistry.cancelTask('test-rel-1', 'manual cancel');
+  const result = taskRegistry.createTask({
+    ...validCommand, request_id: 'child-cancelled', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment', parent_request_id: 'test-rel-1'
+  });
+  assertEqual(result.success, false);
+  assert(result.error.includes('cancelled'));
+  cleanup();
+});
+
+test('F3: child of superseded non-replacement task blocked', () => {
+  setupTask();
+  const sup = taskRegistry.supersedeTask('test-rel-1', 'needs re-run');
+  const result = taskRegistry.createTask({
+    ...validCommand, request_id: 'bogus-child', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment', parent_request_id: 'test-rel-1'
+  });
+  assertEqual(result.success, false);
+  assert(result.error.includes('superseded'));
+  assert(!result.error.includes('designated replacement (' + sup.new_request_id + ') is permitted') || result.error.includes('designated replacement'));
+  cleanup();
+});
+
+test('F3: conflicting active lineage (second active child) fails closed', () => {
+  setupTask();
+  taskRegistry.addEvidence('test-rel-1', 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' });
+  taskRegistry.updateTaskStatus('test-rel-1', 'VERIFIED');
+  taskRegistry.updateTaskStatus('test-rel-1', 'COMPLETE');
+  const first = taskRegistry.createTask({
+    ...validCommand, request_id: 'child-a', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment', parent_request_id: 'test-rel-1'
+  });
+  assertEqual(first.success, true);
+  const second = taskRegistry.createTask({
+    ...validCommand, request_id: 'child-b', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@kilo', activation_surface: 'github_issue_comment', parent_request_id: 'test-rel-1'
+  });
+  assertEqual(second.success, false);
+  assert(second.error.includes('Conflicting active lineage'));
+  cleanup();
+});
+
+test('F3: lineage remains intact across rehydration', () => {
+  setupTask();
+  const sup = taskRegistry.supersedeTask('test-rel-1', 'needs re-run');
+  const attempt = taskRegistry.rehydrateTask({ ...validCommand, request_id: 'test-rel-1' });
+  assertEqual(attempt.success, true);
+  const replacement = taskRegistry.getTask(sup.new_request_id);
+  assertEqual(replacement.parent_request_id, 'test-rel-1');
+  cleanup();
+});
+
+// === FAILURE 4: Configuration verification — authoritative & fail-closed ===
+
+test('F4: proposed configuration (claim, no authoritative source) is not verified', () => {
+  const r = verifyConfiguration('SOME_TARGET', { claimed: 'production' });
+  assertEqual(r.state, 'PROPOSED');
+  assertEqual(r.verified, false);
+});
+
+test('F4: documented configuration without authoritative evidence is not verified', () => {
+  const r = verifyConfiguration('RENDER_SERVICE_ID', { claimed: 'svc-123', env: {} });
+  assert(!['VERIFIED'].includes(r.state));
+  assertEqual(r.verified, false);
+});
+
+test('F4: agent-claimed configuration is not verified', () => {
+  const r = verifyConfiguration('KILO_TRIGGER_URL', { claimed: 'https://example.com', env: {} });
+  assertEqual(r.state, 'PROPOSED');
+  assertEqual(r.verified, false);
+});
+
+test('F4: authoritative env-existence verification is VERIFIED and never exposes secret value', () => {
+  const secretEnv = { MY_SECRET_PROVIDER: 'super-secret-value-12345' };
+  const r = verifyConfiguration('MY_SECRET_PROVIDER', { env: secretEnv });
+  assertEqual(r.state, 'VERIFIED');
+  assertEqual(r.verified, true);
+  assert(!JSON.stringify(r).includes('super-secret-value-12345'));
+});
+
+test('F4: authoritative task-registry config matches claim -> VERIFIED', () => {
+  setupTask();
+  const entry = taskRegistry.getTask('test-rel-1');
+  const r = verifyConfiguration('repository', { claimed: 'fluentwithkyle/openclaw-webhook', task: entry });
+  assertEqual(r.state, 'VERIFIED');
+  assertEqual(r.verified, true);
+  cleanup();
+});
+
+test('F4: task-registry config mismatched claim is not verified', () => {
+  setupTask();
+  const entry = taskRegistry.getTask('test-rel-1');
+  const r = verifyConfiguration('repository', { claimed: 'other/repo', task: entry });
+  assert(!['VERIFIED'].includes(r.state));
+  assertEqual(r.verified, false);
+  cleanup();
+});
+
+test('F4: unavailable authoritative configuration is UNKNOWN', () => {
+  const r = verifyConfiguration('NONEXISTENT_CONFIG_KEY', {});
+  assertEqual(r.state, 'UNKNOWN');
+  assertEqual(r.verified, false);
+});
+
+test('F4: required UNKNOWN configuration is blocked (fail-closed)', () => {
+  setupTask();
+  taskRegistry.recordConfigVerification('test-rel-1', 'UNAVAILABLE_PROVIDER',
+    verifyConfiguration('UNAVAILABLE_PROVIDER', { claimed: null }));
+  const required = taskRegistry.requireConfigVerified('test-rel-1', 'UNAVAILABLE_PROVIDER');
+  assertEqual(required.success, false);
+  assertEqual(required.config_state, 'UNKNOWN');
+  cleanup();
+});
+
+test('F4: UNKNOWN/claimed configuration cannot satisfy execution prerequisite', () => {
+  setupTask();
+  taskRegistry.recordConfigVerification('test-rel-1', 'PROPOSED_TARGET',
+    verifyConfiguration('PROPOSED_TARGET', { claimed: 'docs-only-value' }));
+  const required = taskRegistry.requireConfigVerified('test-rel-1', 'PROPOSED_TARGET');
+  assertEqual(required.success, false);
+  assert(!['VERIFIED'].includes(required.config_state));
+  cleanup();
+});
+
+test('F4: VERIFIED configuration satisfies execution prerequisite', () => {
+  setupTask();
+  const entry = taskRegistry.getTask('test-rel-1');
+  taskRegistry.verifyConfig('test-rel-1', 'repository', { claimed: 'fluentwithkyle/openclaw-webhook' });
+  const required = taskRegistry.requireConfigVerified('test-rel-1', 'repository');
+  assertEqual(required.success, true);
+  assertEqual(required.config_state, 'VERIFIED');
+  cleanup();
+});
+
+test('F4: config verification records state but never records raw secret values', () => {
+  setupTask();
+  taskRegistry.verifyConfig('test-rel-1', 'REPO_TOKEN', { env: { REPO_TOKEN: 'secret-token-xyz' } });
+  const task = taskRegistry.getTask('test-rel-1');
+  const rec = task.config_verification && task.config_verification['REPO_TOKEN'];
+  assert(rec);
+  assertEqual(rec.state, 'VERIFIED');
+  assert(!JSON.stringify(task).includes('secret-token-xyz'));
+  cleanup();
+});
+
 console.log(`\n=== Reliability Enforcement Tests: ${passCount} passed, ${failCount} failed ===`);
 if (failCount > 0) process.exit(1);
