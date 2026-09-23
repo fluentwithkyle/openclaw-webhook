@@ -62,7 +62,7 @@ const VALID_STATE_TRANSITIONS = {
   'COMPLETE': []
 };
 
-const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE', 'BUILDER'];
+const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE', 'BUILDER', 'RESEARCH_DOCUMENT'];
 const DEFAULT_TASK_MODE = 'REVIEW';
 
 const VALID_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push', 'run_tests'];
@@ -71,11 +71,24 @@ const REVIEW_CAPABILITIES = ['read_only'];
 const VERIFY_RECONCILE_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push'];
 const FAILOVER_EXECUTE_CAPABILITIES = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
 const BUILDER_CAPABILITIES = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+const RESEARCH_DOCUMENT_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push'];
 
 const VERIFY_RECONCILE_PATHS = [
   'docs/ai/TASK_LOG.md',
   'docs/ai/STATE.md',
   'docs/ai/CONTROL_CENTER.md'
+];
+
+const RESEARCH_DOCUMENT_PATHS = [
+  'docs/ai/research/',
+  'docs/ai/RESEARCH_INDEX.md',
+  'docs/ai/TASK_LOG.md',
+  'docs/ai/STATE.md',
+  'docs/ai/CONTROL_CENTER.md',
+  'docs/ai/README.md',
+  'docs/ai/ARCH_DECISIONS.md',
+  'poc/schemas/acp-schema.js',
+  'test/schema.test.js'
 ];
 
 const VALID_RECONCILIATION_STATUSES = ['COMPLETED', 'SKIPPED', 'FAILED'];
@@ -86,6 +99,7 @@ function getRequiredCapabilitiesForMode(taskMode) {
     case 'VERIFY_RECONCILE': return VERIFY_RECONCILE_CAPABILITIES;
     case 'FAILOVER_EXECUTE': return FAILOVER_EXECUTE_CAPABILITIES;
     case 'BUILDER': return BUILDER_CAPABILITIES;
+    case 'RESEARCH_DOCUMENT': return RESEARCH_DOCUMENT_CAPABILITIES;
     case 'REVIEW':
     default: return REVIEW_CAPABILITIES.slice();
   }
@@ -94,6 +108,7 @@ function getRequiredCapabilitiesForMode(taskMode) {
 function getAuthorizedPathsForMode(taskMode) {
   const mode = taskMode || DEFAULT_TASK_MODE;
   if (mode === 'VERIFY_RECONCILE') return VERIFY_RECONCILE_PATHS;
+  if (mode === 'RESEARCH_DOCUMENT') return RESEARCH_DOCUMENT_PATHS;
   return null;
 }
 
@@ -133,6 +148,19 @@ function validateCapabilitiesForMode(taskMode, capabilities) {
     return { valid: true };
   }
 
+  if (mode === 'RESEARCH_DOCUMENT') {
+    const requiredCaps = RESEARCH_DOCUMENT_CAPABILITIES;
+    if (capabilities.length !== requiredCaps.length) {
+      return { valid: false, error: `RESEARCH_DOCUMENT mode requires exactly ${JSON.stringify(requiredCaps)} capabilities` };
+    }
+    for (const cap of requiredCaps) {
+      if (!capabilities.includes(cap)) {
+        return { valid: false, error: `RESEARCH_DOCUMENT mode requires capability: ${cap}` };
+      }
+    }
+    return { valid: true };
+  }
+
   for (const cap of required) {
     if (!capabilities.includes(cap)) {
       return { valid: false, error: `${mode} mode requires capability: ${cap}` };
@@ -158,7 +186,9 @@ function validatePermittedPathsForMode(taskMode, permittedPaths) {
   }
 
   for (const p of permittedPaths) {
-    if (!authorizedPaths.includes(p)) {
+    const isAuthorized = authorizedPaths.includes(p) ||
+      authorizedPaths.some(authPath => authPath.endsWith('/') && p.startsWith(authPath));
+    if (!isAuthorized) {
       return { valid: false, error: `Unauthorized path for ${mode}: ${p}. Authorized paths: ${authorizedPaths.join(', ')}` };
     }
   }
@@ -416,7 +446,9 @@ module.exports = {
   VERIFY_RECONCILE_CAPABILITIES,
    FAILOVER_EXECUTE_CAPABILITIES,
    BUILDER_CAPABILITIES,
+   RESEARCH_DOCUMENT_CAPABILITIES,
    VERIFY_RECONCILE_PATHS,
+   RESEARCH_DOCUMENT_PATHS,
   VALID_RECONCILIATION_STATUSES,
   getRequiredCapabilitiesForMode,
   getAuthorizedPathsForMode,

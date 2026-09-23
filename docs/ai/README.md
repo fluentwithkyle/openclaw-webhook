@@ -120,6 +120,11 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 - Operating instructions for the AI project-state directory.
 - Update rules, security requirements, authoritative vs historical distinctions.
 
+### `RESEARCH_INDEX.md` — Research Record Index
+- Navigational index for durable research records under `docs/ai/research/`.
+- Each RESEARCH_DOCUMENT task produces one Markdown research record; the index and TASK_LOG reference it.
+- Research records are durable research artifacts, not current-state files.
+
 ## Update Rules
 
 | File | When to Update | Who Updates |
@@ -127,6 +132,7 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 | `STATE.md` | After any authorized work that changes current project state (active tasks, blockers, status) | Kilo (primary), any authorized agent |
 | `ARCH_DECISIONS.md` | When a significant architectural decision is made or reviewed | Gemini (primary), Kilo when implementing |
 | `TASK_LOG.md` | After every completed authorized task | Kilo (primary), any agent completing authorized work |
+| `RESEARCH_INDEX.md` | When a RESEARCH_DOCUMENT task completes or a research record is added | Kilo (primary), any authorized research agent |
 | `README.md` | When operating rules or security requirements change | Kilo (when authorized) |
 
 **Update discipline:**
@@ -159,5 +165,6 @@ Do not introduce a new secret-management mechanism.
 | `docs/ai/ARCH_DECISIONS.md` | Recorded decisions + rationale | Context for AI decision-making |
 | `docs/ai/TASK_LOG.md` | Historical record | Audit trail of completed AI work |
 | `docs/ai/README.md` | Operating rules | How agents use the system |
+| `docs/ai/RESEARCH_INDEX.md` | Research record index | Navigation to durable research records |
 
 **Rule**: Documentation is not proof that proposed functionality is implemented. Always verify against production code.

@@ -10,6 +10,7 @@ const {
   VALID_STATUSES,
   VALID_TASK_MODES,
   BUILDER_CAPABILITIES,
+  RESEARCH_DOCUMENT_CAPABILITIES,
   getRequiredCapabilitiesForMode
 } = require('../poc/schemas/acp-schema');
 
@@ -301,6 +302,127 @@ test('Execution report with agent Gemini Builder is valid', () => {
 test('Execution report with invalid agent fails', () => {
   const report = { ...validReport, agent: 'Invalid' };
   const result = validateExecutionReport(report);
+  assertEqual(result.valid, false);
+});
+
+test('RESEARCH_DOCUMENT is a valid task mode', () => {
+  assert(VALID_TASK_MODES.includes('RESEARCH_DOCUMENT'), 'RESEARCH_DOCUMENT should be a valid task mode');
+});
+
+test('RESEARCH is no longer a valid task mode', () => {
+  assert(!VALID_TASK_MODES.includes('RESEARCH'), 'RESEARCH should not be a valid task mode');
+});
+
+test('RESEARCH_DOCUMENT_CAPABILITIES contains the complete fixed set', () => {
+  assertArrayIncludes(RESEARCH_DOCUMENT_CAPABILITIES, ['read_only', 'modify_files', 'commit', 'push']);
+  assertEqual(RESEARCH_DOCUMENT_CAPABILITIES.length, 4);
+});
+
+test('getRequiredCapabilitiesForMode returns RESEARCH_DOCUMENT_CAPABILITIES for RESEARCH_DOCUMENT', () => {
+  const caps = getRequiredCapabilitiesForMode('RESEARCH_DOCUMENT');
+  assertArrayIncludes(caps, ['read_only', 'modify_files', 'commit', 'push']);
+  assertEqual(caps.length, 4);
+});
+
+test('validateTaskMode - RESEARCH_DOCUMENT is valid', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateTaskMode('RESEARCH_DOCUMENT');
+  assertEqual(result.valid, true);
+  assertEqual(result.task_mode, 'RESEARCH_DOCUMENT');
+});
+
+test('validateTaskMode - RESEARCH is no longer valid', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateTaskMode('RESEARCH');
+  assertEqual(result.valid, false);
+  assert(result.error.includes('RESEARCH'));
+});
+
+test('validateCapabilitiesForMode - RESEARCH_DOCUMENT accepts complete fixed set', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'commit', 'push']);
+  assertEqual(result.valid, true);
+});
+
+test('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects only read_only', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only']);
+  assertEqual(result.valid, false);
+});
+
+test('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects missing modify_files', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'commit', 'push']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('modify_files'));
+});
+
+test('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects missing commit', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'push']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('commit'));
+});
+
+test('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects missing push', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'commit']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('push'));
+});
+
+test('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects extra capability (run_tests)', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+  assertEqual(result.valid, false);
+});
+
+test('validatePermittedPathsForMode - RESEARCH_DOCUMENT accepts research docs paths', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const paths = ['docs/ai/research/', 'docs/ai/RESEARCH_INDEX.md', 'docs/ai/TASK_LOG.md'];
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', paths);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - RESEARCH_DOCUMENT accepts research subdirectory file', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const paths = ['docs/ai/research/research-task-001.md'];
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', paths);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - RESEARCH_DOCUMENT accepts schema and test paths', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const paths = ['poc/schemas/acp-schema.js', 'test/schema.test.js'];
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', paths);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - RESEARCH_DOCUMENT rejects index.js', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', ['index.js']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('Unauthorized path'));
+});
+
+test('validateAuthorization - RESEARCH_DOCUMENT valid command', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateAuthorization({
+    task_mode: 'RESEARCH_DOCUMENT',
+    authorization: { capabilities: ['read_only', 'modify_files', 'commit', 'push'] },
+    constraints: { permitted_paths: ['docs/ai/research/', 'docs/ai/RESEARCH_INDEX.md'] }
+  });
+  assertEqual(result.valid, true);
+  assertEqual(result.task_mode, 'RESEARCH_DOCUMENT');
+});
+
+test('validateAuthorization - RESEARCH_DOCUMENT rejects read_only only', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateAuthorization({
+    task_mode: 'RESEARCH_DOCUMENT',
+    authorization: { capabilities: ['read_only'] },
+    constraints: { permitted_paths: ['docs/ai/research/'] }
+  });
   assertEqual(result.valid, false);
 });
 

@@ -10,7 +10,7 @@ All task requests must be structured with the following fields:
 - `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Kilo").
 - `repository`: (Required) The repository the task applies to.
 - `base_branch`: (Required) The branch the task is based on and intended to integrate with.
-- `task_mode`: (Required) The execution mode. One of: "RESEARCH", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions.
+- `task_mode`: (Required) The execution mode. One of: "RESEARCH_DOCUMENT", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions.
 - `capabilities`: (Required) Explicit list of capabilities required (e.g., "inspect", "modify_files", "commit", "push").
 - `objective`: (Required) A concise statement of the goal.
 - `scope`: (Required) Clear definition of the files, directories, or architectural boundaries impacted.
@@ -233,9 +233,31 @@ Do not introduce an arbitrary numeric retry limit merely to satisfy previous rec
 
 The following task modes define the execution semantics for ACP tasks. Every task request must specify exactly one `task_mode`.
 
-### 9.1 RESEARCH
+### 9.1 RESEARCH_DOCUMENT
 
-The agent inspects the repository, architecture, and relevant files to answer questions, analyze problems, or gather information. No repository changes are made. Read-only.
+The agent inspects the repository, architecture, and relevant files to answer questions, analyze problems, or gather information, and **must** persist its research findings into the repository as a durable research record.
+
+Research documentation is an **intrinsic completion requirement** of RESEARCH_DOCUMENT, not an optional capability, optional cleanup step, or separate follow-up authorization. A RESEARCH_DOCUMENT task is not complete until the research record, research index entry, and TASK_LOG reference have been persisted, committed, and pushed.
+
+**Required capabilities (fixed set):** `read_only`, `modify_files`, `commit`, `push`.
+
+The capabilities field must contain exactly these four capabilities. Selecting RESEARCH_DOCUMENT establishes these requirements as part of the mode contract; the caller does not separately decide to add `modify_files`, `commit`, or `push`. A RESEARCH_DOCUMENT task is invalid with only `read_only` and is invalid if it omits any of `modify_files`, `commit`, or `push`.
+
+**Research persistence requirements:**
+
+1. A dedicated durable research repository exists under `docs/ai/research/`.
+2. One Markdown research record is created per research task, following the format defined in `docs/ai/RESEARCH_INDEX.md`.
+3. `docs/ai/RESEARCH_INDEX.md` is created as the navigational index for research records.
+4. Each research record must contain, at minimum: task/request identifier, research question/objective, agent, date, scope examined, findings, conclusions, unresolved questions/blockers (if any), relevant repository files/interfaces, implementation implications or recommended next action (when applicable), and verification/evidence basis.
+5. `docs/ai/TASK_LOG.md` must reference the corresponding research record whenever a RESEARCH_DOCUMENT task completes.
+6. The research index must reference the corresponding research record.
+7. The research record, index entry, and TASK_LOG reference must be created/updated during the same authorized research execution.
+8. Research records must link/reference the actual repository evidence used; agent assertions must not be presented as independently verified facts.
+9. A RESEARCH_DOCUMENT task is not complete until the research record, index entry, and TASK_LOG reference have been persisted, committed, and pushed.
+
+**Permitted paths:** Restricted to the research/documentation surface: `docs/ai/research/`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/README.md`, `docs/ai/ARCH_DECISIONS.md`, `poc/schemas/acp-schema.js`, and `test/schema.test.js`.
+
+**Not RESEARCH:** The old standalone RESEARCH task-mode semantics — a read-only research mode whose research persistence was optional — are removed. RESEARCH is no longer a valid task mode in the canonical task standard or the runtime ACP schema. RESEARCH_DOCUMENT is the standard research mode for Kilo, Gemini, and any future designated research agent.
 
 ### 9.2 PLAN
 

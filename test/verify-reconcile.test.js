@@ -458,10 +458,13 @@ runTest('ACP Engine - REVIEW rejects modify_files', () => {
 
 console.log('\n=== Module Constants ===\n');
 
-runTest('VALID_TASK_MODES includes all three modes', () => {
+runTest('VALID_TASK_MODES includes all modes including RESEARCH_DOCUMENT', () => {
   assert(schema.VALID_TASK_MODES.includes('REVIEW'));
   assert(schema.VALID_TASK_MODES.includes('VERIFY_RECONCILE'));
   assert(schema.VALID_TASK_MODES.includes('FAILOVER_EXECUTE'));
+  assert(schema.VALID_TASK_MODES.includes('BUILDER'));
+  assert(schema.VALID_TASK_MODES.includes('RESEARCH_DOCUMENT'));
+  assert(!schema.VALID_TASK_MODES.includes('RESEARCH'), 'RESEARCH must no longer be a valid task mode');
 });
 
 runTest('VERIFY_RECONCILE_CAPABILITIES has correct members', () => {
@@ -473,17 +476,119 @@ runTest('VERIFY_RECONCILE_CAPABILITIES has correct members', () => {
   assert(!schema.VERIFY_RECONCILE_CAPABILITIES.includes('run_tests'));
 });
 
-runTest('VERIFY_RECONCILE_PATHS has correct docs paths', () => {
-  assertEqual(schema.VERIFY_RECONCILE_PATHS.length, 3);
-  assert(schema.VERIFY_RECONCILE_PATHS.includes('docs/ai/TASK_LOG.md'));
-  assert(schema.VERIFY_RECONCILE_PATHS.includes('docs/ai/STATE.md'));
-  assert(schema.VERIFY_RECONCILE_PATHS.includes('docs/ai/CONTROL_CENTER.md'));
+runTest('RESEARCH_DOCUMENT_CAPABILITIES has correct members', () => {
+  assertEqual(schema.RESEARCH_DOCUMENT_CAPABILITIES.length, 4);
+  assert(schema.RESEARCH_DOCUMENT_CAPABILITIES.includes('read_only'));
+  assert(schema.RESEARCH_DOCUMENT_CAPABILITIES.includes('modify_files'));
+  assert(schema.RESEARCH_DOCUMENT_CAPABILITIES.includes('commit'));
+  assert(schema.RESEARCH_DOCUMENT_CAPABILITIES.includes('push'));
+  assert(!schema.RESEARCH_DOCUMENT_CAPABILITIES.includes('run_tests'));
 });
 
-runTest('getRequiredCapabilitiesForMode returns correct sets', () => {
-  assert.deepStrictEqual(schema.getRequiredCapabilitiesForMode('REVIEW'), ['read_only']);
-  assertEqual(schema.getRequiredCapabilitiesForMode('VERIFY_RECONCILE').length, 4);
-  assertEqual(schema.getRequiredCapabilitiesForMode('FAILOVER_EXECUTE').length, 5);
+runTest('RESEARCH_DOCUMENT_PATHS has correct docs and research paths', () => {
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('docs/ai/research/'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('docs/ai/RESEARCH_INDEX.md'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('docs/ai/TASK_LOG.md'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('docs/ai/STATE.md'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('docs/ai/CONTROL_CENTER.md'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('docs/ai/README.md'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('docs/ai/ARCH_DECISIONS.md'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('poc/schemas/acp-schema.js'));
+  assert(schema.RESEARCH_DOCUMENT_PATHS.includes('test/schema.test.js'));
+});
+
+runTest('getRequiredCapabilitiesForMode returns RESEARCH_DOCUMENT_CAPABILITIES', () => {
+  assert.deepStrictEqual(schema.getRequiredCapabilitiesForMode('RESEARCH_DOCUMENT'), schema.RESEARCH_DOCUMENT_CAPABILITIES);
+});
+
+console.log('\n=== RESEARCH_DOCUMENT Mode Validation ===\n');
+
+runTest('validateTaskMode - RESEARCH_DOCUMENT is valid', () => {
+  const result = schema.validateTaskMode('RESEARCH_DOCUMENT');
+  assertEqual(result.valid, true);
+  assertEqual(result.task_mode, 'RESEARCH_DOCUMENT');
+});
+
+runTest('validateTaskMode - RESEARCH is rejected (removed)', () => {
+  const result = schema.validateTaskMode('RESEARCH');
+  assertEqual(result.valid, false);
+  assert(result.error.includes('RESEARCH'));
+});
+
+runTest('validateCapabilitiesForMode - RESEARCH_DOCUMENT accepts complete fixed set', () => {
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'commit', 'push']);
+  assertEqual(result.valid, true);
+});
+
+runTest('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects only read_only', () => {
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only']);
+  assertEqual(result.valid, false);
+});
+
+runTest('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects missing modify_files', () => {
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'commit', 'push']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('modify_files'));
+});
+
+runTest('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects missing commit', () => {
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'push']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('commit'));
+});
+
+runTest('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects missing push', () => {
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'commit']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('push'));
+});
+
+runTest('validateCapabilitiesForMode - RESEARCH_DOCUMENT rejects extra capability', () => {
+  const result = schema.validateCapabilitiesForMode('RESEARCH_DOCUMENT', ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+  assertEqual(result.valid, false);
+});
+
+runTest('validatePermittedPathsForMode - RESEARCH_DOCUMENT accepts docs/ai paths', () => {
+  const paths = ['docs/ai/research/', 'docs/ai/RESEARCH_INDEX.md', 'docs/ai/TASK_LOG.md', 'docs/ai/STATE.md', 'docs/ai/CONTROL_CENTER.md'];
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', paths);
+  assertEqual(result.valid, true);
+});
+
+runTest('validatePermittedPathsForMode - RESEARCH_DOCUMENT accepts research subdirectory files', () => {
+  const paths = ['docs/ai/research/research-task-001.md'];
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', paths);
+  assertEqual(result.valid, true);
+});
+
+runTest('validatePermittedPathsForMode - RESEARCH_DOCUMENT accepts schema and test paths', () => {
+  const paths = ['poc/schemas/acp-schema.js', 'test/schema.test.js'];
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', paths);
+  assertEqual(result.valid, true);
+});
+
+runTest('validatePermittedPathsForMode - RESEARCH_DOCUMENT rejects index.js', () => {
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', ['index.js']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('Unauthorized path'));
+});
+
+runTest('validateAuthorization - RESEARCH_DOCUMENT valid command', () => {
+  const result = schema.validateAuthorization({
+    task_mode: 'RESEARCH_DOCUMENT',
+    authorization: { capabilities: ['read_only', 'modify_files', 'commit', 'push'] },
+    constraints: { permitted_paths: ['docs/ai/research/', 'docs/ai/RESEARCH_INDEX.md'] }
+  });
+  assertEqual(result.valid, true);
+  assertEqual(result.task_mode, 'RESEARCH_DOCUMENT');
+});
+
+runTest('validateAuthorization - RESEARCH_DOCUMENT rejects read_only only', () => {
+  const result = schema.validateAuthorization({
+    task_mode: 'RESEARCH_DOCUMENT',
+    authorization: { capabilities: ['read_only'] },
+    constraints: { permitted_paths: ['docs/ai/research/'] }
+  });
+  assertEqual(result.valid, false);
 });
 
 console.log(`\n=== Verify Reconcile Tests: ${passCount} passed, ${failCount} failed ===`);

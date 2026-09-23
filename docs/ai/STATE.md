@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-22
-**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-DEEPSEEK-CHATBOX-PROGRESS-LOG-VERIFY-RECONCILE-001)
+**Last Updated**: 2026-09-23
+**Updated By**: Kilo — FAILOVER_EXECUTE (TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001)
 
 ---
 
@@ -55,6 +55,7 @@
 | Email template ownership migration | **BACKLOG** | — | Move template selection to Render, retain Gmail delivery in Apps Script |
 | Automated testing infrastructure | **BACKLOG** | — | Tests, fixtures, contract tests, formal test script |
 | Git completion-signal Path 2 architectural direction (Issue #172) | **IMPLEMENTED / VERIFIED** | Kilo | Path 2 implemented: Git/GitHub as durable completion/recovery evidence with TaskRegistry as runtime orchestration state. When TaskRegistry state is absent (`taskRegistry.getTask(requestId)` returns null), `poc/github-webhook.js` `recoverTaskFromGitHub()` retrieves the authoritative ACP task from the GitHub issue body (correlated by exact `request_id`), validates it via `validateACPCommand` + `validateAuthorization`, requires commit/push capabilities for the execution path, rehydrates a TaskRegistry entry via `taskRegistry.rehydrateTask()`, then continues through the existing Kilo-completion → Gemini flow. Fail-closed on GitHub issue absence, request_id mismatch, validation/authorization failure, and missing token. ADR-016 updated to record implementation status. 347 total tests pass (77 github-webhook + 270 regression). |
+| RESEARCH_DOCUMENT task mode implementation (Issue #198, TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001) | **IMPLEMENTED / VERIFIED** | Kilo | Added `RESEARCH_DOCUMENT` as a new runtime-valid task mode in `poc/schemas/acp-schema.js` (`VALID_TASK_MODES`). Required fixed capability set: `read_only`, `modify_files`, `commit`, `push` (exact match enforced; `run_tests` not permitted). Authorized paths restricted to research/documentation surface: `docs/ai/research/`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/README.md`, `docs/ai/ARCH_DECISIONS.md`, plus `poc/schemas/acp-schema.js` and `test/schema.test.js`. Removed `RESEARCH` from `TASK_STANDARD.md` (it was never a runtime schema mode — pure documentation removal, no production path breaks). Created `docs/ai/research/` directory, `docs/ai/RESEARCH_INDEX.md` index, and first research record. Updated `KILO_INTEGRATION.md`, `docs/ai/README.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/TASK_LOG.md`. `prefix matching` added to `validatePermittedPathsForMode` for directory paths (backward compatible). Tests: 46 schema + 67 verify-reconcile pass; full suite 483 tests pass across 18 test files. Research record: `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md`. |
 
 ## Gemini Builder Transition Status
 

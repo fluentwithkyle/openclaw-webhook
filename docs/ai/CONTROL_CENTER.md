@@ -71,6 +71,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-DEEPSEEK-CHATBOX-PROGRESS-LOG-
 | Git completion-signal Path 2 recovery (Issue #175, plan Issue #172) | IMPLEMENTED / VERIFIED | Kilo | Path 2 implemented: Git/GitHub as durable completion/recovery evidence; TaskRegistry retained as runtime orchestration state; `recoverTaskFromGitHub()` retrieves task context from GitHub issue body when TaskRegistry is absent. Commit `030f888`. ADR-016 updated. Postgres/Redis fallback only if investigation proves Git/GitHub recovery insufficient. Follow-on: signal emitter implemented in Issue #180 (commit `7bec058`). (TASK-KILO-GIT-COMPLETION-SIGNAL-PATH-2-RECOVERY-IMPLEMENTATION-001) |
 | Gemini ACP artifact reporting fix (Issue #173) | IMPLEMENTED / VERIFIED | Kilo | Fixed `gemini-acp-report.json` to contain the structured ACP envelope from `callback_payload.json` (with `current_head_sha`) instead of raw Gemini CLI summary **for the `workflow_dispatch` path**. NOTE: `issue_comment` path remained defective (raw Markdown persist step not removed). Fixed by Issue #174. 328 total tests pass. (TASK-KILO-GEMINI-ACP-ARTIFACT-REPORTING-FIX-001) |
 | Gemini ACP artifact reporting fix — issue_comment path (Issue #174) | IMPLEMENTED / VERIFIED | Kilo | Unified structured ACP artifact reporting across both trigger paths. Removed raw Markdown persist step; generalized payload step to run for both `workflow_dispatch` and `issue_comment` (`if: always()`); derived `task`/`repository`/`base_branch` from issue_comment context; `request_id` set to `null` when unavailable; unified single artifact upload step. Preserved Render callback (workflow_dispatch-only), `@gemini-cli` triggering, Gemini CLI execution, ACP authorization, recursion-prevention, artifact name/file. 29 tests pass. (TASK-KILO-GEMINI-ACP-ARTIFACT-ISSUE-COMMENT-FIX-002) |
+| RESEARCH_DOCUMENT task mode implementation (Issue #198) | IMPLEMENTED / VERIFIED | Kilo | Added `RESEARCH_DOCUMENT` task mode to ACP schema (`poc/schemas/acp-schema.js`); fixed capability set `read_only, modify_files, commit, push`; restricted paths to research/documentation surface; created `docs/ai/research/` directory and `docs/ai/RESEARCH_INDEX.md`; updated `TASK_STANDARD.md`, `KILO_INTEGRATION.md`, `docs/ai/README.md`; first research record created. (TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001) |
 
 ---
 
@@ -98,7 +99,8 @@ Substantially complete:
 - Kilo ↔ Gemini post-dispatch result lifecycle repair — **IMPLEMENTED / VERIFIED** (270 total tests pass; repaired false-success callback path in `main.yml`)
 - Chatbox Gateway Ingress — **IMPLEMENTED / VERIFIED** (26 gateway tests pass; 450 total tests pass). **Live end-to-end NOT verified** — Chatbox `Network Error: Load failed` on `/poc/chatbox` when using `CHATBOX_GATEWAY`; root cause UNKNOWN.
 - Gemini ACP artifact reporting — issue_comment path unified (Issue #174) — **IMPLEMENTED / VERIFIED** (29 workflow-expression tests pass)
-- Git completion-signal emitter (Issue #180, commit `7bec058`) — **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** (41 emitter tests pass; 77 webhook regression tests pass; 410 total tests pass)
+  - Git completion-signal emitter (Issue #180, commit `7bec058`) — **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** (41 emitter tests pass; 77 webhook regression tests pass; 410 total tests pass)
+  - RESEARCH_DOCUMENT task mode — **IMPLEMENTED / VERIFIED** (483 total tests pass across 18 test files)
 
 Remaining pending items:
 - Remaining Part 2.1 (authenticated Gemini → Render return path) — PROPOSED / TARGET, not yet implemented (Gemini investigation result)
@@ -109,7 +111,7 @@ Remaining pending items:
 - Render Control Gate — PROPOSED / TARGET (blocked on Layer 1 stabilization)
 - ChatGPT Control Gate architecture — RESEARCH COMPLETE / PROPOSED / PENDING
 
-**Current test count**: 450 total tests pass across 18 test files. Builder transition (commit `8a56fe6`).
+**Current test count**: 483 total tests pass across 18 test files. Builder transition (commit `8a56fe6`).
 
 Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the prerequisite for Layer 2 (Render Control Gate).
 

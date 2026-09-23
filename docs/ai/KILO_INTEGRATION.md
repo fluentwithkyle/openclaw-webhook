@@ -235,7 +235,7 @@ of the following:
 | `target` | The intended recipient execution lane |
 | `repository` | The repository the task applies to |
 | `base_branch` | The branch the task is based on and intended to integrate with |
-| `task_mode` / `execution_authority` | The execution mode (e.g. RESEARCH, PLAN, EXECUTE) |
+| `task_mode` / `execution_authority` | The execution mode (e.g. RESEARCH_DOCUMENT, PLAN, EXECUTE) |
 | `permitted_task` | The description of the work to be performed |
 | `authorized_files_or_directories` | Permitted paths / boundaries (permitted_paths allow-list) |
 | `commit_authority` | Explicit authorization to create local commits |

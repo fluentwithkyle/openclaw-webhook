@@ -6,6 +6,8 @@
 
 ---
 
+2026-09-23 | TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001 | Implement RESEARCH_DOCUMENT task mode: added mode to ACP schema with fixed capability set and restricted paths, removed RESEARCH from canonical standard, created research documentation system (docs/ai/research/, RESEARCH_INDEX.md, research record) | SUCCESS | Commit SHA: a92d5ec; research record: `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md`
+
 2026-09-22 | TASK-KILO-CHATBOX-TARGET-AWARE-DISPATCH-VERIFY-RECONCILE-001 | Remove hardcoded Chatbox Kilo target; make ACP target selection explicit through the trusted control path | SUCCESS | Merge commit on main
 2026-09-22 | TASK-GEMINI-RECONCILE-BUILDER-TRANSITION-RESEARCH-PLAN-001 | Reconcile durable project documentation with Gemini Builder transition research and implementation plan | SUCCESS | Commit SHA: d1cc444
 2026-09-22 | TASK-KILO-DEEPSEEK-CHATBOX-PROGRESS-LOG-VERIFY-RECONCILE-001 | Reconcile project-state documentation with current DeepSeek + Chatbox integration state, external test results, integration gap, and investigation plan | SUCCESS | Commit SHA: d9d3166
@@ -2130,4 +2132,91 @@ The reconciled documentation distinguishes:
 
 **Commit Reference**: `d9d3166` on `main`
 
----*
+---
+
+## 2026-09-23 | RESEARCH_DOCUMENT Task Mode Implementation (TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001)
+
+**Task**: Replace the current read-only research-task model with a mandatory research-and-documentation task mode (RESEARCH_DOCUMENT) that automatically requires every research execution to persist its research findings into the repository, index that research, and reference it from the task log before the research task can be considered complete.
+
+**Originator**: Kyle — Director
+**Target Agent**: Kilo
+**Repository**: `fluentwithkyle/openclaw-webhook`
+**Base Branch**: `main`
+**Task Mode**: FAILOVER_EXECUTE (authorized via GitHub issue #198 body)
+**Capabilities Authorized**: read_only, modify_files, commit, push
+**Permitted Paths**: `poc/schemas/acp-schema.js`, `test/schema.test.js`, `docs/ai/TASK_STANDARD.md`, `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, `docs/ai/README.md`, `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/research/`
+
+**Objective**: Add a new runtime-valid task mode named RESEARCH_DOCUMENT. Remove the old standalone RESEARCH task-mode semantics from the canonical task standard. Define RESEARCH_DOCUMENT as the standard research mode for Kilo, Gemini, and any future designated research agent. Make research persistence an intrinsic completion requirement of RESEARCH_DOCUMENT, not an optional capability or separately authorized follow-up action.
+
+**Changes made**:
+
+1. **`poc/schemas/acp-schema.js`**:
+   - Added `'RESEARCH_DOCUMENT'` to `VALID_TASK_MODES`
+   - Added `RESEARCH_DOCUMENT_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push']`
+   - Added `RESEARCH_DOCUMENT_PATHS` array (research/documentation surface: `docs/ai/research/`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/README.md`, `docs/ai/ARCH_DECISIONS.md`, `poc/schemas/acp-schema.js`, `test/schema.test.js`)
+   - Added `RESEARCH_DOCUMENT` case to `getRequiredCapabilitiesForMode`
+   - Added `RESEARCH_DOCUMENT` case to `getAuthorizedPathsForMode`
+   - Added exact-match enforcement for RESEARCH_DOCUMENT capabilities in `validateCapabilitiesForMode` (exactly 4 caps, `run_tests` rejected)
+   - Added prefix matching for directory paths (ending in `/`) in `validatePermittedPathsForMode` (backward compatible — exact match still used for file paths)
+   - Exported `RESEARCH_DOCUMENT_CAPABILITIES` and `RESEARCH_DOCUMENT_PATHS`
+
+2. **`test/schema.test.js`**:
+   - Added `RESEARCH_DOCUMENT_CAPABILITIES` to imports
+   - Added 18 tests: RESEARCH_DOCUMENT valid mode, RESEARCH no longer valid, capabilities complete fixed set, getRequiredCapabilitiesForMode, validateTaskMode, validateCapabilitiesForMode (accept complete set, reject read_only only, reject missing each cap, reject extra run_tests), validatePermittedPathsForMode (accept docs paths, accept research subdirectory, accept schema/test paths, reject index.js), validateAuthorization (valid, reject read_only only)
+
+3. **`test/verify-reconcile.test.js`**:
+   - Added 15 tests: VALID_TASK_MODES includes RESEARCH_DOCUMENT and excludes RESEARCH, RESEARCH_DOCUMENT_CAPABILITIES members, RESEARCH_DOCUMENT_PATHS members, getRequiredCapabilitiesForMode for RESEARCH_DOCUMENT, validateTaskMode (valid RESEARCH_DOCUMENT, RESEARCH rejected), validateCapabilitiesForMode (accept complete set, reject read_only only, reject missing each cap, reject extra), validatePermittedPathsForMode (accept docs paths, accept research subdirectory, accept schema/test paths, reject index.js), validateAuthorization (valid, reject read_only only)
+
+4. **`docs/ai/TASK_STANDARD.md`**:
+   - Updated task_mode field definition: replaced "RESEARCH, PLAN, EXECUTE, or VERIFY_RECONCILE" with "RESEARCH_DOCUMENT, PLAN, EXECUTE, or VERIFY_RECONCILE"
+   - Replaced Section 9.1 RESEARCH with Section 9.1 RESEARCH_DOCUMENT defining the mandatory research-and-documentation mode with intrinsic persistence requirements, fixed capability set, restricted paths, and removal of the old read-only RESEARCH mode
+
+5. **`docs/ai/KILO_INTEGRATION.md`**:
+   - Updated line 238: "RESEARCH, PLAN, EXECUTE" → "RESEARCH_DOCUMENT, PLAN, EXECUTE"
+
+6. **`docs/ai/README.md`**:
+   - Added `RESEARCH_INDEX.md` to File Contents section
+   - Added `RESEARCH_INDEX.md` to Update Rules table
+   - Added `RESEARCH_INDEX.md` to Authoritative vs Historical Information table
+
+7. **`docs/ai/STATE.md`**:
+   - Added RESEARCH_DOCUMENT task mode implementation to Active Tasks table
+
+8. **`docs/ai/CONTROL_CENTER.md`**:
+   - Added RESEARCH_DOCUMENT to Active Work table
+   - Added RESEARCH_DOCUMENT to Next Action substantially complete list
+   - Updated test count: 450 → 483
+
+9. **`docs/ai/RESEARCH_INDEX.md`** (new):
+   - Created navigational index for research records
+   - Defined research record format
+   - Added first entry for this task
+   - Added update rules
+
+10. **`docs/ai/research/`** (new directory):
+    - Created `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md` research record
+
+**Repository state inspected before modifying**:
+
+- Confirmed `RESEARCH` was never in `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` (only REVIEW, VERIFY_RECONCILE, FAILOVER_EXECUTE, BUILDER). No JS code references `RESEARCH` as a task mode value (verified via grep across poc/, routes/, services/, workflows/, test/, index.js). RESEARCH existed only in `docs/ai/TASK_STANDARD.md` (line 13 and Section 9.1). Removal from the canonical task standard has no runtime impact — it is a documentation correction.
+- Confirmed existing task mode validation pattern in `poc/schemas/acp-schema.js` and `poc/acp-engine.js`.
+- Confirmed `RESEARCH_DOCUMENT_CAPABILITIES` should match `VERIFY_RECONCILE_CAPABILITIES` (read_only, modify_files, commit, push) per the task requirements.
+- Confirmed no existing `docs/ai/research/` directory or `docs/ai/RESEARCH_INDEX.md` existed.
+- Confirmed test runner pattern: `node test/<name>.test.js` (standalone Node.js, no mocha).
+
+**Verification performed**:
+
+1. `node test/schema.test.js` — 46 passed, 0 failed (18 new RESEARCH_DOCUMENT tests)
+2. `node test/verify-reconcile.test.js` — 67 passed, 0 failed (15 new RESEARCH_DOCUMENT tests)
+3. Full test suite: all 18 test files pass, 483 total tests (450 original + 33 new across schema + verify-reconcile)
+4. `git diff --check` — no whitespace errors
+5. No production application code, routes, services, or workflows modified
+6. No secrets, credentials, or tokens introduced
+7. Prefix matching in `validatePermittedPathsForMode` is backward compatible (exact match still used for VERIFY_RECONCILE paths which don't end in `/`)
+
+**Outcome**: SUCCESS — RESEARCH_DOCUMENT task mode fully implemented in runtime schema and tests, old RESEARCH semantics removed from canonical task standard, research documentation system established with durable research records, index, and task log references.
+
+**Research Record**: `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md`
+**Research Index**: `docs/ai/RESEARCH_INDEX.md`
+
+**Commit Reference**: `a92d5ec` on `main`
