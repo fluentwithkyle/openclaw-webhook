@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-23
-**Updated By**: Kilo — RESEARCH_DOCUMENT (TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001)
+**Updated By**: Kilo — FAILOVER_EXECUTE (TASK-KILO-CONTROL-PLANE-RELIABILITY-ENFORCEMENT-IMPLEMENT-001) — reconciliation with origin/main
 
 ---
 
@@ -60,6 +60,7 @@
 | DeepSeek control-plane tool-execution architecture research documentation (TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001) | **COMPLETED (RESEARCH)** | Kilo | Documented the server-side execution-runtime architecture for DeepSeek control-plane tool execution via OpenRouter; reconciled CHATBOX_ACP_ARCHITECTURE_RECORD.md (new Section 17), added ADR-017, created the research record, and updated RESEARCH_INDEX/TASK_LOG/STATE/CONTROL_CENTER. Current DeepSeek path remains Direct ACP (`POST /poc/coordinator`); the OpenRouter tool-calling execution runtime and `control_plane` tool are documented as NOT YET IMPLEMENTED. |
 
 | TASK-KILO-CONTROL-PLANE-RELIABILITY-ENFORCEMENT-IMPLEMENT-001 | **IMPLEMENTED / VERIFIED** | Kilo | Durable evidence-gated reliability layer for ACP control plane. Added evidence types (`AGENT_REPORT`, `WORKFLOW_SUCCESS`, `INDEPENDENT_VERIFICATION`), state-transition evidence requirements (EXECUTING→VERIFIED and VERIFIED→COMPLETE require INDEPENDENT_VERIFICATION), evidence recording in `updateAgentResult`, evidence-gated `updateTaskStatus` (fail-closed), `addEvidence`/`getEvidenceByType`/`hasEvidenceOfType`/`supersedeTask`/`cancelTask`/`isSuperseded`/`isCancelled`/`activeTaskExists`/`getTasksByParent` in task-registry, state-driven `rehydrateTask` recovery, ACP compliance validation and activation syntax entry points in `acp-engine`, orchestrator evidence-gated Gemini completion. 202 tests pass (46 schema + 20 task-registry + 29 orchestrator + 11 integration + 67 verify-reconcile + 29 reliability-enforcement). |
+| Four reliability corrections (reconciled onto current origin/main) | **IMPLEMENTED / VERIFIED** | Kilo | Reconciled four reliability corrections onto current `origin/main` (commit `5d04446`). Four corrections: (1) Mandatory activation syntax/surface — exact case-sensitive matching for `@kilo`/`@gemini-cli` at the ACP compliance boundary, no case-insensitive fallback (commit `ce212d8`); (2) Agent-to-evidence-type mapping enforced at `addEvidence` boundary (Kilo→`AGENT_REPORT`, Gemini Builder→`AGENT_REPORT`, Gemini Reviewer→`INDEPENDENT_VERIFICATION`) (commit `ce212d8`); (3) Duplicate active-task / lineage protection — `parent_request_id` validation prevents child creation while parent active, superseded, or cancelled; lineage-aware `rehydrateTask` redirects to replacement; `supersedeTask` rejects cancelled parents (commits `ce212d8`, `f7a06fd`); (4) Configuration verification — `verifyConfiguration` with authoritative sources (runtime env existence, task-registry config match), PROPOSED/UNKNOWN states fail-closed, environment values never recorded (commit `f7a06fd`). Compliance test suite: 70/70 pass (29 original + 41 new in reliability-enforcement.test.js). Full suite: all tests pass across 20 test files. DeepSeek research documentation preserved from `origin/main`. |
 ## Gemini Builder Transition Status
 
 | Capability | Status | Notes |
