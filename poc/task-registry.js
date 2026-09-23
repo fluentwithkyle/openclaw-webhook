@@ -9,8 +9,11 @@ const {
   createEvidenceRecord,
   validateEvidenceRecord,
   validateAgentEvidenceType,
+  verifyConfiguration,
+  isConfigurationAuthoritativelyVerified,
   EVIDENCE_TYPES,
   AGENT_EVIDENCE_TYPE,
+  CONFIG_VERIFICATION_STATES,
   VALID_STATE_TRANSITIONS
 } = require('./schemas/acp-schema');
 
@@ -227,6 +230,66 @@ function hasEvidenceOfType(requestId, evidenceType) {
   const result = getEvidenceByType(requestId, evidenceType);
   if (!result.success) return false;
   return result.evidence.length > 0;
+}
+
+function recordConfigVerification(requestId, configKey, verificationResult) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found' };
+  }
+  entry.config_verification = entry.config_verification || {};
+  entry.config_verification[configKey] = {
+    state: verificationResult.state,
+    verified: Boolean(verificationResult.verified),
+    source: verificationResult.source || null,
+    timestamp: new Date().toISOString()
+  };
+  entry.updated_at = new Date().toISOString();
+  cache.set(requestId, entry);
+  persistCache();
+  return { success: true, entry, config_verification: entry.config_verification[configKey] };
+}
+
+function getConfigVerificationState(requestId, configKey) {
+  const entry = getTask(requestId);
+  if (!entry) return 'UNKNOWN';
+  const rec = entry.config_verification && entry.config_verification[configKey];
+  if (!rec) return 'UNKNOWN';
+  return rec.state;
+}
+
+function requireConfigVerified(requestId, configKey) {
+  const entry = getTask(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found', config_state: 'UNKNOWN' };
+  }
+  const state = getConfigVerificationState(requestId, configKey);
+  if (state !== 'VERIFIED') {
+    return {
+      success: false,
+      error: 'Configuration ' + configKey + ' is ' + state + ' (required VERIFIED); execution prerequisite not met',
+      config_state: state,
+      entry: entry
+    };
+  }
+  return { success: true, config_state: state, entry: entry };
+}
+
+function verifyConfig(requestId, configKey, options) {
+  const entry = getTask(requestId);
+  const opts = Object.assign({}, options || {});
+  if (!opts.env && typeof process !== 'undefined' && process.env) {
+    opts.env = process.env;
+  }
+  if (entry) {
+    opts.task = entry;
+  }
+  const result = verifyConfiguration(configKey, opts);
+  if (entry) {
+    recordConfigVerification(requestId, configKey, result);
+  }
+  return result;
 }
 
 function supersedeTask(requestId, reason) {
@@ -455,73 +518,93 @@ function resetRegistry() {
 function rehydrateTask(command) {
   const requestId = command.request_id;
 
-  const existing = getTask(requestId);
-  if (existing) {
-    const state = existing.status;
+  const currentId = resolveCurrentLineage(requestId);
+  let currentEntry = currentId ? getTask(currentId) : null;
+
+  if (currentEntry) {
+    if (isCancelled(currentId)) {
+      return {
+        success: false,
+        error: 'Task is cancelled, cannot rehydrate',
+        entry: currentEntry,
+        original_request_id: requestId,
+        lineage_current: currentId
+      };
+    }
+
+    const state = currentEntry.status;
 
     if (state === 'COMPLETE') {
-      return { success: true, entry: existing, rehydrated: false, action: 'none' };
+      return { success: true, entry: currentEntry, rehydrated: false, action: 'none', original_request_id: requestId, lineage_current: currentId };
     }
 
     if (state === 'VERIFIED') {
-      return { success: true, entry: existing, rehydrated: false, action: 'complete' };
+      return { success: true, entry: currentEntry, rehydrated: false, action: 'complete', original_request_id: requestId, lineage_current: currentId };
     }
 
     if (state === 'EXECUTING') {
-      if (existing.kilo.status === 'pending') {
-        return { success: true, entry: existing, rehydrated: false, action: 'kilo_execution' };
+      if (currentEntry.kilo.status === 'pending') {
+        return { success: true, entry: currentEntry, rehydrated: false, action: 'kilo_execution', original_request_id: requestId, lineage_current: currentId };
       }
-      if (existing.kilo.status === 'success' && existing.builder.status === 'pending' && existing.next_action === 'trigger_builder') {
-        return { success: true, entry: existing, rehydrated: false, action: 'trigger_builder' };
+      if (currentEntry.kilo.status === 'success' && currentEntry.builder.status === 'pending' && currentEntry.next_action === 'trigger_builder') {
+        return { success: true, entry: currentEntry, rehydrated: false, action: 'trigger_builder', original_request_id: requestId, lineage_current: currentId };
       }
-      if (existing.builder.status === 'success' && existing.gemini.status === 'pending' && existing.next_action === 'trigger_gemini') {
-        return { success: true, entry: existing, rehydrated: false, action: 'trigger_gemini' };
+      if (currentEntry.builder.status === 'success' && currentEntry.gemini.status === 'pending' && currentEntry.next_action === 'trigger_gemini') {
+        return { success: true, entry: currentEntry, rehydrated: false, action: 'trigger_gemini', original_request_id: requestId, lineage_current: currentId };
       }
-      if (existing.gemini.status === 'pending' && existing.next_action === 'waiting_gemini_callback') {
-        return { success: true, entry: existing, rehydrated: false, action: 'waiting_gemini' };
+      if (currentEntry.gemini.status === 'pending' && currentEntry.next_action === 'waiting_gemini_callback') {
+        return { success: true, entry: currentEntry, rehydrated: false, action: 'waiting_gemini', original_request_id: requestId, lineage_current: currentId };
       }
-      return { success: true, entry: existing, rehydrated: false, action: 'continue' };
+      return { success: true, entry: currentEntry, rehydrated: false, action: 'continue', original_request_id: requestId, lineage_current: currentId };
     }
 
     if (state === 'FAILED' || state === 'BLOCKED') {
+      if (currentEntry.lineage && currentEntry.lineage.cancelled === true) {
+        return {
+          success: false,
+          error: 'Task is cancelled, cannot rehydrate',
+          entry: currentEntry,
+          original_request_id: requestId,
+          lineage_current: currentId
+        };
+      }
       return {
         success: false,
         error: 'Task in terminal state ' + state + ', requires human review',
-        entry: existing
+        entry: currentEntry,
+        original_request_id: requestId,
+        lineage_current: currentId
       };
     }
 
     if (state === 'PENDING' || state === 'SELECTED' || state === 'PLANNED') {
-      if (isCancelled(requestId) || isSuperseded(requestId)) {
-        return {
-          success: false,
-          error: 'Task is cancelled or superseded, cannot rehydrate',
-          entry: existing
-        };
-      }
-
       const transitions = [];
       if (state === 'PENDING') transitions.push('SELECTED', 'PLANNED', 'EXECUTING');
       else if (state === 'SELECTED') transitions.push('PLANNED', 'EXECUTING');
       else if (state === 'PLANNED') transitions.push('EXECUTING');
 
       for (const status of transitions) {
-        const r = updateTaskStatus(requestId, status);
+        const r = updateTaskStatus(currentId, status);
         if (!r.success) {
           return {
             success: false,
-            error: 'Failed to transition to ' + status + ': ' + r.error
+            error: 'Failed to transition to ' + status + ': ' + r.error,
+            entry: getTask(currentId),
+            original_request_id: requestId,
+            lineage_current: currentId
           };
         }
       }
 
-      return { success: true, entry: getTask(requestId), rehydrated: true, action: 'kilo_execution' };
+      return { success: true, entry: getTask(currentId), rehydrated: true, action: 'kilo_execution', original_request_id: requestId, lineage_current: currentId };
     }
 
     return {
       success: false,
       error: 'Cannot rehydrate task in state ' + state,
-      entry: existing
+      entry: currentEntry,
+      original_request_id: requestId,
+      lineage_current: currentId
     };
   }
 
@@ -562,9 +645,15 @@ module.exports = {
   isSuperseded,
   activeTaskExists,
   getTasksByParent,
+  resolveCurrentLineage,
+  validateLineageForCreate,
   addEvidence,
   getEvidenceByType,
   hasEvidenceOfType,
   supersedeTask,
-  cancelTask
+  cancelTask,
+   recordConfigVerification,
+   getConfigVerificationState,
+   requireConfigVerified,
+   verifyConfig
 };

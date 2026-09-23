@@ -476,11 +476,48 @@ function createInitialTaskRegistryEntry(requestId, command) {
        cancelled: false,
        cancelled_at: null
      },
-     config_verification: {}
-   };
- }
+      config_verification: {}
+    };
+  }
 
- function validateEvidenceRecord(evidence) {
+  function verifyConfiguration(configKey, options) {
+    options = options || {};
+    const env = options.env;
+    const task = options.task;
+    const claimed = options.claimed;
+
+    if (!configKey || typeof configKey !== 'string') {
+      return { state: 'UNKNOWN', verified: false, source: null, key: configKey };
+    }
+
+    if (env && Object.prototype.hasOwnProperty.call(env, configKey)) {
+      return { state: 'VERIFIED', verified: true, source: 'runtime_env', key: configKey };
+    }
+
+    if (task && typeof task === 'object') {
+      if (configKey === 'repository' && task.repository === claimed) {
+        return { state: 'VERIFIED', verified: true, source: 'task_registry', key: configKey };
+      }
+      if (configKey === 'base_branch' && task.base_branch === claimed) {
+        return { state: 'VERIFIED', verified: true, source: 'task_registry', key: configKey };
+      }
+      if (configKey === 'target' && task.target === claimed) {
+        return { state: 'VERIFIED', verified: true, source: 'task_registry', key: configKey };
+      }
+    }
+
+    if (claimed !== undefined && claimed !== null && claimed !== '') {
+      return { state: 'PROPOSED', verified: false, source: 'claim', key: configKey };
+    }
+
+    return { state: 'UNKNOWN', verified: false, source: null, key: configKey };
+  }
+
+  function isConfigurationAuthoritativelyVerified(result) {
+    return Boolean(result) && result.state === 'VERIFIED' && result.verified === true;
+  }
+
+  function validateEvidenceRecord(evidence) {
    if (!evidence || typeof evidence !== 'object') {
      return { valid: false, error: 'Evidence must be an object' };
    }
@@ -775,5 +812,7 @@ module.exports = {
    validateActivationSurface,
    taskModeRequiresActivation,
    validateACPCompliance,
-  createInitialTaskRegistryEntry
+   createInitialTaskRegistryEntry,
+   verifyConfiguration,
+   isConfigurationAuthoritativelyVerified
 };
