@@ -6,6 +6,7 @@
 
 ---
 
+2026-09-23 | TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001 | Document the server-side execution-runtime architecture for DeepSeek control-plane tool execution via OpenRouter (application-side tool-calling model; narrow `control_plane` tool submitting to existing `/poc/coordinator` ACP boundary; security model; Agent SDK/MCP/minimal-loop research; repository-findings verification). Reconciled CHATBOX_ACP_ARCHITECTURE_RECORD.md (Section 17), added ADR-017, created the research record, updated RESEARCH_INDEX/STATE/CONTROL_CENTER. No implementation performed. | SUCCESS | Commit SHA: 89bf546
 2026-09-23 | TASK-KILO-CONTROL-PLANE-RELIABILITY-ENFORCEMENT-IMPLEMENT-001 | Implement durable evidence-gated reliability layer for ACP control plane: added evidence types and state-transition evidence requirements to schema, evidence recording in updateAgentResult, evidence-gated updateTaskStatus (fail-closed for EXECUTING→VERIFIED and VERIFIED→COMPLETE without INDEPENDENT_VERIFICATION), addEvidence/getEvidenceByType/hasEvidenceOfType, supersedeTask/cancelTask/isSuperseded/isCancelled/activeTaskExists/getTasksByParent, state-driven rehydrateTask, ACP compliance validation entry point in acp-engine, orchestrator evidence-gated transitions | SUCCESS | Commit SHA: 29223c7
 2026-09-23 | TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001 | Implement RESEARCH_DOCUMENT task mode: added mode to ACP schema with fixed capability set and restricted paths, removed RESEARCH from canonical standard, created research documentation system (docs/ai/research/, RESEARCH_INDEX.md, research record) | SUCCESS | Commit SHA: 4f24c70; research record: `docs/ai/research/research-TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001.md`
 
@@ -2221,3 +2222,44 @@ The reconciled documentation distinguishes:
 **Research Index**: `docs/ai/RESEARCH_INDEX.md`
 
 **Commit Reference**: `4f24c70` on `main`| TASK-GEMINI-COORDINATOR-RELIABILITY-CONTROL-RESEARCH-001 | 2026-09-23 | Research and Design Durable Coordinator Controls | Complete | [Commit SHA] |
+
+---
+
+## 2026-09-23 | Document DeepSeek Control-Plane Tool-Execution Architecture (TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001)
+
+**Task**: Research and documentation of the DeepSeek control-plane tool-execution architecture — a trusted server-side execution runtime hosting the OpenRouter/DeepSeek tool-calling loop and a narrow `control_plane` tool that submits validated results to the existing `/poc/coordinator` ACP boundary. RESEARCH_DOCUMENT; no implementation authorized.
+
+**Originator**: Kyle (ACP request, GitHub Issue #201)
+**Target**: Kilo
+**Repository**: `fluentwithkyle/openclaw-webhook`
+**Base Branch**: `main`
+**Task Mode**: RESEARCH_DOCUMENT
+**Capabilities Authorized**: read_only, modify_files, commit, push
+**Permitted Paths**: `docs/ai/` research & documentation surface; the ACP request explicitly authorized `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md` (Section 18A) in addition to the standard RESEARCH_DOCUMENT permitted paths.
+
+**Objective**: Permanently record, in the repository, the research/discoveries and architectural realization reached during the DeepSeek/Chatbox control-plane investigation so that an engineer or agent reading it months later (without conversation history) can reconstruct the original objective, the existing Chatbox and Coordinator architecture, the initial obstacle, the OpenRouter tool-calling behavior and the application-side execution requirement, the resulting server-side execution-runtime architecture, the narrow `control_plane` tool concept, the existing coordinator as the authorization boundary, the security model, the Agent SDK / MCP / minimal-loop research, current repository findings, the proposed future implementation boundary, and unresolved questions. Do not implement the system in this task.
+
+**Changes made (documentation only; no source/production code; no secrets; no protected files modified)**:
+
+1. **`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md`** (new): 18-section research record with status distinction (VERIFIED / ESTABLISHED DIRECTION / NOT YET IMPLEMENTED / UNRESOLVED), the architectural diagram, simplicity-gate evaluation, and evidence basis.
+2. **`docs/ai/RESEARCH_INDEX.md`**: added the new entry; restored the previously-unindexed `TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001` entry (per the index's own update rules — every research record must be indexed).
+3. **`docs/ai/ARCH_DECISIONS.md`**: added ADR-017 (DeepSeek control-plane tool-execution via a trusted server-side execution runtime; PROPOSED / TARGET; implementation not authorized).
+4. **`docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md`**: reconciled with the newly documented architecture — Section 2.1 now distinguishes the current Direct ACP path from the future tool-calling runtime; added Section 17 (DeepSeek execution-runtime architecture) documenting component relationships, current-vs-future, prohibited items, and open questions; expanded Sections 15 and 16. All verified existing Chatbox/Coordinator facts preserved.
+5. **`docs/ai/STATE.md`**: updated `Updated By`; added a completed active-tasks row.
+6. **`docs/ai/CONTROL_CENTER.md`**: updated header dates/`Updated By`; added a "Future Target (Documented, Not Implemented)" row to the DeepSeek Coordinator Project section.
+
+**Verification performed**:
+
+1. Re-read current project protocol: `AGENTS.md`, `GEMINI.md`, `ARCHITECTURE.md` Sections 16.4–16.6 (Qwen→Kilo→ACP boundary; Direct ACP DeepSeek Coordinator), `docs/ai/TASK_STANDARD.md` (RESEARCH_DOCUMENT mode, permitted paths, capabilities), `docs/ai/README.md`, `docs/ai/ARCH_DECISIONS.md` (ADR-005/010/015/016), `docs/ai/CHATBOX_ACP_ARCHITECTURE_RECORD.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`.
+2. Verified existing implementation against current `main` (commit `d2372b5`): `routes/poc.js` (`/poc/coordinator`, `/poc/chatbox`, `/poc/kilo`, auth middleware `authenticateDeepSeekCoordinator`/`authenticateChatboxGateway`/`authenticatePoc`, `buildChatboxCommand`, `getDispatcher()` usage), `poc/schemas/acp-schema.js` (`VALID_TASK_MODES`, `VALID_CAPABILITIES`, `VALID_AGENTS`, `RESEARCH_DOCUMENT_CAPABILITIES`/`PATHS`, `validateACPCommand`, `validateAuthorization`, `createInitialTaskRegistryEntry`), `poc/acp-engine.js` (`validate`, `validateReviewMode`), `poc/task-registry.js` (`createTask`, `rehydrateTask`), `poc/orchestrator.js` (`handleKiloCompletion`, `triggerGemini`, `triggerGeminiBuilder`), `services/transport-provider.js` (`getDispatcher`, `dispatch`, `dispatchKilo`, `dispatchBuilder`), `poc/kilo-transport.js` (`dispatch`, `KILO_TRIGGER_URL`), `index.js` (route mounting).
+3. Verified repository-findings claim (Section 11): searched all source (`poc/`, `routes/`, `services/`, `workflows/`, `test/`, `index.js`, `google-apps-script/`, `ai-models/`) for `OpenRouter`, `OPENROUTER_API_KEY`, `tool_calls`/`tool-calling`, `Agent SDK`, `@openrouter/agent`, `MCP`, `execution runtime`, `control_plane` — **no matches in any JavaScript/TypeScript source**. Only documentation files contain OpenRouter/DeepSeek text (concept + "DeepSeek Coordinator"/"Chatbox Gateway" ingress labels, which are ACP ingress auth labels, not a model tool-calling integration).
+4. Verified OpenRouter documentation claims against current official docs (`https://openrouter.ai/docs`, `/docs/agent-sdk/overview`, `/docs/api-reference/overview`): OpenAI-compatible `/api/v1/chat/completions`; `tools`/`tool_calls` contract; `finish_reason` includes `tool_calls`; "tool support varies by model" (filter `supported_parameters=tools`); Agent SDK `callModel` loop executes tools application-side with stop conditions (`stepCountIs`, `maxCost`); MCP server is build-time data retrieval only ("To run models in your app, keep calling the OpenRouter API directly").
+5. `git diff --check` — no whitespace errors.
+6. No production application code, routes, services, or workflows modified; `AGENTS.md`, `GEMINI.md`, `ARCHITECTURE.md`, and `.github/workflows/*` not modified; no secrets, credentials, or tokens introduced.
+7. Final diff: only `docs/ai/` documentation files (research record, RESEARCH_INDEX, ARCH_DECISIONS, CHATBOX record, STATE, CONTROL_CENTER, TASK_LOG) changed.
+
+**Outcome**: SUCCESS — DeepSeek control-plane tool-execution architecture permanently documented as an architectural direction. The current DeepSeek control-plane path remains Direct ACP (`POST /poc/coordinator`, VERIFIED/IMPLEMENTED). The server-side execution runtime, OpenRouter integration, `control_plane` tool/schema, runtime endpoint/deployment, and Chatbox production integration are explicitly documented as NOT YET IMPLEMENTED and remain out of scope for this RESEARCH_DOCUMENT task. No application implementation was introduced.
+
+**Research Record**: `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001.md`
+**ADR**: `docs/ai/ARCH_DECISIONS.md` — ADR-017
+**Commit Reference**: `89bf546` on `main`
