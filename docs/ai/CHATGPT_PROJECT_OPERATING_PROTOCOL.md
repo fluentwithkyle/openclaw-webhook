@@ -462,31 +462,56 @@ Tasks should be specific enough that the receiving agent can execute them withou
 
 Authorization for capabilities such as modification, commit, push, deployment, or external communication must be explicit when required by the task.
 
-### 8.1 Required Protocol Syntax vs. Authorization
+### 8.1 Required Protocol Syntax, Task Identifier, and Authorization
 
 **Required protocol syntax** (initiation markers, routing identifiers, ACP fields, and other mandatory task-construction elements) **must be present** in a prepared ACP work order for it to be valid. This syntax is part of the task artifact itself.
 
-**Authorization** governs the **execution of the consequential action** (creating, posting, sending, or triggering the GitHub mutation). Authorization is separate from and does not derive from the presence of required protocol syntax in the prepared task.
+**Complete ACP task title and task identifier** must be explicitly defined as part of the required prepared ACP artifact. The task identifier provides the unique reference, and the title provides the functional description within the artifact itself.
+
+**Authorization** governs the **execution of the consequential action** (creating, posting, sending, or triggering the GitHub mutation). Authorization is separate from and does not derive from the presence of required protocol syntax or the task title/identifier in the prepared task.
 
 Including required protocol syntax in a prepared task — such as the `@kilo` initiation marker — **does not itself authorize** creation, posting, sending, or triggering of the GitHub action. The prepared task artifact and the consequential action are distinct.
 
-ChatGPT must perform a **pre-execution/preparation completeness check** to verify that all required ACP syntax, fields, and protocol markers are present and correct before seeking authorization for the consequential action.
+ChatGPT must perform a **pre-execution/preparation completeness check** to verify that all required ACP syntax, fields, task identifier, task title, and protocol markers are present and correct before seeking authorization for the consequential action.
 
-This distinction applies generally to all required protocol markers, ACP fields, routing identifiers, and other mandatory task-construction elements, not only `@kilo`.
+This distinction applies generally to all required protocol markers, ACP fields, routing identifiers, task identifiers, and other mandatory task-construction elements, not only `@kilo`.
 
-### 8.2 Mandatory ACP Task Construction Checklist
+### 8.2 Mandatory ACP Task Construction and Compliance Checklist
 
-Before seeking authorization for a consequential GitHub action that creates or posts an ACP task, ChatGPT MUST verify all of the following:
+Before seeking authorization for a consequential GitHub action that creates or posts an ACP task, ChatGPT MUST verify all of the following using the **Mandatory Artifact-Level Compliance Checklist** applied to the actual completed ACP artifact:
 
-- [ ] **Protocol Gate satisfied**: The current protocol (`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) has been reviewed and the applicable requirements identified before preparing the ACP task.
-- [ ] **Required initiation syntax present**: The task includes all required agent trigger markers (e.g., `@kilo` at the beginning of the issue body for Kilo tasks) as required by the configured integration.
-- [ ] **Complete ACP envelope**: All required ACP fields are present and correctly populated (`request_id`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`). The `capabilities` field immediately precedes `objective`.
-- [ ] **Authorization fields explicit**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`, etc.) are explicitly listed and match the authorized scope.
-- [ ] **Task is agent-ready**: The complete issue body is self-contained and executable per the integration contract; no separate follow-up comment is needed to complete the task.
-- [ ] **Protocol syntax distinguished from authorization**: The presence of required protocol syntax (initiation markers, routing identifiers, ACP fields) is confirmed as a property of the prepared task artifact, not as authorization for the consequential action.
-- [ ] **Section 14 compliance**: The requested consequential action is explicitly authorized and matches exactly one authorized mutation per Section 14.1–14.2.
+#### 8.2.1 The Artifact-Level Verification Principle
+Compliance must be determined from the **final task artifact that will actually be posted/sent**. Prior protocol review, memory, an earlier compliant draft, conceptual verification, or a statement that the task is compliant are insufficient.
 
-This checklist must be satisfied during the **Preparing** operating mode (Section 16.4) before transitioning to the **Authorizing** mode.
+#### 8.2.2 The Fail-Closed Rule
+If an applicable requirement cannot be verified against the completed ACP artifact, ChatGPT must not present the task as ACP-compliant and must not proceed to authorization. The required state is **NOT READY — ACP COMPLIANCE INCOMPLETE**.
+
+#### 8.2.3 Mandatory ACP Task Compliance Checklist
+- [ ] **Current protocol review**: Confirmed review of the repository version of `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`.
+- [ ] **Repository/State verification**: Confirmed consistency with `docs/ai/STATE.md` and repository reality.
+- [ ] **Complete task title and task identifier**: Both are explicitly included inside the ACP artifact.
+- [ ] **Required initiation syntax**: Task includes all required agent trigger markers (e.g., `@kilo` at start of issue body) per configured integration.
+- [ ] **Complete ACP envelope**: All required ACP fields present (`request_id`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`).
+- [ ] **Canonical field ordering**: `capabilities` immediately precedes `objective`.
+- [ ] **Runtime ACP schema compatibility**: Task structure is compatible with `poc/schemas/acp-schema.js`.
+- [ ] **Explicit capabilities**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`) are explicitly listed.
+- [ ] **Explicit permitted paths**: `permitted_paths` are explicitly defined and within authorized bounds.
+- [ ] **Task-mode semantics**: Correct `task_mode` (REVIEW, VERIFY_RECONCILE, FAILOVER_EXECUTE, BUILDER) applied.
+- [ ] **Intrinsic completion requirements**: Defined completion criteria are present in `verification`.
+- [ ] **Executable verification requirements**: Verification criteria are executable and verifiable.
+- [ ] **Explicit persistence requirements**: Persistence expectations are explicit per `docs/ai/TASK_STANDARD.md`.
+- [ ] **Conflict handling**: Explicit instructions for rule conflicts are included.
+- [ ] **Agent-ready/self-contained construction**: Task is executable as-is without follow-up comments.
+- [ ] **Absence of contradictory instructions**: Protocol and task instructions are mutually consistent.
+- [ ] **Absence of unauthorized scope expansion**: Task adheres strictly to `permitted_paths` and granted `capabilities`.
+- [ ] **Actual final-artifact compliance verification**: Checklist items were applied to the final artifact, not a draft.
+- [ ] **Correction of failed checklist items**: Any failed compliance item was corrected, and a new compliance check was performed before authorization.
+- [ ] **Preservation of the authorization boundary**: Compliance is distinct from authorization.
+- [ ] **Showing the complete final artifact**: The complete, compliant artifact was shown to Kyle for authorization.
+- [ ] **Posting/sending the same approved artifact**: The posted/sent artifact matches the approved artifact exactly; substantive changes require re-authorization.
+- [ ] **Section 14 compliance**: Requested consequential action is authorized per Section 14.
+
+This checklist must be satisfied during the **Preparing** operating mode (Section 16.4) before transitioning to the **Authorizing** mode. A failed checklist item requires correction and another full compliance check.
 
 9. External Services and Tool Use
 
