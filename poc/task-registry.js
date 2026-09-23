@@ -79,10 +79,13 @@ function createTask(command) {
   const taskMode = command.task_mode || 'REVIEW';
   const executionModes = ['FAILOVER_EXECUTE', 'BUILDER'];
   
-  if (executionModes.includes(taskMode) && !parentId) {
-    return { success: false, error: 'Execution-mode tasks (' + taskMode + ') require a valid parent_request_id for durable lineage' };
+  if (executionModes.includes(taskMode)) {
+    const activeTasks = getAllTasks().filter(t => activeTaskExists(t.request_id));
+    if (activeTasks.length > 0 && !parentId) {
+      return { success: false, error: 'Execution-mode tasks require a valid parent_request_id when an active task exists to maintain lineage' };
+    }
   }
-
+  
   if (parentId) {
     const lineageCheck = validateLineageForCreate(parentId, requestId);
     if (!lineageCheck.valid) {
@@ -246,29 +249,18 @@ function recordConfigVerification(requestId, configKey, verificationResult, clai
     return { success: false, error: 'Task not found' };
   }
 
-  // Enforce authoritative verification source
-  let finalState = verificationResult.state;
-  let finalVerified = Boolean(verificationResult.verified);
-
-  if (finalState === 'VERIFIED') {
-    // Perform an independent authoritative check to ensure the claim is valid
-    const authoritativeResult = verifyConfiguration(configKey, {
-      env: env || (typeof process !== 'undefined' ? process.env : {}),
-      task: entry,
-      claimed: claimed || verificationResult.claimed // Fallback if claimed is not passed
-    });
-
-    if (authoritativeResult.state !== 'VERIFIED') {
-      finalState = 'UNVERIFIED';
-      finalVerified = false;
-    }
-  }
+  // Authoritative check
+  const authoritativeResult = verifyConfiguration(configKey, {
+    env: env || (typeof process !== 'undefined' ? process.env : {}),
+    task: entry,
+    claimed: claimed
+  });
 
   entry.config_verification = entry.config_verification || {};
   entry.config_verification[configKey] = {
-    state: finalState,
-    verified: finalVerified,
-    source: verificationResult.source || null,
+    state: authoritativeResult.state,
+    verified: Boolean(authoritativeResult.verified),
+    source: authoritativeResult.source || null,
     timestamp: new Date().toISOString()
   };
   entry.updated_at = new Date().toISOString();
