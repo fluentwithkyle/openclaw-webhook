@@ -76,6 +76,13 @@ function createTask(command) {
   }
 
   const parentId = command.parent_request_id;
+  const taskMode = command.task_mode || 'REVIEW';
+  const executionModes = ['FAILOVER_EXECUTE', 'BUILDER'];
+  
+  if (executionModes.includes(taskMode) && !parentId) {
+    return { success: false, error: 'Execution-mode tasks (' + taskMode + ') require a valid parent_request_id for durable lineage' };
+  }
+
   if (parentId) {
     const lineageCheck = validateLineageForCreate(parentId, requestId);
     if (!lineageCheck.valid) {
@@ -232,7 +239,7 @@ function hasEvidenceOfType(requestId, evidenceType) {
   return result.evidence.length > 0;
 }
 
-function recordConfigVerification(requestId, configKey, verificationResult) {
+function recordConfigVerification(requestId, configKey, verificationResult, claimed, env) {
   const cache = getCache();
   const entry = cache.get(requestId);
   if (!entry) {
@@ -244,8 +251,14 @@ function recordConfigVerification(requestId, configKey, verificationResult) {
   let finalVerified = Boolean(verificationResult.verified);
 
   if (finalState === 'VERIFIED') {
-    const allowedSources = ['runtime_env', 'task_registry'];
-    if (!allowedSources.includes(verificationResult.source)) {
+    // Perform an independent authoritative check to ensure the claim is valid
+    const authoritativeResult = verifyConfiguration(configKey, {
+      env: env || (typeof process !== 'undefined' ? process.env : {}),
+      task: entry,
+      claimed: claimed || verificationResult.claimed // Fallback if claimed is not passed
+    });
+
+    if (authoritativeResult.state !== 'VERIFIED') {
       finalState = 'UNVERIFIED';
       finalVerified = false;
     }
@@ -300,7 +313,7 @@ function verifyConfig(requestId, configKey, options) {
   }
   const result = verifyConfiguration(configKey, opts);
   if (entry) {
-    recordConfigVerification(requestId, configKey, result);
+    recordConfigVerification(requestId, configKey, result, opts.claimed, opts.env);
   }
   return result;
 }

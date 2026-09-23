@@ -31,7 +31,7 @@ describe('Reliability Enforcement Final Corrections - Configuration Provenance',
       state: 'VERIFIED',
       verified: true,
       source: 'caller_assertion' // Unauthorized source
-    });
+    }, 'repo', {});
 
     assert.strictEqual(result.success, true); // Still sets it, but maybe we need to validate in recordConfigVerification instead of just setting it.
 
@@ -58,7 +58,7 @@ describe('Reliability Enforcement Final Corrections - Configuration Provenance',
       state: 'VERIFIED',
       verified: true,
       source: 'task_registry' // Authorized source
-    });
+    }, 'repo', {});
 
     const state = getConfigVerificationState('task-1', 'repository');
     assert.strictEqual(state, 'VERIFIED');
