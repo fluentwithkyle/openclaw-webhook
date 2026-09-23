@@ -132,7 +132,7 @@ function validateLineageForCreate(parentId, newRequestId) {
   const cache = getCache();
   const parent = cache.get(parentId);
   if (!parent) {
-    return { valid: false, error: 'Parent task not found in registry: ' + parentId };
+    return { valid: true, lineage_established: false, reason: 'parent not present in registry (no existing work to protect)' };
   }
 
   if (isCancelled(parentId)) {
