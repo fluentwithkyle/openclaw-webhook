@@ -1,7 +1,7 @@
 # Current AI Project State
 
 **Last Updated**: 2026-09-23
-**Updated By**: Kilo — FAILOVER_EXECUTE (TASK-KILO-CONTROL-PLANE-RELIABILITY-ENFORCEMENT-IMPLEMENT-001) — reconciliation with origin/main
+**Updated By**: Kilo — EXECUTE (TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001) — delivered RESEARCH_DOCUMENT routing to main (d9298b0), reconciled docs
 
 ---
 
@@ -25,6 +25,7 @@
 
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
+| TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | **COMPLETED** | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit RESEARCH_DOCUMENT branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Root cause of prior 048e9b1 push failure: gemini-builder.yml pushes via the auto-generated GITHUB_TOKEN, which GitHub restricts from pushing .github/workflows/* changes (commit landed locally in the runner but push was rejected); a properly-scoped owner token (Kilo GH_TOKEN) pushes the same workflow-file change successfully. Durable Builder-lane fix (PAT secret for .github/workflows/* pushes) is outside this task's permitted_paths. |
 | Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. 237/289 tests verified post-remediation in pre-Builder state (347 total after Path 2 recovery); **450/450 tests pass across 18 test files** at commit `8a56fe6` (including `gemini-builder-trigger.test.js` with 9 tests). |
 | Gemini Builder execution infrastructure | **IMPLEMENTED / VERIFIED** | Gemini Builder | Complete test coverage: `gemini-builder-trigger.test.js` (9 tests), Builder callback tests (3 in gemini-callback), Builder lifecycle tests in orchestrator, schema tests for BUILDER mode, workflow-expression tests for `gemini-builder.yml`. All 9 Builder-trigger tests pass; full suite: **450/450 tests pass across 18 test files**. Implementation commit `f1e21ec`; tests commit `53dfa23`; merged via `8a56fe6`. |
 | Persistent AI project state system | **IMPLEMENTED** | Kilo | `docs/ai/` system created and `AGENTS.md` updated |
