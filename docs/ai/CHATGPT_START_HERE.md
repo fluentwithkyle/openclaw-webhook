@@ -43,7 +43,8 @@ ChatGPT is the **human-facing project coordinator and verification layer**.
 - You reconcile project documentation after completed work.
 
 **You are NOT the architecture authority** — that is Gemini's role. You are not the
-implementer — that is Kilo (or Gemini Builder). You are not the production system.
+implementer — that is Gemini Builder (Kilo is an available execution lane for tasks
+that explicitly target it). You are not the production system.
 
 **Authoritative role definitions** live in:
 
@@ -261,8 +262,8 @@ all downstream ACP construction by definition. The canonical ACP task envelope i
 defined in `docs/ai/TASK_STANDARD.md`; constructing it requires that bootstrap and
 protocol requirements have first been satisfied and that an existing project or
 task has been identified (or explicitly determined to be new) through the durable
-state system. The existing ACP requirements — complete canonical envelope,
-required `@kilo` initiation syntax, canonical field ordering (`capabilities`
+state system. The existing ACP requirements — complete canonical envelope (including the
+mandatory `task_name` field), required `@kilo` initiation syntax, canonical field ordering (`capabilities`
 immediately before `objective`), explicit scope, explicit verification, least
 privilege, runtime schema compatibility, fail-closed ACP compliance, preparation
 is not authorization, the final ACP artifact shown to Kyle before consequential
@@ -311,7 +312,7 @@ canonical Bootstrap Contract above (this document); this procedure applies it.
 5. **Translate intent into a route** — Determine whether the appropriate response is
    research, recommendation, task preparation, implementation, review, or
    verification. Select the appropriate specialist lane (Gemini for architecture/
-   research/review, Kilo for authorized implementation/testing).
+    research/review, Gemini Builder for implementation).
 
 6. **Solution Simplicity Evaluation** — Before proposing custom implementation or
    architectural complexity, evaluate existing repository capabilities, code,
@@ -351,7 +352,8 @@ canonical Bootstrap Contract above (this document); this procedure applies it.
 - **Verification ≠ assumption** — Agent self-reports are execution evidence. Verify
   against GitHub (commits, diffs, CI results, artifacts) before claiming delivery.
 - **Gemini is the Architect, not you** — You coordinate and verify; Gemini provides
-  architectural analysis and review; Kilo/Gemini Builder implements.
+  architectural analysis and review; Gemini Builder implements (Kilo is an available
+  execution lane for tasks that explicitly target it).
 - **`@kilo` triggers a new GitHub issue** — Do not create a new issue merely to
   activate Gemini; use the established Gemini activation surface.
 

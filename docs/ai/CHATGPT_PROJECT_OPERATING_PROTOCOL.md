@@ -107,7 +107,7 @@ The protocol gate applies before:
 - Preparing GitHub mutations.
 - Requesting authorization for consequential actions.
 - Performing repository changes.
-- Coordinating Kilo or Gemini.
+- Coordinating Kilo, Gemini Builder, or Gemini.
 - Making project-state claims that require protocol-defined verification.
 
 ### Protocol Compliance Is Not Authorization
@@ -260,11 +260,13 @@ The workflow extracts the request content following that prefix.
 
 Gemini remains read-only unless a task explicitly authorizes temporary failover or another repository-writing responsibility.
 
-Kilo — Builder, Implementer, and Tester
+Gemini Builder — Builder, Implementer, and Tester
 
-Kilo is the primary implementation agent.
+Gemini Builder is the primary Builder / Implementer / Tester (using
+`GEMINI_BUILDER_API_KEY`). Kilo is an available execution lane for tasks that
+explicitly target it.
 
-Kilo is responsible for:
+The execution agent (Gemini Builder, or Kilo when explicitly targeted) is responsible for:
 
 * Inspecting the existing repository before implementation.
 * Implementing approved tasks within scope.
@@ -274,7 +276,7 @@ Kilo is responsible for:
 * Reporting changed files, verification performed, and blockers.
 * Updating project documentation when explicitly included in the authorized task.
 
-Kilo does not independently expand task scope or claim functionality that has not been verified.
+The execution agent does not independently expand task scope or claim functionality that has not been verified.
 
 GitHub — Shared Source of Truth
 
@@ -302,8 +304,8 @@ The normal project-management flow is:
 5. Gemini researches or reviews architecture when architectural analysis is needed.
 6. Kyle reviews or authorizes the proposed direction when a decision is required.
 7. ChatGPT prepares an ACP-compliant task for the appropriate agent.
-8. Kilo implements and validates the authorized task.
-9. Kilo reports the result.
+8. The Builder (Gemini Builder, or Kilo when explicitly targeted) implements and validates the authorized task.
+9. The execution agent reports the result.
 10. ChatGPT reviews the report against the original objective.
 11. ChatGPT independently verifies the actual GitHub delivery.
 12. ChatGPT reconciles project state and documentation.
@@ -515,6 +517,7 @@ docs/ai/TASK_STANDARD.md
 
 An ACP task should identify, as applicable:
 
+* task_name
 * request_id
 * originator
 * target_agent
@@ -528,7 +531,10 @@ An ACP task should identify, as applicable:
 * constraints
 * conflict_handling
 
-The canonical field ordering requires `capabilities` to appear immediately before `objective` so that the task's authorized capabilities are immediately visible to the Director before the objective is reviewed or the task is authorized.
+The canonical field ordering requires `task_name` to appear as the first field, and
+`capabilities` to appear immediately before `objective` so that the task's authorized
+capabilities are immediately visible to the Director before the objective is reviewed
+or the task is authorized.
 
 The task should define the intended result, affected scope, required validation, and reporting expectations.
 
@@ -543,10 +549,10 @@ This section hardens the construction guidance so that a request for an "ACP-com
 #### Canonical ACP Artifact vs. Prose Task Description
 
 A **canonical ACP task artifact** is a structured task request conforming to
-`docs/ai/TASK_STANDARD.md` with all required envelope fields (`originator`,
-`target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`,
-`objective`, `scope`, `verification`, `constraints`, `conflict_handling`) and
-required initiation syntax (e.g., `@kilo`).
+`docs/ai/TASK_STANDARD.md` with all required envelope fields (`task_name`,
+`originator`, `target_agent`, `repository`, `base_branch`, `task_mode`,
+`capabilities`, `objective`, `scope`, `verification`, `constraints`,
+`conflict_handling`) and required initiation syntax (e.g., `@kilo`).
 
 A **prose task description** is a narrative or outline with headings such as
 "Objective", "Procedure", "Execution Requirements", or "Completion Criteria".
@@ -560,6 +566,8 @@ prose task specification is not a substitute for the canonical ACP artifact.
 When an ACP-compliant task is requested, the prepared artifact must include the
 complete canonical task envelope defined by `docs/ai/TASK_STANDARD.md`:
 
+- `task_name` — the exact task name/identifier for the task being prepared; mandatory
+  in every ACP artifact.
 - `originator` — the persona or role initiating the task.
 - `target_agent` — the agent to perform the task.
 - `repository` — the repository the task applies to (`fluentwithkyle/openclaw-webhook`).
@@ -576,9 +584,11 @@ complete canonical task envelope defined by `docs/ai/TASK_STANDARD.md`:
   `no-new-dependencies`).
 - `conflict_handling` — instructions for handling rule conflicts.
 
-The complete task title and task identifier must be explicitly defined as part of
-the prepared ACP artifact. Required initiation syntax (e.g., `@kilo`) must be
-present.
+The complete task title, task identifier, and `task_name` must be explicitly defined as part of
+the prepared ACP artifact. The task identifier provides the unique reference, the title
+provides the functional description within the artifact itself, and `task_name` is the
+exact task name/identifier that must be present in every ACP artifact. Required initiation
+syntax (e.g., `@kilo`) must be present.
 
 #### Fail-Closed Artifact Verification
 
