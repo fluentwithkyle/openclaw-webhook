@@ -25,7 +25,7 @@ The project has completed the transition from Kilo Cloud Agent (transitional/leg
 | **Google Adapter** | Google Apps Script |
 | **Last Updated** | 2026-09-24 |
 
-Updated By | Kilo — EXECUTE (TASK-KILO-CHATGPT-COLD-START-PROJECT-INITIALIZATION-IMPLEMENT-001)
+Updated By | Kilo — EXECUTE (TASK-KILO-CHATGPT-BOOTSTRAP-CONTRACT-RECONCILE-001)
 
 ---
 
@@ -74,6 +74,7 @@ Updated By | Kilo — EXECUTE (TASK-KILO-CHATGPT-COLD-START-PROJECT-INITIALIZATI
 | RESEARCH_DOCUMENT task mode implementation (Issue #198) | IMPLEMENTED / VERIFIED | Kilo | Added `RESEARCH_DOCUMENT` task mode to ACP schema (`poc/schemas/acp-schema.js`); fixed capability set `read_only, modify_files, commit, push`; restricted paths to research/documentation surface; created `docs/ai/research/` directory and `docs/ai/RESEARCH_INDEX.md`; updated `TASK_STANDARD.md`, `KILO_INTEGRATION.md`, `docs/ai/README.md`; first research record created. (TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001) |
 | TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | COMPLETED | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Prior 048e9b1 push failed because gemini-builder.yml pushes via auto-generated GITHUB_TOKEN (restricted from .github/workflows/* changes); Kilo delivered via owner-scoped token. |
 | ChatGPT cold-start / project initialization hardening | COMPLETED | Kilo | Created `docs/ai/CHATGPT_START_HERE.md` as canonical cold-start entry point; added Project Bootstrap / Cold-Start Gate to `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`; added ACP task-construction hardening; updated `docs/ai/TASK_STANDARD.md` and `docs/ai/README.md`. No production code, workflows, or secrets modified. |
+| ChatGPT cold-start bootstrap contract reconciliation | COMPLETED | Kilo | Reconciled the canonical ChatGPT cold-start bootstrap contract: established `docs/ai/CHATGPT_START_HERE.md` as the sole canonical bootstrap contract with the Bootstrap Completion Check, fail-closed result `NOT READY — PROJECT BOOTSTRAP INCOMPLETE`, three non-overlapping phases, explicit dependency chain, and ACP-construction-downstream-of-bootstrap rule; reconciled `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` Section 0 to reference (not duplicate) the canonical contract. No production code, workflows, or secrets modified. |
 
 ---
 
@@ -163,5 +164,5 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 - **State:** docs/ai/STATE.md (authoritative current project state)
 - **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-017)
 - **Task History:** docs/ai/TASK_LOG.md
-- **Cold Start:** docs/ai/CHATGPT_START_HERE.md (fresh-instance entry point)
+- **Cold Start:** docs/ai/CHATGPT_START_HERE.md (canonical bootstrap contract — fresh-instance entry point)
 - **Docs:** docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md

@@ -1,14 +1,18 @@
-# ChatGPT Cold-Start Orientation
+# ChatGPT Cold-Start Bootstrap Contract
 
-> **Start here.** This is the canonical cold-start entry point for a completely fresh
+> **Start here.** This is the **canonical cold-start bootstrap contract** for a completely fresh
 > ChatGPT instance that has received a request to coordinate the Fluent with Kyle
 > automation project. This document exists so that a stateless instance — with no
 > prior conversation, memory, or project context — can correctly initialize itself
 > from the repository alone.
 
-This document is **navigation and initialization only**. It does not redefine policy.
-The substantive rules live in the authoritative documents linked below. Follow this
-reading path in order; do not skip steps.
+This document is the **sole canonical bootstrap contract**. It establishes repository
+identity, the ChatGPT coordinator role, the authoritative project-control
+documentation, the three mandatory preparation phases (Project Bootstrap, Protocol
+Review, Repository/State Verification), the Bootstrap Completion Check, and the
+fail-closed bootstrap result. The substantive operating rules are enforced by the
+authoritative documents linked below. Follow this contract and its reading path in
+order; do not skip steps.
 
 ---
 
@@ -151,18 +155,140 @@ When a new request arrives, establish context in this order:
 
 ---
 
+## Bootstrap Contract (Canonical)
+
+This document is the **sole canonical bootstrap contract**. It defines the
+deterministic, fail-closed preparation sequence that a completely fresh chat
+instance must complete before any project action — including ACP task
+construction — may proceed. The operating protocol
+(`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) references and depends on this
+contract; it does not redefine or duplicate the bootstrap procedure.
+
+### The Three Mandatory Preparation Phases
+
+The preparation sequence consists of exactly three phases with non-overlapping
+responsibilities. Each phase must complete before the next begins.
+
+- **Project Bootstrap** — Establish which repository and which project-control
+  documentation govern the request. Confirm the governing repository and base
+  branch, locate the authoritative project-control documents, inspect the durable
+  project-state system, classify the incoming request, and identify (or explicitly
+  determine to be new) any relevant existing project or task. This phase establishes
+  durable context from the repository alone; it must never depend on prior
+  conversation, memory, or user reconstruction.
+
+- **Protocol Review** — Read the current repository version of
+  `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` in full and extract the
+  applicable requirements. Protocol review is the authoritative source of operating
+  requirements and must be performed against the current repository version, not
+  from memory or prior conversation.
+
+- **Repository/State Verification** — Establish the actual current implementation
+  and project truth from GitHub and the durable state system (`STATE.md`,
+  `TASK_LOG.md`, `ARCH_DECISIONS.md`, `CONTROL_CENTER.md`, commits, issues, PRs,
+  and relevant source). Agent reports and prior conversation are supporting
+  evidence only until verified against GitHub.
+
+These three phases are distinct and must not duplicate one another: Bootstrap
+establishes **governing context**; Protocol Review extracts **operating
+requirements**; Repository/State Verification establishes **current truth**.
+
+### Bootstrap Completion Check
+
+Bootstrap is complete only when every required element below is established. If
+any element cannot be established, the bootstrap result is the fail-closed state
+defined in the next subsection.
+
+- [ ] **Repository identity established** — The governing repository is
+  `fluentwithkyle/openclaw-webhook`.
+- [ ] **Base branch established** — The authoritative base branch is `main`.
+- [ ] **Authoritative project-control documents located** — Located: `AGENTS.md`,
+  `ARCHITECTURE.md`, `GEMINI.md`, this document, `CHATGPT_PROJECT_OPERATING_PROTOCOL.md`,
+  `TASK_STANDARD.md`, `STATE.md`, `ARCH_DECISIONS.md`, `CONTROL_CENTER.md`,
+  `TASK_LOG.md`, `README.md`.
+- [ ] **Durable project state inspected** — `STATE.md`, `TASK_LOG.md`,
+  `ARCH_DECISIONS.md`, and `CONTROL_CENTER.md` inspected for current status, active
+  tasks, blockers, and existing projects — before concluding that any project or
+  prior work does not exist.
+- [ ] **Request classified** — The incoming request is classified as a new task,
+  a continuation of an existing task, an existing project, an existing task, a
+  research record, an architectural decision, completed work, or an unresolved
+  item / blocker.
+- [ ] **Relevant existing project/task identified or explicitly determined to be new** —
+  The request is cross-referenced against the durable state; either the relevant
+  existing project/task is identified or this is explicitly determined to be new.
+- [ ] **Protocol identified for mandatory review** —
+  `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` is identified as the protocol to
+  be reviewed in the next phase.
+
+### Fail-Closed Bootstrap Result
+
+If any required Bootstrap Completion Check element cannot be established, the
+bootstrap result is:
+
+```
+NOT READY — PROJECT BOOTSTRAP INCOMPLETE
+```
+
+When this result is reached, the instance must **stop** and report the specific
+unmet element(s). No consequential action — including Protocol Review,
+Repository/State Verification, Action Construction, or ACP task construction — may
+proceed. Completing the Project Bootstrap does not authorize any consequential
+action; explicit authorization remains required for consequential actions.
+
+### Dependency Chain
+
+The full operating sequence is deterministic and fail-closed:
+
+```
+Project Bootstrap complete
+  → Protocol Review complete
+  → Applicable Requirements extracted
+  → Repository/State Verification complete
+  → Action Construction (incl. Solution Simplicity Evaluation)
+  → ACP Compliance Verification
+  → Kyle Authorization
+  → Authorized Execution
+  → Independent Verification
+  → Stop
+```
+
+### ACP Construction Is Downstream of Bootstrap
+
+Construction of a compliant ACP task artifact **cannot** proceed when bootstrap is
+incomplete. A fail-closed `NOT READY — PROJECT BOOTSTRAP INCOMPLETE` result blocks
+all downstream ACP construction by definition. The canonical ACP task envelope is
+defined in `docs/ai/TASK_STANDARD.md`; constructing it requires that bootstrap and
+protocol requirements have first been satisfied and that an existing project or
+task has been identified (or explicitly determined to be new) through the durable
+state system. The existing ACP requirements — complete canonical envelope,
+required `@kilo` initiation syntax, canonical field ordering (`capabilities`
+immediately before `objective`), explicit scope, explicit verification, least
+privilege, runtime schema compatibility, fail-closed ACP compliance, preparation
+is not authorization, the final ACP artifact shown to Kyle before consequential
+posting, and the posted artifact matching the approved artifact — are preserved and
+apply only downstream of a complete bootstrap. The Solution Simplicity Gate
+(defined in `CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) is likewise preserved and
+applies within Action Construction; this contract does not replace or weaken it.
+
+---
+
 ## 7. What To Do When Kyle Gives a Project Request
 
-Follow this procedure. Do not invent a new workflow.
+Follow this procedure. Do not invent a new workflow. Bootstrap is governed by the
+canonical Bootstrap Contract above (this document); this procedure applies it.
 
-1. **Protocol Gate** — Review the current repository version of
+1. **Project Bootstrap** — Execute the Bootstrap Completion Check (Bootstrap Contract
+   above). Establish repository identity (`fluentwithkyle/openclaw-webhook`), confirm
+   the base branch is `main`, locate the authoritative project-control documents,
+   inspect the durable project-state system, classify the request, and identify
+   (or explicitly determine to be new) any relevant existing project or task. If any
+   required element cannot be established, stop with `NOT READY — PROJECT BOOTSTRAP
+   INCOMPLETE`.
+
+2. **Protocol Review** — Review the current repository version of
    `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` and extract the applicable
    requirements. This is mandatory before every project response or action.
-
-2. **Project Bootstrap / Cold-Start** — Establish which repository and which
-   project-control documentation govern the request. Confirm the repository is
-   `fluentwithkyle/openclaw-webhook` and the base branch is `main`. Identify whether
-   the request relates to an existing project (see Step 3) or is a new task.
 
 3. **Check existing state** — Inspect `STATE.md`, `TASK_LOG.md`, `ARCH_DECISIONS.md`,
    `CONTROL_CENTER.md`, and open GitHub issues/PRs. Determine whether the request is:
@@ -257,8 +383,17 @@ If you are reading this as a freshly initialized instance:
 
 1. Confirm you are in `fluentwithkyle/openclaw-webhook` on branch `main`.
 2. Read `AGENTS.md` and `ARCHITECTURE.md` in full.
-3. Read `docs/ai/README.md`, then this protocol, then `TASK_STANDARD.md`.
-4. Read `docs/ai/STATE.md` and `docs/ai/CONTROL_CENTER.md` for current status.
-5. Proceed to the appropriate procedure in Section 7.
+3. Execute the **Bootstrap Contract** (above): confirm repository identity and base
+   branch, locate the authoritative project-control documents, inspect the durable
+   project-state system (`STATE.md`, `TASK_LOG.md`, `ARCH_DECISIONS.md`,
+   `CONTROL_CENTER.md`), classify the request, and identify (or explicitly
+   determine to be new) any relevant existing project/task. Bootstrap is
+   incomplete — result `NOT READY — PROJECT BOOTSTRAP INCOMPLETE` — if any required
+   element cannot be established; no consequential action may proceed until bootstrap
+   is complete.
+4. Read `docs/ai/README.md`, then `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`,
+   then `docs/ai/TASK_STANDARD.md` (Protocol Review).
+5. Read `docs/ai/STATE.md` and `docs/ai/CONTROL_CENTER.md` for current status.
+6. Proceed to the procedure in Section 7 (What To Do).
 
 The repository is the durable context. Begin there.

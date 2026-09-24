@@ -6,57 +6,45 @@ Purpose: Human-facing operating protocol for ChatGPT when coordinating the Fluen
 
 ## Project Bootstrap / Cold-Start Gate
 
-### Purpose
+### Canonical Bootstrap Contract
 
-This gate ensures that a completely fresh ChatGPT instance — with no prior conversation,
-memory, or project-specific context — can correctly initialize itself from the repository
-and identify the authoritative project-control documentation before proceeding to the
-Protocol Gate.
+The **canonical bootstrap contract** is defined in `docs/ai/CHATGPT_START_HERE.md`.
+This protocol references and depends on that contract; it does not redefine or
+duplicate the bootstrap procedure. A completely fresh ChatGPT instance — with no
+prior conversation, memory, or project-specific context — must execute the
+Bootstrap Completion Check in `CHATGPT_START_HERE.md` before the Protocol Gate
+applies.
 
-A fresh instance must **never** depend on prior ChatGPT memory, prior conversation, or
-user reconstruction when the repository can establish the relevant context. The repository
-itself is the durable project context.
+A fresh instance must **never** depend on prior ChatGPT memory, prior conversation,
+or user reconstruction when the repository can establish the relevant context. The
+repository itself is the durable project context. The repository must not be treated
+as "unknown" merely because a project name does not appear in filenames, source
+code, or an initial keyword search; the durable `docs/ai/` project-state system is
+the authoritative source for project identity and status (keyword search alone is
+insufficient to determine whether a project exists).
 
-### Mandatory Bootstrap Steps
-
-Before the existing Protocol Gate applies, ChatGPT must complete the Project Bootstrap:
-
-1. **Establish repository identity**: Confirm the governing repository is
-   `fluentwithkyle/openclaw-webhook` and the base branch is `main`.
-
-2. **Establish documentation identity**: Confirm the authoritative project-control
-   documentation location is `docs/ai/CHATGPT_START_HERE.md` and that it points to
-   this protocol, `TASK_STANDARD.md`, `STATE.md`, `CONTROL_CENTER.md`,
-   `TASK_LOG.md`, `ARCHITECTURE.md`, and `AGENTS.md`.
-
-3. **Inspect the durable project-state system**: Before concluding that a project, prior
-   work, research record, architectural decision, or task does not exist, inspect
-   `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`, `docs/ai/ARCH_DECISIONS.md`, and
-   `docs/ai/CONTROL_CENTER.md`. A project may exist within this repository without its
-   name appearing in a filename, source file, or initial keyword search.
-
-4. **Classify the request**: Identify whether the request is a new task, a
-   continuation of an existing task, an existing project, an existing task, a research
-   record, an architectural decision, completed work, or an unresolved item / blocker.
-
-### Repository Cannot Be Treated as Unknown
-
-The repository must not be treated as "unknown" merely because a project name does not
-appear in filenames, source code, or an initial keyword search. The durable
-`docs/ai/` project-state system is the authoritative source for project identity and
-status. Keyword search alone is insufficient to determine whether a project exists.
-
-### Distinction: Bootstrap vs Protocol Review vs Repository/State Verification
-
-The three preparation phases are distinct and each is a mandatory precondition:
+The three preparation phases are non-overlapping and are defined in
+`CHATGPT_START_HERE.md` → Bootstrap Contract:
 
 - **Project Bootstrap** — Establish which repository and which project-control
   documentation govern the request.
-- **Protocol Review** — Read the current repository version of this protocol
-  (`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) and extract applicable requirements.
-- **Repository/State Verification** — Establish the actual current state from GitHub and
-  the durable project-state system (`STATE.md`, `TASK_LOG.md`, `ARCH_DECISIONS.md`,
-  `CONTROL_CENTER.md`, commits, issues, PRs).
+- **Protocol Review** — Read and apply the current operating protocol.
+- **Repository/State Verification** — Establish current implementation/project truth
+  from GitHub and durable state.
+
+### Mandatory Precondition for the Protocol Gate
+
+Successful Project Bootstrap (all Bootstrap Completion Check elements established in
+`CHATGPT_START_HERE.md`) is a mandatory precondition for the Protocol Gate. If any
+required bootstrap element cannot be established, the result is the fail-closed
+state defined in `CHATGPT_START_HERE.md`:
+
+```
+NOT READY — PROJECT BOOTSTRAP INCOMPLETE
+```
+
+and no consequential action — including Protocol Review, Repository/State
+Verification, Action Construction, or ACP task construction — may proceed.
 
 ### Bootstrap Compliance Does Not Authorize
 
@@ -69,7 +57,11 @@ defined by the authorization gate (Section 14).
 
 The full operating sequence is:
 
-**Project Bootstrap → Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution → Independent Verification → Stop**
+**Project Bootstrap complete → Protocol Review complete → Applicable Requirements extracted → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution → Independent Verification → Stop**
+
+The canonical definitions of the three preparation phases, the Bootstrap Completion
+Check, and the fail-closed result reside in `docs/ai/CHATGPT_START_HERE.md`
+(Bootstrap Contract). This protocol depends on that contract and does not redefine it.
 
 ### Integration with Existing Procedures
 
@@ -128,7 +120,7 @@ Explicit authorization remains required immediately before consequential actions
 
 The protocol gate establishes the first step of the project operating sequence and preserves all existing project sequences rather than creating a competing workflow:
 
-**Project Bootstrap → Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution → Independent Verification → Stop**
+**Project Bootstrap complete → Protocol Review complete → Applicable Requirements extracted → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution → Independent Verification → Stop**
 
 This gate does not require ChatGPT to expose hidden chain-of-thought or private reasoning. The gate requires confirmation that the applicable protocol requirements were reviewed and satisfied, not disclosure of internal reasoning.
 
@@ -183,7 +175,7 @@ The gate is intentionally lightweight. It does **not** require exhaustive invest
 
 The Solution Simplicity Gate is integrated into the existing workflow as an evaluation step within Action Construction and Authorized Execution. It does **not** create a competing process:
 
-**Project Bootstrap → Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution (Solution Simplicity Validation) → Independent Verification → Stop**
+**Project Bootstrap complete → Protocol Review complete → Applicable Requirements extracted → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution (Solution Simplicity Validation) → Independent Verification → Stop**
 
 The gate preserves all existing protocol requirements, including mandatory protocol review, repository/state verification, explicit capabilities, least privilege, authentication boundaries, specialist lanes, task modes, persistence, and VERIFY_RECONCILE semantics.
 

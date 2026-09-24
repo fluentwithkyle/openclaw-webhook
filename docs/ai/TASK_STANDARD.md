@@ -2,7 +2,7 @@
 
 This document defines the mandatory, canonical format for all AI task requests initiated by the Director in the `fluentwithkyle/openclaw-webhook` repository.
 
-A fresh ChatGPT instance — with no prior conversation, memory, or project-specific context — must begin at `docs/ai/CHATGPT_START_HERE.md`, which directs it to this standard. This standard is self-contained: a fresh instance must not rely on prior conversation memory when constructing or interpreting a task.
+A fresh ChatGPT instance — with no prior conversation, memory, or project-specific context — must begin at `docs/ai/CHATGPT_START_HERE.md`, the canonical bootstrap contract, which directs it to this standard. This standard is self-contained: a fresh instance must not rely on prior conversation memory when constructing or interpreting a task. The canonical bootstrap contract and its Bootstrap Completion Check in `docs/ai/CHATGPT_START_HERE.md` are the sole bootstrap procedure for this repository; no competing bootstrap procedure is defined elsewhere.
 
 ## 0. Canonical ACP Artifact vs. Prose Task Description
 

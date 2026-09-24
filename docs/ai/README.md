@@ -11,11 +11,15 @@ project-specific context — must begin at:
 
 **`docs/ai/CHATGPT_START_HERE.md`**
 
-This is the canonical cold-start orientation document. It establishes repository
-identity, defines ChatGPT's coordinator role, identifies the authoritative
-project-control documentation, explains that project discovery cannot rely on
-keyword search alone, identifies the DeepSeek Coordinator as an existing project,
-and defines the mandatory initialization reading path.
+This is the **canonical bootstrap contract** and cold-start entry point. It establishes
+repository identity, defines ChatGPT's coordinator role, locates the authoritative
+project-control documentation, defines the three mandatory preparation phases
+(Project Bootstrap, Protocol Review, Repository/State Verification), specifies the
+Bootstrap Completion Check, and defines the fail-closed bootstrap result. It
+identifies the DeepSeek Coordinator as an existing project, explains that project
+discovery cannot rely on keyword search alone, and defines the mandatory
+initialization reading path. The operating protocol references and depends on this
+contract and does not redefine it.
 
 Do not bypass this document when initializing from a cold-start condition.
 
@@ -109,16 +113,21 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 
 ## File Contents
 
-### `CHATGPT_START_HERE.md` — Cold-Start Orientation
-- Canonical entry point for a completely fresh ChatGPT instance with no prior context.
+### `CHATGPT_START_HERE.md` — Cold-Start Bootstrap Contract
+- Canonical cold-start entry point and **sole canonical bootstrap contract** for a completely fresh ChatGPT instance with no prior context.
 - Establishes repository identity, ChatGPT's coordinator role, the mandatory
-  initialization reading path, and the project discovery hierarchy.
-- Must be the first document consulted on cold start.
+  initialization reading path, the project discovery hierarchy, the three mandatory
+  preparation phases (Project Bootstrap, Protocol Review, Repository/State
+  Verification), the Bootstrap Completion Check, and the fail-closed bootstrap result.
+- Must be the first document consulted on cold start. No consequential action
+  (including ACP task construction) may proceed until the Bootstrap Completion Check
+  is satisfied.
 
 ### `CHATGPT_PROJECT_OPERATING_PROTOCOL.md` — ChatGPT Operating Protocol
-- Defines the Project Bootstrap / Cold-Start Gate, Protocol Gate, Solution Simplicity
-  Gate, Standard Project Flow, Project Status Procedure, ACP Task Protocol, and
-  Consequential Action Stop Gate.
+- References and depends on the canonical bootstrap contract
+  (`CHATGPT_START_HERE.md`); it does not redefine the bootstrap procedure.
+- Defines the Protocol Gate, Solution Simplicity Gate, Standard Project Flow,
+  Project Status Procedure, ACP Task Protocol, and Consequential Action Stop Gate.
 - Authoritative for ChatGPT's preparation, authorization, execution, and
   verification operating behavior.
 
@@ -137,7 +146,7 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 ### `TASK_STANDARD.md` — Canonical AI Task Request Standard
 - Mandatory, canonical format for all AI task requests initiated by the Director.
 - Defines the Task Request Envelope, authorization requirements, instruction precedence, and relationship with ACP.
-- A fresh ChatGPT instance must begin at `CHATGPT_START_HERE.md`, which directs to this standard.
+- A fresh ChatGPT instance must begin at `CHATGPT_START_HERE.md` (the canonical bootstrap contract), which directs to this standard.
 - All agents must conform to this standard when preparing and initiating tasks.
 
 ### `TASK_LOG.md` — Historical Task Record
