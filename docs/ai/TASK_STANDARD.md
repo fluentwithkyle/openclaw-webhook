@@ -2,6 +2,16 @@
 
 This document defines the mandatory, canonical format for all AI task requests initiated by the Director in the `fluentwithkyle/openclaw-webhook` repository.
 
+A fresh ChatGPT instance — with no prior conversation, memory, or project-specific context — must begin at `docs/ai/CHATGPT_START_HERE.md`, which directs it to this standard. This standard is self-contained: a fresh instance must not rely on prior conversation memory when constructing or interpreting a task.
+
+## 0. Canonical ACP Artifact vs. Prose Task Description
+
+A **canonical ACP task artifact** is a structured task request conforming to the Task Request Envelope (Section 1) with all required fields, required initiation syntax (e.g., `@kilo`), complete task title and task identifier, and canonical field ordering (`capabilities` immediately before `objective`).
+
+A **prose task description** uses narrative headings such as "Objective", "Procedure", "Execution Requirements", and "Completion Criteria" without the canonical envelope fields. **Headings such as Objective, Procedure, Execution Requirements, and Completion Criteria do not, by themselves, constitute ACP compliance.** A generic prose task specification is not a substitute for the canonical ACP artifact. The complete canonical task envelope defined below is required.
+
+This distinction and the fail-closed artifact-verification rule are enforced in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 8, ACP Task-Protocol Hardening) and must be applied to the final artifact that will actually be posted/sent.
+
 ## 1. Task Request Envelope
 
 All task requests must be structured with the following fields:

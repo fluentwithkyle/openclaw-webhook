@@ -23,9 +23,9 @@ The project has completed the transition from Kilo Cloud Agent (transitional/leg
 | **Branch** | main |
 | **Deploy** | Render (Node.js/Express) |
 | **Google Adapter** | Google Apps Script |
-| **Last Updated** | 2026-09-23 |
+| **Last Updated** | 2026-09-24 |
 
-Updated By | Kilo — RESEARCH_DOCUMENT (TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESEARCH-DOCUMENT-001)
+Updated By | Kilo — EXECUTE (TASK-KILO-CHATGPT-COLD-START-PROJECT-INITIALIZATION-IMPLEMENT-001)
 
 ---
 
@@ -73,6 +73,7 @@ Updated By | Kilo — RESEARCH_DOCUMENT (TASK-GEMINI-DEEPSEEK-CONTROL-PLANE-RESE
 | Gemini ACP artifact reporting fix — issue_comment path (Issue #174) | IMPLEMENTED / VERIFIED | Kilo | Unified structured ACP artifact reporting across both trigger paths. Removed raw Markdown persist step; generalized payload step to run for both `workflow_dispatch` and `issue_comment` (`if: always()`); derived `task`/`repository`/`base_branch` from issue_comment context; `request_id` set to `null` when unavailable; unified single artifact upload step. Preserved Render callback (workflow_dispatch-only), `@gemini-cli` triggering, Gemini CLI execution, ACP authorization, recursion-prevention, artifact name/file. 29 tests pass. (TASK-KILO-GEMINI-ACP-ARTIFACT-ISSUE-COMMENT-FIX-002) |
 | RESEARCH_DOCUMENT task mode implementation (Issue #198) | IMPLEMENTED / VERIFIED | Kilo | Added `RESEARCH_DOCUMENT` task mode to ACP schema (`poc/schemas/acp-schema.js`); fixed capability set `read_only, modify_files, commit, push`; restricted paths to research/documentation surface; created `docs/ai/research/` directory and `docs/ai/RESEARCH_INDEX.md`; updated `TASK_STANDARD.md`, `KILO_INTEGRATION.md`, `docs/ai/README.md`; first research record created. (TASK-KILO-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001) |
 | TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | COMPLETED | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Prior 048e9b1 push failed because gemini-builder.yml pushes via auto-generated GITHUB_TOKEN (restricted from .github/workflows/* changes); Kilo delivered via owner-scoped token. |
+| ChatGPT cold-start / project initialization hardening | COMPLETED | Kilo | Created `docs/ai/CHATGPT_START_HERE.md` as canonical cold-start entry point; added Project Bootstrap / Cold-Start Gate to `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`; added ACP task-construction hardening; updated `docs/ai/TASK_STANDARD.md` and `docs/ai/README.md`. No production code, workflows, or secrets modified. |
 
 ---
 
@@ -160,7 +161,7 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 
 - **Architecture:** ARCHITECTURE.md (authoritative for intended architecture)
 - **State:** docs/ai/STATE.md (authoritative current project state)
-- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-016)
+- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-017)
 - **Task History:** docs/ai/TASK_LOG.md
-- **Issue:** [fluentwithkyle/openclaw-webhook#56](https://github.com/fluentwithkyle/openclaw-webhook/issues/56)
+- **Cold Start:** docs/ai/CHATGPT_START_HERE.md (fresh-instance entry point)
 - **Docs:** docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md

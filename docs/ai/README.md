@@ -4,6 +4,21 @@
 
 This directory (`docs/ai/`) is the persistent, repository-resident memory for AI agents working on the `fluentwithkyle/openclaw-webhook` repository. It replaces reliance on transient conversation memory and provides a durable source of project context, decisions, and history.
 
+## Cold-Start Entry Point
+
+A completely fresh ChatGPT instance — with no prior conversation, memory, or
+project-specific context — must begin at:
+
+**`docs/ai/CHATGPT_START_HERE.md`**
+
+This is the canonical cold-start orientation document. It establishes repository
+identity, defines ChatGPT's coordinator role, identifies the authoritative
+project-control documentation, explains that project discovery cannot rely on
+keyword search alone, identifies the DeepSeek Coordinator as an existing project,
+and defines the mandatory initialization reading path.
+
+Do not bypass this document when initializing from a cold-start condition.
+
 ## When to Read
 
 **All AI agents** working in this repository must consult the relevant files in `docs/ai/` before planning or implementing work:
@@ -94,6 +109,19 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 
 ## File Contents
 
+### `CHATGPT_START_HERE.md` — Cold-Start Orientation
+- Canonical entry point for a completely fresh ChatGPT instance with no prior context.
+- Establishes repository identity, ChatGPT's coordinator role, the mandatory
+  initialization reading path, and the project discovery hierarchy.
+- Must be the first document consulted on cold start.
+
+### `CHATGPT_PROJECT_OPERATING_PROTOCOL.md` — ChatGPT Operating Protocol
+- Defines the Project Bootstrap / Cold-Start Gate, Protocol Gate, Solution Simplicity
+  Gate, Standard Project Flow, Project Status Procedure, ACP Task Protocol, and
+  Consequential Action Stop Gate.
+- Authoritative for ChatGPT's preparation, authorization, execution, and
+  verification operating behavior.
+
 ### `STATE.md` — Current Live Project State
 - **Mutable current state**, not immutable history.
 - Current status, active tasks, blockers, upcoming/backlog items.
@@ -109,6 +137,7 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 ### `TASK_STANDARD.md` — Canonical AI Task Request Standard
 - Mandatory, canonical format for all AI task requests initiated by the Director.
 - Defines the Task Request Envelope, authorization requirements, instruction precedence, and relationship with ACP.
+- A fresh ChatGPT instance must begin at `CHATGPT_START_HERE.md`, which directs to this standard.
 - All agents must conform to this standard when preparing and initiating tasks.
 
 ### `TASK_LOG.md` — Historical Task Record

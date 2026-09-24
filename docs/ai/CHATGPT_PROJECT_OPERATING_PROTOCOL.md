@@ -4,6 +4,88 @@ Status: CURRENT / IMPLEMENTED
 Owner: Kyle — Director
 Purpose: Human-facing operating protocol for ChatGPT when coordinating the Fluent with Kyle automation project.
 
+## Project Bootstrap / Cold-Start Gate
+
+### Purpose
+
+This gate ensures that a completely fresh ChatGPT instance — with no prior conversation,
+memory, or project-specific context — can correctly initialize itself from the repository
+and identify the authoritative project-control documentation before proceeding to the
+Protocol Gate.
+
+A fresh instance must **never** depend on prior ChatGPT memory, prior conversation, or
+user reconstruction when the repository can establish the relevant context. The repository
+itself is the durable project context.
+
+### Mandatory Bootstrap Steps
+
+Before the existing Protocol Gate applies, ChatGPT must complete the Project Bootstrap:
+
+1. **Establish repository identity**: Confirm the governing repository is
+   `fluentwithkyle/openclaw-webhook` and the base branch is `main`.
+
+2. **Establish documentation identity**: Confirm the authoritative project-control
+   documentation location is `docs/ai/CHATGPT_START_HERE.md` and that it points to
+   this protocol, `TASK_STANDARD.md`, `STATE.md`, `CONTROL_CENTER.md`,
+   `TASK_LOG.md`, `ARCHITECTURE.md`, and `AGENTS.md`.
+
+3. **Inspect the durable project-state system**: Before concluding that a project, prior
+   work, research record, architectural decision, or task does not exist, inspect
+   `docs/ai/STATE.md`, `docs/ai/TASK_LOG.md`, `docs/ai/ARCH_DECISIONS.md`, and
+   `docs/ai/CONTROL_CENTER.md`. A project may exist within this repository without its
+   name appearing in a filename, source file, or initial keyword search.
+
+4. **Classify the request**: Identify whether the request is a new task, a
+   continuation of an existing task, an existing project, an existing task, a research
+   record, an architectural decision, completed work, or an unresolved item / blocker.
+
+### Repository Cannot Be Treated as Unknown
+
+The repository must not be treated as "unknown" merely because a project name does not
+appear in filenames, source code, or an initial keyword search. The durable
+`docs/ai/` project-state system is the authoritative source for project identity and
+status. Keyword search alone is insufficient to determine whether a project exists.
+
+### Distinction: Bootstrap vs Protocol Review vs Repository/State Verification
+
+The three preparation phases are distinct and each is a mandatory precondition:
+
+- **Project Bootstrap** — Establish which repository and which project-control
+  documentation govern the request.
+- **Protocol Review** — Read the current repository version of this protocol
+  (`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`) and extract applicable requirements.
+- **Repository/State Verification** — Establish the actual current state from GitHub and
+  the durable project-state system (`STATE.md`, `TASK_LOG.md`, `ARCH_DECISIONS.md`,
+  `CONTROL_CENTER.md`, commits, issues, PRs).
+
+### Bootstrap Compliance Does Not Authorize
+
+Completing the Project Bootstrap does **not** authorize a consequential action.
+
+Explicit authorization remains required immediately before consequential actions, as
+defined by the authorization gate (Section 14).
+
+### Updated Operational Sequence
+
+The full operating sequence is:
+
+**Project Bootstrap → Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution → Independent Verification → Stop**
+
+### Integration with Existing Procedures
+
+The Project Bootstrap gate is the mandatory precondition for:
+
+- The Protocol Gate.
+- The Solution Simplicity Gate.
+- The Standard Project Flow (Section 3).
+- The Project Status Procedure (Section 4).
+- The ACP Task Protocol including the preparation checklist (Section 8).
+- The Consequential Action Stop Gate (Section 14).
+- The Standard Completion Loop (Section 12).
+- The Human Intent Translation Protocol operating modes (Section 16.4).
+
+---
+
 ## Protocol Gate
 
 ### Mandatory Protocol Review
@@ -46,7 +128,7 @@ Explicit authorization remains required immediately before consequential actions
 
 The protocol gate establishes the first step of the project operating sequence and preserves all existing project sequences rather than creating a competing workflow:
 
-**Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution → Independent Verification → Stop**
+**Project Bootstrap → Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution → Independent Verification → Stop**
 
 This gate does not require ChatGPT to expose hidden chain-of-thought or private reasoning. The gate requires confirmation that the applicable protocol requirements were reviewed and satisfied, not disclosure of internal reasoning.
 
@@ -101,7 +183,7 @@ The gate is intentionally lightweight. It does **not** require exhaustive invest
 
 The Solution Simplicity Gate is integrated into the existing workflow as an evaluation step within Action Construction and Authorized Execution. It does **not** create a competing process:
 
-**Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution (Solution Simplicity Validation) → Independent Verification → Stop**
+**Project Bootstrap → Protocol Review → Applicable Gate Extraction → Repository/State Verification → Action Construction (Solution Simplicity Evaluation) → Authorization Gate → Authorized Execution (Solution Simplicity Validation) → Independent Verification → Stop**
 
 The gate preserves all existing protocol requirements, including mandatory protocol review, repository/state verification, explicit capabilities, least privilege, authentication boundaries, specialist lanes, task modes, persistence, and VERIFY_RECONCILE semantics.
 
@@ -217,7 +299,7 @@ Agent reports, chat messages, and task descriptions are supporting evidence unti
 
 3. Standard Project Flow
 
-The normal project-management flow follows the Operational Sequence defined by the Protocol Gate. Before Step 1, ChatGPT must satisfy the Protocol Gate: review the current protocol and identify the applicable requirements.
+The normal project-management flow follows the Operational Sequence defined by the Protocol Gate (which now begins with the Project Bootstrap / Cold-Start Gate). Before Step 1, ChatGPT must satisfy the Project Bootstrap Gate: establish repository and documentation identity, then review the current protocol and identify the applicable requirements.
 
 The normal project-management flow is:
 
@@ -239,7 +321,7 @@ The purpose of this flow is to prevent Kyle from repeatedly performing repositor
 
 4. Project Status Procedure
 
-Before performing this procedure, ChatGPT MUST satisfy the Protocol Gate: review the current version of this protocol and identify the applicable requirements.
+Before performing this procedure, ChatGPT MUST satisfy the Project Bootstrap Gate and the Protocol Gate: establish repository and documentation identity, review the current version of this protocol, and identify the applicable requirements.
 
 When Kyle asks for the current project status, ChatGPT MUST inspect the repository before answering. Repository review is mandatory; memory, chat history, isolated agent reports, and task descriptions are NOT substitutes for repository verification.
 
@@ -461,6 +543,81 @@ The task should define the intended result, affected scope, required validation,
 Tasks should be specific enough that the receiving agent can execute them without reconstructing the Director's intent.
 
 Authorization for capabilities such as modification, commit, push, deployment, or external communication must be explicit when required by the task.
+
+### ACP Task-Construction Hardening
+
+This section hardens the construction guidance so that a request for an "ACP-compliant task" necessarily produces the repository-defined canonical ACP task artifact rather than a generic prose implementation specification.
+
+#### Canonical ACP Artifact vs. Prose Task Description
+
+A **canonical ACP task artifact** is a structured task request conforming to
+`docs/ai/TASK_STANDARD.md` with all required envelope fields (`originator`,
+`target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`,
+`objective`, `scope`, `verification`, `constraints`, `conflict_handling`) and
+required initiation syntax (e.g., `@kilo`).
+
+A **prose task description** is a narrative or outline with headings such as
+"Objective", "Procedure", "Execution Requirements", or "Completion Criteria".
+
+These are distinct. **Headings such as Objective, Procedure, Execution Requirements,
+and Completion Criteria do not, by themselves, constitute ACP compliance.** A generic
+prose task specification is not a substitute for the canonical ACP artifact.
+
+#### Mandatory Canonical Envelope Requirements
+
+When an ACP-compliant task is requested, the prepared artifact must include the
+complete canonical task envelope defined by `docs/ai/TASK_STANDARD.md`:
+
+- `originator` — the persona or role initiating the task.
+- `target_agent` — the agent to perform the task.
+- `repository` — the repository the task applies to (`fluentwithkyle/openclaw-webhook`).
+- `base_branch` — the branch the task is based on and intended to integrate with
+  (`main`).
+- `task_mode` — one of `RESEARCH_DOCUMENT`, `PLAN`, `EXECUTE`, or
+  `VERIFY_RECONCILE`.
+- `capabilities` — explicit list of required capabilities; must appear immediately
+  before `objective`.
+- `objective` — a concise statement of the goal.
+- `scope` — clear definition of permitted paths and boundaries.
+- `verification` — specific, executable criteria for verifying task completion.
+- `constraints` — operational limits (e.g., `smallest-change`,
+  `no-new-dependencies`).
+- `conflict_handling` — instructions for handling rule conflicts.
+
+The complete task title and task identifier must be explicitly defined as part of
+the prepared ACP artifact. Required initiation syntax (e.g., `@kilo`) must be
+present.
+
+#### Fail-Closed Artifact Verification
+
+Compliance must be determined from the **final task artifact that will actually be
+posted/sent**. Prior protocol review, memory, an earlier compliant draft, conceptual
+verification, or a statement that the task is compliant are insufficient.
+
+If an applicable requirement cannot be verified against the completed ACP artifact,
+the task must be reported as **NOT READY — ACP COMPLIANCE INCOMPLETE**. Do not
+proceed to authorization until compliance is verified.
+
+This fail-closed rule is implemented in Section 8.2 (Mandatory ACP Task Construction
+and Compliance Checklist).
+
+#### Preparation Is Not Authorization; Posting Is the Consequential Action
+
+Task preparation and ACP compliance are distinct from authorization to create, post,
+send, or trigger the consequential GitHub action. Preparing a compliant task does not
+authorize posting or sending it.
+
+**The complete final artifact must be shown to Kyle for authorization before
+consequential posting/sending.** The artifact actually posted/sent must be identical
+to the approved artifact unless a substantive reauthorization occurs.
+
+#### Runtime ACP Schema Compatibility
+
+The prepared ACP task must be compatible with the runtime ACP schema
+(`poc/schemas/acp-schema.js`) and the existing ACP validation engine
+(`poc/acp-engine.js`). Verify required fields, permitted `task_mode` values,
+capability sets per mode, and permitted_paths allow-lists against the actual schema
+before presenting the artifact for authorization.
 
 ### 8.1 Required Protocol Syntax, Task Identifier, and Authorization
 
