@@ -167,11 +167,11 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 
 | File | When to Update | Who Updates |
 |------|----------------|-------------|
-| `STATE.md` | After any authorized work that changes current project state (active tasks, blockers, status) | Kilo (primary), any authorized agent |
-| `ARCH_DECISIONS.md` | When a significant architectural decision is made or reviewed | Gemini (primary), Kilo when implementing |
-| `TASK_LOG.md` | After every completed authorized task | Kilo (primary), any agent completing authorized work |
-| `RESEARCH_INDEX.md` | When a RESEARCH_DOCUMENT task completes or a research record is added | Kilo (primary), any authorized research agent |
-| `README.md` | When operating rules or security requirements change | Kilo (when authorized) |
+| `STATE.md` | After any authorized work that changes current project state (active tasks, blockers, status) | Gemini Builder (primary), any authorized agent |
+| `ARCH_DECISIONS.md` | When a significant architectural decision is made or reviewed | Gemini (primary), Gemini Builder when implementing |
+| `TASK_LOG.md` | After every completed authorized task | Gemini Builder (primary), any agent completing authorized work |
+| `RESEARCH_INDEX.md` | When a RESEARCH_DOCUMENT task completes or a research record is added | Gemini Builder (primary), any authorized research agent |
+| `README.md` | When operating rules or security requirements change | Gemini Builder (when authorized) |
 
 **Update discipline:**
 - Make the smallest change that reflects the new reality.

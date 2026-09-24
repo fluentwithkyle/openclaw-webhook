@@ -25,7 +25,7 @@ The project has completed the transition from Kilo Cloud Agent (transitional/leg
 | **Google Adapter** | Google Apps Script |
 | **Last Updated** | 2026-09-24 |
 
-Updated By | Kilo — EXECUTE (TASK-KILO-CHATGPT-BOOTSTRAP-CONTRACT-RECONCILE-001)
+Updated By | Kilo — EXECUTE (TASK-KILO-CHATGPT-BOOTSTRAP-ROLE-RECONCILE-001)
 
 ---
 

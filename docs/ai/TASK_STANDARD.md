@@ -6,7 +6,7 @@ A fresh ChatGPT instance — with no prior conversation, memory, or project-spec
 
 ## 0. Canonical ACP Artifact vs. Prose Task Description
 
-A **canonical ACP task artifact** is a structured task request conforming to the Task Request Envelope (Section 1) with all required fields, required initiation syntax (e.g., `@kilo`), complete task title and task identifier, and canonical field ordering (`capabilities` immediately before `objective`).
+A **canonical ACP task artifact** is a structured task request conforming to the Task Request Envelope (Section 1) with all required fields (including the mandatory `task_name` field), required initiation syntax (e.g., `@kilo`), complete task title and task identifier, and canonical field ordering (`task_name` first, then `capabilities` immediately before `objective`).
 
 A **prose task description** uses narrative headings such as "Objective", "Procedure", "Execution Requirements", and "Completion Criteria" without the canonical envelope fields. **Headings such as Objective, Procedure, Execution Requirements, and Completion Criteria do not, by themselves, constitute ACP compliance.** A generic prose task specification is not a substitute for the canonical ACP artifact. The complete canonical task envelope defined below is required.
 
@@ -16,8 +16,9 @@ This distinction and the fail-closed artifact-verification rule are enforced in 
 
 All task requests must be structured with the following fields:
 
+- `task_name`: (Required) The exact task name/identifier for the task being prepared; must be present in every ACP artifact and verified against the task's actual identifier/name before authorization.
 - `originator`: (Required) The persona or role initiating the task (e.g., "Kyle — Director").
-- `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Kilo").
+- `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Gemini Builder", "Kilo").
 - `repository`: (Required) The repository the task applies to.
 - `base_branch`: (Required) The branch the task is based on and intended to integrate with.
 - `task_mode`: (Required) The execution mode. One of: "RESEARCH_DOCUMENT", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions.
@@ -28,7 +29,7 @@ All task requests must be structured with the following fields:
 - `constraints`: (Optional) Operational limits or rules (e.g., "no-new-dependencies").
 - `conflict_handling`: (Optional) Instructions for handling rule conflicts.
 
-The canonical field ordering is: `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`. The `capabilities` field must appear immediately before `objective` so that the task's authorized capabilities are immediately visible to the Director before the objective is reviewed or the task is authorized.
+The canonical field ordering is: `task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`. The `task_name` field must appear first so the task's exact identifier is immediately visible. The `capabilities` field must appear immediately before `objective` so that the task's authorized capabilities are immediately visible to the Director before the objective is reviewed or the task is authorized.
 
 ## 2. Authorization and Safety
 
@@ -48,7 +49,7 @@ Every ACP task must explicitly evaluate the simplest viable solution before auth
 - Introducing custom code or additional architectural complexity only when the simpler viable path does not satisfy the objective.
 - Documenting why escalation beyond the simplest viable path is necessary.
 
-This requirement corresponds to the Solution Simplicity Gate in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`. It applies to all delegated Kilo/Gemini tasks and does not weaken existing authorization, verification, or persistence requirements. The gate is practical: it does not require exhaustive investigation of every conceivable alternative when a simple viable path can be established and validated.
+This requirement corresponds to the Solution Simplicity Gate in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`. It applies to all delegated execution-agent tasks (Gemini Builder, Kilo when explicitly targeted, or any other designated agent) and does not weaken existing authorization, verification, or persistence requirements. The gate is practical: it does not require exhaustive investigation of every conceivable alternative when a simple viable path can be established and validated.
 
 ## 3. Instruction Precedence
 
@@ -62,7 +63,7 @@ This standard provides the human-readable envelope for task delegation. The Agen
 
 ## 5. Persistence Expectations for Implementation Tasks
 
-This section defines the mandatory persistence requirements for implementation tasks (task_mode: EXECUTE) targeting Kilo or any execution agent. These requirements ensure that implementation work is durably recorded in GitHub within the same authorized execution.
+This section defines the mandatory persistence requirements for implementation tasks (task_mode: EXECUTE) targeting Gemini Builder, Kilo (when explicitly targeted), or any execution agent. These requirements ensure that implementation work is durably recorded in GitHub within the same authorized execution.
 
 ### 5.1 Same-Execution Persistence Requirement
 
@@ -142,20 +143,21 @@ An authorized implementation task shall cause CONTROL_CENTER.md to be refreshed 
 - The task completes a task listed in CONTROL_CENTER.md.
 - A new task is authorized that Kyle must be aware of.
 
-Kilo refreshes CONTROL_CENTER.md as part of the task verification step, only when the task scope includes `docs/ai/CONTROL_CENTER.md` in permitted_paths or when STATE.md content reflected in CONTROL_CENTER.md has materially changed.
+The execution agent refreshes CONTROL_CENTER.md as part of the task verification step, only when the task scope includes `docs/ai/CONTROL_CENTER.md` in permitted_paths or when STATE.md content reflected in CONTROL_CENTER.md has materially changed.
 
 ### Authority Boundary
 
-- Kilo may update CONTROL_CENTER.md only as a side effect of an authorized implementation task.
-- Kilo may not independently create or modify CONTROL_CENTER.md outside of an authorized task.
+- The execution agent may update CONTROL_CENTER.md only as a side effect of an authorized implementation task.
+- The execution agent may not independently create or modify CONTROL_CENTER.md outside of an authorized task.
 - CONTROL_CENTER.md updates must preserve least-privilege and fail-closed requirements.
 - No automated synchronization of CONTROL_CENTER.md is introduced by this standard.
-- CONTROL_CENTER.md must never grant Kilo unrestricted authority over project-state documentation.
+- CONTROL_CENTER.md must never grant the execution agent unrestricted authority over project-state documentation.
 
 ## 7. Concrete Example
 
 ```json
 {
+  "task_name": "TASK-KILO-CHATGPT-BOOTSTRAP-ROLE-RECONCILE-001",
   "originator": "Kyle — Director",
   "target_agent": "Kilo",
   "repository": "fluentwithkyle/openclaw-webhook",
@@ -173,21 +175,21 @@ Kilo refreshes CONTROL_CENTER.md as part of the task verification step, only whe
 
 ## 8. Dynamic Recovery and Convergence Protocol
 
-This section defines the execution behavior for Kilo (and any implementation agent) when implementing authorized tasks. It replaces any fixed recovery-cycle limits with a convergence-based model that allows productive exploration and recovery while preventing unbounded debugging loops and scope expansion.
+This section defines the execution behavior for the execution agent (Gemini Builder, or Kilo when explicitly targeted) when implementing authorized tasks. It replaces any fixed recovery-cycle limits with a convergence-based model that allows productive exploration and recovery while preventing unbounded debugging loops and scope expansion.
 
 ### 8.1 Initial Exploration Is Expected
 
-- Kilo may inspect relevant code, documentation, tests, and configuration before and during implementation.
+- The execution agent may inspect relevant code, documentation, tests, and configuration before and during implementation.
 - A few exploratory steps are normal and should not immediately trigger a blocked result.
 - Exploration is bounded by the task's authorized scope (`permitted_paths`, `capabilities`).
 
 ### 8.2 Recovery Is Allowed
 
-- When implementation or validation reveals a problem, Kilo may diagnose and repair it.
+- When implementation or validation reveals a problem, the execution agent may diagnose and repair it.
 - There is no rigid universal one-recovery-cycle limit.
 - Recovery steps must remain within the authorized scope and capabilities.
 
-### 8.3 Convergence Determines Whether Kilo Continues
+### 8.3 Convergence Determines Whether the Execution Agent Continues
 
 Continue execution when the execution path is converging toward the stated objective. Signals of convergence include:
 
@@ -197,7 +199,7 @@ Continue execution when the execution path is converging toward the stated objec
 - The required scope remains stable.
 - Each recovery step produces useful information or measurable progress.
 
-### 8.4 Non-Convergence Determines When Kilo Stops
+### 8.4 Non-Convergence Determines When the Execution Agent Stops
 
 Stop and report `status: blocked` when recovery becomes materially non-convergent. Signals include:
 
@@ -210,7 +212,7 @@ Stop and report `status: blocked` when recovery becomes materially non-convergen
 
 ### 8.5 Scope Expansion Is a Hard Warning Signal
 
-- Kilo should prefer preserving the original bounded execution path.
+- The execution agent should prefer preserving the original bounded execution path.
 - If solving the task requires genuinely new architectural decisions or external-system investigation, that work must be surfaced as a blocker/escalation rather than silently turning the task into a different task.
 - Scope expansion beyond `permitted_paths` or authorized `capabilities` requires new explicit authorization.
 
@@ -222,14 +224,14 @@ Stop and report `status: blocked` when recovery becomes materially non-convergen
 
 ### 8.7 Durable Completion
 
-- When the task reaches a valid completed state, Kilo must finish the requested implementation, verification, commit, push, and completion report according to the existing task standard.
+- When the task reaches a valid completed state, the execution agent must finish the requested implementation, verification, commit, push, and completion report according to the existing task standard.
 - Completion includes reporting the commit SHA and verification performed.
 
 ### 8.8 Behavioral Principle
 
-**Allow enough exploration and recovery for Kilo to gain traction. Stop when the execution path stops converging.**
+**Allow enough exploration and recovery for the execution agent to gain traction. Stop when the execution path stops converging.**
 
-This principle replaces any interpretation of "fail fast" as "stop at the first unexpected problem." The objective is autonomous completion without babysitting, while preserving reasonable room for Kilo to solve ordinary implementation problems independently.
+This principle replaces any interpretation of "fail fast" as "stop at the first unexpected problem." The objective is autonomous completion without babysitting, while preserving reasonable room for the execution agent to solve ordinary implementation problems independently.
 
 ### 8.9 Conflict Resolution
 
@@ -267,7 +269,7 @@ The capabilities field must contain exactly these four capabilities. Selecting R
 
 **Permitted paths:** Restricted to the research/documentation surface: `docs/ai/research/`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/README.md`, `docs/ai/ARCH_DECISIONS.md`, `poc/schemas/acp-schema.js`, and `test/schema.test.js`.
 
-**Not RESEARCH:** The old standalone RESEARCH task-mode semantics — a read-only research mode whose research persistence was optional — are removed. RESEARCH is no longer a valid task mode in the canonical task standard or the runtime ACP schema. RESEARCH_DOCUMENT is the standard research mode for Kilo, Gemini, and any future designated research agent.
+**Not RESEARCH:** The old standalone RESEARCH task-mode semantics — a read-only research mode whose research persistence was optional — are removed. RESEARCH is no longer a valid task mode in the canonical task standard or the runtime ACP schema. RESEARCH_DOCUMENT is the standard research mode for Gemini Builder, Kilo, Gemini, and any future designated research agent.
 
 ### 9.2 PLAN
 
