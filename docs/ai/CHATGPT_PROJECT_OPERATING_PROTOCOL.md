@@ -625,13 +625,13 @@ before presenting the artifact for authorization.
 
 **Required protocol syntax** (initiation markers, routing identifiers, ACP fields, and other mandatory task-construction elements) **must be present** in a prepared ACP work order for it to be valid. This syntax is part of the task artifact itself.
 
-**Complete ACP task title and task identifier** must be explicitly defined as part of the required prepared ACP artifact. The task identifier provides the unique reference, and the title provides the functional description within the artifact itself.
+**Complete ACP task title, task identifier, and task_name** must be explicitly defined as part of the required prepared ACP artifact. The task identifier provides the unique reference, the title provides the functional description within the artifact itself, and `task_name` is the exact task name/identifier that must be present in every ACP artifact.
 
-**Authorization** governs the **execution of the consequential action** (creating, posting, sending, or triggering the GitHub mutation). Authorization is separate from and does not derive from the presence of required protocol syntax or the task title/identifier in the prepared task.
+**Authorization** governs the **execution of the consequential action** (creating, posting, sending, or triggering the GitHub mutation). Authorization is separate from and does not derive from the presence of required protocol syntax or the task title/identifier/task_name in the prepared task.
 
 Including required protocol syntax in a prepared task — such as the `@kilo` initiation marker — **does not itself authorize** creation, posting, sending, or triggering of the GitHub action. The prepared task artifact and the consequential action are distinct.
 
-ChatGPT must perform a **pre-execution/preparation completeness check** to verify that all required ACP syntax, fields, task identifier, task title, and protocol markers are present and correct before seeking authorization for the consequential action.
+ChatGPT must perform a **pre-execution/preparation completeness check** to verify that all required ACP syntax, fields, task identifier, task title, task_name, and protocol markers are present and correct before seeking authorization for the consequential action.
 
 This distinction applies generally to all required protocol markers, ACP fields, routing identifiers, task identifiers, and other mandatory task-construction elements, not only `@kilo`.
 
@@ -648,14 +648,17 @@ If an applicable requirement cannot be verified against the completed ACP artifa
 #### 8.2.3 Mandatory ACP Task Compliance Checklist
 - [ ] **Current protocol review**: Confirmed review of the repository version of `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`.
 - [ ] **Repository/State verification**: Confirmed consistency with `docs/ai/STATE.md` and repository reality.
-- [ ] **Complete task title and task identifier**: Both are explicitly included inside the ACP artifact.
+- [ ] **Complete task title, task identifier, and task_name**: The `task_name` field is explicitly included inside the ACP artifact and matches the task's actual identifier/name. Both task title and task identifier are also explicitly included.
 - [ ] **Required initiation syntax**: Task includes all required agent trigger markers (e.g., `@kilo` at start of issue body) per configured integration.
-- [ ] **Complete ACP envelope**: All required ACP fields present (`request_id`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`).
+- [ ] **Complete ACP envelope**: All required ACP fields present (`task_name`, `request_id`, `originator`,
+  `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`,
+  `scope`, `verification`, `constraints`, `conflict_handling`). Omission of `task_name`
+  is an ACP compliance failure requiring correction before authorization.
 - [ ] **Canonical field ordering**: `capabilities` immediately precedes `objective`.
 - [ ] **Runtime ACP schema compatibility**: Task structure is compatible with `poc/schemas/acp-schema.js`.
 - [ ] **Explicit capabilities**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`) are explicitly listed.
 - [ ] **Explicit permitted paths**: `permitted_paths` are explicitly defined and within authorized bounds.
-- [ ] **Task-mode semantics**: Correct `task_mode` (REVIEW, VERIFY_RECONCILE, FAILOVER_EXECUTE, BUILDER) applied.
+- [ ] **Task-mode semantics**: Correct `task_mode` (RESEARCH_DOCUMENT, PLAN, EXECUTE, VERIFY_RECONCILE) applied.
 - [ ] **Intrinsic completion requirements**: Defined completion criteria are present in `verification`.
 - [ ] **Executable verification requirements**: Verification criteria are executable and verifiable.
 - [ ] **Explicit persistence requirements**: Persistence expectations are explicit per `docs/ai/TASK_STANDARD.md`.
@@ -1236,7 +1239,7 @@ This section explicitly establishes the responsibility boundary between the Dire
 
 - Repository inspection and analysis needs.
 - Decomposition into implementable units.
-- Specialist-agent selection (e.g., Gemini for architecture, Kilo for implementation).
+- Specialist-agent selection (e.g., Gemini for architecture, Gemini Builder for implementation).
 - Task construction within the ACP/TASK_STANDARD envelope.
 - Verification strategy.
 - Reconciliation of completed work with project state and documentation.
@@ -1283,7 +1286,7 @@ This protocol makes ChatGPT's operating behavior explicitly result-oriented. Kyl
 - Modify ACP, TASK_STANDARD, or repository architecture.
 - Change application behavior or workflow mechanics.
 - Weaken existing authorization boundaries (Section 14 remains authoritative).
-- Collapse specialist lanes (Gemini, Kilo, Security AI, Utility AI remain distinct).
+- Collapse specialist lanes (Gemini, Gemini Builder, Kilo, Security AI, Utility AI remain distinct).
 
 ### 16.2 Decision Hierarchy
 
@@ -1396,7 +1399,7 @@ The new behavior must not collapse specialist lanes into ChatGPT:
 
 - **ChatGPT** remains responsible for coordination and translation.
 - **Gemini** remains responsible for research/architecture/review where appropriate.
-- **Kilo** remains responsible for authorized implementation/testing.
+- **Gemini Builder** remains the primary Builder / Implementer / Tester. **Kilo** remains an available execution lane for tasks that explicitly target it.
 - **Security AI** and **Utility AI** retain their defined roles.
 
 The Coordinator determines which lane is appropriate based on the desired result and current repository state.
@@ -1498,7 +1501,8 @@ Rules:
 
 Document and preserve the existing boundaries:
 
-- **Kilo** = implementation / execution.
+- **Gemini Builder** = implementation / execution.
+- **Kilo** = available execution lane for explicitly-targeted tasks.
 - **Gemini** = research / architecture / reviewer.
 - **ChatGPT** = coordinator / control-plane.
 - Preserve boundaries for agent, task, activation surface, and destination.
