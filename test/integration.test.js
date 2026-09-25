@@ -254,8 +254,15 @@ async function main() {
   await test('Correlation preserved across full flow', async () => {
     cleanup();
 
+    const parentCommand = { ...validCommand, request_id: 'parent-123' };
+    assertEqual(taskRegistry.createTask(parentCommand).success, true);
+    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'SELECTED').success, true);
+    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'PLANNED').success, true);
+    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'EXECUTING').success, true);
+    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'FAILED').success, true);
+
     const customCommand = { ...validCommand, request_id: 'correlation-test-42', parent_request_id: 'parent-123' };
-    taskRegistry.createTask(customCommand);
+    assertEqual(taskRegistry.createTask(customCommand).success, true);
     taskRegistry.updateTaskStatus('correlation-test-42', 'SELECTED');
     taskRegistry.updateTaskStatus('correlation-test-42', 'PLANNED');
     taskRegistry.updateTaskStatus('correlation-test-42', 'EXECUTING');
