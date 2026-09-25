@@ -2284,4 +2284,4 @@ The reconciled documentation distinguishes:
 
 **Outcome**: SUCCESS — Added authenticated `POST /poc/deepseek-runtime` and `services/deepseek-runtime.js`. The runtime uses existing Axios (no new dependency), supports normal OpenRouter completions and a maximum of two tool iterations, and exposes exactly one `control_plane` tool. The tool accepts only `operation`, `objective`, and the fixed `Gemini Builder` target; server-side policy supplies repository, base branch, REVIEW mode, read-only capability, permitted `poc/` path, and ACP authorization. Coordinator requests retain the server-side coordinator secret. Focused tests cover authentication, successful and malformed provider responses, timeouts, tool validation, authority injection rejection, ACP translation, coordinator submission, and coordinator failures. `npm test` passed. Live OpenRouter/Chatbox deployment verification remains UNKNOWN.
 
-**Commit Reference**: `b61b1cbcaa870f189ab061fa2ad5765beeb69947` on `main`.
+**Commit Reference**: `934dee2af8e8c3c34109e9545c3da1f86b9dbfdb` on `main`.
