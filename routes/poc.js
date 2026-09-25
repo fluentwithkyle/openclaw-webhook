@@ -5,6 +5,7 @@ const orchestrator = require('../poc/orchestrator');
 const { validateExecutionReport, validateACPCommand, VALID_AGENTS } = require('../poc/schemas/acp-schema');
 const taskRegistry = require('../poc/task-registry');
 const gitWebhook = require('../poc/github-webhook');
+const { createDeepSeekRuntimeHandler } = require('../services/deepseek-runtime');
 
 const router = express.Router();
 
@@ -768,6 +769,8 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
         });
     }
 });
+
+router.post('/deepseek-runtime', authenticateChatboxGateway, createDeepSeekRuntimeHandler());
 
 router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) => {
     const command = req.body;

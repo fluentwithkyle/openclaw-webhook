@@ -2275,3 +2275,13 @@ The reconciled documentation distinguishes:
 **Commit Reference**: `89bf546` on `main`
 
 - 2026-09-23: TASK-GEMINI-CHATBOX-ACP-ARCHITECTURE-RECOVERY-001 - Recovered and preserved historical Chatbox → DeepSeek → ACP architecture research verbatim from repository. Created research record: `docs/ai/research/research-TASK-GEMINI-CHATBOX-ACP-ARCHITECTURE-RECOVERY-001.md`. Added index entry to `docs/ai/RESEARCH_INDEX.md`.
+
+---
+
+## 2026-09-25 | Implement DeepSeek/OpenRouter Bounded Runtime (TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001)
+
+**Task**: Implement the smallest server-side OpenRouter/DeepSeek tool-execution runtime that reuses the existing `/poc/coordinator` ACP authority boundary.
+
+**Outcome**: SUCCESS — Added authenticated `POST /poc/deepseek-runtime` and `services/deepseek-runtime.js`. The runtime uses existing Axios (no new dependency), supports normal OpenRouter completions and a maximum of two tool iterations, and exposes exactly one `control_plane` tool. The tool accepts only `operation`, `objective`, and the fixed `Gemini Builder` target; server-side policy supplies repository, base branch, REVIEW mode, read-only capability, permitted `poc/` path, and ACP authorization. Coordinator requests retain the server-side coordinator secret. Focused tests cover authentication, successful and malformed provider responses, timeouts, tool validation, authority injection rejection, ACP translation, coordinator submission, and coordinator failures. `npm test` passed. Live OpenRouter/Chatbox deployment verification remains UNKNOWN.
+
+**Commit Reference**: `b61b1cbcaa870f189ab061fa2ad5765beeb69947` on `main`.

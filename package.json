@@ -4,7 +4,8 @@
   "description": "Webhook listener",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node test/deepseek-runtime.test.js && node test/schema.test.js && node test/task-registry.test.js && node test/orchestrator.test.js && node test/integration.test.js && node test/gemini-trigger.test.js && node test/gemini-builder-trigger.test.js && node test/gemini-callback.test.js && node test/kilo-callback.test.js && node test/kilo-polling.test.js && node test/kilo-verifier.test.js && node test/github-webhook.test.js && node test/transport-provider.test.js && node test/chatbox-gateway.test.js && node test/coordinator.test.js && node test/verify-reconcile.test.js && node test/reliability-enforcement.test.js && node test/reliability-enforcement-final.test.js && node test/signal-emitter.test.js && node test/workflow-expression.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",
