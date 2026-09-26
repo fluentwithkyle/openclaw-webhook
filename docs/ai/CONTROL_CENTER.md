@@ -1,10 +1,12 @@
-# Control Center
+## Control Center
 
 **Derived human-facing dashboard.** This document is a presentation layer.
 **docs/ai/STATE.md remains the authoritative current project-state source.**
 
 Designed for Kyle checking the project from a phone.
 
+**Last Updated**: 2026-09-26
+**Updated By**: ChatGPT Coordinator — TASK-CHATGPT-DEEPSEEK-DOCUMENTATION-RECONCILE-002
 ---
 
 ## Architectural Note
@@ -39,7 +41,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIV
 6. **DeepSeek Coordinator Project** — **HIGH PRIORITY**. Authenticated `POST /poc/coordinator` ingress implemented and verified in `routes/poc.js`. After successful registration, the command is dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Registration failure prevents dispatch; provider identifiers persisted on successful dispatch. 19 coordinator tests pass; 170 total tests pass. (IMPLEMENTED / VERIFIED)
 7. **Git completion-signal emitter and Path 2** — Signal emitter implemented (Issue #180, commit `7bec058`): `poc/signal-emitter.js` with `poc/signals/<request_id>.json` artifact. **Path 2 recovery IMPLEMENTED / VERIFIED** (Issue #175, commit `030f888`): `recoverTaskFromGitHub()` reconstructs task context from GitHub issue body when TaskRegistry is absent. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`). Architectural direction (Issue #172, ADR-016) APPROVED / PROPOSED / TARGET — fully documented. Remaining gap: **live end-to-end validation (GitHub push ↠ Render webhook ↠ Gemini dispatch) NOT verified**; tests use mocks. Test count discrepancy: signal artifact claims 337 regression (total 378); independently verified actual is 369 regression (total 410). See STATE.md for full details.
 8. **Chatbox → Render live integration gap** — `CHATBOX_GATEWAY` custom provider configured in Chatbox iOS (OpenAI API Compatible; host `/poc/chatbox`; `CHATBOX_GATEWAY_SECRET` auth boundary in Render). DeepSeek Flash test through OpenRouter succeeded; DeepSeek Flash test under `CHATBOX_GATEWAY` returned `Network Error: Load failed`. `/poc/chatbox` route is implemented (26/26 gateway tests pass); root cause of the live network error is **UNKNOWN**. Investigation questions recorded in STATE.md — next authorized action pending your direction.
-9. **DeepSeek Runtime live validation gap** — `POST /poc/deepseek-runtime` (implementation commit `934dee2`) implemented and under validation. Render environment configured; Chatbox custom provider ("DeepSeek Runtime") configured toward `/poc/deepseek-runtime`; connection check reported **successful**. However, sending a normal chat message resulted in a **blank response**, and Render request-log inspection showed **no observed request** to `/poc/deepseek-runtime`. Streaming compatibility (runtime returns non-streaming JSON; Chatbox SSE handler expects streamed response) is a known concern but **NOT proven** as the root cause. Complete live path (Chatbox → Render → OpenRouter → DeepSeek → coordinator → ACP dispatcher) **unverified**. Next authorized action pending your direction — no implementation authorized by this reconciliation task.
+9. **DeepSeek Runtime state** — Server-side /poc/deepseek-runtime is IMPLEMENTED / VERIFIED, and live validation established successful read-only Builder dispatch through the existing control-plane path. The asynchronous TaskRegistry/orchestration lifecycle is VERIFIED beyond initial dispatch. Current gap: the runtime returns the dispatch acknowledgement/task identity rather than retrieving the eventual asynchronous result for the ChatBox-facing conversation. A bounded read-only result/status operation through the existing control_plane is PROPOSED / NOT IMPLEMENTED / NOT AUTHORIZED. End-to-end ChatBox success remains unverified.
 
 ---
 
@@ -89,6 +91,15 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIV
 
 ---
 
+
+
+### DeepSeek Runtime result retrieval boundary
+
+**Current**: VERIFIED live read-only dispatch + VERIFIED asynchronous TaskRegistry/orchestration lifecycle.
+
+**Gap**: the runtime returns dispatch acknowledgement/task identity rather than the eventual task result to the ChatBox-facing conversation.
+
+**Next architectural boundary**: a bounded read-only status/result operation through the existing control_plane — PROPOSED / NOT IMPLEMENTED / NOT AUTHORIZED.
 ## Next Action
 
 Substantially complete:

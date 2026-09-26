@@ -1,8 +1,7 @@
-# Current AI Project State
+## Current AI Project State
 
-**Last Updated**: 2026-09-25
-**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIVE-VALIDATION-001) — reconciled durable documentation with the DeepSeek/OpenRouter runtime implementation state (commit `934dee2`, task commit-reference reconciled by `17b8065`; stale SHA `b61b1cb` verified absent from history) and the live-validation investigation of the Chatbox → Render `/poc/deepseek-runtime` endpoint. Updated the DeepSeek runtime Active Tasks entry, added a "DeepSeek Runtime Live Validation Status" section, updated CONTROL_CENTER.md, and appended a TASK_LOG reconciliation entry. No application/runtime/ACP code, routes, dependencies, tests, deployment configuration, or secrets modified; all changes within `docs/ai/` documentation scope.
-
+**Last Updated**: 2026-09-26
+**Updated By**: ChatGPT Coordinator — TASK-CHATGPT-DEEPSEEK-DOCUMENTATION-RECONCILE-002 — reconciled independently verified DeepSeek runtime dispatch/result-retrieval state and corrected prior documentation delivery record.
 ---
 
 ## Project Status: ACTIVE (Transitional)
@@ -26,7 +25,7 @@
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | DeepSeek Chatbox Runtime Boundary Research (TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001) | **COMPLETED (RESEARCH)** | Gemini | Researched and durably documented the DeepSeek Chatbox runtime boundary and tool-execution architecture (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001.md`). Answered all 8 required verification items: current Chatbox ingress (`POST /poc/chatbox`), current Direct ACP coordinator path (`POST /poc/coordinator`), OpenRouter's role (model proxy and provider router, application-side tool execution), repository absence of server-side DeepSeek/OpenRouter tool execution runtime, exact missing boundary between `tool_call` and coordinator, accuracy of ADR-017, prerequisite for Milestone 0 connectivity testing (baseline ping reachability), and unresolved configuration questions. Updated RESEARCH_INDEX.md, TASK_LOG.md, and STATE.md. No implementation performed. |
-| TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED (LIVE VALIDATION IN PROGRESS)** | Codex Builder | Added the bounded server-side OpenRouter/DeepSeek runtime at authenticated `POST /poc/deepseek-runtime` (implementation commit `934dee2`, task commit-reference reconciled by `17b8065`; stale SHA `b61b1cb` verified absent from history). The runtime exposes exactly one `control_plane` tool, maps the sole allowed `request_task` intent to server-controlled REVIEW ACP authority (target: Gemini Builder; capabilities: read_only; permitted paths: poc/), and submits through existing `POST /poc/coordinator`. Server-side secrets used: `OPENROUTER_API_KEY`, `DEEPSEEK_COORDINATOR_SECRET`; route protected by `CHATBOX_GATEWAY_SECRET`. Render environment configured for OpenRouter/DeepSeek/coordinator operation: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (`deepseek/deepseek-v4-flash`), `DEEPSEEK_COORDINATOR_SECRET`, `OPENROUTER_API_URL`, `DEEPSEEK_COORDINATOR_URL`. Chatbox custom provider configured toward `/poc/deepseek-runtime`; connection check reported successful. Live end-to-end Chatbox → Render runtime execution NOT VERIFIED — normal Chatbox chat requests were not observed in Render request logs. See "DeepSeek Runtime Live Validation Status" section below. |
+| TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED / LIVE DISPATCH VERIFIED / RESULT RETRIEVAL GAP** | Codex Builder | Server-side OpenRouter/DeepSeek runtime exists at /poc/deepseek-runtime with one bounded control_plane tool. Runtime message normalization correction is at commit 65a8ed3. Live validation established successful read-only Builder dispatch through the existing control-plane path and confirmed asynchronous TaskRegistry/orchestration can progress beyond dispatch. The runtime currently returns the dispatch acknowledgement/task identity rather than retrieving the eventual asynchronous task result for the ChatBox-facing conversation. Result/status retrieval through the existing control plane is PROPOSED / NOT IMPLEMENTED / NOT AUTHORIZED. End-to-end ChatBox success remains unverified. |
 | TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | **COMPLETED** | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit RESEARCH_DOCUMENT branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Root cause of prior 048e9b1 push failure: gemini-builder.yml pushes via the auto-generated GITHUB_TOKEN, which GitHub restricts from pushing .github/workflows/* changes (commit landed locally in the runner but push was rejected); a properly-scoped owner token (Kilo GH_TOKEN) pushes the same workflow-file change successfully. Durable Builder-lane fix (PAT secret for .github/workflows/* pushes) is outside this task's permitted_paths. |
 | Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. 237/289 tests verified post-remediation in pre-Builder state (347 total after Path 2 recovery); **450/450 tests pass across 18 test files** at commit `8a56fe6` (including `gemini-builder-trigger.test.js` with 9 tests). |
 | Gemini Builder execution infrastructure | **IMPLEMENTED / VERIFIED** | Gemini Builder | Complete test coverage: `gemini-builder-trigger.test.js` (9 tests), Builder callback tests (3 in gemini-callback), Builder lifecycle tests in orchestrator, schema tests for BUILDER mode, workflow-expression tests for `gemini-builder.yml`. All 9 Builder-trigger tests pass; full suite: **450/450 tests pass across 18 test files**. Implementation commit `f1e21ec`; tests commit `53dfa23`; merged via `8a56fe6`. |
@@ -713,6 +712,16 @@ Runtime implementation merged on main (934dee2)
   → Streaming compatibility identified as UNRESOLVED CONCERN (not proven root cause)
   → Complete live path REMAINS UNVERIFIED
 ```
+
+
+### Asynchronous Result Retrieval — Current Verified State
+
+- VERIFIED: The server-side DeepSeek runtime can submit a bounded read-only Builder task through the existing authenticated control-plane path.
+- VERIFIED: The existing TaskRegistry/orchestration lifecycle is asynchronous and can progress beyond the initial dispatch acknowledgement.
+- VERIFIED GAP: The DeepSeek runtime currently returns the coordinator dispatch acknowledgement/task identity to the model/ChatBox conversation; it does not retrieve and return the eventual TaskRegistry completion/result.
+- PROPOSED / NOT IMPLEMENTED / NOT AUTHORIZED: A bounded read-only task-status/result retrieval operation through the existing control_plane capability.
+- UNKNOWN: Any claim that the eventual Builder result is already available to ChatBox through the current runtime.
+- This task records the verified gap only. It does not authorize or implement the result-retrieval path.
 
 ---
 
