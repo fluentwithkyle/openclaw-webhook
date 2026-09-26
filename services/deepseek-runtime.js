@@ -44,15 +44,65 @@ function getRuntimeConfig(env = process.env) {
     };
 }
 
-function validateMessages(messages) {
+const VALID_ROLES = ['system', 'user', 'assistant', 'tool'];
+
+function normalizeContent(content, role) {
+    if (content === null) {
+        if (role !== 'assistant') {
+            throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
+        }
+        return '';
+    }
+    if (typeof content === 'string') {
+        return content;
+    }
+    if (Array.isArray(content)) {
+        return content
+            .filter(part => part && typeof part === 'object' && typeof part.text === 'string')
+            .map(part => part.text)
+            .join('');
+    }
+    throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
+}
+
+function normalizeMessage(message) {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+        throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
+    }
+    if (typeof message.role !== 'string' || !VALID_ROLES.includes(message.role)) {
+        throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include a valid string role field');
+    }
+    if (!('content' in message)) {
+        throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
+    }
+
+    const normalized = { role: message.role };
+
+    if (message.role === 'tool') {
+        if (typeof message.tool_call_id !== 'string' || message.tool_call_id.trim() === '') {
+            throw new RuntimeError(400, 'INVALID_MESSAGES', 'tool messages must include a string tool_call_id field');
+        }
+        normalized.tool_call_id = message.tool_call_id;
+    }
+
+    normalized.content = normalizeContent(message.content, message.role);
+
+    if (message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+        normalized.tool_calls = message.tool_calls;
+    }
+
+    if (message.role === 'function' && typeof message.name === 'string') {
+        normalized.name = message.name;
+    }
+
+    return normalized;
+}
+
+function normalizeMessages(messages) {
     if (!Array.isArray(messages) || messages.length === 0) {
         throw new RuntimeError(400, 'INVALID_MESSAGES', 'messages must be a non-empty array');
     }
-    for (const message of messages) {
-        if (!message || typeof message !== 'object' || typeof message.role !== 'string' || typeof message.content !== 'string') {
-            throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
-        }
-    }
+    return messages.map(normalizeMessage);
 }
 
 function buildControlPlaneCommand(args) {
@@ -121,9 +171,8 @@ function normalizeProviderError(error, operation) {
 }
 
 async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
-    validateMessages(messages);
+    const conversation = normalizeMessages(messages);
     const config = getRuntimeConfig(env);
-    const conversation = messages.map(message => ({ ...message }));
 
     for (let iteration = 0; iteration <= MAX_TOOL_ITERATIONS; iteration++) {
         let providerResponse;
@@ -216,5 +265,7 @@ module.exports = {
     buildControlPlaneCommand,
     createDeepSeekRuntimeHandler,
     getRuntimeConfig,
+    normalizeMessages,
+    normalizeMessage,
     runDeepSeekConversation
 };

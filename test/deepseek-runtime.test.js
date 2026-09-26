@@ -6,6 +6,7 @@ const {
     CONTROL_PLANE_TOOL,
     buildControlPlaneCommand,
     createDeepSeekRuntimeHandler,
+    normalizeMessages,
     runDeepSeekConversation
 } = require('../services/deepseek-runtime');
 
@@ -193,6 +194,127 @@ function request(port, headers, body) {
 
     await test('missing credentials fail closed', async () => {
         await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'x' }], env: {}, httpClient: { post: async () => null } }), error => error.code === 'RUNTIME_NOT_CONFIGURED');
+    });
+
+    await test('assistant message with null content (tool-call history) reaches OpenRouter normalized', async () => {
+        const calls = [];
+        const client = { post: async (url, body) => {
+            calls.push({ url, body });
+            return providerResponse({ role: 'assistant', content: 'Done.' });
+        } };
+        const conversation = [
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: null }
+        ];
+        const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
+        assert.equal(result.message.content, 'Done.');
+        const sentMessages = calls[0].body.messages;
+        assert.equal(sentMessages[0].role, 'user');
+        assert.equal(sentMessages[1].role, 'assistant');
+        assert.equal(sentMessages[1].content, '');
+    });
+
+    await test('tool result message with string content is preserved in conversation history', async () => {
+        const calls = [];
+        const client = { post: async (url, body) => {
+            calls.push({ url, body });
+            return providerResponse({ role: 'assistant', content: 'Acknowledged.' });
+        } };
+        const conversation = [
+            { role: 'user', content: 'Check the calendar' },
+            { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Check calendar', target: 'Gemini Builder' }) } }] },
+            { role: 'tool', tool_call_id: 'call-1', content: '[{"status":"completed","coordinator":{"request_id":"test-1"}}]' }
+        ];
+        const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
+        assert.equal(result.message.content, 'Acknowledged.');
+        const sentMessages = calls[0].body.messages;
+        assert.equal(sentMessages[0].role, 'user');
+        assert.equal(sentMessages[1].role, 'assistant');
+        assert.equal(sentMessages[1].content, '');
+        assert.equal(sentMessages[2].role, 'tool');
+        assert.equal(sentMessages[2].tool_call_id, 'call-1');
+        assert.equal(typeof sentMessages[2].content, 'string');
+    });
+
+    await test('structured content parts (array) are normalized to string', async () => {
+        const calls = [];
+        const client = { post: async (url, body) => {
+            calls.push({ url, body });
+            return providerResponse({ role: 'assistant', content: 'OK' });
+        } };
+        const conversation = [
+            { role: 'user', content: [{ type: 'text', text: 'Hello' }, { type: 'text', text: ' World' }] }
+        ];
+        const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
+        assert.equal(result.message.content, 'OK');
+        assert.equal(calls[0].body.messages[0].content, 'Hello World');
+    });
+
+    await test('system message and multiple message roles are accepted', async () => {
+        const calls = [];
+        const client = { post: async (url, body) => {
+            calls.push({ url, body });
+            return providerResponse({ role: 'assistant', content: 'Understood.' });
+        } };
+        const conversation = [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: 'What is 2+2?' }
+        ];
+        const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
+        assert.equal(result.message.content, 'Understood.');
+        assert.equal(calls[0].body.messages[0].role, 'system');
+        assert.equal(calls[0].body.messages[0].content, 'You are a helpful assistant.');
+    });
+
+    await test('malformed messages still fail closed with INVALID_MESSAGES', async () => {
+        const invalidCases = [
+            { messages: [] },
+            { messages: [{ role: 'user' }] },
+            { messages: [{ role: 'user', content: null }] },
+            { messages: [{ role: 'user', content: 123 }] },
+            { messages: [{ role: 'unknown', content: 'x' }] },
+            { messages: [{ role: 'tool', content: 'x' }] },
+            { messages: 'not an array' },
+            { messages: null },
+            { messages: [{ role: 'user', content: { nested: true } }] },
+        ];
+        for (const testCase of invalidCases) {
+            await assert.rejects(
+                async () => normalizeMessages(testCase.messages),
+                error => error.code === 'INVALID_MESSAGES'
+            );
+        }
+    });
+
+    await test('normalizeMessages normalises null and structured content while preserving roles', async () => {
+        const assistantNull = normalizeMessages([{ role: 'assistant', content: null }]);
+        assert.equal(assistantNull[0].content, '');
+
+        const structured = normalizeMessages([{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }]);
+        assert.equal(structured[0].content, 'Hello');
+
+        const toolResult = normalizeMessages([{ role: 'tool', tool_call_id: 'call-1', content: 'result' }]);
+        assert.equal(toolResult[0].content, 'result');
+        assert.equal(toolResult[0].role, 'tool');
+        assert.equal(toolResult[0].tool_call_id, 'call-1');
+    });
+
+    await test('normalizeMessages rejects malformed messages with INVALID_MESSAGES', async () => {
+        const invalidCases = [
+            [{ role: 'user', content: 123 }],
+            [{ role: 'user', content: { nested: true } }],
+            [{ role: 'unknown', content: 'x' }],
+            [{ role: '' }],
+            [{ role: 123 }],
+            [{ content: 'x' }],
+            [{ role: 'tool', content: 'x' }],
+        ];
+        for (const messages of invalidCases) {
+            await assert.rejects(
+                async () => normalizeMessages(messages),
+                error => error.code === 'INVALID_MESSAGES'
+            );
+        }
     });
 
     await test('runtime route accepts custom-header and Bearer gateway authentication while rejecting missing or invalid credentials', async () => {
