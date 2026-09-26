@@ -57,9 +57,16 @@ function normalizeContent(content, role) {
         return content;
     }
     if (Array.isArray(content)) {
+        if (content.length === 0) {
+            throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
+        }
         return content
-            .filter(part => part && typeof part === 'object' && typeof part.text === 'string')
-            .map(part => part.text)
+            .map(part => {
+                if (!part || typeof part !== 'object' || Array.isArray(part) || typeof part.text !== 'string') {
+                    throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
+                }
+                return part.text;
+            })
             .join('');
     }
     throw new RuntimeError(400, 'INVALID_MESSAGES', 'each message must include string role and content fields');
@@ -89,10 +96,6 @@ function normalizeMessage(message) {
 
     if (message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
         normalized.tool_calls = message.tool_calls;
-    }
-
-    if (message.role === 'function' && typeof message.name === 'string') {
-        normalized.name = message.name;
     }
 
     return normalized;

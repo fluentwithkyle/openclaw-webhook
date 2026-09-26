@@ -309,12 +309,52 @@ function request(port, headers, body) {
             [{ content: 'x' }],
             [{ role: 'tool', content: 'x' }],
         ];
-        for (const messages of invalidCases) {
+         for (const messages of invalidCases) {
             await assert.rejects(
                 async () => normalizeMessages(messages),
                 error => error.code === 'INVALID_MESSAGES'
             );
         }
+    });
+
+    await test('invalid function role fails closed and is not accepted as a valid role', async () => {
+        await assert.rejects(
+            async () => normalizeMessages([{ role: 'function', content: 'x', name: 'foo' }]),
+            error => error.code === 'INVALID_MESSAGES'
+        );
+    });
+
+    await test('structured content array with a missing text part fails closed with INVALID_MESSAGES', async () => {
+        await assert.rejects(
+            async () => normalizeMessages([{ role: 'user', content: [{ type: 'text', text: 'Hello' }, { type: 'image_url', image_url: { url: 'data:...' } }] }]),
+            error => error.code === 'INVALID_MESSAGES'
+        );
+    });
+
+    await test('structured content array with a malformed part fails closed with INVALID_MESSAGES', async () => {
+        await assert.rejects(
+            async () => normalizeMessages([{ role: 'user', content: [{ type: 'text', text: 'Hello' }, { type: 'text' }] }]),
+            error => error.code === 'INVALID_MESSAGES'
+        );
+    });
+
+    await test('structured content array with a non-object part fails closed with INVALID_MESSAGES', async () => {
+        await assert.rejects(
+            async () => normalizeMessages([{ role: 'user', content: [{ type: 'text', text: 'Hello' }, 'bad-part'] }]),
+            error => error.code === 'INVALID_MESSAGES'
+        );
+    });
+
+    await test('otherwise unusable (empty) structured content array fails closed with INVALID_MESSAGES', async () => {
+        await assert.rejects(
+            async () => normalizeMessages([{ role: 'user', content: [] }]),
+            error => error.code === 'INVALID_MESSAGES'
+        );
+    });
+
+    await test('valid structured content parts continue to normalize correctly', async () => {
+        const structured = normalizeMessages([{ role: 'user', content: [{ type: 'text', text: 'Hello' }, { type: 'text', text: ' World' }] }]);
+        assert.equal(structured[0].content, 'Hello World');
     });
 
     await test('runtime route accepts custom-header and Bearer gateway authentication while rejecting missing or invalid credentials', async () => {
