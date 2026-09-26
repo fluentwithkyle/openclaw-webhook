@@ -21,10 +21,11 @@ const CONTROL_PLANE_TOOL = {
 };
 
 class RuntimeError extends Error {
-    constructor(status, code, message) {
+    constructor(status, code, message, diagnostics) {
         super(message);
         this.status = status;
         this.code = code;
+        if (diagnostics) this.diagnostics = diagnostics;
     }
 }
 
@@ -92,6 +93,19 @@ function parseToolArguments(toolCall) {
     }
 }
 
+function getCoordinatorDiagnostics(error) {
+    const diagnostics = error && error.response && error.response.data && error.response.data.diagnostics;
+    if (!diagnostics || typeof diagnostics !== 'object' || Array.isArray(diagnostics)) return undefined;
+
+    const safeDiagnostics = {};
+    if (typeof diagnostics.stage === 'string') safeDiagnostics.stage = diagnostics.stage;
+    if (typeof diagnostics.category === 'string') safeDiagnostics.category = diagnostics.category;
+    if (typeof diagnostics.status_code === 'number') safeDiagnostics.status_code = diagnostics.status_code;
+    if (typeof diagnostics.workflow === 'string') safeDiagnostics.workflow = diagnostics.workflow;
+    if (typeof diagnostics.repository === 'string') safeDiagnostics.repository = diagnostics.repository;
+    return Object.keys(safeDiagnostics).length > 0 ? safeDiagnostics : undefined;
+}
+
 function normalizeProviderError(error, operation) {
     if (error instanceof RuntimeError) return error;
     if (error.code === 'ECONNABORTED') {
@@ -101,7 +115,7 @@ function normalizeProviderError(error, operation) {
         if (error.response.status === 401) return new RuntimeError(502, 'COORDINATOR_AUTHENTICATION_FAILED', 'Coordinator authentication failed');
         if (error.response.status === 400) return new RuntimeError(502, 'COORDINATOR_VALIDATION_REJECTED', 'Coordinator rejected the ACP command');
         if (error.response.status === 403) return new RuntimeError(502, 'COORDINATOR_DISPATCH_BLOCKED', 'Coordinator blocked dispatch');
-        if (error.response.status >= 500) return new RuntimeError(502, 'COORDINATOR_DISPATCH_FAILED', 'Coordinator dispatch failed');
+        if (error.response.status >= 500) return new RuntimeError(502, 'COORDINATOR_DISPATCH_FAILED', 'Coordinator dispatch failed', getCoordinatorDiagnostics(error));
     }
     return new RuntimeError(502, `${operation}_FAILED`, `${operation} request failed`);
 }
@@ -183,12 +197,14 @@ function createDeepSeekRuntimeHandler(options = {}) {
             });
         } catch (error) {
             const runtimeError = normalizeProviderError(error, 'RUNTIME');
-            return res.status(runtimeError.status).json({
+            const response = {
                 status: 'runtime failed',
                 stage: 'deepseek-runtime',
                 error: runtimeError.message,
                 code: runtimeError.code
-            });
+            };
+            if (runtimeError.diagnostics) response.diagnostics = runtimeError.diagnostics;
+            return res.status(runtimeError.status).json(response);
         }
     };
 }
