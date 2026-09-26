@@ -240,6 +240,8 @@ async function main() {
             const result = await dispatch(cmd);
             assertEqual(result.status, 'FAILED');
             assert(result.error.includes('Missing GitHub token'), 'error should indicate missing token');
+            assertEqual(result.diagnostics.stage, 'authentication');
+            assertEqual(result.diagnostics.category, 'missing_github_token');
             assert(!result.error.includes('test-gh-token'), 'no token value should be exposed');
         } finally {
             restoreEnv();
@@ -255,6 +257,8 @@ async function main() {
             const result = await dispatch({ ...builderCommand, request_id: 'builder-fail-1' });
             assertEqual(result.status, 'FAILED');
             assert(result.error.includes('GitHub API error'));
+            assertEqual(result.diagnostics.status_code, 500);
+            assertEqual(result.diagnostics.category, 'dispatch_failed');
             assertEqual(result.request_id, 'builder-fail-1');
         } finally {
             geminiBuilderTrigger.dispatchGeminiBuilder = original;

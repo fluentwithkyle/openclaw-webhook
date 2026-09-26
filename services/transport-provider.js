@@ -55,7 +55,11 @@ async function dispatchBuilder(command) {
         return {
             request_id: command.request_id,
             status: 'FAILED',
-            error: `Transport error: ${err.message}`
+            error: 'Builder workflow dispatch failed',
+            diagnostics: {
+                stage: 'dispatch',
+                category: 'unexpected_dispatch_failure'
+            }
         };
     }
 
@@ -71,7 +75,14 @@ async function dispatchBuilder(command) {
     return {
         request_id: command.request_id,
         status: 'FAILED',
-        error: result.error
+        error: result.error,
+        diagnostics: {
+            stage: result.stage || 'dispatch',
+            category: result.category || 'dispatch_failed',
+            status_code: result.status_code,
+            workflow: result.workflow,
+            repository: result.repository
+        }
     };
 }
 

@@ -4,7 +4,16 @@ const GITHUB_API_BASE = 'https://api.github.com';
 const WORKFLOW_FILE = 'gemini-builder.yml';
 const REPOSITORY = 'fluentwithkyle/openclaw-webhook';
 
-function triggerGeminiBuilderWorkflow(inputs, githubToken) {
+function classifyGitHubDispatchFailure(statusCode) {
+  if (statusCode === 401) return { stage: 'authentication', category: 'github_authentication_failed' };
+  if (statusCode === 403) return { stage: 'authorization', category: 'github_authorization_failed' };
+  if (statusCode === 404) return { stage: 'workflow', category: 'workflow_not_found' };
+  if (statusCode === 422) return { stage: 'input', category: 'workflow_input_rejected' };
+  if (statusCode >= 500) return { stage: 'github', category: 'github_service_failure' };
+  return { stage: 'github', category: 'github_dispatch_failed' };
+}
+
+function triggerGeminiBuilderWorkflow(inputs, githubToken, request = https.request) {
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({
       ref: inputs.base_branch || 'main',
@@ -35,42 +44,48 @@ function triggerGeminiBuilderWorkflow(inputs, githubToken) {
       }
     };
 
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
+    const req = request(options, (res) => {
+      res.resume();
       res.on('end', () => {
         if (res.statusCode === 204) {
           resolve({
             success: true,
             message: 'Builder workflow dispatch accepted',
-            status_code: res.statusCode
+            status_code: res.statusCode,
+            stage: 'dispatch',
+            category: 'accepted'
           });
         } else {
+          const diagnostic = classifyGitHubDispatchFailure(res.statusCode);
           resolve({
             success: false,
-            error: `GitHub API error: ${res.statusCode}`,
-            details: data,
-            status_code: res.statusCode
+            error: `GitHub workflow dispatch failed (${diagnostic.category})`,
+            status_code: res.statusCode,
+            stage: diagnostic.stage,
+            category: diagnostic.category,
+            workflow: WORKFLOW_FILE,
+            repository: REPOSITORY
           });
         }
       });
     });
 
-    req.on('error', (err) => {
-      reject(new Error(`Network error: ${err.message}`));
-    });
+    req.on('error', reject);
 
     req.write(postData);
     req.end();
   });
 }
 
-async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, githubToken, verification, taskMode, capabilities, permittedPaths, builderApiKey) {
+async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, githubToken, verification, taskMode, capabilities, permittedPaths, builderApiKey, request) {
   if (!githubToken) {
     return {
       success: false,
       error: 'Missing GitHub token for builder workflow dispatch',
-      stage: 'authentication'
+      stage: 'authentication',
+      category: 'missing_github_token',
+      workflow: WORKFLOW_FILE,
+      repository: REPOSITORY
     };
   }
 
@@ -87,13 +102,16 @@ async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, gi
   };
 
   try {
-    const result = await triggerGeminiBuilderWorkflow(inputs, githubToken);
+    const result = await triggerGeminiBuilderWorkflow(inputs, githubToken, request);
     return result;
   } catch (err) {
     return {
       success: false,
-      error: err.message,
-      stage: 'dispatch'
+      error: 'GitHub workflow dispatch network failure',
+      stage: 'network',
+      category: 'network_failure',
+      workflow: WORKFLOW_FILE,
+      repository: REPOSITORY
     };
   }
 }
@@ -112,5 +130,6 @@ module.exports = {
   dispatchGeminiBuilder,
   validateDispatchInputs,
   triggerGeminiBuilderWorkflow,
+  classifyGitHubDispatchFailure,
   WORKFLOW_FILE
 };

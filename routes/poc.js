@@ -9,6 +9,13 @@ const { createDeepSeekRuntimeHandler } = require('../services/deepseek-runtime')
 
 const router = express.Router();
 
+function sanitizeDispatchError(error) {
+    const message = error && typeof error.message === 'string' ? error.message : 'Coordinator dispatch failed';
+    return message
+        .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+        .replace(/(authorization|token|api[_ -]?key|secret)\s*[:=]\s*\S+/gi, '$1=[redacted]');
+}
+
 function transitionToExecuting(requestId) {
     const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
     for (const status of transitions) {
@@ -813,7 +820,7 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
         try {
             dispatchResult = await getDispatcher()(command);
         } catch (dispatchError) {
-            console.error('Dispatch error in /poc/coordinator:', dispatchError);
+            console.error('Dispatch error in /poc/coordinator: unexpected_dispatch_failure');
             return res.status(500).json({
                 request_id: command.request_id,
                 status: 'Registration succeeded, dispatch failed',
@@ -822,7 +829,8 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
                 task_status: result.entry.status,
                 current_agent: result.entry.current_agent,
                 next_agent: result.entry.next_agent,
-                error: dispatchError.message
+                error: sanitizeDispatchError(dispatchError),
+                diagnostics: { stage: 'dispatch', category: 'unexpected_dispatch_failure' }
             });
         }
 
@@ -871,7 +879,8 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
                 task_status: result.entry.status,
                 current_agent: result.entry.current_agent,
                 next_agent: result.entry.next_agent,
-                error: dispatchResult.error
+                error: dispatchResult.error,
+                diagnostics: dispatchResult.diagnostics
             });
         }
     } catch (error) {
