@@ -4,7 +4,14 @@ const express = require('express');
 const http = require('http');
 const {
     CONTROL_PLANE_TOOL,
+    MAX_TOOL_ITERATIONS,
+    DEEPSEEK_RUNTIME_REQUEST_ID_PREFIX,
+    RuntimeError,
     buildControlPlaneCommand,
+    validateGetTaskArgs,
+    createTaskProjection,
+    handleGetTask,
+    isDeepSeekRuntimeRequestId,
     createDeepSeekRuntimeHandler,
     normalizeMessages,
     runDeepSeekConversation
@@ -53,6 +60,19 @@ function coordinatorFailureClient(status, data) {
             error.response = { status, data };
             throw error;
         }
+    };
+}
+
+function createMockRegistry(tasks) {
+    const store = {};
+    if (tasks) {
+        for (const [id, task] of Object.entries(tasks)) {
+            store[id] = JSON.parse(JSON.stringify(task));
+        }
+    }
+    return {
+        getTask: (requestId) => store[requestId] || null,
+        _store: store
     };
 }
 
@@ -386,7 +406,580 @@ function request(port, headers, body) {
         } finally {
             axios.post = originalPost;
             await new Promise(resolve => server.close(resolve));
+         }
+     });
+
+    await test('control_plane tool schema supports both request_task and get_task', async () => {
+        const operations = CONTROL_PLANE_TOOL.function.parameters.properties.operation.enum;
+        assert.deepEqual(operations, ['request_task', 'get_task']);
+        const properties = CONTROL_PLANE_TOOL.function.parameters.properties;
+        assert.ok(properties.request_id, 'request_id property must exist');
+        assert.equal(properties.request_id.type, 'string');
+    });
+
+    await test('get_task accepts a valid deepseek-runtime-* request ID', async () => {
+        const validId = 'deepseek-runtime-123456789-testid';
+        const result = validateGetTaskArgs({ operation: 'get_task', request_id: validId });
+        assert.equal(result, validId);
+    });
+
+    await test('get_task accepts request_id with surrounding whitespace', async () => {
+        const validId = 'deepseek-runtime-123456789';
+        const result = validateGetTaskArgs({ operation: 'get_task', request_id: '  ' + validId + '  ' });
+        assert.equal(result, validId);
+    });
+
+    await test('isDeepSeekRuntimeRequestId validates namespace prefix', async () => {
+        assert.equal(isDeepSeekRuntimeRequestId('deepseek-runtime-abc-123'), true);
+        assert.equal(isDeepSeekRuntimeRequestId('deepseek-runtime-'), true);
+        assert.equal(isDeepSeekRuntimeRequestId('deepseek-runtime'), false);
+        assert.equal(isDeepSeekRuntimeRequestId('poc-test-abc'), false);
+        assert.equal(isDeepSeekRuntimeRequestId(''), false);
+        assert.equal(isDeepSeekRuntimeRequestId(null), false);
+        assert.equal(isDeepSeekRuntimeRequestId(123), false);
+    });
+
+    await test('get_task retrieves existing TaskRegistry entry via runDeepSeekConversation', async () => {
+        const requestId = 'deepseek-runtime-1001-task';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'EXECUTING',
+            task: 'Review the poc directory',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:05:00.000Z',
+            next_action: 'trigger_builder',
+            kilo: { status: 'success', execution_id: 'exec-001', report: null },
+            builder: { status: 'running', execution_id: 'builder-exec-001', report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+
+        let callCount = 0;
+        const client = {
+            post: async (url, body) => {
+                callCount++;
+                if (callCount === 1) {
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                        id: 'call-1',
+                        type: 'function',
+                        function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) }
+                    }] });
+                }
+                return providerResponse({ role: 'assistant', content: 'Task is still executing.' });
+            }
+        };
+
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Check task status' }],
+            env: env(),
+            httpClient: client,
+            registry: mockRegistry
+        });
+
+        assert.equal(result.message.content, 'Task is still executing.');
+        assert.equal(result.iterations, 1);
+        assert.equal(callCount, 2);
+    });
+
+    await test('get_task returns pending/executing state correctly', async () => {
+        const requestId = 'deepseek-runtime-1002-pending';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'PENDING',
+            task: 'Initial review task',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:00:00.000Z',
+            next_action: null,
+            kilo: { status: 'pending', execution_id: null, report: null },
+            builder: { status: 'pending', execution_id: null, report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+        const projection = await handleGetTask(requestId, mockRegistry);
+
+        assert.equal(projection.status, 'PENDING');
+        assert.equal(projection.request_id, requestId);
+        assert.equal(projection.current_agent, 'Gemini Builder');
+        assert.equal(projection.next_action, null);
+    });
+
+    await test('get_task returns completed Gemini result when present', async () => {
+        const requestId = 'deepseek-runtime-1003-completed';
+        const geminiReport = {
+            agent: 'Gemini',
+            status: 'success',
+            result: {
+                execution_metadata: { invocation_id: 'inv-1003' },
+                summary: 'Review complete'
+            }
+        };
+        const taskEntry = {
+            request_id: requestId,
+            status: 'COMPLETE',
+            task: 'Final review task',
+            task_mode: 'REVIEW',
+            current_agent: null,
+            next_agent: null,
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:30:00.000Z',
+            next_action: 'complete',
+            kilo: { status: 'success', execution_id: 'exec-1003', report: null },
+            builder: { status: 'success', execution_id: 'builder-1003', report: null },
+            gemini: { status: 'success', execution_id: 'gemini-1003', report: geminiReport },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+        const projection = await handleGetTask(requestId, mockRegistry);
+
+        assert.equal(projection.status, 'COMPLETE');
+        assert.equal(projection.builder.status, 'success');
+        assert.equal(projection.gemini.status, 'success');
+        assert.equal(projection.gemini.execution_id, 'gemini-1003');
+        assert.deepEqual(projection.result, geminiReport);
+    });
+
+    await test('get_task returns failed state correctly', async () => {
+        const requestId = 'deepseek-runtime-1004-failed';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'FAILED',
+            task: 'Failed task',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:15:00.000Z',
+            next_action: 'human_review',
+            kilo: { status: 'failure', execution_id: 'exec-1004', report: null },
+            builder: { status: 'pending', execution_id: null, report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+        const projection = await handleGetTask(requestId, mockRegistry);
+
+        assert.equal(projection.status, 'FAILED');
+        assert.equal(projection.builder.status, 'pending');
+        assert.equal(projection.gemini.status, 'pending');
+        assert.equal(projection.next_action, 'human_review');
+        assert.equal(projection.result, undefined);
+    });
+
+    await test('get_task returns blocked state correctly', async () => {
+        const requestId = 'deepseek-runtime-1005-blocked';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'BLOCKED',
+            task: 'Blocked task',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:10:00.000Z',
+            next_action: 'human_review',
+            kilo: { status: 'success', execution_id: 'exec-1005', report: null },
+            builder: { status: 'blocked', execution_id: null, report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+        const projection = await handleGetTask(requestId, mockRegistry);
+
+        assert.equal(projection.status, 'BLOCKED');
+        assert.equal(projection.builder.status, 'blocked');
+        assert.equal(projection.next_action, 'human_review');
+        assert.equal(projection.result, undefined);
+    });
+
+    await test('unknown request ID fails cleanly with TASK_NOT_FOUND', async () => {
+        const mockRegistry = createMockRegistry({});
+        await assert.rejects(
+            () => handleGetTask('deepseek-runtime-9999-unknown', mockRegistry),
+            error => error.status === 404 && error.code === 'TASK_NOT_FOUND' && !error.message.includes('secret')
+        );
+    });
+
+    await test('non-DeepSeek task IDs are rejected by validateGetTaskArgs', async () => {
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: 'poc-task-123' }), /deepseek-runtime/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: 'chatbox-123' }), /deepseek-runtime/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: 'test-123' }), /deepseek-runtime/);
+    });
+
+    await test('missing or malformed get_task arguments fail closed', async () => {
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task' }), /not permitted/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: '' }), /not permitted/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: null }), /not permitted/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: 123 }), /not permitted/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: 'deepseek-runtime-valid', extra: 'field' }), /not permitted/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'request_task', request_id: 'deepseek-runtime-valid' }), /not permitted/);
+        assert.throws(() => validateGetTaskArgs(null), /not permitted|must be an object/);
+        assert.throws(() => validateGetTaskArgs('string'), /not permitted|must be an object/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: 'poc-task-123' }), /deepseek-runtime/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: '  ' }), /not permitted/);
+    });
+
+    await test('sensitive/unapproved TaskRegistry fields are excluded from projection', async () => {
+        const requestId = 'deepseek-runtime-1006-sensitive';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'EXECUTING',
+            task: 'Sensitive task',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:05:00.000Z',
+            next_action: 'trigger_builder',
+            kilo: { status: 'success', execution_id: 'exec-1006', report: null, provider_session_id: 'sess-001', provider_message_id: 'msg-001', provider_invocation_id: 'inv-001' },
+            builder: { status: 'running', execution_id: 'builder-1006', report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [{ evidence_type: 'AGENT_REPORT', agent: 'Kilo', timestamp: '2026-09-26T10:05:00.000Z' }],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: { OPENROUTER_API_KEY: { state: 'VERIFIED', verified: true, source: 'runtime_env' } },
+            authorization: { capabilities: ['read_only'] },
+            parent_request_id: 'deepseek-runtime-parent',
+            originator: 'Kyle',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            verification: 'test verification',
+            reporting: 'json',
+            lineage: { superseded_by: null, cancelled: false }
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+        const projection = await handleGetTask(requestId, mockRegistry);
+
+        const projectionKeys = Object.keys(projection);
+        const forbiddenTopKeys = ['evidence', 'config_verification', 'capabilities', 'permitted_paths', 'authorization', 'parent_request_id', 'repository', 'base_branch', 'lineage'];
+        for (const key of forbiddenTopKeys) {
+            assert.equal(projectionKeys.includes(key), false, 'Forbidden field leaked into projection: ' + key);
         }
+
+        assert.equal(projectionKeys.includes('kilo'), false);
+        assert.equal(projectionKeys.includes('parent_request_id'), false);
+
+        assert.equal(JSON.stringify(projection).includes('sess-001'), false);
+        assert.equal(JSON.stringify(projection).includes('msg-001'), false);
+        assert.equal(JSON.stringify(projection).includes('inv-001'), false);
+        assert.equal(JSON.stringify(projection).includes('VERIFIED'), false);
+        assert.equal(JSON.stringify(projection).includes('OPENROUTER_API_KEY'), false);
+
+        assert.equal(projection.builder.status, 'running');
+        assert.equal(projection.gemini.status, 'pending');
+        assert.equal(projection.kilo, undefined);
+    });
+
+    await test('get_task never calls the coordinator (no HTTP post to coordinator)', async () => {
+        const requestId = 'deepseek-runtime-1007-no-coordinator';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'PENDING',
+            task: 'No coordinator test',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:00:00.000Z',
+            next_action: null,
+            kilo: { status: 'pending', execution_id: null, report: null },
+            builder: { status: 'pending', execution_id: null, report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+
+        const calls = [];
+        let callCount = 0;
+        const client = {
+            post: async (url, body) => {
+                callCount++;
+                calls.push({ url, body });
+                if (callCount === 1) {
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                        id: 'call-1',
+                        type: 'function',
+                        function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) }
+                    }] });
+                }
+                return providerResponse({ role: 'assistant', content: 'Got task.' });
+            }
+        };
+
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Get task' }],
+            env: env(),
+            httpClient: client,
+            registry: mockRegistry
+        });
+
+        const coordinatorCalls = calls.filter(c => c.url === env().DEEPSEEK_COORDINATOR_URL);
+        assert.equal(coordinatorCalls.length, 0);
+        assert.equal(result.message.content, 'Got task.');
+    });
+
+    await test('get_task with unknown ID fails closed in conversation', async () => {
+        const mockRegistry = createMockRegistry({});
+        const client = {
+            post: async (url, body) => {
+                if (body.messages && body.tools) {
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                        id: 'call-1',
+                        type: 'function',
+                        function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: 'deepseek-runtime-9998-notfound' }) }
+                    }] });
+                }
+                return providerResponse({ role: 'assistant', content: 'should not reach here' });
+            }
+        };
+
+        await assert.rejects(
+            () => runDeepSeekConversation({
+                messages: [{ role: 'user', content: 'Get task' }],
+                env: env(),
+                httpClient: client,
+                registry: mockRegistry
+            }),
+            error => error.code === 'TASK_NOT_FOUND' && error.status === 404
+        );
+    });
+
+    await test('get_task with non-DeepSeek request ID fails closed in conversation', async () => {
+        const mockRegistry = createMockRegistry({});
+        const client = {
+            post: async (url, body) => {
+                if (body.messages && body.tools) {
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                        id: 'call-1',
+                        type: 'function',
+                        function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: 'poc-task-123' }) }
+                    }] });
+                }
+                return providerResponse({ role: 'assistant', content: 'should not reach here' });
+            }
+        };
+
+        await assert.rejects(
+            () => runDeepSeekConversation({
+                messages: [{ role: 'user', content: 'Get task' }],
+                env: env(),
+                httpClient: client,
+                registry: mockRegistry
+            }),
+            error => error.code === 'INVALID_TOOL_ARGUMENTS' && error.message.includes('deepseek-runtime')
+        );
+    });
+
+    await test('get_task with malformed arguments fails closed in conversation', async () => {
+        const mockRegistry = createMockRegistry({});
+        const client = {
+            post: async () => providerResponse({ role: 'assistant', tool_calls: [{
+                id: 'call-1',
+                type: 'function',
+                function: { name: 'control_plane', arguments: '{bad json' }
+            }] })
+        };
+
+        await assert.rejects(
+            () => runDeepSeekConversation({
+                messages: [{ role: 'user', content: 'Get task' }],
+                env: env(),
+                httpClient: client,
+                registry: mockRegistry
+            }),
+            error => error.code === 'INVALID_TOOL_ARGUMENTS'
+        );
+    });
+
+    await test('existing request_task behavior remains unchanged after get_task addition', async () => {
+        const calls = [];
+        const client = { post: async (url, body, options) => {
+            calls.push({ url, body, options });
+            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior', target: 'Gemini Builder' }) } }] });
+            if (calls.length === 2) return { data: { status: 'Task registered and dispatched', request_id: body.request_id } };
+            return providerResponse({ role: 'assistant', content: 'Review requested.' });
+        } };
+        const result = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'review it' }], env: env(), httpClient: client });
+        assert.equal(result.message.content, 'Review requested.');
+        assert.equal(calls.length, 3);
+        const command = calls[1].body;
+        assert.equal(calls[1].url, env().DEEPSEEK_COORDINATOR_URL);
+        assert.equal(calls[1].options.headers['x-deepseek-coordinator-secret'], env().DEEPSEEK_COORDINATOR_SECRET);
+        assert.equal(command.repository, 'fluentwithkyle/openclaw-webhook');
+        assert.equal(command.base_branch, 'main');
+        assert.deepEqual(command.authorization.capabilities, ['read_only']);
+        assert.deepEqual(command.constraints.permitted_paths, ['poc/']);
+        assert.equal(command.target, 'Gemini Builder');
+        assert.equal(command.task_mode, 'REVIEW');
+    });
+
+    await test('tool-loop limit is preserved for get_task calls', async () => {
+        const requestId = 'deepseek-runtime-1009-toolloop';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'PENDING',
+            task: 'Loop test',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:00:00.000Z',
+            next_action: null,
+            kilo: { status: 'pending', execution_id: null, report: null },
+            builder: { status: 'pending', execution_id: null, report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+
+        const client = {
+            post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                id: 'call-1',
+                type: 'function',
+                function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) }
+            }] })
+        };
+
+        await assert.rejects(
+            () => runDeepSeekConversation({
+                messages: [{ role: 'user', content: 'Get task' }],
+                env: env(),
+                httpClient: client,
+                registry: mockRegistry
+            }),
+            error => error.code === 'TOOL_LOOP_BLOCKED'
+        );
+    });
+
+    await test('multiple simultaneous tool calls fail closed', async () => {
+        const client = {
+            post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: '{}' }
+            }, {
+                id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: '{}' }
+            }] })
+        };
+
+        await assert.rejects(
+            () => runDeepSeekConversation({
+                messages: [{ role: 'user', content: 'x' }],
+                env: env(),
+                httpClient: client,
+                registry: createMockRegistry({})
+            }),
+            error => error.code === 'TOOL_LOOP_BLOCKED'
+        );
+    });
+
+    await test('existing normalization and runtime regression tests continue passing', async () => {
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'hello' }], env: env(),
+            httpClient: { post: async () => { return providerResponse({ role: 'assistant', content: 'hello back' }); } }
+        });
+        assert.equal(result.message.content, 'hello back');
+        assert.equal(result.iterations, 0);
+    });
+
+    await test('createTaskProjection handles partial task entries without builder/gemini', async () => {
+        const projection = createTaskProjection({
+            request_id: 'deepseek-runtime-1010-partial',
+            status: 'PENDING',
+            task: 'Partial task',
+            task_mode: 'REVIEW',
+            current_agent: null,
+            next_agent: null,
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:00:00.000Z',
+            next_action: null
+        });
+
+        assert.equal(projection.builder.status, 'pending');
+        assert.equal(projection.builder.execution_id, null);
+        assert.equal(projection.gemini.status, 'pending');
+        assert.equal(projection.gemini.execution_id, null);
+        assert.equal(projection.result, undefined);
+    });
+
+    await test('get_task preserves tool-loop and fail-closed for unsupported operation', async () => {
+        assert.throws(() => validateGetTaskArgs({ operation: 'execute', request_id: 'deepseek-runtime-abc' }), /not permitted/);
+        assert.throws(() => validateGetTaskArgs({ operation: 'get_task', request_id: 'deepseek-runtime-abc', unauthorized_extra: 'field' }), /not permitted/);
+    });
+
+    await test('runDeepSeekConversation handles get_task then continuation to final response', async () => {
+        const requestId = 'deepseek-runtime-1011-continue';
+        const taskEntry = {
+            request_id: requestId,
+            status: 'EXECUTING',
+            task: 'Continue test',
+            task_mode: 'REVIEW',
+            current_agent: 'Gemini Builder',
+            next_agent: 'Gemini',
+            created_at: '2026-09-26T10:00:00.000Z',
+            updated_at: '2026-09-26T10:05:00.000Z',
+            next_action: 'trigger_builder',
+            kilo: { status: 'success', execution_id: 'exec-1011', report: null },
+            builder: { status: 'running', execution_id: 'builder-1011', report: null },
+            gemini: { status: 'pending', execution_id: null, report: null },
+            evidence: [],
+            capabilities: ['read_only'],
+            permitted_paths: ['poc/'],
+            config_verification: {}
+        };
+        const mockRegistry = createMockRegistry({ [requestId]: taskEntry });
+
+        let callCount = 0;
+        const client = {
+            post: async (url, body) => {
+                callCount++;
+                if (callCount === 1 && body.tools) {
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                        id: 'call-1',
+                        type: 'function',
+                        function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) }
+                    }] });
+                }
+                return providerResponse({ role: 'assistant', content: 'Task status retrieved.' });
+            }
+        };
+
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Check task' }],
+            env: env(),
+            httpClient: client,
+            registry: mockRegistry
+        });
+
+        assert.equal(result.message.content, 'Task status retrieved.');
+        assert.equal(result.iterations, 1);
+        assert.equal(callCount, 2);
     });
 
     console.log(`\n${passed} passed, ${failed} failed`);

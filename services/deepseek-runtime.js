@@ -1,20 +1,28 @@
 const axios = require('axios');
+const taskRegistry = require('../poc/task-registry');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 2;
+const DEEPSEEK_RUNTIME_REQUEST_ID_PREFIX = 'deepseek-runtime-';
+
+function isDeepSeekRuntimeRequestId(requestId) {
+    return typeof requestId === 'string' && requestId.startsWith(DEEPSEEK_RUNTIME_REQUEST_ID_PREFIX);
+}
+
 const CONTROL_PLANE_TOOL = {
     type: 'function',
     function: {
         name: 'control_plane',
-        description: 'Request a bounded read-only repository review through the trusted control plane.',
+        description: 'Request a bounded read-only repository review through the trusted control plane, or retrieve the status and result of a previously created DeepSeek Runtime task.',
         parameters: {
             type: 'object',
             additionalProperties: false,
-            required: ['operation', 'objective', 'target'],
+            required: ['operation'],
             properties: {
-                operation: { type: 'string', enum: ['request_task'] },
+                operation: { type: 'string', enum: ['request_task', 'get_task'] },
                 objective: { type: 'string', minLength: 1, maxLength: 2000 },
-                target: { type: 'string', enum: ['Gemini Builder'] }
+                target: { type: 'string', enum: ['Gemini Builder'] },
+                request_id: { type: 'string', minLength: 1, maxLength: 256 }
             }
         }
     }
@@ -112,7 +120,10 @@ function buildControlPlaneCommand(args) {
     if (!args || typeof args !== 'object' || Array.isArray(args)) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
     }
-    if (Object.keys(args).length !== 3 || args.operation !== 'request_task' || args.target !== 'Gemini Builder' ||
+    if (args.operation !== 'request_task') {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
+    }
+    if (Object.keys(args).length !== 3 || args.target !== 'Gemini Builder' ||
         typeof args.objective !== 'string' || args.objective.trim().length === 0 || args.objective.length > 2000) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
     }
@@ -133,6 +144,57 @@ function buildControlPlaneCommand(args) {
         reporting: 'structured-json',
         originator: 'Kyle'
     };
+}
+
+function validateGetTaskArgs(args) {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
+    }
+    if (args.operation !== 'get_task') {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
+    }
+    if (Object.keys(args).length !== 2 || typeof args.request_id !== 'string' ||
+        args.request_id.trim().length === 0 || args.request_id.length > 256) {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
+    }
+    if (!isDeepSeekRuntimeRequestId(args.request_id.trim())) {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'request_id must belong to the deepseek-runtime-* namespace');
+    }
+    return args.request_id.trim();
+}
+
+function createTaskProjection(task) {
+    const projection = {
+        request_id: task.request_id,
+        status: task.status,
+        task: task.task,
+        task_mode: task.task_mode,
+        current_agent: task.current_agent,
+        next_agent: task.next_agent,
+        created_at: task.created_at,
+        updated_at: task.updated_at,
+        next_action: task.next_action,
+        builder: task.builder ? {
+            status: task.builder.status,
+            execution_id: task.builder.execution_id
+        } : { status: 'pending', execution_id: null },
+        gemini: task.gemini ? {
+            status: task.gemini.status,
+            execution_id: task.gemini.execution_id
+        } : { status: 'pending', execution_id: null }
+    };
+    if (task.gemini && task.gemini.report) {
+        projection.result = task.gemini.report;
+    }
+    return projection;
+}
+
+async function handleGetTask(requestId, taskRegistryInstance) {
+    const task = taskRegistryInstance.getTask(requestId);
+    if (!task) {
+        throw new RuntimeError(404, 'TASK_NOT_FOUND', 'Task not found: ' + requestId);
+    }
+    return createTaskProjection(task);
 }
 
 function parseToolArguments(toolCall) {
@@ -173,7 +235,7 @@ function normalizeProviderError(error, operation) {
     return new RuntimeError(502, `${operation}_FAILED`, `${operation} request failed`);
 }
 
-async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
+async function runDeepSeekConversation({ messages, env, httpClient = axios, registry = taskRegistry }) {
     const conversation = normalizeMessages(messages);
     const config = getRuntimeConfig(env);
 
@@ -210,25 +272,35 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
         }
 
         const toolCall = toolCalls[0];
-        const command = buildControlPlaneCommand(parseToolArguments(toolCall));
-        let coordinatorResponse;
-        try {
-            coordinatorResponse = await httpClient.post(config.coordinatorUrl, command, {
-                timeout: config.timeout,
-                headers: {
-                    'x-deepseek-coordinator-secret': config.coordinatorSecret,
-                    'Content-Type': 'application/json'
-                }
-            });
-        } catch (error) {
-            throw normalizeProviderError(error, 'COORDINATOR');
+        const args = parseToolArguments(toolCall);
+        let toolResult;
+
+        if (args.operation === 'get_task') {
+            const requestId = validateGetTaskArgs(args);
+            const projection = await handleGetTask(requestId, registry);
+            toolResult = { status: 'completed', get_task: projection };
+        } else {
+            const command = buildControlPlaneCommand(args);
+            let coordinatorResponse;
+            try {
+                coordinatorResponse = await httpClient.post(config.coordinatorUrl, command, {
+                    timeout: config.timeout,
+                    headers: {
+                        'x-deepseek-coordinator-secret': config.coordinatorSecret,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            } catch (error) {
+                throw normalizeProviderError(error, 'COORDINATOR');
+            }
+            toolResult = { status: 'completed', coordinator: coordinatorResponse.data };
         }
 
         conversation.push(message);
         conversation.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: JSON.stringify({ status: 'completed', coordinator: coordinatorResponse.data })
+            content: JSON.stringify(toolResult)
         });
     }
 
@@ -241,7 +313,8 @@ function createDeepSeekRuntimeHandler(options = {}) {
             const result = await runDeepSeekConversation({
                 messages: req.body && req.body.messages,
                 env: options.env || process.env,
-                httpClient: options.httpClient || axios
+                httpClient: options.httpClient || axios,
+                registry: options.registry || taskRegistry
             });
             return res.status(200).json({
                 choices: [{ message: result.message }],
@@ -264,8 +337,13 @@ function createDeepSeekRuntimeHandler(options = {}) {
 module.exports = {
     CONTROL_PLANE_TOOL,
     MAX_TOOL_ITERATIONS,
+    DEEPSEEK_RUNTIME_REQUEST_ID_PREFIX,
     RuntimeError,
     buildControlPlaneCommand,
+    validateGetTaskArgs,
+    createTaskProjection,
+    handleGetTask,
+    isDeepSeekRuntimeRequestId,
     createDeepSeekRuntimeHandler,
     getRuntimeConfig,
     normalizeMessages,
