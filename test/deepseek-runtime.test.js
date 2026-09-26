@@ -5,10 +5,12 @@ const http = require('http');
 const {
     CONTROL_PLANE_TOOL,
     buildControlPlaneCommand,
+    validateGetTaskArguments,
     createDeepSeekRuntimeHandler,
     normalizeMessages,
     runDeepSeekConversation
 } = require('../services/deepseek-runtime');
+const taskRegistry = require('../poc/task-registry');
 
 let passed = 0;
 let failed = 0;
@@ -387,6 +389,125 @@ function request(port, headers, body) {
             axios.post = originalPost;
             await new Promise(resolve => server.close(resolve));
         }
+    });
+
+    await test('control_plane tool exposes get_task operation and request_id parameter', async () => {
+        const operationEnum = CONTROL_PLANE_TOOL.function.parameters.properties.operation.enum;
+        assert(operationEnum.includes('get_task'));
+        assert(CONTROL_PLANE_TOOL.function.parameters.properties.request_id);
+    });
+
+    await test('validateGetTaskArguments validates get_task args and rejects invalid ones', async () => {
+        const valid = validateGetTaskArguments({ operation: 'get_task', request_id: 'task-123' });
+        assert.equal(valid.operation, 'get_task');
+        assert.equal(valid.request_id, 'task-123');
+
+        assert.throws(() => validateGetTaskArguments({ operation: 'get_task' }), /not permitted/);
+        assert.throws(() => validateGetTaskArguments({ operation: 'get_task', request_id: '' }), /not permitted/);
+        assert.throws(() => validateGetTaskArguments({ operation: 'request_task', request_id: 'task-123' }), /not permitted/);
+    });
+
+    await test('get_task operation queries taskRegistry server-side and returns not_found when absent', async () => {
+        let coordinatorCalled = false;
+        const client = {
+            post: async (url) => {
+                if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                    coordinatorCalled = true;
+                }
+                return providerResponse({ role: 'assistant', content: 'done' });
+            }
+        };
+        const conversation = [
+            { role: 'user', content: 'Check task status' },
+            { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: 'non-existent-task' }) } }] }
+        ];
+        const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
+        assert.equal(coordinatorCalled, false);
+        assert.equal(result.message.content, 'done');
+    });
+
+    await test('get_task operation retrieves task metadata and status when task exists in taskRegistry', async () => {
+        const requestId = 'ds-test-task-1';
+        taskRegistry.createTask({
+            request_id: requestId,
+            source: 'DeepSeek',
+            target: 'Gemini Builder',
+            task: 'Test task',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task_mode: 'REVIEW',
+            constraints: { permitted_paths: ['poc/'] },
+            authorization: { capabilities: ['read_only'] },
+            verification: 'verify'
+        });
+
+        let coordinatorCalled = false;
+        const client = {
+            post: async (url) => {
+                if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                    coordinatorCalled = true;
+                }
+                return providerResponse({ role: 'assistant', content: 'task status received' });
+            }
+        };
+        const conversation = [
+            { role: 'user', content: 'Check task' },
+            { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) } }] }
+        ];
+        const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
+        assert.equal(coordinatorCalled, false);
+        assert.equal(result.message.content, 'task status received');
+    });
+
+    await test('multi-turn conversation executes request_task then get_task', async () => {
+        let dispatchedRequestId = null;
+        let openRouterCallCount = 0;
+        const client = {
+            post: async (url, body) => {
+                if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                    dispatchedRequestId = body.request_id;
+                    return { data: { status: 'Task registered and dispatched', request_id: body.request_id } };
+                }
+                openRouterCallCount++;
+                if (openRouterCallCount === 1) {
+                    return providerResponse({
+                        role: 'assistant',
+                        content: null,
+                        tool_calls: [{
+                            id: 'call-1',
+                            type: 'function',
+                            function: {
+                                name: 'control_plane',
+                                arguments: JSON.stringify({ operation: 'request_task', objective: 'Inspect code', target: 'Gemini Builder' })
+                            }
+                        }]
+                    });
+                } else if (openRouterCallCount === 2) {
+                    return providerResponse({
+                        role: 'assistant',
+                        content: null,
+                        tool_calls: [{
+                            id: 'call-2',
+                            type: 'function',
+                            function: {
+                                name: 'control_plane',
+                                arguments: JSON.stringify({ operation: 'get_task', request_id: dispatchedRequestId })
+                            }
+                        }]
+                    });
+                } else {
+                    return providerResponse({ role: 'assistant', content: 'Task inspection completed.' });
+                }
+            }
+        };
+
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Run and check task' }],
+            env: env(),
+            httpClient: client
+        });
+        assert.equal(result.message.content, 'Task inspection completed.');
+        assert.equal(result.iterations, 2);
     });
 
     console.log(`\n${passed} passed, ${failed} failed`);

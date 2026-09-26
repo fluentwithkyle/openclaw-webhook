@@ -1,4 +1,5 @@
 const axios = require('axios');
+const taskRegistry = require('../poc/task-registry');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 2;
@@ -6,15 +7,16 @@ const CONTROL_PLANE_TOOL = {
     type: 'function',
     function: {
         name: 'control_plane',
-        description: 'Request a bounded read-only repository review through the trusted control plane.',
+        description: 'Request a bounded read-only repository review or query task status through the trusted control plane.',
         parameters: {
             type: 'object',
             additionalProperties: false,
-            required: ['operation', 'objective', 'target'],
+            required: ['operation'],
             properties: {
-                operation: { type: 'string', enum: ['request_task'] },
+                operation: { type: 'string', enum: ['request_task', 'get_task'] },
                 objective: { type: 'string', minLength: 1, maxLength: 2000 },
-                target: { type: 'string', enum: ['Gemini Builder'] }
+                target: { type: 'string', enum: ['Gemini Builder'] },
+                request_id: { type: 'string', minLength: 1, maxLength: 100 }
             }
         }
     }
@@ -135,6 +137,20 @@ function buildControlPlaneCommand(args) {
     };
 }
 
+function validateGetTaskArguments(args) {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
+    }
+    if (Object.keys(args).length !== 2 || args.operation !== 'get_task' || typeof args.request_id !== 'string' || args.request_id.trim().length === 0 || args.request_id.length > 100) {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments for get_task are not permitted by the runtime policy');
+    }
+
+    return {
+        operation: 'get_task',
+        request_id: args.request_id.trim()
+    };
+}
+
 function parseToolArguments(toolCall) {
     if (!toolCall || toolCall.type !== 'function' || !toolCall.function || toolCall.function.name !== 'control_plane') {
         throw new RuntimeError(400, 'UNEXPECTED_TOOL_CALL', 'Only the control_plane tool is permitted');
@@ -210,25 +226,56 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
         }
 
         const toolCall = toolCalls[0];
-        const command = buildControlPlaneCommand(parseToolArguments(toolCall));
-        let coordinatorResponse;
-        try {
-            coordinatorResponse = await httpClient.post(config.coordinatorUrl, command, {
-                timeout: config.timeout,
-                headers: {
-                    'x-deepseek-coordinator-secret': config.coordinatorSecret,
-                    'Content-Type': 'application/json'
-                }
-            });
-        } catch (error) {
-            throw normalizeProviderError(error, 'COORDINATOR');
+        const args = parseToolArguments(toolCall);
+        let toolResultContent;
+
+        if (args.operation === 'request_task') {
+            const command = buildControlPlaneCommand(args);
+            let coordinatorResponse;
+            try {
+                coordinatorResponse = await httpClient.post(config.coordinatorUrl, command, {
+                    timeout: config.timeout,
+                    headers: {
+                        'x-deepseek-coordinator-secret': config.coordinatorSecret,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            } catch (error) {
+                throw normalizeProviderError(error, 'COORDINATOR');
+            }
+            toolResultContent = JSON.stringify({ status: 'completed', coordinator: coordinatorResponse.data });
+        } else if (args.operation === 'get_task') {
+            const validatedArgs = validateGetTaskArguments(args);
+            const task = taskRegistry.getTask(validatedArgs.request_id);
+            if (!task) {
+                toolResultContent = JSON.stringify({ status: 'not_found', request_id: validatedArgs.request_id });
+            } else {
+                toolResultContent = JSON.stringify({
+                    status: 'found',
+                    task: {
+                        request_id: task.request_id,
+                        status: task.status,
+                        current_agent: task.current_agent,
+                        next_agent: task.next_agent,
+                        task: task.task,
+                        kilo: task.kilo,
+                        gemini: task.gemini,
+                        next_action: task.next_action,
+                        verification: task.verification,
+                        created_at: task.created_at,
+                        updated_at: task.updated_at
+                    }
+                });
+            }
+        } else {
+            throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'Unsupported control_plane operation');
         }
 
         conversation.push(message);
         conversation.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: JSON.stringify({ status: 'completed', coordinator: coordinatorResponse.data })
+            content: toolResultContent
         });
     }
 
@@ -266,6 +313,7 @@ module.exports = {
     MAX_TOOL_ITERATIONS,
     RuntimeError,
     buildControlPlaneCommand,
+    validateGetTaskArguments,
     createDeepSeekRuntimeHandler,
     getRuntimeConfig,
     normalizeMessages,
