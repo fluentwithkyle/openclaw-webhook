@@ -5,6 +5,7 @@ const http = require('http');
 const {
     CONTROL_PLANE_TOOL,
     buildControlPlaneCommand,
+    createDeepSeekRuntimeHandler,
     runDeepSeekConversation
 } = require('../services/deepseek-runtime');
 
@@ -33,6 +34,25 @@ async function test(name, fn) {
 
 function providerResponse(message) {
     return { data: { choices: [{ message }] } };
+}
+
+function coordinatorFailureClient(status, data) {
+    let callCount = 0;
+    return {
+        post: async () => {
+            callCount++;
+            if (callCount === 1) {
+                return providerResponse({ role: 'assistant', tool_calls: [{
+                    id: 'call-1',
+                    type: 'function',
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'x', target: 'Gemini Builder' }) }
+                }] });
+            }
+            const error = new Error('sensitive coordinator detail');
+            error.response = { status, data };
+            throw error;
+        }
+    };
 }
 
 function request(port, headers, body) {
@@ -115,16 +135,60 @@ function request(port, headers, body) {
 
     await test('coordinator authentication, validation, and dispatch failures are explicit', async () => {
         for (const [status, code] of [[401, 'COORDINATOR_AUTHENTICATION_FAILED'], [400, 'COORDINATOR_VALIDATION_REJECTED'], [403, 'COORDINATOR_DISPATCH_BLOCKED'], [500, 'COORDINATOR_DISPATCH_FAILED']]) {
-            let callCount = 0;
-            const client = { post: async () => {
-                callCount++;
-                if (callCount === 1) return providerResponse({ role: 'assistant', tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'x', target: 'Gemini Builder' }) } }] });
-                const error = new Error('sensitive coordinator detail');
-                error.response = { status };
-                throw error;
-            } };
-            await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'x' }], env: env(), httpClient: client }), error => error.code === code && !error.message.includes('sensitive'));
+            const client = coordinatorFailureClient(status);
+            await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'x' }], env: env(), httpClient: client }), error => error.code === code && !error.message.includes('sensitive') && error.diagnostics === undefined);
         }
+    });
+
+    await test('coordinator dispatch diagnostics are preserved and safely exposed', async () => {
+        const diagnostics = {
+            stage: 'dispatch',
+            category: 'builder_workflow_dispatch_failed',
+            status_code: 500,
+            workflow: 'gemini-builder.yml',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            authorization: 'Bearer should-not-leak',
+            api_key: 'should-not-leak'
+        };
+        const coordinatorData = {
+            error: 'Builder workflow dispatch failed',
+            diagnostics,
+            authorization: 'Bearer should-not-leak',
+            api_key: 'should-not-leak'
+        };
+        const input = { messages: [{ role: 'user', content: 'x' }] };
+        await assert.rejects(
+            () => runDeepSeekConversation({ ...input, env: env(), httpClient: coordinatorFailureClient(500, coordinatorData) }),
+            error => {
+                assert.equal(error.status, 502);
+                assert.equal(error.code, 'COORDINATOR_DISPATCH_FAILED');
+                assert.deepEqual(error.diagnostics, {
+                    stage: 'dispatch',
+                    category: 'builder_workflow_dispatch_failed',
+                    status_code: 500,
+                    workflow: 'gemini-builder.yml',
+                    repository: 'fluentwithkyle/openclaw-webhook'
+                });
+                return true;
+            }
+        );
+
+        const response = {};
+        const handler = createDeepSeekRuntimeHandler({ env: env(), httpClient: coordinatorFailureClient(500, coordinatorData) });
+        await handler({ body: input }, {
+            status: code => { response.status = code; return { json: body => { response.body = body; } }; }
+        });
+        assert.equal(response.status, 502);
+        assert.equal(response.body.code, 'COORDINATOR_DISPATCH_FAILED');
+        assert.deepEqual(response.body.diagnostics, {
+            stage: 'dispatch',
+            category: 'builder_workflow_dispatch_failed',
+            status_code: 500,
+            workflow: 'gemini-builder.yml',
+            repository: 'fluentwithkyle/openclaw-webhook'
+        });
+        assert.deepEqual(Object.keys(response.body.diagnostics).sort(), ['category', 'repository', 'stage', 'status_code', 'workflow']);
+        assert.equal(JSON.stringify(response.body).includes('should-not-leak'), false);
     });
 
     await test('missing credentials fail closed', async () => {
