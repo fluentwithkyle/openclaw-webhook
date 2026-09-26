@@ -398,13 +398,14 @@ function request(port, headers, body) {
     });
 
     await test('validateGetTaskArguments validates get_task args and rejects invalid ones', async () => {
-        const valid = validateGetTaskArguments({ operation: 'get_task', request_id: 'task-123' });
+        const valid = validateGetTaskArguments({ operation: 'get_task', request_id: 'deepseek-runtime-123' });
         assert.equal(valid.operation, 'get_task');
-        assert.equal(valid.request_id, 'task-123');
+        assert.equal(valid.request_id, 'deepseek-runtime-123');
 
+        assert.throws(() => validateGetTaskArguments({ operation: 'get_task', request_id: 'task-123' }), /not permitted/);
         assert.throws(() => validateGetTaskArguments({ operation: 'get_task' }), /not permitted/);
         assert.throws(() => validateGetTaskArguments({ operation: 'get_task', request_id: '' }), /not permitted/);
-        assert.throws(() => validateGetTaskArguments({ operation: 'request_task', request_id: 'task-123' }), /not permitted/);
+        assert.throws(() => validateGetTaskArguments({ operation: 'request_task', request_id: 'deepseek-runtime-123' }), /not permitted/);
     });
 
     await test('get_task operation queries taskRegistry server-side and returns not_found when absent', async () => {
@@ -508,6 +509,107 @@ function request(port, headers, body) {
         });
         assert.equal(result.message.content, 'Task inspection completed.');
         assert.equal(result.iterations, 2);
+    });
+
+    await test('validateGetTaskArguments enforces deepseek-runtime-* namespace enforcement', async () => {
+        const valid = validateGetTaskArguments({ operation: 'get_task', request_id: 'deepseek-runtime-12345' });
+        assert.equal(valid.request_id, 'deepseek-runtime-12345');
+
+        assert.throws(() => validateGetTaskArguments({ operation: 'get_task', request_id: 'task-123' }), /not permitted/);
+        assert.throws(() => validateGetTaskArguments({ operation: 'get_task', request_id: 'kilo-runtime-123' }), /not permitted/);
+        assert.throws(() => validateGetTaskArguments({ operation: 'get_task', request_id: 'random-id' }), /not permitted/);
+    });
+
+    await test('get_task operation returns allowlisted sanitized projection excluding secrets and internal fields', async () => {
+        const requestId = 'deepseek-runtime-sec-test-1';
+        taskRegistry.createTask({
+            request_id: requestId,
+            source: 'DeepSeek',
+            target: 'Gemini Builder',
+            task: 'Security test task',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task_mode: 'REVIEW',
+            constraints: { permitted_paths: ['poc/'] },
+            authorization: { capabilities: ['read_only'] },
+            verification: 'verify'
+        });
+
+        taskRegistry.updateAgentResult(requestId, 'Gemini', {
+            status: 'success',
+            execution_id: 'gemini-exec-1',
+            report: {
+                summary: 'Completed successfully with token secret-token-value and apiKey secret-api-key',
+                apiKey: 'super-secret-key',
+                authorization: 'Bearer secret-bearer-token',
+                nested: {
+                    secret_password: 'bad-password'
+                }
+            }
+        });
+
+        let toolContent = null;
+        let openRouterCalls = 0;
+        const client = {
+            post: async (url, body) => {
+                if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                    return { data: { status: 'dispatched' } };
+                }
+                openRouterCalls++;
+                if (openRouterCalls === 1) {
+                    return providerResponse({
+                        role: 'assistant',
+                        content: null,
+                        tool_calls: [{
+                            id: 'call-1',
+                            type: 'function',
+                            function: {
+                                name: 'control_plane',
+                                arguments: JSON.stringify({ operation: 'get_task', request_id: requestId })
+                            }
+                        }]
+                    });
+                }
+                const messages = body.messages;
+                const toolMsg = messages.find(m => m.role === 'tool');
+                if (toolMsg) toolContent = JSON.parse(toolMsg.content);
+                return providerResponse({ role: 'assistant', content: 'Inspected.' });
+            }
+        };
+
+        await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'check security projection' }],
+            env: env(),
+            httpClient: client
+        });
+
+        assert(toolContent);
+        assert.equal(toolContent.status, 'found');
+        const projectedTask = toolContent.task;
+
+        assert.equal(projectedTask.request_id, requestId);
+        assert.equal(projectedTask.status, 'PENDING');
+        assert.equal(projectedTask.task, 'Security test task');
+        assert.equal(projectedTask.task_mode, 'REVIEW');
+        assert.equal(projectedTask.current_agent, null);
+        assert.equal(projectedTask.next_agent, null);
+        assert.equal(projectedTask.next_action, null);
+        assert(projectedTask.created_at);
+        assert(projectedTask.updated_at);
+        assert(projectedTask.gemini);
+        assert.equal(projectedTask.gemini.status, 'success');
+        assert.equal(projectedTask.gemini.execution_id, 'gemini-exec-1');
+
+        const report = projectedTask.gemini.report;
+        assert.equal(report.apiKey, undefined);
+        assert.equal(report.authorization, undefined);
+        assert.equal(report.nested, undefined);
+
+        assert.equal(projectedTask.kilo, undefined);
+        assert.equal(projectedTask.constraints, undefined);
+        assert.equal(projectedTask.authorization, undefined);
+        assert.equal(projectedTask.verification, undefined);
+        assert.equal(projectedTask.lineage, undefined);
     });
 
     console.log(`\n${passed} passed, ${failed} failed`);

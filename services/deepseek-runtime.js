@@ -144,11 +144,50 @@ function validateGetTaskArguments(args) {
     if (Object.keys(args).length !== 2 || args.operation !== 'get_task' || typeof args.request_id !== 'string' || args.request_id.trim().length === 0 || args.request_id.length > 100) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments for get_task are not permitted by the runtime policy');
     }
+    const requestId = args.request_id.trim();
+    if (!requestId.startsWith('deepseek-runtime-')) {
+        throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments for get_task are not permitted by the runtime policy');
+    }
 
     return {
         operation: 'get_task',
-        request_id: args.request_id.trim()
+        request_id: requestId
     };
+}
+
+function sanitizeReport(report) {
+    if (!report || typeof report !== 'object') return report || null;
+    if (Array.isArray(report)) return report.map(sanitizeReport);
+
+    const sanitized = {};
+    for (const [key, value] of Object.entries(report)) {
+        const lowerKey = key.toLowerCase();
+        if (
+            lowerKey.includes('key') ||
+            lowerKey.includes('secret') ||
+            lowerKey.includes('token') ||
+            lowerKey.includes('credential') ||
+            lowerKey.includes('authorization') ||
+            lowerKey.includes('password')
+        ) {
+            continue;
+        }
+        if (value && typeof value === 'object') {
+            sanitized[key] = sanitizeReport(value);
+        } else if (typeof value === 'string') {
+            sanitized[key] = sanitizeStringValue(value);
+        } else {
+            sanitized[key] = value;
+        }
+    }
+    return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
+function sanitizeStringValue(str) {
+    if (typeof str !== 'string') return str;
+    return str
+        .replace(/Bearer\s+[A-Za-z0-9_\-\.]+/gi, 'Bearer [REDACTED]')
+        .replace(/api[_-]?key[=:]\s*[A-Za-z0-9_\-\.]+/gi, 'api_key=REDACTED');
 }
 
 function parseToolArguments(toolCall) {
@@ -255,15 +294,22 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
                     task: {
                         request_id: task.request_id,
                         status: task.status,
+                        task: task.task,
+                        task_mode: task.task_mode,
                         current_agent: task.current_agent,
                         next_agent: task.next_agent,
-                        task: task.task,
-                        kilo: task.kilo,
-                        gemini: task.gemini,
                         next_action: task.next_action,
-                        verification: task.verification,
                         created_at: task.created_at,
-                        updated_at: task.updated_at
+                        updated_at: task.updated_at,
+                        builder: task.builder ? {
+                            status: task.builder.status || null,
+                            execution_id: task.builder.execution_id || null
+                        } : null,
+                        gemini: task.gemini ? {
+                            status: task.gemini.status || null,
+                            execution_id: task.gemini.execution_id || null,
+                            report: sanitizeReport(task.gemini.report)
+                        } : null
                     }
                 });
             }
