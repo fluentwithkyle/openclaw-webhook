@@ -2285,3 +2285,88 @@ The reconciled documentation distinguishes:
 **Outcome**: SUCCESS — Added authenticated `POST /poc/deepseek-runtime` and `services/deepseek-runtime.js`. The runtime uses existing Axios (no new dependency), supports normal OpenRouter completions and a maximum of two tool iterations, and exposes exactly one `control_plane` tool. The tool accepts only `operation`, `objective`, and the fixed `Gemini Builder` target; server-side policy supplies repository, base branch, REVIEW mode, read-only capability, permitted `poc/` path, and ACP authorization. Coordinator requests retain the server-side coordinator secret. Focused tests cover authentication, successful and malformed provider responses, timeouts, tool validation, authority injection rejection, ACP translation, coordinator submission, and coordinator failures. `npm test` passed. Live OpenRouter/Chatbox deployment verification remains UNKNOWN.
 
 **Commit Reference**: `934dee2af8e8c3c34109e9545c3da1f86b9dbfdb` on `main`.
+
+---
+
+## 2026-09-25 | Reconcile DeepSeek Runtime Live-Validation Documentation (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIVE-VALIDATION-001)
+
+**Task**: Reconcile the repository's durable AI/project documentation so it accurately records the current state of the DeepSeek/OpenRouter/Chatbox runtime integration and the live-validation investigation. (Issue #214, `issue.body`)
+
+**Originator**: ChatGPT
+**Target Agent**: Kilo
+**Repository**: `fluentwithkyle/openclaw-webhook`
+**Base Branch**: `main`
+**Task Mode**: VERIFY_RECONCILE
+**Capabilities**: read_only, modify_files, commit, push
+**Permitted paths**: `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`
+
+### Authoritative Current State (Starting Point)
+
+**Runtime implementation — VERIFIED**:
+- Server-side DeepSeek runtime implemented and merged on `main` at commit `934dee2af8e8c3c34109e9545c3da1f86b9dbfdb` (commit message: `docs: record DeepSeek runtime implementation (#213)`).
+- Provides `POST /poc/deepseek-runtime` (`services/deepseek-runtime.js`, route `routes/poc.js:773`).
+- Uses exactly one model-facing tool: `control_plane` (server-side env `services/deepseek-runtime.js:CONTROL_PLANE_TOOL`).
+- The model does NOT control: capabilities, permitted paths, authorization, repository, base branch, activation syntax/surface — all server-derived in `buildControlPlaneCommand()` (`services/deepseek-runtime.js:57-82`).
+- Constructs a bounded REVIEW ACP request: target `Gemini Builder`, task_mode `REVIEW`, capabilities `read_only`, permitted paths `poc/`.
+- Submits through existing `POST /poc/coordinator` with `DEEPSEEK_COORDINATOR_SECRET`.
+- Route protected by `CHATBOX_GATEWAY_SECRET` (`authenticateChatboxGateway`).
+- Server-side secrets used: `OPENROUTER_API_KEY`, `DEEPSEEK_COORDINATOR_SECRET` (plus the URL overrides `OPENROUTER_API_URL`, `DEEPSEEK_COORDINATOR_URL`).
+
+**Prior log reconciliation — VERIFIED**:
+- Stale SHA `b61b1cbcaa870f189ab061fa2ad5765beeb69947` was corrected to `934dee2a...` by reconciliation commit `17b8065043cac14aedc4f457e0b6a32941e440aa` in `docs/ai/TASK_LOG.md`.
+
+### State to be Recorded
+
+**Completed**:
+- DeepSeek/OpenRouter runtime implementation exists.
+- Implementation is merged on `main` (commit `934dee2`).
+- Prior stale task-log SHA was reconciled by `17b8065`.
+
+**Configured**:
+- Render runtime environment has been configured for OpenRouter/DeepSeek/coordinator operation: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (`deepseek/deepseek-v4-flash`), `DEEPSEEK_COORDINATOR_SECRET`, `OPENROUTER_API_URL`, `DEEPSEEK_COORDINATOR_URL`. `CHATBOX_GATEWAY_SECRET` serves as the Chatbox-facing route authentication boundary.
+- Chatbox custom provider configured toward `/poc/deepseek-runtime` (API Host `https://openclaw-webhook-iz6s.onrender.com`, API Path `/poc/deepseek-runtime`, Model `deepseek/deepseek-v4-flash`, API key = `CHATBOX_GATEWAY_SECRET`).
+
+**Verified**:
+- Chatbox provider connection check reported `Connection successful!`.
+- Chatbox source confirms custom API host/path support: `normalizeOpenAIApiHostAndPath` in `src/shared/utils/llm_utils.ts` trims strings, strips trailing `/` from host, adds leading `/` to path, adds `https://` if missing, recognizes a full `/chat/completions` URL, and preserves an explicitly-supplied custom path.
+- Chatbox custom OpenAI code in `src/shared/providers/definitions/models/custom-openai.ts` constructs the request URL as `${apiHost}${apiPath}` — the configured endpoint resolves to `https://openclaw-webhook-iz6s.onrender.com/poc/deepseek-runtime`.
+- Chatbox has streaming behavior/SSE handling via `src/shared/models/utils/openai-chat-sse-termination.ts`.
+- Current Render runtime returns non-streaming JSON: `{ choices: [{ message: result.message }], tool_iterations: result.iterations }` (`services/deepseek-runtime.js:180-183`).
+- Runtime implementation and local tests were previously verified (implementation commit `934dee2`; focused tests in `test/deepseek-runtime.test.js`).
+
+**Not Verified / Unknown**:
+- Normal Chatbox chat request reaching Render at `/poc/deepseek-runtime` — NOT VERIFIED (Render request-log inspection showed no observed request).
+- Chatbox normal chat receiving a response from `/poc/deepseek-runtime` — NOT VERIFIED (blank response observed).
+- OpenRouter request succeeding through the live runtime — NOT VERIFIED.
+- DeepSeek live model response through OpenRouter — NOT VERIFIED.
+- Live coordinator invocation from the runtime — NOT VERIFIED.
+- Live ACP validation / TaskRegistry / dispatcher execution through the complete path — NOT VERIFIED.
+- Whether streaming incompatibility is responsible for the blank response — UNKNOWN (it is an identified compatibility concern, NOT a proven root cause).
+
+**Streaming compatibility concern (unresolved)**:
+- The server runtime returns ordinary JSON, not an OpenAI SSE streaming response.
+- Chatbox has an SSE-specific wrapper for streamed OpenAI Chat Completions responses.
+- This is a known compatibility concern, but NOT proven to be the cause of the blank response or the absence of requests in Render logs. The absence of any request in Render logs is a distinct, stronger signal.
+
+### Reconciliation Performed
+
+- `docs/ai/STATE.md` — Updated header (`Last Updated`: 2026-09-25; `Updated By`); updated Active Tasks table row for `TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001` to reflect Render configuration, Chatbox provider configuration, connection-check success, and live-validation-in-progress status; appended new "DeepSeek Runtime Live Validation Status" section documenting Render service configuration, Chatbox provider configuration, verified facts, not-verified/unknown facts, the streaming compatibility concern, and a state-progression summary.
+- `docs/ai/CONTROL_CENTER.md` — Updated header (`Last Updated`: 2026-09-25; `Updated By`); updated the "Bounded OpenRouter Runtime" row in the DeepSeek Coordinator Project dashboard with live-validation status; added a new "Requires Kyle's Attention" item (#9) documenting the DeepSeek runtime live-validation gap.
+- `docs/ai/TASK_LOG.md` — Appended this historical reconciliation entry (append-only; existing entries preserved).
+
+### Verification Performed
+
+1. Verified current branch is `main`; HEAD at `17b8065043cac14aedc4f457e0b6a32941e440aa`.
+2. Verified implementation commit `934dee2af8e8c3c34109e9545c3da1f86b9dbfdb` exists in history (`git cat-file -t` confirmed).
+3. Verified reconciliation commit `17b8065043cac14aedc4f457e0b6a32941e440aa` exists in history.
+4. Verified stale SHA `b61b1cbcaa870f189ab061fa2ad5765beeb69947` is NOT present in history.
+5. Verified `services/deepseek-runtime.js` exists (204 lines; `createDeepSeekRuntimeHandler`, `runDeepSeekConversation`, `buildControlPlaneCommand`, `CONTROL_PLANE_TOOL`); returns non-streaming JSON (`choices` + `tool_iterations`).
+6. Verified `routes/poc.js:773` mounts `POST /poc/deepseek-runtime` with `authenticateChatboxGateway` + `createDeepSeekRuntimeHandler()`.
+7. Verified `getRuntimeConfig()` reads `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `DEEPSEEK_COORDINATOR_SECRET`, `OPENROUTER_API_URL`, `DEEPSEEK_COORDINATOR_URL` from env.
+8. Verified `buildControlPlaneCommand` injects server-side authority (target `Gemini Builder`, `REVIEW` mode, `read_only`, `poc/`, repository `fluentwithkyle/openclaw-webhook`, base branch `main`).
+9. `git diff --check` — run and clean (no whitespace errors).
+10. Confirmed only `docs/ai/` files changed — no application/runtime/ACP code, tests, Render configuration, Chatbox configuration, deployment configuration, or secrets modified.
+
+**Outcome**: SUCCESS — Durable documentation reconciled to accurately reflect the DeepSeek/OpenRouter/Chatbox runtime implementation state and live-validation investigation. Completed, configured, verified, and not-verified/unknown states are clearly distinguished. The streaming compatibility concern is recorded as unresolved, not as a proven root cause. No stale SHA `b61b1cb` reintroduced. No live end-to-end success claimed. Only authorized `docs/ai/` paths changed. `git diff --check` clean.
+
+**Commit Reference**: (to be filled with this reconciliation commit SHA)

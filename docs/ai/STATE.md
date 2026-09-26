@@ -1,7 +1,7 @@
 # Current AI Project State
 
-**Last Updated**: 2026-09-24
-**Updated By**: Kilo — EXECUTE (TASK-KILO-CHATGPT-BOOTSTRAP-ROLE-RECONCILE-001) — reconciled ChatGPT bootstrap protocol role definitions and ACP task envelope: removed stale Kilo-as-primary-implementer statements across CHATGPT_START_HERE.md, CHATGPT_PROJECT_OPERATING_PROTOCOL.md, TASK_STANDARD.md, and README.md (Gemini Builder is now the designated Builder; Kilo is an available execution lane for tasks that explicitly target it); added mandatory `task_name` field to the canonical ACP task envelope, canonical field ordering, and compliance checklist in TASK_STANDARD.md and CHATGPT_PROJECT_OPERATING_PROTOCOL.md; fixed stale task_mode values in the ACP compliance checklist to match TASK_STANDARD.md (RESEARCH_DOCUMENT, PLAN, EXECUTE, VERIFY_RECONCILE); updated STATE.md, CONTROL_CENTER.md, and TASK_LOG.md. No production code, GitHub Actions workflows, or secrets modified; all changes within docs/ai/ documentation scope.
+**Last Updated**: 2026-09-25
+**Updated By**: Kilo — VERIFY_RECONCILE (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIVE-VALIDATION-001) — reconciled durable documentation with the DeepSeek/OpenRouter runtime implementation state (commit `934dee2`, task commit-reference reconciled by `17b8065`; stale SHA `b61b1cb` verified absent from history) and the live-validation investigation of the Chatbox → Render `/poc/deepseek-runtime` endpoint. Updated the DeepSeek runtime Active Tasks entry, added a "DeepSeek Runtime Live Validation Status" section, updated CONTROL_CENTER.md, and appended a TASK_LOG reconciliation entry. No application/runtime/ACP code, routes, dependencies, tests, deployment configuration, or secrets modified; all changes within `docs/ai/` documentation scope.
 
 ---
 
@@ -26,7 +26,7 @@
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | DeepSeek Chatbox Runtime Boundary Research (TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001) | **COMPLETED (RESEARCH)** | Gemini | Researched and durably documented the DeepSeek Chatbox runtime boundary and tool-execution architecture (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001.md`). Answered all 8 required verification items: current Chatbox ingress (`POST /poc/chatbox`), current Direct ACP coordinator path (`POST /poc/coordinator`), OpenRouter's role (model proxy and provider router, application-side tool execution), repository absence of server-side DeepSeek/OpenRouter tool execution runtime, exact missing boundary between `tool_call` and coordinator, accuracy of ADR-017, prerequisite for Milestone 0 connectivity testing (baseline ping reachability), and unresolved configuration questions. Updated RESEARCH_INDEX.md, TASK_LOG.md, and STATE.md. No implementation performed. |
-| TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED** | Codex Builder | Added the bounded server-side OpenRouter/DeepSeek runtime at authenticated `POST /poc/deepseek-runtime`. It exposes only the intent-level `control_plane` tool, maps the sole allowed `request_task` intent to server-controlled REVIEW ACP authority, and submits through existing `POST /poc/coordinator`. No Chatbox or Render configuration changed; live OpenRouter/Chatbox connectivity remains UNKNOWN pending configured credentials and deployment verification. |
+| TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED (LIVE VALIDATION IN PROGRESS)** | Codex Builder | Added the bounded server-side OpenRouter/DeepSeek runtime at authenticated `POST /poc/deepseek-runtime` (implementation commit `934dee2`, task commit-reference reconciled by `17b8065`; stale SHA `b61b1cb` verified absent from history). The runtime exposes exactly one `control_plane` tool, maps the sole allowed `request_task` intent to server-controlled REVIEW ACP authority (target: Gemini Builder; capabilities: read_only; permitted paths: poc/), and submits through existing `POST /poc/coordinator`. Server-side secrets used: `OPENROUTER_API_KEY`, `DEEPSEEK_COORDINATOR_SECRET`; route protected by `CHATBOX_GATEWAY_SECRET`. Render environment configured for OpenRouter/DeepSeek/coordinator operation: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (`deepseek/deepseek-v4-flash`), `DEEPSEEK_COORDINATOR_SECRET`, `OPENROUTER_API_URL`, `DEEPSEEK_COORDINATOR_URL`. Chatbox custom provider configured toward `/poc/deepseek-runtime`; connection check reported successful. Live end-to-end Chatbox → Render runtime execution NOT VERIFIED — normal Chatbox chat requests were not observed in Render request logs. See "DeepSeek Runtime Live Validation Status" section below. |
 | TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | **COMPLETED** | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit RESEARCH_DOCUMENT branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Root cause of prior 048e9b1 push failure: gemini-builder.yml pushes via the auto-generated GITHUB_TOKEN, which GitHub restricts from pushing .github/workflows/* changes (commit landed locally in the runner but push was rejected); a properly-scoped owner token (Kilo GH_TOKEN) pushes the same workflow-file change successfully. Durable Builder-lane fix (PAT secret for .github/workflows/* pushes) is outside this task's permitted_paths. |
 | Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. 237/289 tests verified post-remediation in pre-Builder state (347 total after Path 2 recovery); **450/450 tests pass across 18 test files** at commit `8a56fe6` (including `gemini-builder-trigger.test.js` with 9 tests). |
 | Gemini Builder execution infrastructure | **IMPLEMENTED / VERIFIED** | Gemini Builder | Complete test coverage: `gemini-builder-trigger.test.js` (9 tests), Builder callback tests (3 in gemini-callback), Builder lifecycle tests in orchestrator, schema tests for BUILDER mode, workflow-expression tests for `gemini-builder.yml`. All 9 Builder-trigger tests pass; full suite: **450/450 tests pass across 18 test files**. Implementation commit `f1e21ec`; tests commit `53dfa23`; merged via `8a56fe6`. |
@@ -623,6 +623,96 @@ Any future Chatbox → Render integration work must preserve this separation.
 - Was there a timeout, authentication rejection, or application error?
 
 These must be answered by the investigation plan above (questions 1–4 and 8) before any integration change is authorized.
+
+---
+
+## DeepSeek Runtime Live Validation Status
+
+**Status**: Live end-to-end Chatbox → Render `/poc/deepseek-runtime` execution NOT VERIFIED. Chatbox connection check reported successful; normal Chatbox chat requests were not observed in Render request logs.
+
+This section is distinct from the Chatbox Gateway (`/poc/chatbox`) integration gap documented above. The DeepSeek runtime is a separate authenticated endpoint (`POST /poc/deepseek-runtime`) that hosts the OpenRouter/DeepSeek model/tool-call loop.
+
+### Render Service Configuration
+
+**VERIFIED repository state (server-side env var names read by `services/deepseek-runtime.js` `getRuntimeConfig()`)**:
+
+| Variable | Role |
+|----------|------|
+| `OPENROUTER_API_KEY` | OpenRouter API authentication |
+| `OPENROUTER_MODEL` | OpenRouter model (`deepseek/deepseek-v4-flash` when configured) |
+| `OPENROUTER_API_URL` | OpenRouter endpoint override (optional; defaults to `https://openrouter.ai/api/v1/chat/completions`) |
+| `DEEPSEEK_COORDINATOR_SECRET` | Coordinator authentication |
+| `DEEPSEEK_COORDINATOR_URL` | Coordinator endpoint override (optional; defaults to `http://127.0.0.1:<port>/poc/coordinator`) |
+| `CHATBOX_GATEWAY_SECRET` | Authentication boundary for `POST /poc/deepseek-runtime` (via `authenticateChatboxGateway` in `routes/poc.js:773`) |
+
+| Item | Value |
+|------|-------|
+| Render service | `openclaw-webhook` |
+| Public URL | `https://openclaw-webhook-iz6s.onrender.com` |
+| Intended runtime URL | `https://openclaw-webhook-iz6s.onrender.com/poc/deepseek-runtime` |
+| Coordinator URL (configured) | `https://openclaw-webhook-iz6s.onrender.com/poc/coordinator` |
+| Configured model | `deepseek/deepseek-v4-flash` |
+
+Render environment configuration for these variables is established (configuration is external to repository code; server reads them as documented above). Secret values are NOT recorded.
+
+### Chatbox Custom Provider Configuration (Externally Observed)
+
+**VERIFIED externally observed** — A Chatbox custom OpenAI-compatible provider was configured:
+
+| Field | Value |
+|-------|-------|
+| Name | DeepSeek Runtime |
+| API Mode | OpenAI API Compatible |
+| API Host | `https://openclaw-webhook-iz6s.onrender.com` |
+| API Path | `/poc/deepseek-runtime` |
+| Model | `deepseek/deepseek-v4-flash` |
+| API key | `CHATBOX_GATEWAY_SECRET` value (not recorded) |
+
+Connection check reported: **Connection successful!**
+
+### Verified Facts
+
+- **VERIFIED repository state**: Runtime implementation exists and is merged on `main` (commit `934dee2`). `services/deepseek-runtime.js` provides `POST /poc/deepseek-runtime` (route `routes/poc.js:773`), authenticated by `authenticateChatboxGateway` (`CHATBOX_GATEWAY_SECRET`).
+- **VERIFIED repository state**: The runtime exposes exactly one model-facing tool — `control_plane` — accepting only `operation` (`request_task`), `objective`, and `target` (`Gemini Builder`). Server-side policy supplies all authority-bearing fields (repository, base branch, task_mode `REVIEW`, capabilities `read_only`, permitted paths `poc/`).
+- **VERIFIED externally observed**: Chatbox provider connection check reported "Connection successful!".
+- **VERIFIED externally observed / repository-documented**: Chatbox source confirms custom API host/path support — `normalizeOpenAIApiHostAndPath` in `src/shared/utils/llm_utils.ts` trims, strips trailing `/`, adds leading `/` to `apiPath`, adds `https://` if missing, recognizes a full `/chat/completions` URL, and preserves an explicitly-supplied custom path.
+- **VERIFIED externally observed / repository-documented**: Chatbox custom OpenAI code in `src/shared/providers/definitions/models/custom-openai.ts` constructs the request URL as `${apiHost}${apiPath}` — the configured endpoint resolves to `https://openclaw-webhook-iz6s.onrender.com/poc/deepseek-runtime`.
+- **VERIFIED repository state**: The runtime returns ordinary JSON (`{ choices: [{ message }], tool_iterations }`) — see `createDeepSeekRuntimeHandler()` in `services/deepseek-runtime.js:180-183`.
+- **VERIFIED repository state**: Chatbox source (`src/shared/models/utils/openai-chat-sse-termination.ts`) includes an SSE-specific wrapper for streamed OpenAI Chat Completions responses.
+- **VERIFIED repository state**: Runtime implementation and local tests were previously verified (implementation commit `934dee2`; tests in `test/deepseek-runtime.test.js`).
+
+### Not Verified / Unknown
+
+- **NOT VERIFIED**: Normal Chatbox chat requests reaching Render at `/poc/deepseek-runtime`. Render request-log inspection showed no observed request to `/poc/deepseek-runtime`.
+- **NOT VERIFIED**: Chatbox normal chat receiving a response from `/poc/deepseek-runtime`. Sending a normal chat message resulted in a blank response.
+- **NOT VERIFIED**: OpenRouter request succeeding through the live runtime.
+- **NOT VERIFIED**: DeepSeek live model response through OpenRouter.
+- **NOT VERIFIED**: Live coordinator invocation from the runtime.
+- **NOT VERIFIED**: Live ACP validation / TaskRegistry / dispatcher execution through the complete path.
+- **UNKNOWN**: Why the normal Chatbox request was not observed at Render.
+- **UNKNOWN**: Whether the streaming compatibility concern is the cause of the blank response.
+- **UNKNOWN**: Whether another Chatbox client-side condition prevents the request.
+
+### Streaming Compatibility Concern (Unresolved)
+
+**VERIFIED repository state** — The current server runtime (`services/deepseek-runtime.js:180-183`) returns ordinary JSON in the form `{ choices: [{ message: result.message }], tool_iterations: result.iterations }`. It does **NOT** implement an OpenAI SSE streaming response.
+
+**VERIFIED repository state** — Chatbox has an SSE-specific wrapper (`src/shared/models/utils/openai-chat-sse-termination.ts`) that handles streamed OpenAI Chat Completions responses.
+
+This is a **known compatibility concern** — Chatbox's custom OpenAI-compatible provider may expect an SSE streaming response, while the runtime returns non-streaming JSON. However, **this is NOT proven to be the reason** the normal chat request was not observed in Render logs. The streaming concern must be recorded as an unresolved compatibility concern, not as a confirmed root cause. The stronger signal is that no request was observed in Render request logs at all.
+
+### State Progression
+
+```
+Runtime implementation merged on main (934dee2)
+  → Render environment configured (secret names only documented)
+  → Chatbox custom provider configured toward /poc/deepseek-runtime
+  → Chatbox provider connection check SUCCESSFUL
+  → Normal Chatbox chat request NOT OBSERVED at Render
+  → Chatbox source/path investigation COMPLETED
+  → Streaming compatibility identified as UNRESOLVED CONCERN (not proven root cause)
+  → Complete live path REMAINS UNVERIFIED
+```
 
 ---
 
