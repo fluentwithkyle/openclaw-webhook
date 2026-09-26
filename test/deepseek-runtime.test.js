@@ -428,7 +428,7 @@ function request(port, headers, body) {
     });
 
     await test('get_task operation retrieves task metadata and status when task exists in taskRegistry', async () => {
-        const requestId = 'ds-test-task-1';
+        const requestId = 'deepseek-runtime-test-1';
         taskRegistry.createTask({
             request_id: requestId,
             source: 'DeepSeek',
@@ -603,7 +603,7 @@ function request(port, headers, body) {
         const report = projectedTask.gemini.report;
         assert.equal(report.apiKey, undefined);
         assert.equal(report.authorization, undefined);
-        assert.equal(report.nested, undefined);
+        assert.equal(report.nested, null);
 
         assert.equal(projectedTask.kilo, undefined);
         assert.equal(projectedTask.constraints, undefined);
