@@ -420,7 +420,7 @@ function request(port, headers, body) {
         };
         const conversation = [
             { role: 'user', content: 'Check task status' },
-            { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: 'non-existent-task' }) } }] }
+            { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: 'deepseek-runtime-non-existent-task' }) } }] }
         ];
         const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
         assert.equal(coordinatorCalled, false);
