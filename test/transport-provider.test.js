@@ -240,6 +240,8 @@ async function main() {
             const result = await dispatch(cmd);
             assertEqual(result.status, 'FAILED');
             assert(result.error.includes('Missing GitHub token'), 'error should indicate missing token');
+            assertEqual(result.diagnostics.stage, 'authentication');
+            assertEqual(result.diagnostics.category, 'missing_github_token');
             assert(!result.error.includes('test-gh-token'), 'no token value should be exposed');
         } finally {
             restoreEnv();
@@ -250,11 +252,22 @@ async function main() {
     await runTest('Builder dispatchGeminiBuilder failure normalizes to FAILED', async () => {
         process.env.ORCHESTRATOR_GH_TOKEN = 'test-gh-token';
         const original = geminiBuilderTrigger.dispatchGeminiBuilder;
-        geminiBuilderTrigger.dispatchGeminiBuilder = async () => ({ success: false, error: 'GitHub API error: 500', status_code: 500 });
+        geminiBuilderTrigger.dispatchGeminiBuilder = async () => ({
+            success: false,
+            error: 'GitHub workflow dispatch failed (github_service_failure)',
+            status_code: 500,
+            stage: 'github',
+            category: 'github_service_failure',
+            workflow: 'gemini-builder.yml',
+            repository: 'fluentwithkyle/openclaw-webhook'
+        });
         try {
             const result = await dispatch({ ...builderCommand, request_id: 'builder-fail-1' });
             assertEqual(result.status, 'FAILED');
-            assert(result.error.includes('GitHub API error'));
+            assert(result.error.includes('GitHub workflow dispatch failed (github_service_failure)'));
+            assertEqual(result.diagnostics.status_code, 500);
+            assertEqual(result.diagnostics.stage, 'github');
+            assertEqual(result.diagnostics.category, 'github_service_failure');
             assertEqual(result.request_id, 'builder-fail-1');
         } finally {
             geminiBuilderTrigger.dispatchGeminiBuilder = original;
