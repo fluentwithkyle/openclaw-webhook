@@ -91,8 +91,14 @@ const authenticateDeepSeekCoordinator = (req, res, next) => {
 
 // Chatbox Gateway Authentication Middleware
 const authenticateChatboxGateway = (req, res, next) => {
-    const secret = req.headers['x-chatbox-gateway-secret'];
-    if (!secret || secret !== process.env.CHATBOX_GATEWAY_SECRET) {
+    const gatewaySecret = req.headers['x-chatbox-gateway-secret'];
+    const authorization = req.headers.authorization;
+    const bearerSecret = typeof authorization === 'string' && authorization.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : undefined;
+    const expectedSecret = process.env.CHATBOX_GATEWAY_SECRET;
+
+    if (!expectedSecret || (gatewaySecret !== expectedSecret && bearerSecret !== expectedSecret)) {
         return res.status(401).json({
             request_id: 'unknown',
             status: 'authentication blocked',

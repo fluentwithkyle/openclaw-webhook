@@ -131,7 +131,7 @@ function request(port, headers, body) {
         await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'x' }], env: {}, httpClient: { post: async () => null } }), error => error.code === 'RUNTIME_NOT_CONFIGURED');
     });
 
-    await test('runtime route rejects missing or invalid gateway authentication and accepts valid authentication', async () => {
+    await test('runtime route accepts custom-header and Bearer gateway authentication while rejecting missing or invalid credentials', async () => {
         process.env.CHATBOX_GATEWAY_SECRET = 'gateway-test-secret';
         process.env.OPENROUTER_API_KEY = 'route-test-key';
         process.env.OPENROUTER_MODEL = 'deepseek/test';
@@ -149,10 +149,14 @@ function request(port, headers, body) {
             const body = { messages: [{ role: 'user', content: 'hello' }] };
             assert.equal((await request(3011, {}, body)).status, 401);
             assert.equal((await request(3011, { 'x-chatbox-gateway-secret': 'invalid' }, body)).status, 401);
+            assert.equal((await request(3011, { authorization: 'Bearer wrong-secret' }, body)).status, 401);
             const valid = await request(3011, { 'x-chatbox-gateway-secret': 'gateway-test-secret' }, body);
             assert.equal(valid.status, 200);
             assert.equal(valid.body.choices[0].message.content, 'authenticated response');
             assert.equal(JSON.stringify(valid.body).includes('route-test-key'), false);
+            const bearer = await request(3011, { authorization: 'Bearer gateway-test-secret' }, body);
+            assert.equal(bearer.status, 200);
+            assert.equal(bearer.body.choices[0].message.content, 'authenticated response');
         } finally {
             axios.post = originalPost;
             await new Promise(resolve => server.close(resolve));
