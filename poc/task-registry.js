@@ -14,13 +14,18 @@ const {
   EVIDENCE_TYPES,
   AGENT_EVIDENCE_TYPE,
   CONFIG_VERIFICATION_STATES,
-  VALID_STATE_TRANSITIONS
+  VALID_STATE_TRANSITIONS,
+  validateDirectorApprovalScope,
+  calculateDirectorScopeHash,
+  getDirectorScope,
+  isConsequentialCommand
 } = require('./schemas/acp-schema');
 
 const REGISTRY_FILE = path.join(__dirname, 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, 'task-registry.json.bak');
 
 let memoryCache = new Map();
+let approvalCache = new Map();
 let initialized = false;
 
 function ensureRegistryFile() {
@@ -34,11 +39,14 @@ function loadFromFile() {
     ensureRegistryFile();
     const data = fs.readFileSync(REGISTRY_FILE, 'utf8');
     const parsed = JSON.parse(data || '{}');
+    approvalCache = new Map(Object.entries(parsed.__director_approvals__ || {}));
+    delete parsed.__director_approvals__;
     memoryCache = new Map(Object.entries(parsed));
     initialized = true;
   } catch (err) {
     console.error('Failed to load task registry:', err.message);
     memoryCache = new Map();
+    approvalCache = new Map();
     initialized = true;
   }
 }
@@ -58,10 +66,19 @@ function atomicWrite(data) {
 
 function persistCache() {
   const data = Object.fromEntries(memoryCache);
+  data.__director_approvals__ = Object.fromEntries(approvalCache);
   atomicWrite(data);
 }
 
 function createTask(command) {
+  return createTaskUnchecked(command);
+}
+
+function createTaskWithDirectorAuthorization(command) {
+  return isConsequentialCommand(command) ? consumeDirectorApprovalAndCreateTask(command) : module.exports.createTask(command);
+}
+
+function createTaskUnchecked(command, options) {
   const cache = getCache();
   const requestId = command.request_id;
 
@@ -91,8 +108,41 @@ function createTask(command) {
   }
 
   cache.set(requestId, entry);
-  persistCache();
+  if (!options || options.persist !== false) persistCache();
   return { success: true, entry };
+}
+
+function createDirectorApproval(scope) {
+  getCache();
+  const validation = validateDirectorApprovalScope(scope);
+  if (!validation.valid) return { success: false, error: validation.error };
+  const issuedAt = new Date().toISOString();
+  const expiry = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const approvalId = 'dir-approval-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  const record = { ...getDirectorScope(scope), issuer: 'Kyle (Director)', expiry, issued_at: issuedAt, consumed_at: null, status: 'PENDING', approval_id: approvalId, scope_hash: calculateDirectorScopeHash(scope) };
+  approvalCache.set(approvalId, record);
+  persistCache();
+  return { success: true, approval: record };
+}
+
+function consumeDirectorApprovalAndCreateTask(command) {
+  const cache = getCache();
+  const approvalId = command.authorization && command.authorization.approval_id;
+  if (typeof approvalId !== 'string' || approvalId.length === 0) return { success: false, authorization: true, error: 'Director approval is required for consequential task' };
+  const record = approvalCache.get(approvalId);
+  if (!record) return { success: false, authorization: true, error: 'Director approval does not exist' };
+  if (record.status !== 'PENDING') return { success: false, authorization: true, error: 'Director approval is not pending' };
+  if (Date.parse(record.expiry) <= Date.now()) { record.status = 'EXPIRED'; approvalCache.set(approvalId, record); persistCache(); return { success: false, authorization: true, error: 'Director approval has expired' }; }
+  if (record.scope_hash !== calculateDirectorScopeHash(getDirectorScope(command))) return { success: false, authorization: true, error: 'Director approval scope mismatch' };
+  const result = createTaskUnchecked(command, { persist: false });
+  if (!result.success) return result;
+  record.status = 'CONSUMED';
+  record.consumed_at = new Date().toISOString();
+  approvalCache.set(approvalId, record);
+  result.entry.authorization_proof = { approval_id: approvalId, scope_hash: record.scope_hash, issuer: record.issuer, consumed_at: record.consumed_at };
+  cache.set(command.request_id, result.entry);
+  persistCache();
+  return result;
 }
 
 function getTask(requestId) {
@@ -519,7 +569,8 @@ function deleteTask(requestId) {
 
 function resetRegistry() {
   memoryCache = new Map();
-  atomicWrite({});
+  approvalCache = new Map();
+  atomicWrite({ __director_approvals__: {} });
   return { success: true };
 }
 
@@ -637,6 +688,9 @@ function rehydrateTask(command) {
 
 module.exports = {
   createTask,
+  createDirectorApproval,
+  createTaskWithDirectorAuthorization,
+  consumeDirectorApprovalAndCreateTask,
   getTask,
   updateTaskStatus,
   updateAgentResult,

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ACP_COMMAND_REQUIRED_FIELDS = [
   'protocol_version',
@@ -239,6 +240,56 @@ function validatePermittedPathsForMode(taskMode, permittedPaths) {
   }
 
   return { valid: true };
+}
+
+function canonicalizeDirectorScope(scope) {
+  return JSON.stringify({
+    request_id: scope.request_id,
+    target: scope.target,
+    task_mode: scope.task_mode,
+    capabilities: [...scope.capabilities].sort(),
+    permitted_paths: [...scope.permitted_paths].sort(),
+    repository: scope.repository,
+    base_branch: scope.base_branch
+  });
+}
+
+function getDirectorScope(command) {
+  return {
+    request_id: command.request_id,
+    target: command.target,
+    task_mode: command.task_mode || DEFAULT_TASK_MODE,
+    capabilities: command.authorization && command.authorization.capabilities,
+    permitted_paths: command.constraints && command.constraints.permitted_paths,
+    repository: command.repository,
+    base_branch: command.base_branch
+  };
+}
+
+function validateDirectorApprovalScope(scope) {
+  if (!scope || typeof scope !== 'object') return { valid: false, error: 'Director approval scope must be an object' };
+  for (const field of ['request_id', 'target', 'task_mode', 'repository', 'base_branch']) {
+    if (typeof scope[field] !== 'string' || scope[field].trim() === '') return { valid: false, error: 'Director approval scope requires ' + field };
+  }
+  const mode = validateTaskMode(scope.task_mode);
+  if (!mode.valid) return mode;
+  if (!VALID_AGENTS.includes(scope.target)) return { valid: false, error: 'Invalid Director approval target' };
+  const caps = validateCapabilitiesForMode(scope.task_mode, scope.capabilities);
+  if (!caps.valid) return caps;
+  const paths = validatePermittedPathsForMode(scope.task_mode, scope.permitted_paths);
+  if (!paths.valid || scope.permitted_paths.length === 0) return paths.valid ? { valid: false, error: 'Director approval scope requires permitted_paths' } : paths;
+  return { valid: true };
+}
+
+function calculateDirectorScopeHash(scope) {
+  return crypto.createHash('sha256').update(canonicalizeDirectorScope(scope)).digest('hex');
+}
+
+function isConsequentialCommand(command) {
+  const scope = getDirectorScope(command);
+  return scope.task_mode === 'BUILDER' || scope.task_mode === 'FAILOVER_EXECUTE' ||
+    (Array.isArray(scope.capabilities) && scope.capabilities.some(cap => ['modify_files', 'commit', 'push'].includes(cap))) ||
+    (Array.isArray(scope.permitted_paths) && scope.permitted_paths.some(p => !p.startsWith('poc/')));
 }
 
 function validateAuthorization(command) {
@@ -803,6 +854,11 @@ module.exports = {
   validateCapabilitiesForMode,
   validatePermittedPathsForMode,
   validateAuthorization,
+  canonicalizeDirectorScope,
+  getDirectorScope,
+  validateDirectorApprovalScope,
+  calculateDirectorScopeHash,
+  isConsequentialCommand,
   validateReconciliation,
   determineReconciliationStatus,
   validateACPCommand,
