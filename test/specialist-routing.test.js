@@ -1,0 +1,51 @@
+const assert = require('assert');
+const {
+    CONTROL_PLANE_TOOL,
+    MAX_TOOL_ITERATIONS,
+    buildControlPlaneCommand,
+    routeSpecialistIntent
+} = require('../services/deepseek-runtime');
+
+function request(objective, extra = {}) {
+    return buildControlPlaneCommand({ operation: 'request_task', objective, ...extra });
+}
+
+const review = routeSpecialistIntent('Research the current coordinator behavior');
+assert.deepEqual({ lane: review.lane, target: review.target, task_mode: review.task_mode, capabilities: review.capabilities }, {
+    lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: ['read_only']
+});
+assert.equal(request('Review the coordinator').target, 'Gemini');
+
+const security = routeSpecialistIntent('Audit authentication and credential handling');
+assert.equal(security.lane, 'Security Specialist');
+assert.equal(security.target, 'Security Specialist');
+assert.equal(security.task_mode, 'REVIEW');
+assert.deepEqual(security.capabilities, ['read_only']);
+assert.equal(request('Audit authentication and credential handling').target, 'Security Specialist');
+
+const utility = routeSpecialistIntent('Format the README documentation');
+assert.equal(utility.lane, 'Utility Specialist');
+assert.equal(utility.target, 'Utility Specialist');
+assert.equal(utility.task_mode, 'REVIEW');
+assert.deepEqual(utility.capabilities, ['read_only']);
+assert.equal(request('Format the README documentation').target, 'Utility Specialist');
+
+const builder = routeSpecialistIntent('Implement a code change');
+assert.equal(builder.lane, 'Gemini Builder');
+assert.equal(builder.authorization_required, true);
+assert.equal(builder.outcome, 'HUMAN_REVIEW');
+assert.throws(() => request('Implement a code change'), error => error.code === 'SPECIALIST_ROUTING_BLOCKED');
+
+const kilo = routeSpecialistIntent('Implement a code change', { explicit_kilo_failover: true });
+assert.equal(kilo.lane, 'Gemini Builder');
+const explicitKilo = routeSpecialistIntent('Review a failed execution', { explicit_kilo_failover: true });
+assert.equal(explicitKilo.lane, 'Kilo');
+assert.equal(explicitKilo.authorization_required, true);
+
+assert.throws(() => request('Do something'), error => error.code === 'SPECIALIST_ROUTING_BLOCKED');
+assert.throws(() => request('Review this', { parent_request_id: 'deepseek-runtime-parent', target: 'Kilo' }), /not permitted/);
+for (const forbidden of ['target', 'capabilities', 'task_mode', 'permitted_paths', 'repository', 'base_branch', 'authorization']) {
+    assert.equal(CONTROL_PLANE_TOOL.function.parameters.properties[forbidden], undefined);
+}
+assert.equal(MAX_TOOL_ITERATIONS, 3);
+console.log('PASS: deterministic specialist routing preserves server-derived authority and fails closed');

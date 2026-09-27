@@ -68,7 +68,7 @@ function coordinatorFailureClient(status, data) {
                 return providerResponse({ role: 'assistant', tool_calls: [{
                     id: 'call-1',
                     type: 'function',
-                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'x' }) }
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior' }) }
                 }] });
             }
             const error = new Error('sensitive coordinator detail');
@@ -131,7 +131,7 @@ function rawRequest(port, headers, body) {
         assert.equal(command.base_branch, 'main');
         assert.deepEqual(command.authorization.capabilities, ['read_only']);
         assert.deepEqual(command.constraints.permitted_paths, ['poc/']);
-        assert.equal(command.target, 'Gemini Builder');
+        assert.equal(command.target, 'Gemini');
         assert.equal(command.task_mode, 'REVIEW');
     });
 
@@ -158,7 +158,7 @@ function rawRequest(port, headers, body) {
         });
         assert.equal(result.message.content, 'Follow-up requested.');
         assert.equal(childCommand.parent_request_id, parentRequestId);
-        assert.equal(childCommand.target, 'Gemini Builder');
+        assert.equal(childCommand.target, 'Gemini');
         assert.equal(childCommand.task_mode, 'REVIEW');
         assert.deepEqual(childCommand.authorization.capabilities, ['read_only']);
         assert.deepEqual(childCommand.constraints.permitted_paths, ['poc/']);
@@ -264,7 +264,7 @@ function rawRequest(port, headers, body) {
     await test('coordinator authentication, validation, and dispatch failures are explicit', async () => {
         for (const [status, code] of [[401, 'COORDINATOR_AUTHENTICATION_FAILED'], [400, 'COORDINATOR_VALIDATION_REJECTED'], [403, 'COORDINATOR_DISPATCH_BLOCKED'], [500, 'COORDINATOR_DISPATCH_FAILED']]) {
             const client = coordinatorFailureClient(status);
-            await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'x' }], env: env(), httpClient: client }), error => error.code === code && !error.message.includes('sensitive') && error.diagnostics === undefined);
+            await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'Review coordinator behavior' }], env: env(), httpClient: client }), error => error.code === code && !error.message.includes('sensitive') && error.diagnostics === undefined);
         }
     });
 
@@ -284,7 +284,7 @@ function rawRequest(port, headers, body) {
             authorization: 'Bearer should-not-leak',
             api_key: 'should-not-leak'
         };
-        const input = { messages: [{ role: 'user', content: 'x' }] };
+        const input = { messages: [{ role: 'user', content: 'Review coordinator behavior' }] };
         await assert.rejects(
             () => runDeepSeekConversation({ ...input, env: env(), httpClient: coordinatorFailureClient(500, coordinatorData) }),
             error => {
