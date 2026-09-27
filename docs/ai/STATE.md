@@ -1,7 +1,7 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-09-27
-**Updated By**: Gemini — TASK-GEMINI-DEEPSEEK-BOUNDED-RESULT-DRIVEN-CONTINUATION-FINAL-VERIFY-RECONCILE-001 — source/test structure independently reviewed; runtime execution remains blocked.
+**Updated By**: ChatGPT Coordinator — TASK-CHATGPT-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001 — current main independently inspected; runtime execution remains blocked.
 ---
 
 ## Project Status: ACTIVE (Transitional)
@@ -45,7 +45,7 @@ information; it exposes no authority fields. **Director Authorization Architectu
 
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
-| TASK-CODEX-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Increment 4.4 adds bounded, read-only `failure_summary` and `blocked_summary` projections beside unchanged raw sanitized terminal details. Summaries expose only matching recorded agent execution status, recorded blocker counts, and bounded sanitized agent commentary; missing diagnostic evidence remains absent. It preserves the two-operation control plane, the 10-child bound, server-derived continuation, and Director authorization. |
+| TASK-CODEX-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED; AGENT-REPORTED VERIFICATION** | Codex | Increment 4.4 adds bounded, read-only `failure_summary` and `blocked_summary` projections beside unchanged raw sanitized terminal details. Summaries expose only matching recorded agent execution status, recorded blocker counts, and bounded sanitized agent commentary; missing diagnostic evidence remains absent. It preserves the two-operation control plane, the 10-child bound, server-derived continuation, and Director authorization. |
 | TASK-CODEX-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Added exactly one Director approval issuance path authenticated by `DIRECTOR_APPROVAL_SECRET`; approvals are server-held, 15-minute, SHA-256 scope-bound, and consumed once at consequential coordinator/Builder registration. Parent lineage and component authentication do not confer authority; cancellation and supersession revoke matching pending approvals; the DeepSeek REVIEW/read_only/`poc/` boundary is unchanged. Verified by the Phase 3.2 final independent regression execution. |
 | TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFICATION FAILED** | Codex | Superseded by the correction task after independent verification found unsupported specialist transport and Builder command-construction defects. |
 | TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-CORRECTION-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Correction commit `11d057bc756739f111aab9c0189108ca2e678e14` was independently verified by TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-FINAL-VERIFY-RECONCILE-001: focused, relevant regression, and full-suite tests passed; the report is filed at `docs/ai/gemini-acp-report.json`. |
@@ -958,6 +958,15 @@ Codex reported 45/45 focused runtime tests and 625 passing assertions for `npm t
 
 ### Increment 4.4 — Structured Failure & Blocked Diagnostic Summaries
 
-**Status:** IMPLEMENTED / VERIFIED (runtime tests executed locally).
+**Status:** IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.
 
 The existing DeepSeek task observation projection now adds status-scoped, informational `failure_summary` or `blocked_summary` fields beside the unchanged raw sanitized `failure` and `blocked` projections. Each summary derives only from matching recorded agent execution outcomes and sanitized report data: observed execution status, explicitly recorded blocker counts, and separately labeled `agent_commentary` highlights. Commentary is sanitized before exposure and each highlight list is capped at three entries of at most 240 characters. Missing or unsupported diagnostic data produces no summary; the implementation does not interpret evidence as independent verification or alter continuation eligibility, lineage, authority, TaskRegistry, dispatcher, or the two-operation control plane.
+
+
+### Increment 4.4 Final Verification — Structured Failure & Blocked Diagnostic Summaries
+
+**Status:** IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.
+
+Verified main HEAD: `323694dd33356f70600a5a2c7dfbec3e5be89a67` (PR #237 merged). Direct source inspection confirms status-scoped bounded `failure_summary`/`blocked_summary`, sanitization, preserved raw terminal projections, 10-child observation inheritance, exactly two model-facing operations, MAX_TOOL_ITERATIONS=3, and unchanged continuation, lineage, TaskRegistry, dispatcher/orchestrator, and Director-authorization boundaries. Codex's 46/46 focused and full-suite results remain agent evidence; Node/npm execution and independent CI evidence were unavailable to this coordinator.
+
+Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001.md`.
