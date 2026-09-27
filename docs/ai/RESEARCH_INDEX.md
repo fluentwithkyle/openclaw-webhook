@@ -24,6 +24,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 | Verification / Evidence Basis | How findings were verified |
 
 ## Index
+| TASK-CHATGPT-DEEPSEEK-WORKFLOW-COMPLETION-SUMMARY-FINAL-VERIFY-RECONCILE-001 | 2026-09-27 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-WORKFLOW-COMPLETION-SUMMARY-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — appended final verification/reconciliation entry |
 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
