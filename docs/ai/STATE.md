@@ -984,6 +984,20 @@ The existing DeepSeek parent observation now adds `child_tasks_summary` only whe
 **TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001** independently inspected merged PR #238 on main at `7b6b5b312439bd7ba724d8bf02a6e63fd77dabba`. Classification: **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED**. The implementation derives the read-only `child_tasks_summary` from the complete TaskRegistry child set, preserves the 10-item detailed child bound, and introduces no authority or lifecycle changes. Codex's focused/full test results remain **AGENT-REPORTED VERIFICATION** because coordinator runtime execution was unavailable and the merged commit has no exposed CI status.
 
 
+### Increment 4.7 — Parent-Level Workflow Completion & Final Outcome Summary
+
+**Status:** IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.
+
+PR #240 is merged to main as `25e149e476d8c66626ffbb28d159c74aba3c99af` (implementation head before merge: `81be3733f9293821a5a5cadb844457dc4a539556`). Independent source inspection confirms `observeTaskForDeepSeek()` derives `workflow_completion_summary` from the complete `TaskRegistry.getTasksByParent(requestId)` collection, then preserves the unchanged `MAX_CHILD_TASK_OBSERVATIONS = 10` detailed `child_tasks` cap. Existing `child_tasks_summary` and `child_diagnostics_summary` remain intact.
+
+The workflow summary is emitted only when children exist and every child has an authoritative terminal outcome. Actual TaskRegistry semantics are preserved: lifecycle statuses `COMPLETE`, `FAILED`, and `BLOCKED` are terminal; `CANCELLED` and `SUPERSEDED` are lineage stop conditions. `VERIFIED` remains an intermediate lifecycle state and therefore does not prematurely complete the workflow summary. Aggregate counts therefore include children beyond the 10-item detailed observation cap. Completion highlights reuse existing evidence projection and sanitization, with the existing three-highlight / 240-character bounds.
+
+The implementation preserves exactly two model-facing control-plane operations (`request_task`, `get_task`), `MAX_TOOL_ITERATIONS = 3`, server-derived authority, TaskRegistry/dispatcher/orchestrator authority, Director authorization, parent-lineage correlation semantics, and the COMPLETE + INDEPENDENT_VERIFICATION continuation boundary. No second control plane, executor, state store, retry mechanism, or authority path was introduced.
+
+The merged implementation is limited to the approved Increment 4.7 runtime/test scope. PR-reported focused/full tests remain **AGENT-REPORTED VERIFICATION**. Independent Node/npm execution is **BLOCKED** in this coordinator environment because the repository cannot be fetched over the available network path; no CI status is exposed for the merged commit. Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-WORKFLOW-COMPLETION-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
+
+---
+
 ### Increment 4.6 — Child Diagnostic Aggregation & Recovery Context
 
 **Status:** IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.
