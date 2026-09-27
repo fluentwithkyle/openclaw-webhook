@@ -2516,3 +2516,32 @@ The reconciled documentation distinguishes:
 **Verification**: Focused runtime and specialist-routing tests passed; complete `npm test` and final whitespace/diff checks were run. Independent Gemini verification is still required before any VERIFIED claim.
 
 **Commit Reference**: This commit.
+
+
+---
+
+## 2026-09-27 | TASK-CHATGPT-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-VERIFY-RECONCILE-001
+
+**Task**: Independently verify and reconcile the Phase 3.2 DeepSeek specialist-routing implementation from actual repository state on `main`, without relying on the implementation agent's report.
+
+**Verification Result**: **FAILED — PHASE 3.2 NOT VERIFIED**.
+
+**Implementation verified present**: PR #229 merged as commit `2fa4aa9d0dbaf81e8045dc79bf0897a5a8d77ab4` ("Implement deterministic DeepSeek specialist routing (#229)").
+
+**Independent findings**:
+1. `services/deepseek-runtime.js` contains deterministic server-side routing for Gemini Reviewer, Security Specialist, Utility Specialist, Gemini Builder, and Kilo classifications.
+2. ACP schema `VALID_AGENTS` includes Security Specialist and Utility Specialist, so the schema alone does not reject those targets.
+3. The existing `services/transport-provider.js` dispatcher recognizes only `Kilo` and `Gemini Builder`; Security Specialist and Utility Specialist therefore reach an unsupported-target dispatch path rather than a working specialist transport. This violates the Phase 3.2 requirement that the routed specialist lanes remain operational through the existing control-plane boundary.
+4. The Gemini Builder routing policy object in `services/deepseek-runtime.js` declares `authorization_required` but does not provide `capabilities` or `permitted_paths`. `buildControlPlaneCommand()` unconditionally calls `route.capabilities.slice()` and `route.permitted_paths.slice()`, so a Builder-classified request can fail during command construction rather than reaching the existing Phase 3.1 Director authorization gate.
+5. Existing tests in `test/specialist-routing.test.js` verify classification and fail-closed outcomes but do not prove successful end-to-end dispatch of Security Specialist or Utility Specialist through `getDispatcher()`, nor do they exercise the Builder command-construction path to the point where the missing arrays fail.
+6. The implementation does preserve the single `control_plane`, server-derived routing concept, `MAX_TOOL_ITERATIONS = 3`, and the existing Director-authorization boundary concept; these invariants do not cure the dispatch defects above.
+
+**Reconciliation**:
+- Phase 3.2 remains **IMPLEMENTED / VERIFICATION FAILED**, not VERIFIED.
+- No production-code correction was made during this VERIFY_RECONCILE execution.
+- STATE.md, CONTROL_CENTER.md, and RESEARCH_INDEX.md were reconciled to the actual verified state.
+- The implementation remains blocked pending a focused correction task that makes the routed specialist lanes actually dispatchable through the existing transport boundary and fixes the Builder command-construction defect without creating a second control plane or authorization mechanism.
+
+**Next required action**: Create and execute a Phase 3.2 specialist-routing correction task. The correction must first inspect the existing specialist-lane architecture/transport surfaces and implement the smallest supported dispatch integration for Security Specialist and Utility Specialist, then fix the Builder route authority fields and add regression tests proving actual dispatcher integration and Director-authorization gating. Independent VERIFY_RECONCILE is required again afterward.
+
+**Verification evidence**: Actual `main` source inspection of `services/deepseek-runtime.js`, `services/transport-provider.js`, `poc/schemas/acp-schema.js`, `routes/poc.js`, `poc/task-registry.js`, and specialist-routing tests. No claim of full-suite execution is made from this environment.
