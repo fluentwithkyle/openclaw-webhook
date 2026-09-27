@@ -266,6 +266,22 @@ function classifyTaskResultForContinuation(task) {
     return { classification: 'eligible', eligible_for_next_decision: true, reason: null };
 }
 
+function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults) {
+    const task = taskRegistry.getTask(requestId);
+    if (!task) return { status: 'not_found', request_id: requestId };
+
+    const result = classifyTaskResultForContinuation(task);
+    observedTaskResults.set(requestId, result);
+    return {
+        status: 'found',
+        task: projectTaskForDeepSeek(task),
+        continuation: {
+            ...result,
+            submitted_in_this_execution: submittedTaskIds.has(requestId)
+        }
+    };
+}
+
 function sanitizeReport(report) {
     if (!report || typeof report !== 'object') return report || null;
     if (Array.isArray(report)) return report.map(sanitizeReport);
@@ -461,24 +477,14 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
                 throw normalizeProviderError(error, 'COORDINATOR');
             }
             submittedTaskIds.add(command.request_id);
-            toolResultContent = JSON.stringify({ status: 'completed', coordinator: coordinatorResponse.data });
+            toolResultContent = JSON.stringify({
+                status: 'completed',
+                coordinator: coordinatorResponse.data,
+                observation: observeTaskForDeepSeek(command.request_id, submittedTaskIds, observedTaskResults)
+            });
         } else if (args.operation === 'get_task') {
             const validatedArgs = validateGetTaskArguments(args);
-            const task = taskRegistry.getTask(validatedArgs.request_id);
-            if (!task) {
-                toolResultContent = JSON.stringify({ status: 'not_found', request_id: validatedArgs.request_id });
-            } else {
-                const result = classifyTaskResultForContinuation(task);
-                observedTaskResults.set(validatedArgs.request_id, result);
-                toolResultContent = JSON.stringify({
-                    status: 'found',
-                    task: projectTaskForDeepSeek(task),
-                    continuation: {
-                        ...result,
-                        submitted_in_this_execution: submittedTaskIds.has(validatedArgs.request_id)
-                    }
-                });
-            }
+            toolResultContent = JSON.stringify(observeTaskForDeepSeek(validatedArgs.request_id, submittedTaskIds, observedTaskResults));
         } else {
             throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'Unsupported control_plane operation');
         }
@@ -560,6 +566,7 @@ module.exports = {
     validateGetTaskArguments,
     evaluateContinuationPolicy,
     classifyTaskResultForContinuation,
+    observeTaskForDeepSeek,
     projectTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
     getRuntimeConfig,

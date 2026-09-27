@@ -136,6 +136,42 @@ function rawRequest(port, headers, body) {
         assert.equal(command.task_mode, 'REVIEW');
     });
 
+    await test('request_task automatically provides the reused sanitized observation to the next model decision', async () => {
+        taskRegistry.resetRegistry();
+        let modelCallCount = 0;
+        let automaticObservation;
+        const client = { post: async (url, body) => {
+            if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                assert.equal(taskRegistry.createTask(body).success, true);
+                for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus(body.request_id, status).success, true);
+                assert.equal(taskRegistry.addEvidence(body.request_id, 'INDEPENDENT_VERIFICATION', 'Gemini', { summary: 'verified', token: 'hidden' }).success, true);
+                assert.equal(taskRegistry.updateTaskStatus(body.request_id, 'VERIFIED').success, true);
+                assert.equal(taskRegistry.updateTaskStatus(body.request_id, 'COMPLETE').success, true);
+                return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
+            }
+            modelCallCount++;
+            if (modelCallCount === 1) {
+                return providerResponse({ role: 'assistant', content: null, tool_calls: [{
+                    id: 'call-1', type: 'function',
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the bounded result' }) }
+                }] });
+            }
+            automaticObservation = JSON.parse(body.messages.find(message => message.role === 'tool').content);
+            return providerResponse({ role: 'assistant', content: 'I received the independently verified result.' });
+        } };
+
+        const result = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Request and consume the result.' }], env: env(), httpClient: client });
+        assert.equal(result.message.content, 'I received the independently verified result.');
+        assert.equal(modelCallCount, 2);
+        assert.equal(automaticObservation.status, 'completed');
+        assert.equal(automaticObservation.observation.status, 'found');
+        assert.equal(automaticObservation.observation.continuation.classification, 'eligible');
+        assert.equal(automaticObservation.observation.continuation.submitted_in_this_execution, true);
+        assert.equal(JSON.stringify(automaticObservation.observation).includes('hidden'), false);
+        assert.equal(automaticObservation.observation.task.authorization, undefined);
+        taskRegistry.resetRegistry();
+    });
+
     await test('observed independently verified task creates a bounded read-only continuation child', async () => {
         const parentRequestId = 'deepseek-runtime-phase3-parent';
         taskRegistry.resetRegistry();
