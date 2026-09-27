@@ -574,7 +574,7 @@ controlled by existing ACP `INDEPENDENT_VERIFICATION` transition rules.
 
 ### Status
 
-**IMPLEMENTED / VERIFIED**
+**IMPLEMENTED / CODE-REVIEW VERIFIED; RUNTIME EXECUTION UNKNOWN**
 
 ### Context
 
