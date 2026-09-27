@@ -2639,3 +2639,19 @@ The reconciled documentation distinguishes:
 **Verification**: Focused DeepSeek runtime tests passed (45/45); full `npm test` suite passed (625 passing assertions).
 
 **Commit Reference**: This entry is recorded in the implementation commit.
+
+## 2026-09-27 | TASK-CHATGPT-DEEPSEEK-STRUCTURED-SPECIALIST-EVIDENCE-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001
+
+**Task**: Independently verify and reconcile the merged Increment 4.3 structured specialist-evidence summary implementation.
+
+**Verified Main HEAD**: `3d0a5519f56e9027bac27089e13133c6c95ca2aa`
+
+**Implementation Commit**: `f6df467e749202f23922188e19f52b1aea31cbea` (merged through PR #236).
+
+**Outcome**: **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED**. Direct GitHub inspection confirms the bounded deterministic `evidence_summary`, preserved raw sanitized projections, separated agent commentary, 3 × 240-character commentary bound, 10-child observation bound, exactly two model-facing operations, MAX_TOOL_ITERATIONS=3, and unchanged continuation/Director-authorization/lineage boundaries.
+
+**Execution Evidence**: Codex reported 45/45 focused DeepSeek runtime tests and 625 passing assertions for `npm test`, plus successful regression checks and `git diff --check`. Node/npm execution and `git diff --check` were unavailable to the coordinator, and GitHub exposes no CI run/status for the implementation commit. These results remain agent evidence only.
+
+**Reconciliation**: Current-state documentation was updated to distinguish structural verification from runtime execution status.
+
+**Research Record**: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRUCTURED-SPECIALIST-EVIDENCE-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001.md`.

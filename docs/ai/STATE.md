@@ -946,3 +946,11 @@ openclaw-webhook/
 **Status:** IMPLEMENTED / VERIFIED (runtime tests executed locally).
 
 The existing DeepSeek `get_task` / same-execution observation path now includes a read-only `evidence_summary` alongside the unchanged raw sanitized execution and verification projections. It reports only recorded execution statuses, independent-verification evidence counts/outcomes, and counts explicitly present in recorded report arrays (`verification`, `blockers`, and `changed_files`). Bounded report `summary` text is separately labeled `agent_commentary`; it is sanitized before projection, capped at three highlights, and capped at 240 characters per highlight. Missing evidence remains absent, and this derived view does not alter continuation, lineage, authorization, TaskRegistry, or the two-operation control plane.
+
+### Increment 4.3 Final Verification — Structured Specialist Evidence
+
+**Status:** IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.
+
+PR #236 is merged to main as `3d0a5519f56e9027bac27089e13133c6c95ca2aa`; implementation commit is `f6df467e749202f23922188e19f52b1aea31cbea`. Direct source inspection confirms bounded deterministic `evidence_summary` projection, preserved raw sanitized evidence, clearly separated bounded agent commentary, existing 10-child observation bound, exactly two model-facing control-plane operations, MAX_TOOL_ITERATIONS=3, and unchanged server-derived continuation/authorization/lineage boundaries.
+
+Codex reported 45/45 focused runtime tests and 625 passing assertions for `npm test`, but no Node/npm execution or CI evidence was available to the coordinator. Those results remain agent-reported evidence and are not treated as independent runtime verification. Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRUCTURED-SPECIALIST-EVIDENCE-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001.md`.
