@@ -29,7 +29,9 @@
 
 ## Reconciliation
 
-STATE.md, CONTROL_CENTER.md, TASK_LOG.md, and RESEARCH_INDEX.md are reconciled to distinguish implementation-agent evidence from independent verification. ARCH_DECISIONS.md remains unchanged.
+STATE.md, CONTROL_CENTER.md, TASK_LOG.md, and RESEARCH_INDEX.md were reconciled to distinguish implementation-agent evidence from independent verification. ARCH_DECISIONS.md remains unchanged.
+
+Persistence commits: research record `7d1ea17e37a9d05eef39c2b58b111e3294ad01b0`; STATE `3ade49bce67b211671a460819433316ff733b784`; CONTROL_CENTER `f2e7202577b2e62c750a724addd2891b1151f308`; TASK_LOG `e525243a9cb40b4d34ae496f4165c9328ad8cf47`; RESEARCH_INDEX/final main tip `e322efe381d92379a2a7e844fb430eaa6805fe99`.
 
 ## Recommended Next Action
 
