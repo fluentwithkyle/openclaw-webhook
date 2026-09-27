@@ -4,10 +4,13 @@ const {
     setDispatcher,
     dispatch,
     TARGET_KILO,
-    TARGET_GEMINI_BUILDER
+    TARGET_GEMINI_BUILDER,
+    TARGET_SECURITY_SPECIALIST,
+    TARGET_UTILITY_SPECIALIST
 } = require('../services/transport-provider');
 const { dispatch: kiloDispatch } = require('../poc/kilo-transport');
 const geminiBuilderTrigger = require('../poc/gemini-builder-trigger');
+const geminiTrigger = require('../poc/gemini-trigger');
 
 let passCount = 0;
 let failCount = 0;
@@ -69,6 +72,17 @@ const builderCommand = {
     reporting: 'json',
     originator: 'Kyle'
 };
+
+function specialistCommand(target, requestId) {
+    return {
+        ...kiloCommand,
+        request_id: requestId,
+        target,
+        task_mode: 'REVIEW',
+        authorization: { capabilities: ['read_only'] },
+        constraints: { permitted_paths: ['poc/'] }
+    };
+}
 
 function restoreEnv() {
     delete process.env.ORCHESTRATOR_GH_TOKEN;
@@ -177,9 +191,50 @@ async function main() {
         }
     });
 
+    for (const [target, label] of [[TARGET_SECURITY_SPECIALIST, 'Security Specialist'], [TARGET_UTILITY_SPECIALIST, 'Utility Specialist']]) {
+        await runTest(`${label} uses the existing read-only Gemini review workflow transport`, async () => {
+            process.env.ORCHESTRATOR_GH_TOKEN = 'test-gh-token';
+            const original = geminiTrigger.dispatchGemini;
+            let receivedArgs = null;
+            geminiTrigger.dispatchGemini = async function () {
+                receivedArgs = Array.from(arguments);
+                return { success: true, message: 'Review workflow dispatch accepted', status_code: 204 };
+            };
+            const command = specialistCommand(target, `${target.toLowerCase().replace(/ /g, '-')}-route-1`);
+            try {
+                const result = await dispatch(command);
+                assert(receivedArgs !== null, `${label} must hand off to the review transport`);
+                assertEqual(receivedArgs[0], command.request_id);
+                assertEqual(receivedArgs[1], command.task);
+                assertEqual(receivedArgs[2], command.repository);
+                assertEqual(receivedArgs[3], command.base_branch);
+                assertEqual(receivedArgs[6], command.verification);
+                assertEqual(receivedArgs[7], 'REVIEW');
+                assertDeepEqual(receivedArgs[8], ['read_only']);
+                assertDeepEqual(receivedArgs[9], ['poc/']);
+                assertEqual(result.status, 'SUCCESS');
+            } finally {
+                geminiTrigger.dispatchGemini = original;
+                restoreEnv();
+            }
+        });
+    }
+
+    await runTest('Specialist review transport fails safely when its workflow dispatch is unavailable', async () => {
+        const original = geminiTrigger.dispatchGemini;
+        geminiTrigger.dispatchGemini = async () => ({ success: false, error: 'Missing GitHub token for workflow dispatch', stage: 'authentication' });
+        try {
+            const result = await dispatch(specialistCommand(TARGET_SECURITY_SPECIALIST, 'security-specialist-unavailable'));
+            assertEqual(result.status, 'FAILED');
+            assertEqual(result.diagnostics.stage, 'authentication');
+        } finally {
+            geminiTrigger.dispatchGemini = original;
+        }
+    });
+
     // Verification #5: Unsupported / unrecognized targets fail closed
     await runTest('Unrecognized target fails closed without defaulting to Kilo or Builder', async () => {
-        const command = { ...kiloCommand, request_id: 'unrecognized-1', target: 'Gemini' };
+        const command = { ...kiloCommand, request_id: 'unrecognized-1', target: 'Unknown Specialist' };
         let kiloCalled = false;
         let builderCalled = false;
         setDispatcher(() => { kiloCalled = true; return { status: 'SUCCESS' }; });
@@ -190,7 +245,7 @@ async function main() {
             assertEqual(result.status, 'BLOCKED');
             assert(!kiloCalled, 'Kilo transport must not be invoked for unrecognized target');
             assert(!builderCalled, 'Builder must not be invoked for unrecognized target');
-            assert(result.error.includes('Gemini'), 'error should name the rejected target');
+            assert(result.error.includes('Unknown Specialist'), 'error should name the rejected target');
         } finally {
             setDispatcher(kiloDispatch);
             geminiBuilderTrigger.dispatchGeminiBuilder = original;

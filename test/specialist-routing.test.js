@@ -33,8 +33,13 @@ assert.equal(request('Format the README documentation').target, 'Utility Special
 const builder = routeSpecialistIntent('Implement a code change');
 assert.equal(builder.lane, 'Gemini Builder');
 assert.equal(builder.authorization_required, true);
-assert.equal(builder.outcome, 'HUMAN_REVIEW');
-assert.throws(() => request('Implement a code change'), error => error.code === 'SPECIALIST_ROUTING_BLOCKED');
+const builderCommand = request('Implement a code change');
+assert.equal(builderCommand.target, 'Gemini Builder');
+assert.equal(builderCommand.task_mode, 'BUILDER');
+assert.deepEqual(builderCommand.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+assert.deepEqual(builderCommand.constraints.permitted_paths, ['poc/']);
+assert.equal(builderCommand.activation_syntax, '@gemini-cli');
+assert.equal(builderCommand.activation_surface, 'workflow_dispatch');
 
 const kilo = routeSpecialistIntent('Implement a code change', { explicit_kilo_failover: true });
 assert.equal(kilo.lane, 'Gemini Builder');

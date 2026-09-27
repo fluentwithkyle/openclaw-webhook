@@ -3,6 +3,8 @@ const http = require('http');
 const express = require('express');
 const taskRegistry = require('../poc/task-registry');
 const { setDispatcher } = require('../services/transport-provider');
+const { buildControlPlaneCommand } = require('../services/deepseek-runtime');
+const geminiBuilderTrigger = require('../poc/gemini-builder-trigger');
 
 process.env.DIRECTOR_APPROVAL_SECRET = `test-director-${Date.now()}`;
 process.env.DEEPSEEK_COORDINATOR_SECRET = `test-coordinator-${Date.now()}`;
@@ -30,6 +32,24 @@ function command(requestId) {
     const cmd = command('director-auth-1');
     let response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, cmd);
     assert.equal(response.status, 403);
+    const serverDerivedBuilder = buildControlPlaneCommand({ operation: 'request_task', objective: 'Implement the approved poc change' });
+    assert.equal(serverDerivedBuilder.target, 'Gemini Builder');
+    assert.deepEqual(serverDerivedBuilder.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+    assert.deepEqual(serverDerivedBuilder.constraints.permitted_paths, ['poc/']);
+    response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, serverDerivedBuilder);
+    assert.equal(response.status, 403);
+    const serverDerivedApproval = await request('/poc/director/approve', { 'x-director-approval-secret': process.env.DIRECTOR_APPROVAL_SECRET }, { scope: scope(serverDerivedBuilder) });
+    serverDerivedBuilder.authorization.approval_id = serverDerivedApproval.body.approval_id;
+    const originalBuilderDispatch = geminiBuilderTrigger.dispatchGeminiBuilder;
+    process.env.ORCHESTRATOR_GH_TOKEN = 'test-gh-token';
+    geminiBuilderTrigger.dispatchGeminiBuilder = async () => ({ success: true, message: 'accepted', status_code: 204 });
+    try {
+      response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, serverDerivedBuilder);
+      assert.equal(response.status, 202);
+    } finally {
+      geminiBuilderTrigger.dispatchGeminiBuilder = originalBuilderDispatch;
+      delete process.env.ORCHESTRATOR_GH_TOKEN;
+    }
     response = await request('/poc/director/approve', { 'x-director-approval-secret': 'invalid' }, { scope: scope(cmd) });
     assert.equal(response.status, 401);
     response = await request('/poc/director/approve', { 'x-director-approval-secret': process.env.DIRECTOR_APPROVAL_SECRET }, { scope: scope(cmd) });
