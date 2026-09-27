@@ -777,6 +777,76 @@ function rawRequest(port, headers, body) {
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
         assert.equal(observation.task.child_tasks, undefined);
         assert.equal(observation.task.child_tasks_summary, undefined);
+        assert.equal(observation.task.child_diagnostics_summary, undefined);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('child diagnostic summary aggregates all children with bounded sanitized status-scoped highlights', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-child-diagnostics-parent';
+        createDeepSeekReviewTask(parentRequestId);
+        const createChild = (requestId, status, report) => {
+            createDeepSeekReviewTask(requestId);
+            taskRegistry.getTask(requestId).parent_request_id = parentRequestId;
+            if (report) assert.equal(taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
+                status: status === 'FAILED' ? 'failure' : 'blocked', execution_id: `${requestId}-execution`, report
+            }).success, true);
+            const transitions = status === 'FAILED' || status === 'BLOCKED'
+                ? ['SELECTED', 'PLANNED', 'EXECUTING', status]
+                : status === 'VERIFIED' ? ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED']
+                    : status === 'COMPLETE' ? ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE'] : [];
+            if (status === 'VERIFIED' || status === 'COMPLETE') {
+                assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+            }
+            for (const transition of transitions) assert.equal(taskRegistry.updateTaskStatus(requestId, transition).success, true);
+        };
+        for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS; index++) createChild(`deepseek-runtime-child-diagnostics-normal-${index}`, 'PENDING');
+        createChild('deepseek-runtime-child-diagnostics-verified', 'VERIFIED');
+        createChild('deepseek-runtime-child-diagnostics-complete', 'COMPLETE');
+        for (let index = 0; index < MAX_REPORT_HIGHLIGHTS + 1; index++) {
+            createChild(`deepseek-runtime-child-diagnostics-failed-${index}`, 'FAILED', {
+                summary: `Failure ${index}: token failure-token-${index}`, blockers: [`failure blocker ${index}`], authorization: 'Bearer hidden'
+            });
+        }
+        for (let index = 0; index < 2; index++) {
+            createChild(`deepseek-runtime-child-diagnostics-blocked-${index}`, 'BLOCKED', {
+                summary: `Blocked ${index}: credential blocked-credential-${index}`, blockers: [`blocker ${index}`], permitted_paths: ['hidden']
+            });
+        }
+        createDeepSeekReviewTask('deepseek-runtime-child-diagnostics-unrelated');
+        const unrelated = taskRegistry.getTask('deepseek-runtime-child-diagnostics-unrelated');
+        assert.equal(taskRegistry.updateAgentResult(unrelated.request_id, 'Gemini Builder', {
+            status: 'failure', execution_id: 'unrelated-execution', report: { summary: 'Unrelated failure' }
+        }).success, true);
+        for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus(unrelated.request_id, transition).success, true);
+
+        const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
+        const diagnostics = observation.task.child_diagnostics_summary;
+        assert.equal(observation.task.child_tasks.length, MAX_CHILD_TASK_OBSERVATIONS);
+        assert.deepEqual(observation.task.child_tasks_summary, { total: MAX_CHILD_TASK_OBSERVATIONS + 2 + MAX_REPORT_HIGHLIGHTS + 3, pending: MAX_CHILD_TASK_OBSERVATIONS, selected: 0, planned: 0, executing: 0, verified: 1, complete: 1, failed: MAX_REPORT_HIGHLIGHTS + 1, blocked: 2 });
+        assert.deepEqual(Object.keys(diagnostics).sort(), ['blocked', 'blocker_highlights', 'failed', 'failure_highlights']);
+        assert.equal(diagnostics.failed, MAX_REPORT_HIGHLIGHTS + 1);
+        assert.equal(diagnostics.blocked, 2);
+        assert.equal(diagnostics.failure_highlights.length, MAX_REPORT_HIGHLIGHTS);
+        assert.equal(diagnostics.blocker_highlights.length, MAX_REPORT_HIGHLIGHTS);
+        assert(diagnostics.failure_highlights.every(highlight => highlight.source === 'agent_commentary' && highlight.text.length <= MAX_REPORT_HIGHLIGHT_LENGTH));
+        assert(diagnostics.blocker_highlights.every(highlight => highlight.source === 'agent_commentary' && highlight.text.length <= MAX_REPORT_HIGHLIGHT_LENGTH));
+        assert.equal(JSON.stringify(diagnostics).includes('failure-token'), false);
+        assert.equal(JSON.stringify(diagnostics).includes('blocked-credential'), false);
+        assert.equal(JSON.stringify(diagnostics).includes('hidden'), false);
+        assert.equal(JSON.stringify(diagnostics).includes('permitted_paths'), false);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('parents with non-diagnostic children omit child diagnostic summary', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-child-diagnostics-non-terminal-parent';
+        createDeepSeekReviewTask(parentRequestId);
+        createDeepSeekReviewTask('deepseek-runtime-child-diagnostics-pending');
+        taskRegistry.getTask('deepseek-runtime-child-diagnostics-pending').parent_request_id = parentRequestId;
+        const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
+        assert(observation.task.child_tasks_summary);
+        assert.equal(observation.task.child_diagnostics_summary, undefined);
         taskRegistry.resetRegistry();
     });
 
