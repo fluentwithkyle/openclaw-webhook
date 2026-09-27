@@ -113,27 +113,26 @@ project, prior work, research record, architectural decision, or task does not e
 
 ---
 
-## 5. Known Existing Project: DeepSeek Coordinator
+## 5. Known Existing Project: DeepSeek Coordinator Evolution
 
-The **DeepSeek Coordinator Project** is an existing, implemented project within this
-repository. Do not assume a separate DeepSeek repository exists.
+The **DeepSeek Coordinator Evolution — Full Conversational Coordination** project is
+the active HIGH PRIORITY next phase of the existing **DeepSeek Coordinator Project**.
+It is not a second runtime or control plane. Start with `STATE.md`, then
+`ARCHITECTURE.md` §16.6 and ADR-018 to distinguish the implemented bounded foundation
+from the proposed full-coordinator target.
 
-- **Status**: `ACTIVE / IMPLEMENTED / VERIFIED`
-- **Objective**: Connect DeepSeek's natural-language coordination to the existing
-  GitHub-native ACP control plane via Direct ACP.
-- **Implemented**: Authenticated `POST /poc/coordinator` ingress in `routes/poc.js`,
-  authenticated via `x-deepseek-coordinator-secret` header (env:
-  `DEEPSEEK_COORDINATOR_SECRET`), validated via `validateACPCommand`, registered via
-  `taskRegistry.createTask`, and dispatched through the existing Kilo dispatcher via
-  `getDispatcher()` (same mechanism as `/poc/kilo`).
-- **Durable state location**: `docs/ai/STATE.md` (DeepSeek Coordinator Project
-  section) and `docs/ai/ARCH_DECISIONS.md` (ADR-016).
-- **Architecture**: `ARCHITECTURE.md` Section 16.6.
-- **Security decision**: `docs/ai/ARCH_DECISIONS.md` (ADR-015 for Chatbox gateway,
-  ADR-016 for Git completion signal).
+Current foundation: ChatBox reaches `/poc/deepseek-runtime`; the runtime calls
+OpenRouter/DeepSeek and exposes only bounded `control_plane` operations. `request_task`
+constructs a server-derived read-only REVIEW ACP command; `get_task` returns a
+sanitized projection only for DeepSeek-runtime task identifiers. All authority remains
+with Kyle, ACP, TaskRegistry, and the existing dispatcher/orchestrator. Director live
+evidence verifies a fresh ChatBox Ping/Pong display. Workflow decomposition,
+specialist selection, evidence interpretation, state-driven continuation, and verified
+outcome reporting remain gaps/targets.
 
-A fresh coordinator must route to this project's durable state rather than
-re-discovering or re-implementing it.
+Do not infer autonomy from the model loop, a task acknowledgement, or historical
+pre-runtime documentation. Any capability expansion requires explicit ACP
+authorization and must preserve the existing authority chain.
 
 ---
 

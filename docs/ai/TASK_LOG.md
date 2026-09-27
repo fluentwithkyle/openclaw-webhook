@@ -2429,3 +2429,20 @@ The reconciled documentation distinguishes:
 **Verification**: `node test/deepseek-runtime.test.js` passed with regression coverage that parses the exact Ping response from SSE and verifies termination. Live ChatBox display verification was not performed.
 
 **Commit Reference**: Recorded in the task completion report.
+
+
+---
+
+## 2026-09-27 | Establish DeepSeek Coordinator Evolution Documentation Baseline (TASK-GEMINI-DEEPSEEK-FULL-COORDINATOR-DOCUMENTATION-PROJECT-001)
+
+**Task**: Establish the HIGH PRIORITY **DeepSeek Coordinator Evolution — Full Conversational Coordination** project as the next phase of the existing implemented DeepSeek Coordinator foundation. Documentation/project-state reconciliation only; no production source behavior was authorized or modified.
+
+**Repository evidence inspected**: current `main` at `b8828a6ac31e73ed5ad27eb1fc46e20138c31eba`; architecture and operating-state records; `services/deepseek-runtime.js`, `routes/poc.js`, ACP schema, TaskRegistry, orchestrator, dispatcher, `index.js`, package scripts, and DeepSeek/ChatBox tests.
+
+**Verified current foundation**: `/poc/deepseek-runtime` calls configured OpenRouter with exactly one `control_plane` tool. Its bounded operation set is `request_task` (server-derived Gemini Builder / REVIEW / read_only / `poc/` ACP command submitted with server-held coordinator authentication) and `get_task` (DeepSeek-runtime namespace-only sanitized TaskRegistry projection). The runtime uses a bounded loop and supports OpenAI-compatible SSE for `stream: true` while retaining JSON otherwise. `/poc/coordinator` continues through ACP validation, TaskRegistry, and the existing dispatcher/orchestrator. Director-provided live evidence verifies a fresh ChatBox Ping displayed the Pong response.
+
+**Reconciliation**: Updated the authoritative architecture, STATE, derived Control Center, cold-start and operating documents, and ADRs. The new project is explicitly a continuation—not a duplicate runtime/control plane. It records the full conversational coordinator as PROPOSED / TARGET and preserves gaps: workflow decomposition; specialist selection/activation; result/evidence interpretation; next-action reasoning; verification/reconciliation orchestration; bounded state-driven continuation; explicit human-authorization gates; and verified-outcome reporting. Historical statements that the runtime or post-fix ChatBox display are unknown are superseded by the current baseline.
+
+**Outcome**: Documentation baseline established. No claim is made that the full autonomous conversational coordinator is implemented, and a task acknowledgement is not treated as desired-outcome verification. Next authorized action is Phase 0 Coordinator Contract / Capability Architecture.
+
+**Commit Reference**: This task's resulting commit SHA.
