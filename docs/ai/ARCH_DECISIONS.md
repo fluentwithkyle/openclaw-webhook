@@ -530,3 +530,39 @@ Kyle.
   failure/blocked handling, and Kyle authorization gates before runtime expansion.
 - A future capability registry, if justified, is policy representation only—not a
   replacement authority system.
+
+
+---
+
+## ADR-019: Phase 0 DeepSeek Coordinator Contract Uses Existing ACP Authority
+
+### Status
+
+**IMPLEMENTED / VERIFIED** (Phase 0 only). Later coordinator capabilities remain **PROPOSED / TARGET**.
+
+### Context
+
+The implemented runtime already offers bounded `request_task` and `get_task` behavior,
+but required a formal, testable representation of its capability, authority,
+observation, and lifecycle boundaries without adding a second control plane.
+
+### Decision
+
+The runtime exports a structured Phase 0 policy that permits only intent-level
+`request_task` and namespace-constrained `get_task`. Server policy derives every
+authority-bearing ACP field and coordinator authentication context. Its safe task
+projection reports identity, lifecycle, agents, next action, execution/results,
+verification, failure/blocked state, and sanitized specialist evidence. It explicitly
+separates execution completion (`AGENT_REPORT`) from verified outcome, which remains
+controlled by existing ACP `INDEPENDENT_VERIFICATION` transition rules.
+
+### Consequences
+
+- ACP, TaskRegistry, and the existing orchestrator/dispatcher remain the sole
+  authorization, registration, and lifecycle mechanisms; Kyle remains final authority.
+- The model cannot grant paths, targets, task modes, capabilities, commits, pushes, or
+  authentication/authorization context. Consequential capabilities remain excluded.
+- Request-ID prefix validation is not session isolation or session binding.
+- Phase 1+ observation expansion, workflow decomposition, specialist selection, and
+  execution operations are **NOT IMPLEMENTED** and require future authorized ACP-backed
+  policy work.

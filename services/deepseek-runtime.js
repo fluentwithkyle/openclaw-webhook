@@ -3,6 +3,28 @@ const taskRegistry = require('../poc/task-registry');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 2;
+const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
+    phase: 'Phase 0',
+    model_operations: Object.freeze(['request_task', 'get_task']),
+    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'target']), target: 'Gemini Builder' }),
+    get_task: Object.freeze({ model_fields: Object.freeze(['operation', 'request_id']), request_id_prefix: 'deepseek-runtime-' }),
+    server_derived_authority: Object.freeze({
+        repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', target: 'Gemini Builder',
+        task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
+        originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
+    }),
+    observation_projection: Object.freeze(['identity', 'lifecycle', 'agents', 'next_action', 'execution', 'verification', 'failure_or_blocked', 'sanitized_specialist_evidence']),
+    state_semantics: Object.freeze({
+        agent_report: 'execution evidence only',
+        independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
+        verified_outcome: 'only ACP lifecycle status VERIFIED or COMPLETE'
+    }),
+    authorization_boundary: Object.freeze({
+        authority: 'ACP and Kyle',
+        excluded_capabilities: Object.freeze(['modify_files', 'commit', 'push', 'run_tests', 'FAILOVER_EXECUTE', 'BUILDER'])
+    }),
+    extensions: Object.freeze({ later_phases_require_acp_policy_change: true })
+});
 const CONTROL_PLANE_TOOL = {
     type: 'function',
     function: {
@@ -125,15 +147,15 @@ function buildControlPlaneCommand(args) {
         source: 'DeepSeek Runtime',
         target: 'Gemini Builder',
         task_type: 'model-mediated-review',
-        repository: 'fluentwithkyle/openclaw-webhook',
-        base_branch: 'main',
+        repository: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.repository,
+        base_branch: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.base_branch,
         task: args.objective.trim(),
-        task_mode: 'REVIEW',
-        constraints: { permitted_paths: ['poc/'] },
-        authorization: { capabilities: ['read_only'] },
-        verification: 'Review the bounded poc/ scope and return structured findings.',
+        task_mode: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.task_mode,
+        constraints: { permitted_paths: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths.slice() },
+        authorization: { capabilities: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities.slice() },
+        verification: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.verification,
         reporting: 'structured-json',
-        originator: 'Kyle'
+        originator: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.originator
     };
 }
 
@@ -188,6 +210,50 @@ function sanitizeStringValue(str) {
     return str
         .replace(/Bearer\s+[A-Za-z0-9_\-\.]+/gi, 'Bearer [REDACTED]')
         .replace(/api[_-]?key[=:]\s*[A-Za-z0-9_\-\.]+/gi, 'api_key=REDACTED');
+}
+
+function projectAgentExecution(agent) {
+    if (!agent) return null;
+    return {
+        status: agent.status || null,
+        execution_id: agent.execution_id || null,
+        result: sanitizeReport(agent.report)
+    };
+}
+
+function projectTaskForDeepSeek(task) {
+    const evidence = Array.isArray(task.evidence) ? task.evidence : [];
+    const independentVerification = evidence.filter(record => record && record.evidence_type === 'INDEPENDENT_VERIFICATION')
+        .map(record => sanitizeReport({ agent: record.agent, timestamp: record.timestamp, execution_id: record.execution_id, report: record.report }));
+    const agentExecutions = {
+        builder: projectAgentExecution(task.builder),
+        gemini: projectAgentExecution(task.gemini)
+    };
+    const executionCompleted = Object.values(agentExecutions).some(agent => agent && ['success', 'failure', 'blocked'].includes(agent.status));
+    const verifiedOutcome = task.status === 'VERIFIED' || task.status === 'COMPLETE';
+    const failureOrBlocked = task.status === 'FAILED' || task.status === 'BLOCKED'
+        ? { status: task.status, agent_reports: agentExecutions }
+        : null;
+
+    return {
+        request_id: task.request_id,
+        task: task.task,
+        lifecycle: {
+            status: task.status,
+            execution_completed: executionCompleted,
+            verified_outcome: verifiedOutcome
+        },
+        agents: { current: task.current_agent, next: task.next_agent },
+        next_action: task.next_action,
+        execution: agentExecutions,
+        verification: {
+            requirements: task.verification,
+            independent_verification: independentVerification
+        },
+        failure_or_blocked: failureOrBlocked,
+        created_at: task.created_at,
+        updated_at: task.updated_at
+    };
 }
 
 function parseToolArguments(toolCall) {
@@ -289,29 +355,7 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
             if (!task) {
                 toolResultContent = JSON.stringify({ status: 'not_found', request_id: validatedArgs.request_id });
             } else {
-                toolResultContent = JSON.stringify({
-                    status: 'found',
-                    task: {
-                        request_id: task.request_id,
-                        status: task.status,
-                        task: task.task,
-                        task_mode: task.task_mode,
-                        current_agent: task.current_agent,
-                        next_agent: task.next_agent,
-                        next_action: task.next_action,
-                        created_at: task.created_at,
-                        updated_at: task.updated_at,
-                        builder: task.builder ? {
-                            status: task.builder.status || null,
-                            execution_id: task.builder.execution_id || null
-                        } : null,
-                        gemini: task.gemini ? {
-                            status: task.gemini.status || null,
-                            execution_id: task.gemini.execution_id || null,
-                            report: sanitizeReport(task.gemini.report)
-                        } : null
-                    }
-                });
+                toolResultContent = JSON.stringify({ status: 'found', task: projectTaskForDeepSeek(task) });
             }
         } else {
             throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'Unsupported control_plane operation');
@@ -385,10 +429,12 @@ function createDeepSeekRuntimeHandler(options = {}) {
 
 module.exports = {
     CONTROL_PLANE_TOOL,
+    DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
     RuntimeError,
     buildControlPlaneCommand,
     validateGetTaskArguments,
+    projectTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
     getRuntimeConfig,
     normalizeMessages,

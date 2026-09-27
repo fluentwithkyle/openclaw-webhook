@@ -4,8 +4,10 @@ const express = require('express');
 const http = require('http');
 const {
     CONTROL_PLANE_TOOL,
+    DEEPSEEK_COORDINATOR_POLICY,
     buildControlPlaneCommand,
     validateGetTaskArguments,
+    projectTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
     normalizeMessages,
     runDeepSeekConversation
@@ -113,6 +115,16 @@ function rawRequest(port, headers, body) {
         assert.deepEqual(command.constraints.permitted_paths, ['poc/']);
         assert.equal(command.target, 'Gemini Builder');
         assert.equal(command.task_mode, 'REVIEW');
+    });
+
+    await test('Phase 0 coordinator policy formalizes bounded authority and ACP-owned verification', async () => {
+        assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.model_operations, ['request_task', 'get_task']);
+        assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities, ['read_only']);
+        assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths, ['poc/']);
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.authentication_context, 'server-held coordinator secret');
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.authorization_boundary.authority, 'ACP and Kyle');
+        assert(DEEPSEEK_COORDINATOR_POLICY.authorization_boundary.excluded_capabilities.includes('push'));
+        assert.match(DEEPSEEK_COORDINATOR_POLICY.state_semantics.independent_verification, /ACP lifecycle/);
     });
 
     await test('tool contract exposes only intent-level fields', async () => {
@@ -646,28 +658,47 @@ function rawRequest(port, headers, body) {
         const projectedTask = toolContent.task;
 
         assert.equal(projectedTask.request_id, requestId);
-        assert.equal(projectedTask.status, 'PENDING');
         assert.equal(projectedTask.task, 'Security test task');
-        assert.equal(projectedTask.task_mode, 'REVIEW');
-        assert.equal(projectedTask.current_agent, null);
-        assert.equal(projectedTask.next_agent, null);
+        assert.equal(projectedTask.lifecycle.status, 'PENDING');
+        assert.equal(projectedTask.lifecycle.execution_completed, true);
+        assert.equal(projectedTask.lifecycle.verified_outcome, false);
+        assert.equal(projectedTask.agents.current, null);
+        assert.equal(projectedTask.agents.next, null);
         assert.equal(projectedTask.next_action, null);
         assert(projectedTask.created_at);
         assert(projectedTask.updated_at);
-        assert(projectedTask.gemini);
-        assert.equal(projectedTask.gemini.status, 'success');
-        assert.equal(projectedTask.gemini.execution_id, 'gemini-exec-1');
+        assert(projectedTask.execution.gemini);
+        assert.equal(projectedTask.execution.gemini.status, 'success');
+        assert.equal(projectedTask.execution.gemini.execution_id, 'gemini-exec-1');
 
-        const report = projectedTask.gemini.report;
+        const report = projectedTask.execution.gemini.result;
         assert.equal(report.apiKey, undefined);
         assert.equal(report.authorization, undefined);
         assert.equal(report.nested, null);
 
-        assert.equal(projectedTask.kilo, undefined);
+        assert.equal(projectedTask.execution.kilo, undefined);
         assert.equal(projectedTask.constraints, undefined);
         assert.equal(projectedTask.authorization, undefined);
-        assert.equal(projectedTask.verification, undefined);
         assert.equal(projectedTask.lineage, undefined);
+    });
+
+    await test('safe projection separates agent execution reports from verified outcomes and exposes only sanitized evidence', async () => {
+        const task = {
+            request_id: 'deepseek-runtime-projection-test', task: 'Inspect status', status: 'VERIFIED',
+            current_agent: 'Gemini', next_agent: null, next_action: 'complete', verification: 'Independent verification required',
+            created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:01:00.000Z',
+            builder: { status: 'success', execution_id: 'builder-1', report: { summary: 'done', secret: 'hidden' } },
+            gemini: { status: 'success', execution_id: 'review-1', report: { result: 'verified', token: 'hidden' } },
+            evidence: [{ evidence_type: 'INDEPENDENT_VERIFICATION', agent: 'Gemini', timestamp: '2026-01-01T00:01:00.000Z', execution_id: 'review-1', report: { summary: 'verified', api_key: 'hidden' } }],
+            capabilities: ['push'], permitted_paths: ['private/']
+        };
+        const projection = projectTaskForDeepSeek(task);
+        assert.equal(projection.lifecycle.execution_completed, true);
+        assert.equal(projection.lifecycle.verified_outcome, true);
+        assert.equal(projection.execution.builder.result.secret, undefined);
+        assert.equal(projection.verification.independent_verification[0].report.api_key, undefined);
+        assert.equal(projection.capabilities, undefined);
+        assert.equal(projection.permitted_paths, undefined);
     });
 
     console.log(`\n${passed} passed, ${failed} failed`);
