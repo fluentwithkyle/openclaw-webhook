@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-09-27
-**Updated By**: Codex — TASK-CODEX-DEEPSEEK-PHASE-1-OBSERVATION-IMPLEMENT-001
+**Updated By**: Gemini — VERIFY_RECONCILE (TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001)
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -19,7 +19,7 @@ model-facing tool has `request_task` (server-derived REVIEW/read-only/Gemini
 Builder/`poc/`) and sanitized namespace-constrained `get_task`; ACP, TaskRegistry,
 the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
-**Phase 0 contract + Phase 1 observation — IMPLEMENTED / VERIFIED**: the runtime policy formalizes the two
+**Phase 0 contract + Phase 1 observation — IMPLEMENTED / VERIFIED**: independently verified by Gemini (PR #225, commit `8c77901`). The runtime policy formalizes the two
 existing operations, server-derived REVIEW/read-only `poc/` authority, sanitized task
 observation across all eight lifecycle states (including lineage, execution, evidence,
 verification, and failure/blocked information), and ACP-owned independent-verification
