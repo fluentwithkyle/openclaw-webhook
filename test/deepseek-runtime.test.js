@@ -1194,6 +1194,57 @@ function rawRequest(port, headers, body) {
         assert.equal(missing.evidence_summary, null);
     });
 
+    await test('verification and reconciliation summary exposes only bounded sanitized recorded facts', async () => {
+        const longSummary = `Reconciled token reconciliation-token ${'x'.repeat(MAX_REPORT_HIGHLIGHT_LENGTH + 20)}`;
+        const task = {
+            request_id: 'deepseek-runtime-verification-reconciliation', task: 'Observe verification', status: 'EXECUTING', evidence: [
+                { evidence_type: 'INDEPENDENT_VERIFICATION', agent: 'Gemini Reviewer', verification_result: 'authorization verification-token', report: { summary: longSummary } },
+                { evidence_type: 'AGENT_REPORT', agent: 'Evidence Agent', report: { summary: 'Evidence reconciliation Bearer evidence-secret', reconciliation: { status: 'COMPLETED', changed_files: ['one.js'], token: 'hidden' } } }
+            ],
+            builder: { status: 'success', report: { summary: longSummary, reconciliation: { status: 'SKIPPED', changed_files: ['two.js', 'three.js'], authorization: 'Bearer hidden' } } }
+        };
+        const projection = projectTaskForDeepSeek(task);
+        const summary = projection.verification_reconciliation_summary;
+        assert.deepEqual(summary.observed_facts.independent_verification, {
+            evidence_count: 1,
+            outcomes: [{ agent: 'Gemini Reviewer', status: 'authorization [REDACTED]' }]
+        });
+        assert.deepEqual(summary.observed_facts.reconciliation, {
+            count: 2,
+            outcomes: [
+                { agent: 'builder', status: 'SKIPPED', changed_files: 2 },
+                { agent: 'Evidence Agent', status: 'COMPLETED', changed_files: 1 }
+            ]
+        });
+        assert.equal(summary.agent_commentary.reconciliation_highlights.length, MAX_REPORT_HIGHLIGHTS > 1 ? 2 : 1);
+        assert(summary.agent_commentary.reconciliation_highlights.every(highlight => highlight.source === 'agent_commentary' && highlight.text.length <= MAX_REPORT_HIGHLIGHT_LENGTH));
+        assert.equal(JSON.stringify(summary).includes('reconciliation-token'), false);
+        assert.equal(JSON.stringify(summary).includes('evidence-secret'), false);
+        assert.equal(JSON.stringify(summary).includes('hidden'), false);
+
+        const bounded = projectTaskForDeepSeek({
+            request_id: 'deepseek-runtime-bounded-verification', task: 'Observe', status: 'PENDING',
+            evidence: Array.from({ length: MAX_REPORT_HIGHLIGHTS + 1 }, (_, index) => ({
+                evidence_type: 'INDEPENDENT_VERIFICATION', agent: `Reviewer ${index}`, verification_result: `success ${'x'.repeat(MAX_REPORT_HIGHLIGHT_LENGTH + 1)}`
+            }))
+        }).verification_reconciliation_summary;
+        assert.equal(bounded.observed_facts.independent_verification.evidence_count, MAX_REPORT_HIGHLIGHTS + 1);
+        assert.equal(bounded.observed_facts.independent_verification.outcomes.length, MAX_REPORT_HIGHLIGHTS);
+        assert(bounded.observed_facts.independent_verification.outcomes.every(outcome => outcome.status.length <= MAX_REPORT_HIGHLIGHT_LENGTH));
+    });
+
+    await test('verification and reconciliation summary is omitted without relevant evidence and tolerates malformed reconciliation', async () => {
+        const missing = projectTaskForDeepSeek({ request_id: 'deepseek-runtime-no-verification-reconciliation', task: 'Observe', status: 'PENDING', evidence: [] });
+        assert.equal(missing.verification_reconciliation_summary, undefined);
+
+        const malformed = projectTaskForDeepSeek({
+            request_id: 'deepseek-runtime-malformed-reconciliation', task: 'Observe', status: 'PENDING',
+            evidence: [{ evidence_type: 'AGENT_REPORT', agent: 'Gemini Builder', report: { reconciliation: 'invalid' } }],
+            builder: { status: 'success', report: { reconciliation: { changed_files: 'invalid' } } }
+        });
+        assert.equal(malformed.verification_reconciliation_summary, undefined);
+    });
+
     await test('failed and blocked tasks expose status-scoped bounded sanitized diagnostic summaries', async () => {
         const longBlocker = `token secret-token ${'x'.repeat(MAX_REPORT_HIGHLIGHT_LENGTH + 20)}`;
         const failed = projectTaskForDeepSeek({
