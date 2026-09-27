@@ -2428,7 +2428,7 @@ The reconciled documentation distinguishes:
 
 **Verification**: `node test/deepseek-runtime.test.js` passed with regression coverage that parses the exact Ping response from SSE and verifies termination. Live ChatBox display verification was not performed.
 
-**Commit Reference**: Recorded in the task completion report.
+**Commit Reference**: This implementation commit (reported in the completion response).
 
 
 ---
@@ -2461,3 +2461,15 @@ The reconciled documentation distinguishes:
 **Remaining gaps**: Phase 1+ observation expansion, workflow decomposition, specialist selection, consequential execution capabilities, and autonomous coordination remain PROPOSED / TARGET / NOT IMPLEMENTED.
 
 **Commit Reference**: Commit SHA: 8516abca4c2556244ffa2b5b5e5e0090828da439
+
+---
+
+## 2026-09-27 | TASK-CODEX-DEEPSEEK-PHASE-1-OBSERVATION-IMPLEMENT-001
+
+**Task**: Extend the existing bounded `get_task` projection for safe Phase 1 DeepSeek lifecycle observation without expanding model authority.
+
+**Outcome**: IMPLEMENTED / VERIFIED. The existing single `control_plane` tool and its only two operations (`request_task`, `get_task`) remain unchanged. `get_task` now safely observes all eight ACP lifecycle states, lineage, current/next agent and next action, Kilo/Builder/Reviewer execution status/results, evidence count/categories, independent-verification evidence, verification requirements, and failure/blocked information. The projection excludes repository authority, task mode, capabilities, permitted paths, authorization, credentials, and secrets. Recursive sanitization and strict `deepseek-runtime-` namespace validation are regression-covered. `AGENT_REPORT` remains execution evidence only; `INDEPENDENT_VERIFICATION` remains required for verified lifecycle outcomes.
+
+**Verification**: Focused DeepSeek runtime, ACP schema, TaskRegistry, and orchestrator tests passed; full suite result recorded in the completion report. Final diff reviewed for scope and Phase 2+ expansion.
+
+**Commit Reference**: Recorded in the task completion report.
