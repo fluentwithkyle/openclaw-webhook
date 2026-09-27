@@ -2,9 +2,9 @@ const axios = require('axios');
 const taskRegistry = require('../poc/task-registry');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MAX_TOOL_ITERATIONS = 2;
+const MAX_TOOL_ITERATIONS = 3;
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
-    phase: 'Phase 2 bounded lineage',
+    phase: 'Phase 3 bounded autonomous continuation',
     model_operations: Object.freeze(['request_task', 'get_task']),
     request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']), target: 'Gemini Builder' }),
     get_task: Object.freeze({ model_fields: Object.freeze(['operation', 'request_id']), request_id_prefix: 'deepseek-runtime-' }),
@@ -18,6 +18,13 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
         verified_outcome: 'only ACP lifecycle status VERIFIED or COMPLETE'
+    }),
+    continuation: Object.freeze({
+        requires_observation: true,
+        required_parent_status: 'COMPLETE',
+        required_evidence: 'INDEPENDENT_VERIFICATION',
+        stop_statuses: Object.freeze(['FAILED', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']),
+        max_tool_iterations: MAX_TOOL_ITERATIONS
     }),
     authorization_boundary: Object.freeze({
         authority: 'ACP and Kyle',
@@ -183,6 +190,27 @@ function validateGetTaskArguments(args) {
     };
 }
 
+function evaluateContinuationPolicy(parentRequestId, newRequestId, observedTaskIds) {
+    if (!observedTaskIds || !observedTaskIds.has(parentRequestId)) {
+        return { valid: false, error: 'Continuation requires a prior get_task observation of the parent task' };
+    }
+
+    const parent = taskRegistry.getTask(parentRequestId);
+    if (!parent) return { valid: false, error: 'parent_request_id does not exist in registry; continuation cannot proceed' };
+    if (taskRegistry.isCancelled(parentRequestId)) return { valid: false, error: 'Cannot continue a cancelled task' };
+    if (taskRegistry.isSuperseded(parentRequestId)) return { valid: false, error: 'Cannot continue a superseded task' };
+    if (parent.status === 'FAILED' || parent.status === 'BLOCKED') {
+        return { valid: false, error: `Cannot continue a task in terminal state ${parent.status}` };
+    }
+    if (parent.status !== DEEPSEEK_COORDINATOR_POLICY.continuation.required_parent_status) {
+        return { valid: false, error: `Continuation requires parent status ${DEEPSEEK_COORDINATOR_POLICY.continuation.required_parent_status}` };
+    }
+    if (!taskRegistry.hasEvidenceOfType(parentRequestId, DEEPSEEK_COORDINATOR_POLICY.continuation.required_evidence)) {
+        return { valid: false, error: `Continuation requires ${DEEPSEEK_COORDINATOR_POLICY.continuation.required_evidence} evidence` };
+    }
+    return taskRegistry.validateLineageForCreate(parentRequestId, newRequestId);
+}
+
 function sanitizeReport(report) {
     if (!report || typeof report !== 'object') return report || null;
     if (Array.isArray(report)) return report.map(sanitizeReport);
@@ -318,6 +346,7 @@ function normalizeProviderError(error, operation) {
 async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
     const conversation = normalizeMessages(messages);
     const config = getRuntimeConfig(env);
+    const observedTaskIds = new Set();
 
     for (let iteration = 0; iteration <= MAX_TOOL_ITERATIONS; iteration++) {
         let providerResponse;
@@ -358,9 +387,9 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
         if (args.operation === 'request_task') {
             const command = buildControlPlaneCommand(args);
             if (command.parent_request_id) {
-                const lineageCheck = taskRegistry.validateLineageForCreate(command.parent_request_id, command.request_id);
-                if (!lineageCheck.valid) {
-                    throw new RuntimeError(400, 'LINEAGE_VALIDATION_REJECTED', lineageCheck.error);
+                const continuationCheck = evaluateContinuationPolicy(command.parent_request_id, command.request_id, observedTaskIds);
+                if (!continuationCheck.valid) {
+                    throw new RuntimeError(400, 'CONTINUATION_POLICY_REJECTED', continuationCheck.error);
                 }
             }
             let coordinatorResponse;
@@ -382,6 +411,7 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
             if (!task) {
                 toolResultContent = JSON.stringify({ status: 'not_found', request_id: validatedArgs.request_id });
             } else {
+                observedTaskIds.add(validatedArgs.request_id);
                 toolResultContent = JSON.stringify({ status: 'found', task: projectTaskForDeepSeek(task) });
             }
         } else {
@@ -461,6 +491,7 @@ module.exports = {
     RuntimeError,
     buildControlPlaneCommand,
     validateGetTaskArguments,
+    evaluateContinuationPolicy,
     projectTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
     getRuntimeConfig,
