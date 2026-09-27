@@ -1567,79 +1567,134 @@ The Kilo Cloud Agent HTTP webhook trigger is a confirmed Kilo capability. The sp
 
 ⸻
 
-16.6 DeepSeek Coordinator Integration (IMPLEMENTED / VERIFIED)
+16.6 DeepSeek Coordinator Integration (Hybrid: Ingress Implemented / Full Coordinator Proposed)
 
-The **DeepSeek Coordinator Project** is a HIGH PRIORITY project to connect DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane. It is recorded as **ACTIVE / IMPLEMENTED / VERIFIED** after explicit authorization and implementation.
+The **DeepSeek Coordinator Project** connects DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane. The current implementation status is hybrid and must be strictly distinguished:
 
-The project status is: **ACTIVE / IMPLEMENTED / VERIFIED**.
+### Status Summary
+* **CURRENT / IMPLEMENTED / VERIFIED**: The authenticated machine-to-machine DeepSeek Coordinator ingress (`POST /poc/coordinator`), header authentication (`x-deepseek-coordinator-secret` / `DEEPSEEK_COORDINATOR_SECRET`), ACP command validation (`validateACPCommand` in `poc/schemas/acp-schema.js`), TaskRegistry registration (`taskRegistry.createTask` in `poc/task-registry.js`), and existing Kilo/Builder dispatcher routing (`getDispatcher()`).
+* **PROPOSED / TARGET**: DeepSeek as the human-facing conversational coordinator managing the complete task lifecycle above the ACP control plane.
+* **GAP / NOT YET IMPLEMENTED**: Complete outcome/workflow decomposition, specialist selection, research activation, asynchronous status retrieval, specialist-result consumption, next-action reasoning, verification/reconciliation orchestration, bounded multi-turn continuation, and end-to-end feedback loops.
 
-Direct ACP Boundary
+---
 
-Current state: The authenticated DeepSeek Coordinator ingress (`POST /poc/coordinator`) is implemented and verified. DeepSeek's natural-language coordination capability has a validated boundary into the existing ACP-based orchestration system.
+### Required Target Architecture (PROPOSED / TARGET)
 
-The agreed target architecture is **Direct ACP**: DeepSeek emits canonical ACP JSON directly. The existing repository control plane remains responsible for validation, registration, orchestration, execution routing, and verification.
-
-Target integration boundary:
+The intended conversational coordinator architecture flow:
 
 ```
-Kyle → Chatbox → DeepSeek Coordinator → Authenticated GitHub-Native ACP Ingress → Existing ACP Validation and Control Plane → Kilo / Gemini → GitHub Verification → DeepSeek → Chatbox
+Kyle / Human (Director)
+    ↓
+ChatBox (Ingress)
+    ↓
+DeepSeek Coordinator (Reasoning & Coordination Intelligence)
+    ↓
+1. Understand human intent
+2. Determine desired outcome
+3. Determine required workflow
+4. Research existing infrastructure when required
+5. Select appropriate specialist lane (Gemini Architect/Reviewer, Gemini Builder, Kilo, etc.)
+6. Initiate authorized work through ACP
+7. Track TaskRegistry state
+8. Consume specialist results / evidence
+9. Determine next authorized action
+10. Implementation / review / security / verification
+11. Reconcile durable project state
+12. Continue until verified outcome
+    ↓
+Report outcome to Kyle
 ```
 
-The project must not introduce:
+DeepSeek is the reasoning and coordination intelligence. The existing ACP/control-plane infrastructure remains the authority and execution boundary.
 
-* A second orchestration system.
-* A second task registry.
-* A competing control plane.
-* A separate Render-based AI coordination backend.
-* A natural-language-to-code execution path outside ACP validation.
-* An unnecessary DeepSeek transformation service (no `deepseek-transformer.js` or equivalent translation shim).
+---
 
-Current Gap (IMPLEMENTED / VERIFIED)
+### Coordinator Capabilities Matrix
 
-The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) has been implemented and verified. It accepts canonical ACP JSON from DeepSeek, authenticates via `x-deepseek-coordinator-secret` header (env: `DEEPSEEK_COORDINATOR_SECRET`), validates it through the existing ACP schema (`validateACPCommand` in `poc/schemas/acp-schema.js`), and registers it through the existing TaskRegistry (`taskRegistry.createTask` in `poc/task-registry.js`). After successful registration, the command is dispatched through the **existing Kilo dispatcher** via `getDispatcher()` (the same mechanism used by `/poc/kilo`). Registration failure prevents dispatch — if registration fails, the endpoint returns 500 without dispatching. Provider identifiers returned by the dispatcher are persisted in the TaskRegistry. Returns 202 on successful dispatch (SUCCESS), 401 on auth failure, 400 on malformed/invalid ACP, 409 on duplicate request_id, 403 on dispatch BLOCKED, 500 on dispatch FAILED or registry/dispatch failure. The `x-deepseek-coordinator-secret` header provides a dedicated authentication boundary distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`.
+| # | Capability | Status | Description |
+|---|---|---|---|
+| 1 | Understand human intent | PROPOSED / TARGET | Comprehend natural-language requests from Chatbox. |
+| 2 | Determine desired outcome | PROPOSED / TARGET | Translate user requests into concrete project goals. |
+| 3 | Decompose workflow | GAP / NOT YET IMPLEMENTED | Deconstruct complex goals into structured task sequences. |
+| 4 | Determine research need | GAP / NOT YET IMPLEMENTED | Identify when repository research is required. |
+| 5 | Activate research specialist | GAP / NOT YET IMPLEMENTED | Trigger research workflow (`RESEARCH_DOCUMENT` mode). |
+| 6 | Consume research results | GAP / NOT YET IMPLEMENTED | Read and interpret specialist research reports. |
+| 7 | Select specialist lane | GAP / NOT YET IMPLEMENTED | Choose between Gemini Architect, Gemini Builder, Kilo, etc. |
+| 8 | Activate architecture work | PROPOSED / TARGET | Initiate review/planning via ACP (`REVIEW` mode). |
+| 9 | Activate implementation | PROPOSED / TARGET | Initiate coding/building via ACP (`FAILOVER_EXECUTE` or Builder mode). |
+| 10 | Activate security review | PROPOSED / TARGET | Trigger Security Specialist evaluation when required. |
+| 11 | Track async task execution | GAP / NOT YET IMPLEMENTED | Monitor asynchronous task progress in TaskRegistry. |
+| 12 | Retrieve task status | GAP / NOT YET IMPLEMENTED | Query TaskRegistry and provider endpoints for state. |
+| 13 | Retrieve specialist results | GAP / NOT YET IMPLEMENTED | Access specialist execution results and evidence. |
+| 14 | Consume verification evidence | GAP / NOT YET IMPLEMENTED | Review independent verification reports and test outputs. |
+| 15 | Determine next action | GAP / NOT YET IMPLEMENTED | Reason about whether to continue, retry, review, verify, or escalate. |
+| 16 | Bounded multi-turn loop | GAP / NOT YET IMPLEMENTED | Execute state-driven continuation without unbounded recursion. |
+| 17 | Initiate verification / reconciliation | PROPOSED / TARGET | Trigger verification and documentation reconciliation (`VERIFY_RECONCILE` mode). |
+| 18 | Detect blocked/failed work | CURRENT / IMPLEMENTED | Identify dispatch failures or blocked states via ACP/TaskRegistry status. |
+| 19 | Escalate to Kyle | CURRENT / IMPLEMENTED | Surface unresolved decisions or authorization gates to Director. |
+| 20 | Report verified outcome | PROPOSED / TARGET | Present final verified results to Chatbox / Kyle. |
 
-The implemented flow is:
+---
 
-DeepSeek Coordinator → authenticated `POST /poc/coordinator` → existing ACP validation → existing TaskRegistry → existing Kilo dispatcher → existing Kilo execution path
+### Current Verified Implementation (CURRENT / IMPLEMENTED / VERIFIED)
 
-No new dispatcher, parallel orchestration path, poller, or alternate execution architecture was introduced.
+The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) has been implemented and verified in `routes/poc.js`.
 
-The implementation direction (as proposed and now implemented):
+* **Ingress Route**: `POST /poc/coordinator`
+* **Authentication**: Header `x-deepseek-coordinator-secret` verified against environment variable `DEEPSEEK_COORDINATOR_SECRET` (distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`).
+* **Validation**: Submitted payloads are validated through the existing ACP schema (`validateACPCommand` in `poc/schemas/acp-schema.js`).
+* **Registration**: Validated commands are registered through the existing TaskRegistry (`taskRegistry.createTask` in `poc/task-registry.js`).
+* **Dispatch**: After successful registration, commands are dispatched through the existing dispatcher via `getDispatcher()` (the same mechanism used by `/poc/kilo`). Registration failure prevents dispatch (returns 500 without dispatching).
+* **Provider Persistence**: Provider identifiers returned by the dispatcher are persisted in the TaskRegistry.
+* **Response Status Codes**: 202 on successful dispatch (SUCCESS), 401 on auth failure, 400 on malformed/invalid ACP, 409 on duplicate request_id, 403 on dispatch BLOCKED, 500 on dispatch FAILED or registry/dispatch failure.
 
-* Add an authenticated `POST /poc/coordinator` endpoint in `routes/poc.js`.
-* Validate the submitted canonical ACP command using the existing ACP validator (`poc/schemas/acp-schema.js`).
-* Register the validated command through the existing TaskRegistry API (`poc/task-registry.js`).
-* After successful registration, dispatch the command through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`).
-* Persist provider identifiers returned by the dispatcher in the TaskRegistry.
-* Fail-closed on dispatch errors and exceptions.
-* Preserve the existing orchestrator, schema, transport, and registry architecture unless repository inspection proves a necessary exception.
+The implemented execution path is:
+```
+DeepSeek Coordinator → authenticated `POST /poc/coordinator` → existing ACP validation → existing TaskRegistry → existing Kilo/Builder dispatcher → existing execution path
+```
 
-Existing verified components (remain unchanged unless implementation evidence requires otherwise):
+---
 
-* `poc/schemas/acp-schema.js` — ACP command envelope validation
-* `poc/task-registry.js` — task registration
-* `poc/orchestrator.js` — task orchestration
-* `services/transport-provider.js` — transport provider abstraction
-* `routes/poc.js` — POC routes
-* `.github/workflows/main.yml` — Gemini workflow
-* `poc/command.json` — POC ACP command fixture
+### Known Coordinator Gaps (GAP / NOT YET IMPLEMENTED)
 
-The authentication mechanism, environment-variable name, and route implementation have been verified against the current repository: Header `x-deepseek-coordinator-secret`; env var `DEEPSEEK_COORDINATOR_SECRET`; endpoint validates via `validateACPCommand`, registers via `taskRegistry.createTask`, and dispatches via the existing `getDispatcher()` path.
+The following capabilities remain unimplemented and must not be documented as operational:
 
-Gemini Research Basis
+A. **Outcome/workflow decomposition**: DeepSeek cannot yet autonomously decompose goals into multiple multi-step ACP workflows.
+B. **Specialist selection**: The runtime currently constrains action rather than providing complete bounded specialist selection across Gemini (Architect/Reviewer), Gemini Builder, and Kilo.
+C. **Research activation**: No automated triggering of research workflows from DeepSeek conversation context.
+D. **Asynchronous status retrieval**: DeepSeek receives dispatch acknowledgement but lacks the coordinator feedback loop to poll TaskRegistry state.
+E. **Specialist-result consumption**: DeepSeek lacks bounded access to specialist reports and verification evidence.
+F. **Next-action reasoning**: DeepSeek cannot yet autonomously reason about continuation, escalation, or verification steps.
+G. **Verification/reconciliation orchestration**: Complete automated driving of research → implementation → review → verification → reconciliation is not yet operational.
+H. **Bounded multi-turn continuation**: A state-driven continuation loop is PROPOSED / TARGET, not yet implemented.
+I. **Authorization/state gates**: State transitions (prepared → authorized → executing → verified → complete → blocked) are enforced server-side by TaskRegistry, but DeepSeek's reasoning does not grant repository authority.
 
-Gemini investigated the missing boundary between DeepSeek's natural-language coordination capability and the repository's existing validated AI task system. The research concluded that the central integration gap is:
+---
 
-DeepSeek intent must become a validated canonical ACP command before it can enter the existing orchestration system.
+### Security / Authority Boundary
 
-Gemini's final decision was **Direct ACP**: DeepSeek should emit canonical ACP JSON directly rather than producing arbitrary natural-language instructions that another component translates into executable work. Specifically:
+The architecture strictly establishes the following authority hierarchy:
 
-1. DeepSeek should emit canonical ACP JSON.
-2. The existing `validateACPCommand` implementation should validate the command.
-3. No `deepseek-transformer.js` or equivalent translation shim should be introduced.
-4. The existing orchestration system should remain the execution backbone.
-5. The likely missing integration boundary is an authenticated Coordinator ingress route.
-6. The proposed ingress would accept a validated ACP command and register it through the existing TaskRegistry.
+* **Kyle** = Final authorization authority (Director).
+* **ACP coordinator** = Authoritative command validation + registration + dispatch.
+* **TaskRegistry** = Durable task state.
+* **Orchestrator / dispatcher** = Execution lifecycle.
+* **Specialists** (Gemini, Gemini Builder, Kilo, Security Specialist) = Research / architecture / implementation / security / verification.
+* **DeepSeek runtime** = Bounded tool interface + server-side policy enforcement.
+* **DeepSeek** = Reasoning + coordination intelligence.
+
+#### Prohibited DeepSeek Privileges
+DeepSeek must **NOT** be represented as having:
+* Direct repository authority;
+* Direct GitHub credentials;
+* Arbitrary execution privileges;
+* Unrestricted filesystem access;
+* Arbitrary capabilities;
+* Arbitrary permitted paths;
+* Authority to bypass ACP;
+* Authority to create a second control plane, second TaskRegistry, second orchestrator, or generic HTTP executor.
+
+Authority-bearing fields must remain **server-derived and policy-controlled**. Model output remains **untrusted** with respect to authority.
 
 ⸻
 
