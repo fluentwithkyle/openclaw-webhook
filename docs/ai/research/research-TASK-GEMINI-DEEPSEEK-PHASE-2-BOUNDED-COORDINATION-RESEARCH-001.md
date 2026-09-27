@@ -3,111 +3,194 @@
 | Field | Value |
 |-------|-------|
 | Task / Request Identifier | TASK-GEMINI-DEEPSEEK-PHASE-2-BOUNDED-COORDINATION-RESEARCH-001 |
-| Research Question / Objective | Determine the smallest viable, ACP-compliant Phase 2 Bounded Coordination capability/policy model that can let DeepSeek translate an already-observed workflow need into an authorized multi-step coordination request without creating a second control plane or granting the model authority. |
+| Research Question / Objective | Determine the smallest viable, ACP-compliant Phase 2 Bounded Coordination capability/policy model that lets DeepSeek translate an observed workflow need into an authorized coordination request without creating a second control plane or granting the model authority. |
 | Agent | Gemini (Architect / Reviewer / Research) |
 | Date | 2026-09-27 |
 | Task Mode | RESEARCH_DOCUMENT |
-| Scope of this Task | Research and documentation ONLY. No production application code implementation is authorized. All proposed architectural extensions are documented for evaluation and future implementation phases. |
+| Scope of this Task | Research and documentation ONLY. No production application code implementation was authorized. |
 
 ---
 
-## Executive Summary & Baseline State
+## Executive Summary
 
-This research record establishes the architectural blueprint, security boundaries, gap analysis, and policy model for **Phase 2 Bounded Coordination**. Building upon the successfully verified Phase 1 DeepSeek Coordinator Observation implementation (`TASK-CODEX-DEEPSEEK-PHASE-1-OBSERVATION-IMPLEMENT-001`, commit `8c77901`), Phase 2 addresses how DeepSeek — acting through the existing server-side runtime (`services/deepseek-runtime.js`) and ACP coordinator (`routes/poc.js`, `poc/task-registry.js`, `poc/orchestrator.js`) — can transition from observing a workflow need into initiating authorized multi-step coordination requests (such as advancing from research/planning to execution and verification) **without** creating a second control plane or granting the model authority.
+Phase 1 is VERIFIED at implementation commit `8c77901`. The current DeepSeek runtime exposes exactly one model-facing `control_plane` tool with `request_task` and `get_task`. Its current `request_task` authority is server-derived and fixed to REVIEW/read_only/`poc/` with target Gemini Builder.
 
-### Core Baseline Findings (Phase 1 State)
-1. **Model-Facing Boundary**: Exactly one tool (`control_plane`) supporting two narrow operations (`request_task` and `get_task`), as verified in `services/deepseek-runtime.js` and `test/deepseek-runtime.test.js`.
-2. **Server-Derived Authority**: All authority-bearing fields (`repository`, `base_branch`, `target`, `task_mode`, `capabilities`, `permitted_paths`, `originator`, `authentication_context`) are strictly derived server-side. The model cannot supply capabilities or elevated access.
-3. **Observation Surface**: The `get_task` projection provides a structured overview covering identity, lifecycle status (`PENDING`, `SELECTED`, `PLANNED`, `EXECUTING`, `VERIFIED`, `COMPLETE`, `FAILED`, `BLOCKED`), lineage, agent execution reports vs. independent verification evidence, verification requirements, and failure/blocked diagnostics.
-4. **Zero Model Authority**: DeepSeek remains conversational intelligence only. ACP remains the authoritative validation, authorization, registration, and dispatch boundary. Kyle remains final authorization authority.
+The smallest viable Phase 2 increment is to extend the existing `request_task` path with bounded workflow lineage (optional `parent_request_id`) while preserving the current server-derived authority envelope. This is preferable to adding a second model-facing operation or control plane.
 
----
+A critical correction to the earlier draft is that the current runtime does **not** establish a model-selectable target or an existing explicit Kyle approval gate for every consequential child request. The runtime currently fixes the target server-side, while `/poc/coordinator` authenticates and validates ACP commands and then registers/dispatches them. Therefore, human authorization for future consequential coordination must be treated as a policy mechanism to be implemented or explicitly preserved by an existing trusted activation path, not as an already-proven runtime property.
 
-## 1. Mapping Existing ACP Infrastructure Reusable for Phase 2
-
-Phase 2 must reuse existing infrastructure wherever viable, avoiding custom control planes or registries:
-- **`TaskRegistry` (`poc/task-registry.js`)**: Already supports task creation, state transitions (`PENDING` → `SELECTED` → `PLANNED` → `EXECUTING` → `VERIFIED` → `COMPLETE`), evidence recording (`AGENT_REPORT`, `INDEPENDENT_VERIFICATION`), lineage tracking (`parent_request_id`, cancellation, superseding), and parent-child task queries (`getTasksByParent`).
-- **Orchestrator & Dispatchers (`poc/orchestrator.js`, `services/transport-provider.js`)**: Target-aware dispatching to `Kilo`, `Gemini`, and `Gemini Builder` via secure webhooks/transports.
-- **ACP Schema (`poc/schemas/acp-schema.js`)**: Validates task envelopes, allowed task modes (`REVIEW`, `VERIFY_RECONCILE`, `FAILOVER_EXECUTE`, `BUILDER`, `RESEARCH_DOCUMENT`), capabilities, and permitted paths.
+Phase 2 implementation should therefore begin with a bounded, read-only lineage capability. Any future elevation to BUILDER, FAILOVER_EXECUTE, write capabilities, broader permitted paths, commit/push, or other consequential operations requires a separately defined server-side authorization policy and verification task.
 
 ---
 
-## 2. Smallest Viable Phase 2 Coordination Operation Model
+## 1. Verified Existing Infrastructure
 
-### Operation Set Analysis
-1. **Can existing `request_task` be extended?**
-   - *Finding*: `request_task` is designed for initial task inception. Extending it to handle multi-step workflow progression (e.g., triggering a follow-up builder task from a completed research task) by accepting optional parameters like `parent_request_id` or `next_action_intent` is viable, **provided** all authority-bearing fields remain strictly server-derived.
-   - *Alternative*: Introducing a distinct operation (e.g., `request_workflow_step` or `request_child_task`) could cleanly separate initial ingress from iterative coordination. However, from the model's perspective, expressing intent to execute the next phase of an observed workflow naturally maps to requesting a task linked to a parent request.
-
-2. **Smallest Viable Solution**:
-   - Keep the model-facing `control_plane` tool interface minimal.
-   - Support an optional `parent_request_id` parameter (or structured workflow coordination parameters) in `request_task`, validated against the existing `TaskRegistry` lineage validation rules (`validateLineageForCreate`).
-   - Server-side runtime and coordinator validate that the parent task exists, is active (or completed successfully as a prerequisite), and that the child task inherits or appropriately restricts its authorization boundary according to server policy.
+- **DeepSeek runtime:** `services/deepseek-runtime.js` exposes one `control_plane` function with two operations: `request_task` and `get_task`.
+- **Current request authority:** `request_task` accepts untrusted intent/objective and a target field at the tool-schema level, but the server-side command builder fixes the authoritative target to Gemini Builder and derives repository, branch, task mode, capabilities, permitted paths, originator, and verification.
+- **Coordinator boundary:** `routes/poc.js` authenticates `/poc/coordinator`, validates the ACP command, registers it in the existing TaskRegistry, and dispatches through the existing dispatcher.
+- **TaskRegistry:** existing task creation and lineage facilities provide the durable task state and parent/child relationship mechanism.
+- **Observation:** Phase 1 `get_task` provides lifecycle, lineage, agent/evidence, verification, failure, and blocked-state observation.
+- **Authority:** ACP remains the authoritative validation/registration/dispatch boundary; DeepSeek model output is untrusted.
 
 ---
 
-## 3. Workflow Intent Expression vs. Server-Derived Authority
+## 2. Smallest Viable Phase 2 Model
 
-To prevent the model from escalating its own privileges:
-- **Model Inputs (Untrusted)**: `operation` (`request_task` or `get_task`), `objective` (string description of the next step), `target` (authorized target agent from `VALID_AGENTS`, e.g., `Gemini Builder` or `Kilo`), `request_id` (for `get_task`), and optional `parent_request_id` (for task decomposition/lineage).
-- **Server-Derived Fields (Strictly Enforced)**: `task_mode`, `capabilities`, `permitted_paths`, `repository`, `base_branch`, `originator`, and authentication secrets.
-- **Rule**: DeepSeek cannot select task modes or capabilities. If a workflow step requires execution (`BUILDER` or `FAILOVER_EXECUTE`), server-side policy determines whether the session context permits it or whether it requires Kyle's explicit authorization (human-in-the-loop gate).
+### Recommended first increment
 
----
+Extend the existing `request_task` operation with an optional `parent_request_id`.
 
-## 4. Multi-Step Workflow Correlation & Lineage
+The server should:
 
-- **Correlation**: Multi-step workflows correlate through `TaskRegistry` using `parent_request_id`.
-- **Lineage Representation**: When DeepSeek observes a completed research or planning task (e.g., status `VERIFIED` or `COMPLETE`), it can issue a follow-up `request_task` with `parent_request_id` pointing to the parent task.
-- **Registry Enforcement**: `taskRegistry.createTask` checks `validateLineageForCreate(parentId, newRequestId)`:
-  - Rejects children of cancelled or superseded tasks.
-  - Ensures correct task tree decomposition without introducing a second registry.
+1. Validate the parent identifier against the existing TaskRegistry lineage rules.
+2. Permit only an allowed parent/child relationship.
+3. Preserve the current server-derived authority envelope for the child.
+4. Create the child through the existing ACP → TaskRegistry → dispatcher path.
+5. Return the new request identifier and bounded task metadata to DeepSeek.
+6. Preserve the existing tool-loop bound until a separate decision establishes a larger safe limit.
 
----
+This keeps one control plane, one registry, one dispatcher/orchestrator, and one model-facing tool.
 
-## 5. Authorization Gating & Consequential Operations
+### Simplicity conclusion
 
-- **Review / Read-Only vs. Consequential Execution**:
-  - Phase 1 established DeepSeek in a read-only review context (`REVIEW` mode, `read_only` capability, `poc/` permitted path).
-  - Phase 2 bounded coordination must respect task mode boundaries. If DeepSeek observes that a research task is complete and recommends implementation (`BUILDER` or `VERIFY_RECONCILE`), the resulting child task request cannot automatically execute with write privileges unless authorized by server policy or explicitly gated by Kyle.
-  - **Human-in-the-Loop Gate**: Consequential operations (modifying code outside `poc/`, executing tests, committing, pushing) remain gated behind ACP task activation with proper credentials (`GEMINI_BUILDER_API_KEY`, GitHub PAT) and Kyle's authorization. DeepSeek can *request* or *recommend* the follow-up task, but the execution boundary remains strictly enforced by ACP.
+A new `request_workflow_step` or `request_child_task` model-facing operation is unnecessary for the first increment because lineage is already a TaskRegistry concept and can be attached to the existing task-creation operation.
 
 ---
 
-## 6. Lifecycle & Scenario Representation
+## 3. Untrusted Intent vs. Server Authority
 
-- **Research-Only**: Handled via `REVIEW` or `RESEARCH_DOCUMENT` mode within restricted paths (`docs/ai/research/`, `poc/`).
-- **Review-Only**: Handled via `REVIEW` mode.
-- **Implementation**: Handled via `BUILDER` mode, initiated through trusted triggers (`gemini-builder-trigger.js`) with explicit secret validation.
-- **Failure / Recovery**: Handled via agent failure reports updating task status to `FAILED`, captured in observation projection, allowing DeepSeek to reason over blockers and prompt the user or suggest remediation.
-- **Blocked / Escalation**: Handled via `BLOCKED` task status and `next_action: 'human_review'`, which DeepSeek observes and reports to the human operator.
+### Model-supplied / untrusted
 
----
+- `operation`
+- `objective`
+- `parent_request_id` when used for lineage
+- `request_id` for observation
 
-## 7. Explicitly Out of Scope for Phase 2
+The model may describe what work it believes is needed. That description is intent, not authorization.
 
-The following capabilities remain **strictly outside** Phase 2 and must never be granted to DeepSeek:
-1. **Arbitrary Filesystem Access**: Model cannot read or write arbitrary files outside permitted scopes.
-2. **Arbitrary Capabilities**: Model cannot request `modify_files`, `commit`, `push`, or `run_tests` directly.
-3. **Generic HTTP Execution**: Model cannot make arbitrary network requests or invoke unvetted webhooks.
-4. **Direct GitHub Authority**: Model holds no GitHub tokens, PATs, or merge/push privileges.
-5. **Credential Access**: Secrets (`DEEPSEEK_COORDINATOR_SECRET`, `OPENROUTER_API_KEY`, etc.) are never exposed to the model.
-6. **Self-Authorized Commits / Pushes**: All repository mutations require authorized agent lanes (Kilo, Gemini Builder) and ACP validation.
-7. **Autonomous Unbounded Tool Loop**: Tool execution remains bounded by `MAX_TOOL_ITERATIONS` and explicit validation checks.
+### Server-derived / authoritative
 
----
+- repository
+- base branch
+- target agent
+- task mode
+- capabilities
+- permitted paths
+- originator
+- authentication context
+- verification requirements
+- any consequential-operation authorization decision
 
-## 8. Required Implementation Artifacts for Subsequent Atomic Implementation Task
+The model must not be able to select or escalate these fields.
 
-When Phase 2 is authorized for implementation, the following changes will be required:
-1. **ACP Schema / Validation (`poc/schemas/acp-schema.js`)**: Extend validation to accept optional `parent_request_id` in task creation commands originating from the coordinator.
-2. **DeepSeek Runtime (`services/deepseek-runtime.js`)**: Update `buildControlPlaneCommand` to optionally accept `parent_request_id` when the model invokes `request_task` in a multi-step coordination flow.
-3. **Tests (`test/deepseek-runtime.test.js`, `test/task-registry.test.js`)**: Add unit tests verifying parent-child task creation and lineage tracking through the coordinator tool interface.
-4. **Documentation**: Reconcile `ARCHITECTURE.md`, `STATE.md`, and `CONTROL_CENTER.md` upon implementation.
+In particular, the current runtime's model-visible `target` schema field must not become an authority-bearing selector merely because it is present in the tool schema. Phase 2 should either remove that unnecessary model input or ignore it and continue deriving the target server-side.
 
 ---
 
-## 9. Unresolved Architectural / Security Questions for Kyle
+## 4. Lineage and Workflow Correlation
 
-1. **Policy Threshold for Automated Chaining**: Should DeepSeek be permitted to automatically chain read-only research tasks (e.g., research → sub-research), while execution tasks (research → builder) always require explicit human approval via GitHub issue comment / workflow dispatch? (*Recommended position: Yes, read-only chaining can be bounded, while execution tasks require explicit human activation*).
-2. **Iteration Limits**: What is the optimal `MAX_TOOL_ITERATIONS` for multi-step coordination (e.g., increasing from 2 to 4) without risking excessive token consumption or runaway loops?
+Use the existing TaskRegistry `parent_request_id` lineage mechanism.
+
+Required behavior for the Phase 2 increment:
+
+- reject nonexistent or invalid parents;
+- preserve existing cancellation/supersession lineage rules;
+- prevent a child from inheriting greater authority than the server policy grants;
+- expose parent/child correlation through the existing observation projection;
+- keep task identity and lifecycle in the existing registry.
+
+A parent relationship is correlation and decomposition metadata; it is **not** an authorization grant.
+
+---
+
+## 5. Authorization Boundary
+
+The current repository proves authentication and ACP validation at `/poc/coordinator`, but it does not prove that every consequential operation requested by DeepSeek has a separate human approval transaction.
+
+Therefore:
+
+- read-only Phase 2 chaining may use the existing bounded REVIEW/read_only authority envelope;
+- BUILDER, FAILOVER_EXECUTE, `modify_files`, `commit`, `push`, broader permitted paths, or other consequential authority must remain unavailable to the Phase 2 model-facing request path unless a separate server-side authorization policy explicitly permits it;
+- a future human-approval mechanism must be a trusted server-side policy/activation boundary, not a model-provided flag;
+- parent lineage must never itself authorize privilege escalation.
+
+---
+
+## 6. Lifecycle Scenarios
+
+| Scenario | Phase 2 first increment |
+|---|---|
+| Research/review follow-up | Allowed only within the server-derived bounded REVIEW/read_only scope |
+| Implementation request | Request may be observed/reported as intent, but the Phase 2 read-only path does not grant implementation authority |
+| Verification/reconciliation | Remains a separate trusted operation/policy decision |
+| Failure/recovery | Consume existing `get_task` failure/blocked observation and preserve lineage |
+| Blocked/escalation | Surface existing BLOCKED/human-review state; do not let the model self-authorize escalation |
+
+---
+
+## 7. Explicit Phase 2 Security Boundaries
+
+Phase 2 must not introduce:
+
+- arbitrary filesystem access;
+- model-selected capabilities;
+- model-selected permitted paths;
+- model-selected task modes;
+- model-selected target escalation;
+- generic HTTP execution;
+- direct GitHub credentials or repository authority;
+- self-authorized commit/push;
+- a second control plane, registry, dispatcher, or orchestrator;
+- an unbounded tool loop.
+
+---
+
+## 8. Implementation Surface for the First Phase 2 Increment
+
+A later atomic implementation task should inspect and, only where required, modify:
+
+1. `services/deepseek-runtime.js` — extend the existing request-task tool/command construction with bounded parent lineage; keep authority server-derived.
+2. `poc/schemas/acp-schema.js` — only if the canonical ACP envelope currently requires an explicit lineage field or needs validation changes.
+3. `poc/task-registry.js` — reuse existing lineage validation; change only if the existing implementation cannot safely support the coordinator child-request case.
+4. Relevant runtime, schema, and TaskRegistry tests — prove lineage, authority invariants, invalid-parent rejection, and no privilege escalation.
+5. Documentation/state files — reconcile only after implementation is independently verified.
+
+The implementation task must inspect the current code before changing any of these files and use the Solution Simplicity Gate.
+
+---
+
+## 9. Unresolved Decisions for Later Policy Work
+
+1. **Consequential authorization mechanism:** the repository currently does not establish a dedicated human-approval transaction for DeepSeek-requested elevation. A future task must define the trusted server-side authorization mechanism before DeepSeek can initiate consequential work.
+2. **Automatic read-only chaining policy:** determine the exact bounded conditions under which DeepSeek may create additional REVIEW/read_only children without a separate human approval event.
+3. **Tool iteration limit:** retain `MAX_TOOL_ITERATIONS = 2` for the first Phase 2 increment. Any increase requires measured justification and tests; it is not required to implement lineage.
+4. **Target selection:** determine whether the model-facing `target` schema field should be removed entirely or retained as non-authoritative metadata. The current runtime should continue deriving the actual target server-side.
+
+These are policy decisions, not reasons to expand the first implementation beyond bounded read-only lineage.
+
+---
+
+## 10. Evidence vs. Recommendation
+
+**Repository evidence:** one model-facing control-plane tool; fixed server-derived request authority; authenticated/validated `/poc/coordinator`; existing TaskRegistry lineage facilities; Phase 1 observation.
+
+**Recommendation:** implement the smallest Phase 2 increment as bounded parent-linked REVIEW/read_only child requests through the existing `request_task` path.
+
+**Not established by this research:** an automatic privilege-escalation path, a completed human-approval mechanism for consequential DeepSeek requests, or authorization to change task modes/capabilities/paths.
+
+---
+
+## 11. Implementation Acceptance Criteria
+
+The first Phase 2 implementation is acceptable only if:
+
+1. exactly one model-facing `control_plane` tool remains;
+2. no new control plane, registry, dispatcher, or generic executor is introduced;
+3. `parent_request_id` is validated server-side against existing lineage rules;
+4. child authority remains server-derived and bounded to the existing REVIEW/read_only policy;
+5. invalid, nonexistent, cancelled, or superseded parents are rejected according to existing lineage semantics;
+6. the model cannot select task mode, capabilities, permitted paths, or consequential authorization;
+7. Phase 1 `get_task` continues to expose the resulting lineage;
+8. tests cover valid lineage, invalid lineage, and privilege-boundary invariants;
+9. `MAX_TOOL_ITERATIONS` remains 2 for this increment;
+10. no claim is made that consequential human approval has been implemented unless a separate trusted mechanism is actually present and verified.
