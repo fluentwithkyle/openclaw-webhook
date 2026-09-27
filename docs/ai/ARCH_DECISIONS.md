@@ -567,3 +567,30 @@ controlled by existing ACP `INDEPENDENT_VERIFICATION` transition rules.
 - Phase 2+ workflow decomposition, specialist selection, and execution operations are
   **NOT IMPLEMENTED** and require future authorized ACP-backed
   policy work.
+
+---
+
+## ADR-020: Bounded Result-Driven Continuation Reuses Task Observation
+
+### Status
+
+**IMPLEMENTED / VERIFIED**
+
+### Context
+
+The runtime already had one model-facing `control_plane`, bounded `get_task` observation, and lineage-constrained continuation. It needed a minimal same-execution way for a completed specialist result to inform the next bounded model decision without treating specialist output as authority or creating polling, callbacks, queues, or another state store.
+
+### Decision
+
+The existing `get_task` handler remains the sole result-observation path. It now attaches a server-derived continuation classification based only on current TaskRegistry lifecycle, cancellation/supersession lineage, and `INDEPENDENT_VERIFICATION` evidence; it also reports whether the task was submitted during the current runtime execution. Only a `COMPLETE` task with independent-verification evidence is eligible. The runtime records that observed classification locally for the bounded loop, rechecks current TaskRegistry facts, then calls the existing `validateLineageForCreate()` before any child submission.
+
+### Rationale
+
+This supplies sanitized result context to DeepSeek in the existing tool message while retaining the current loop, task identity, TaskRegistry, projection, dispatcher, orchestrator, and ACP boundary. Local same-execution correlation avoids a new persistence mechanism.
+
+### Consequences
+
+- `request_task` and `get_task` remain the only model-facing operations, and `MAX_TOOL_ITERATIONS` remains exactly 3.
+- FAILED, BLOCKED, CANCELLED, SUPERSEDED, missing, invalid, active, and insufficiently verified results cannot progress a continuation.
+- Result content, specialist reports, evidence, lineage, and tool output grant no authority; Director authorization remains required for consequential Builder or FAILOVER_EXECUTE work.
+- Cross-request result delivery, workflow decomposition, automated specialist activation, and full conversational coordination remain **PROPOSED / TARGET**.
