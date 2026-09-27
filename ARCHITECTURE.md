@@ -623,39 +623,47 @@ AI agents operate around the production system.
 
 They do not replace the production system's business-logic boundaries.
 
-The AI development system consists of the following proposed/target architecture:
+The AI development system consists of the current DeepSeek Coordinator architecture:
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED (Foundation & Observation) / PROPOSED (Autonomous Loop)
 
 Kyle
 ↓
-ChatGPT
+ChatBox
 ↓
-Qwen Router
+DeepSeek Coordinator
 ↓
-ACP
+desired outcome / workflow reasoning
 ↓
-Specialist AI Lane
+bounded model-facing control_plane
 ↓
-Kilo
+server-side policy / authorization
 ↓
-GitHub / CI
+existing ACP
 ↓
-Verification / Persistence
+TaskRegistry + existing dispatcher/orchestrator
 ↓
-Execution Report
+specialist execution/review/research lanes (Gemini Builder, Gemini Reviewer, Security Specialist, Utility Specialist, Kilo)
 ↓
-ChatGPT
+execution result + evidence + verification
+↓
+TaskRegistry
+↓
+DeepSeek observation / next-action reasoning
+↓
+continue / verify / recover / escalate
 ↓
 Kyle
 
-The specialist layer contains three distinct lanes:
+(Note: Legacy router references such as Qwen router and separate control gates are superseded by the direct ChatBox → DeepSeek Coordinator architecture, but preserved below for historical context.)
 
-* Gemini — Architect / Planner / Reviewer
-* Security AI — Security Specialist
+The specialist layer contains distinct execution and review lanes:
+
+* Gemini Reviewer — Architect, Planner, and Reviewer (read-only advisory lane)
+* Gemini Builder — Primary implementation, execution, and testing specialist (`BUILDER` mode)
+* Security AI — Security Specialist (risk-tiered security review lane)
 * Utility AI — General Utility Specialist
-
-Gemini Builder is the primary Builder / Implementer / Tester.
+* Kilo — Available explicitly-targeted execution/failover lane
 
 Label this entire multi-agent architecture:
 
@@ -1575,6 +1583,33 @@ active HIGH PRIORITY next phase. It expands coordination intelligence, not raw
 authority. Status labels below distinguish repository-verified implementation from a
 future target; historical documents that predate the runtime do not override this
 section.
+
+### Current Coordinator Roadmap Status
+
+| Stage / Phase | Status | Notes / Repository Evidence |
+|---|---|---|
+| **Stage 1 — Network Path** | **COMPLETE / VERIFIED** | Direct ChatBox → `/poc/deepseek-runtime` → OpenRouter → DeepSeek → `control_plane` → `/poc/coordinator` → ACP → TaskRegistry → dispatcher. Live Ping/Pong display verified by Director. |
+| **Phase 0 — Coordinator Contract** | **PARTIALLY COMPLETE / REQUIRES FORMAL RECONCILIATION** | Core contract established via `request_task` and `get_task`, but requires formal architectural reconciliation as the immediate next checkpoint. |
+| **Phase 1 — Observation** | **ESSENTIALLY COMPLETE / IMPLEMENTED** | Substantially built and advanced through Increments 4.1–4.9; provides safe read-only observation across all 8 lifecycle states, lineage, evidence, and diagnostics. |
+| **Phase 2 — Bounded Coordination** | **IN PROGRESS / SUBSTANTIALLY BUILT** | Bounded result-driven continuation, specialist routing policy, and Director authorization infrastructure established. |
+| **Phase 3 — Autonomous Coordination Loop** | **NOT YET COMPLETE / FUTURE TARGET** | Full autonomous coordination loop (beyond bounded tool iterations and policy gates) remains a future target. |
+
+### Increment 4.1–4.9 Implementation History & Roadmap Mapping
+
+Increments 4.1 through 4.9 represent the concrete implementation history on `main` that substantially advanced Phase 1 and established foundational capabilities of Phase 2. Specifically, these increments delivered:
+* task lifecycle/state observation across all eight ACP states;
+* assigned specialist and routing rationale summary;
+* child task lineage and multi-task observation;
+* aggregate child task progress and status summary;
+* structured failure and blocked diagnostic summarization;
+* parent-level workflow completion and final outcome summary;
+* coordinated verification and reconciliation status summary;
+* execution and evidence categorization;
+* next-action information.
+
+**Explicit architectural rule**: Increment numbering is implementation history, not the roadmap itself. Future work must be selected from roadmap-phase requirements rather than automatically creating another numbered observation increment.
+
+**Next Architectural Checkpoint**: **Phase 0 — Coordinator Contract** is established as the immediate next architectural checkpoint after documentation reconciliation. Substantive future Coordinator work must begin with research and design of the complete Coordinator Contract & Capability Architecture before another implementation increment is authorized.
 
 ### Implemented and Verified Foundation
 
