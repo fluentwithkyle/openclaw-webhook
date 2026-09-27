@@ -281,6 +281,8 @@ function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults
     const projection = projectTaskForDeepSeek(task);
     if (allChildTasks.length > 0) {
         projection.child_tasks_summary = summarizeChildTaskStatuses(allChildTasks);
+        const childDiagnosticsSummary = summarizeChildTaskDiagnostics(allChildTasks);
+        if (childDiagnosticsSummary) projection.child_diagnostics_summary = childDiagnosticsSummary;
         projection.child_tasks = allChildTasks.slice(0, MAX_CHILD_TASK_OBSERVATIONS).map(projectTaskForDeepSeek);
     }
     return {
@@ -303,6 +305,41 @@ function summarizeChildTaskStatuses(childTasks) {
         }
     }
     return summary;
+}
+
+function summarizeChildTaskDiagnostics(childTasks) {
+    const summary = { failed: 0, blocked: 0, failure_highlights: [], blocker_highlights: [] };
+    for (const childTask of childTasks) {
+        if (!['FAILED', 'BLOCKED'].includes(childTask.status)) continue;
+        const diagnosticSummary = projectStructuredDiagnosticSummary(
+            childTask.status,
+            Array.isArray(childTask.evidence) ? childTask.evidence : [],
+            projectTaskAgentExecutions(childTask)
+        );
+        const commentary = diagnosticSummary && diagnosticSummary.agent_commentary;
+        const highlights = childTask.status === 'FAILED'
+            ? [...(commentary && commentary.report_highlights || []), ...(commentary && commentary.blocker_highlights || [])]
+            : [...(commentary && commentary.blocker_highlights || []), ...(commentary && commentary.report_highlights || [])];
+        const targetHighlights = childTask.status === 'FAILED' ? summary.failure_highlights : summary.blocker_highlights;
+        summary[childTask.status.toLowerCase()]++;
+        for (const highlight of highlights) {
+            if (targetHighlights.length >= MAX_REPORT_HIGHLIGHTS) break;
+            targetHighlights.push({
+                agent: sanitizeStringValue(String(highlight.agent || 'Unknown')).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH),
+                source: 'agent_commentary',
+                text: sanitizeStringValue(highlight.text).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH)
+            });
+        }
+    }
+    return summary.failed > 0 || summary.blocked > 0 ? summary : null;
+}
+
+function projectTaskAgentExecutions(task) {
+    return {
+        kilo: projectAgentExecution(task.kilo),
+        builder: projectAgentExecution(task.builder),
+        gemini: projectAgentExecution(task.gemini)
+    };
 }
 
 function sanitizeReport(report) {
@@ -454,11 +491,7 @@ function projectTaskForDeepSeek(task) {
         }
         return categories;
     }, {});
-    const agentExecutions = {
-        kilo: projectAgentExecution(task.kilo),
-        builder: projectAgentExecution(task.builder),
-        gemini: projectAgentExecution(task.gemini)
-    };
+    const agentExecutions = projectTaskAgentExecutions(task);
     const executionCompleted = Object.values(agentExecutions).some(agent => agent && ['success', 'failure', 'blocked'].includes(agent.status));
     const verifiedOutcome = task.status === 'VERIFIED' || task.status === 'COMPLETE';
     const terminalDetails = { status: task.status, agent_execution: agentExecutions };
