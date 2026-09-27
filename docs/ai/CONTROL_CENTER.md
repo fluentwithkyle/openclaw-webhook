@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-09-27
-**Updated By**: Codex — TASK-CODEX-DEEPSEEK-COORDINATOR-CONTRACT-IMPLEMENT-001
+**Updated By**: Codex — TASK-CODEX-DEEPSEEK-PHASE-1-OBSERVATION-IMPLEMENT-001
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -19,11 +19,13 @@ model-facing tool has `request_task` (server-derived REVIEW/read-only/Gemini
 Builder/`poc/`) and sanitized namespace-constrained `get_task`; ACP, TaskRegistry,
 the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
-**Phase 0 contract — IMPLEMENTED / VERIFIED**: the runtime policy formalizes the two
+**Phase 0 contract + Phase 1 observation — IMPLEMENTED / VERIFIED**: the runtime policy formalizes the two
 existing operations, server-derived REVIEW/read-only `poc/` authority, sanitized task
-observation, and ACP-owned independent-verification semantics. It remains an
-extensible policy representation, not a second authority system. **Phase 1+ gaps**:
-no observation expansion, workflow decomposition, specialist selection, or
+observation across all eight lifecycle states (including lineage, execution, evidence,
+verification, and failure/blocked information), and ACP-owned independent-verification
+semantics. It remains an
+extensible policy representation, not a second authority system. **Phase 2+ gaps**:
+workflow decomposition, specialist selection, or
 consequential execution operations. Full current state: `STATE.md`; architecture:
 `ARCHITECTURE.md` §16.6; decisions: ADR-018 and ADR-019.
 
@@ -162,9 +164,9 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 | **Current Status** | ACTIVE / HIGH PRIORITY; foundation IMPLEMENTED / VERIFIED; full coordinator PROPOSED / TARGET |
 | **Objective** | Expand bounded DeepSeek coordination intelligence without expanding authority or replacing ACP, TaskRegistry, the existing orchestrator/dispatcher, GitHub, or Kyle. |
 | **Agreed Architecture** | ChatBox → `/poc/deepseek-runtime` → OpenRouter/DeepSeek → bounded `control_plane` → authenticated `/poc/coordinator` → ACP → TaskRegistry → existing dispatcher/orchestrator → specialist lane. Server derives authority; no second control plane. |
-| **Current Gap** | Workflow decomposition, specialist selection/activation, evidence/result interpretation, next-action reasoning, verification/reconciliation orchestration, bounded state-driven continuation, and verified-outcome reporting. |
+| **Current Gap** | Workflow decomposition, specialist selection/activation, evidence/result interpretation, next-action reasoning, verification/reconciliation orchestration, bounded state-driven continuation, and full verified-outcome reporting. |
 | **Relevant Components** | `poc/schemas/acp-schema.js`, `poc/task-registry.js`, `poc/orchestrator.js`, `services/transport-provider.js`, `routes/poc.js`, `.github/workflows/main.yml`, `poc/command.json`, `test/coordinator.test.js` |
-| **Next Concrete Action** | Phase 0 Coordinator Contract / Capability Architecture; define minimal policy, evidence, failure, verification, and Kyle-authorization gates before runtime expansion. |
+| **Next Concrete Action** | Phase 2+ only if separately authorized through ACP-backed policy and Kyle authorization gates. |
 | **Authorization State** | Implementation authorized and executed via ACP task TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001 (capabilities: inspect, modify, test, commit, push). Commit and push to main authorized. |
 | **Details** | See `docs/ai/STATE.md` → Active High-Priority Project and `ARCHITECTURE.md` §16.6. |
 | **Test Results** | 19/19 coordinator tests pass. 170 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator). |

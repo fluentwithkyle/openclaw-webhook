@@ -1,7 +1,7 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-09-27
-**Updated By**: Codex — TASK-CODEX-DEEPSEEK-COORDINATOR-CONTRACT-IMPLEMENT-001 — implemented and verified the bounded Phase 0 coordinator contract.
+**Updated By**: Codex — TASK-CODEX-DEEPSEEK-PHASE-1-OBSERVATION-IMPLEMENT-001 — implemented and verified bounded Phase 1 coordinator observation.
 ---
 
 ## Project Status: ACTIVE (Transitional)
@@ -35,9 +35,11 @@ coordinator.
 response after the SSE compatibility fix. **GAP**: workflow decomposition, specialist
 selection/activation, research orchestration, evidence/result interpretation,
 next-action reasoning, verification/reconciliation orchestration, state-driven
-continuation, and full verified-outcome reporting. **Next authorized action**: Phase 0
-Coordinator Contract / Capability Architecture—define the smallest server policy and
-human-authorization gates before any runtime expansion. See `ARCHITECTURE.md` §16.6
+continuation, and full verified-outcome reporting. **IMPLEMENTED / VERIFIED**: Phase 1
+extends only the existing `get_task` projection with all eight lifecycle states,
+lineage, execution, evidence categories, independent verification, and failure/blocked
+information; it exposes no authority fields. **Next authorized action**: Phase 2+ only
+with ACP-backed policy and human-authorization gates. See `ARCHITECTURE.md` §16.6
 and ADR-018. Historical live-validation statements below are superseded where they
 conflict with this current baseline.
 
@@ -49,7 +51,8 @@ conflict with this current baseline.
 |------|--------|-------|-------|
 | DeepSeek Chatbox Runtime Boundary Research (TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001) | **COMPLETED (RESEARCH)** | Gemini | Researched and durably documented the DeepSeek Chatbox runtime boundary and tool-execution architecture (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001.md`). Answered all 8 required verification items: current Chatbox ingress (`POST /poc/chatbox`), current Direct ACP coordinator path (`POST /poc/coordinator`), OpenRouter's role (model proxy and provider router, application-side tool execution), repository absence of server-side DeepSeek/OpenRouter tool execution runtime, exact missing boundary between `tool_call` and coordinator, accuracy of ADR-017, prerequisite for Milestone 0 connectivity testing (baseline ping reachability), and unresolved configuration questions. Updated RESEARCH_INDEX.md, TASK_LOG.md, and STATE.md. No implementation performed. |
 | TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED / LIVE DISPATCH VERIFIED / RESULT RETRIEVAL GAP** | Codex Builder | Server-side OpenRouter/DeepSeek runtime exists at `/poc/deepseek-runtime` with one bounded `control_plane` tool. Current source adds `get_task`: only DeepSeek-runtime namespace identifiers may be observed and the result is sanitized. The runtime remains a bounded foundation, not the full coordinator. Director later VERIFIED a new ChatBox Ping/Pong display after SSE compatibility work; the earlier end-to-end-unknown statement is historical. |
-| TASK-CODEX-DEEPSEEK-COORDINATOR-CONTRACT-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Phase 0 contract formalizes only `request_task`/`get_task`, server-derived REVIEW/read-only `poc/` authority, safe observation projection, and ACP-owned independent-verification semantics. It does not add a control plane or Phase 1+ operations. |
+| TASK-CODEX-DEEPSEEK-COORDINATOR-CONTRACT-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Phase 0 contract formalizes only `request_task`/`get_task`, server-derived REVIEW/read-only `poc/` authority, safe observation projection, and ACP-owned independent-verification semantics. It does not add a control plane or Phase 2+ operations. |
+| TASK-CODEX-DEEPSEEK-PHASE-1-OBSERVATION-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Extended only the existing `get_task` projection: safe coverage for PENDING, SELECTED, PLANNED, EXECUTING, VERIFIED, COMPLETE, FAILED, and BLOCKED; lineage, agent execution, evidence counts/categories, independent verification, verification requirements, and failure/blocked information. `request_task` authority, the single `control_plane` tool, and the two-operation set remain unchanged; authority fields and sensitive material remain excluded. |
 | TASK-CODEX-DEEPSEEK-CHATBOX-NEW-CHAT-RESPONSE-COMPATIBILITY-FIX-002 | **COMPLETED / LIVE VERIFIED** | Codex / Gemini (Verify) | For `stream: true`, `/poc/deepseek-runtime` now emits OpenAI-compatible SSE `chat.completion.chunk` events containing the final assistant response, a `finish_reason: stop` event, and `data: [DONE]`. The internal non-streaming OpenRouter tool loop and the bounded `control_plane` authority model are unchanged; requests without `stream: true` retain the ordinary JSON response contract. Focused regression coverage passes. **Live verification by Director confirmed**: a brand-new ChatBox conversation sent "Ping." and successfully displayed "Pong! 🏓 I’m here and ready to help. What can I do for you?". The new-chat blank-response issue is successfully resolved. |
 | TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | **COMPLETED** | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit RESEARCH_DOCUMENT branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Root cause of prior 048e9b1 push failure: gemini-builder.yml pushes via the auto-generated GITHUB_TOKEN, which GitHub restricts from pushing .github/workflows/* changes (commit landed locally in the runner but push was rejected); a properly-scoped owner token (Kilo GH_TOKEN) pushes the same workflow-file change successfully. Durable Builder-lane fix (PAT secret for .github/workflows/* pushes) is outside this task's permitted_paths. |
 | Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. 237/289 tests verified post-remediation in pre-Builder state (347 total after Path 2 recovery); **450/450 tests pass across 18 test files** at commit `8a56fe6` (including `gemini-builder-trigger.test.js` with 9 tests). |

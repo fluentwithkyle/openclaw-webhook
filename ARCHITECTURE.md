@@ -1589,7 +1589,7 @@ only `request_task` and `get_task`.
   and `poc/` permitted paths. It then authenticates to `POST /poc/coordinator` using
   the server-held coordinator secret.
 * `get_task` accepts only a `deepseek-runtime-` request identifier, reads the existing
-  TaskRegistry, and returns a bounded sanitized projection. Its Phase 0 shape covers
+  TaskRegistry, and returns a bounded sanitized projection. Its Phase 1 shape covers
   task identity, lifecycle (including execution-completed versus verified-outcome),
   current/next agent, next action, execution/result information, verification
   requirements and sanitized independent-verification evidence, plus failure/blocked
@@ -1615,10 +1615,10 @@ ChatBox → /poc/deepseek-runtime → OpenRouter → DeepSeek
   → TaskRegistry → existing dispatcher/orchestrator → specialist lane
 ```
 
-### Phase 0 Coordinator Contract / Capability Architecture (IMPLEMENTED / VERIFIED)
+### Phase 1 Coordinator Observation (IMPLEMENTED / VERIFIED)
 
-`DEEPSEEK_COORDINATOR_POLICY` in the runtime is a structured, test-covered Phase 0
-contract, not a new control plane. It formalizes only `request_task` and `get_task`;
+`DEEPSEEK_COORDINATOR_POLICY` in the runtime is a structured, test-covered Phase 1
+observation policy, not a new control plane. It formalizes only `request_task` and `get_task`;
 server derives repository, base branch, target, `REVIEW` task mode, `read_only`
 capability, `poc/` paths, originator, coordinator authentication context, and
 verification requirement. Model output is validated as intent only and cannot grant
@@ -1627,8 +1627,12 @@ capabilities, paths, targets, task modes, commits, pushes, or other authority.
 ACP lifecycle semantics remain authoritative: an `AGENT_REPORT` records execution
 information only, while `INDEPENDENT_VERIFICATION` is required by existing ACP state
 transitions before `VERIFIED` and `COMPLETE`. A terminal agent report therefore does
-not itself establish a verified outcome. The policy’s extension marker permits later
-Phase 1/2 additions only through future ACP-backed policy changes; workflow
+not itself establish a verified outcome. `get_task` safely observes all eight ACP
+lifecycle states, lineage, agent execution, evidence counts/categories, independent
+verification evidence, verification requirements, and failure/blocked state without
+projecting repository, task-mode, capability, path, authorization, credential, or
+secret fields. The policy’s extension marker permits later Phase 2+ additions only
+through future ACP-backed policy changes; workflow
 decomposition, specialist selection, consequential operations, and a new control
 plane are **GAPS / NOT IMPLEMENTED**.
 
@@ -1658,7 +1662,7 @@ be introduced. Authority-bearing ACP fields remain server-derived policy.
 |---|---|---|
 | Conversational ingress and final response | IMPLEMENTED / VERIFIED for Ping display | Runtime accepts ChatBox-compatible requests and SSE; complete work-outcome reporting is a GAP. |
 | Bounded task request | IMPLEMENTED / VERIFIED | One server-derived, read-only `request_task` policy for Gemini Builder and `poc/`. |
-| Bounded task observation | IMPLEMENTED / VERIFIED | `get_task` is namespace-constrained and sanitizes its TaskRegistry projection. |
+| Bounded task observation | IMPLEMENTED / VERIFIED | `get_task` is namespace-constrained and safely projects all eight lifecycle states, lineage, execution, evidence categories, verification, and failure/blocked state. |
 | Workflow decomposition, research need, specialist selection | GAP | No policy-controlled multi-step workflow planner or lane-selection contract. |
 | Research, architecture, implementation, security activation | GAP | No expanded coordinator operation set; all consequential work still requires existing ACP authorization. |
 | Result/evidence interpretation and next action | GAP | Observation exists; consuming evidence and determining an authorized continuation do not. |

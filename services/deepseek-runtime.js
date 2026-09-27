@@ -4,7 +4,7 @@ const taskRegistry = require('../poc/task-registry');
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 2;
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
-    phase: 'Phase 0',
+    phase: 'Phase 1',
     model_operations: Object.freeze(['request_task', 'get_task']),
     request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'target']), target: 'Gemini Builder' }),
     get_task: Object.freeze({ model_fields: Object.freeze(['operation', 'request_id']), request_id_prefix: 'deepseek-runtime-' }),
@@ -13,7 +13,7 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
         originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
     }),
-    observation_projection: Object.freeze(['identity', 'lifecycle', 'agents', 'next_action', 'execution', 'verification', 'failure_or_blocked', 'sanitized_specialist_evidence']),
+    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence_summary', 'verification', 'failure', 'blocked']),
     state_semantics: Object.freeze({
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
@@ -167,7 +167,7 @@ function validateGetTaskArguments(args) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments for get_task are not permitted by the runtime policy');
     }
     const requestId = args.request_id.trim();
-    if (!requestId.startsWith('deepseek-runtime-')) {
+    if (args.request_id !== requestId || !requestId.startsWith('deepseek-runtime-')) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments for get_task are not permitted by the runtime policy');
     }
 
@@ -225,15 +225,20 @@ function projectTaskForDeepSeek(task) {
     const evidence = Array.isArray(task.evidence) ? task.evidence : [];
     const independentVerification = evidence.filter(record => record && record.evidence_type === 'INDEPENDENT_VERIFICATION')
         .map(record => sanitizeReport({ agent: record.agent, timestamp: record.timestamp, execution_id: record.execution_id, report: record.report }));
+    const evidenceCategories = evidence.reduce((categories, record) => {
+        if (record && typeof record.evidence_type === 'string') {
+            categories[record.evidence_type] = (categories[record.evidence_type] || 0) + 1;
+        }
+        return categories;
+    }, {});
     const agentExecutions = {
+        kilo: projectAgentExecution(task.kilo),
         builder: projectAgentExecution(task.builder),
         gemini: projectAgentExecution(task.gemini)
     };
     const executionCompleted = Object.values(agentExecutions).some(agent => agent && ['success', 'failure', 'blocked'].includes(agent.status));
     const verifiedOutcome = task.status === 'VERIFIED' || task.status === 'COMPLETE';
-    const failureOrBlocked = task.status === 'FAILED' || task.status === 'BLOCKED'
-        ? { status: task.status, agent_reports: agentExecutions }
-        : null;
+    const terminalDetails = { status: task.status, agent_execution: agentExecutions };
 
     return {
         request_id: task.request_id,
@@ -243,14 +248,24 @@ function projectTaskForDeepSeek(task) {
             execution_completed: executionCompleted,
             verified_outcome: verifiedOutcome
         },
+        lineage: {
+            parent_request_id: task.parent_request_id || null,
+            superseded_by: task.lineage && task.lineage.superseded_by || null,
+            cancelled: Boolean(task.lineage && task.lineage.cancelled)
+        },
         agents: { current: task.current_agent, next: task.next_agent },
         next_action: task.next_action,
         execution: agentExecutions,
+        evidence: {
+            count: evidence.length,
+            categories: evidenceCategories
+        },
         verification: {
             requirements: task.verification,
             independent_verification: independentVerification
         },
-        failure_or_blocked: failureOrBlocked,
+        failure: task.status === 'FAILED' ? terminalDetails : null,
+        blocked: task.status === 'BLOCKED' ? terminalDetails : null,
         created_at: task.created_at,
         updated_at: task.updated_at
     };

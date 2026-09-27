@@ -534,11 +534,11 @@ Kyle.
 
 ---
 
-## ADR-019: Phase 0 DeepSeek Coordinator Contract Uses Existing ACP Authority
+## ADR-019: Phase 1 DeepSeek Coordinator Observation Uses Existing ACP Authority
 
 ### Status
 
-**IMPLEMENTED / VERIFIED** (Phase 0 only). Later coordinator capabilities remain **PROPOSED / TARGET**.
+**IMPLEMENTED / VERIFIED** (Phase 0 contract and Phase 1 observation only). Later coordinator capabilities remain **PROPOSED / TARGET**.
 
 ### Context
 
@@ -548,11 +548,12 @@ observation, and lifecycle boundaries without adding a second control plane.
 
 ### Decision
 
-The runtime exports a structured Phase 0 policy that permits only intent-level
+The runtime exports a structured Phase 1 policy that permits only intent-level
 `request_task` and namespace-constrained `get_task`. Server policy derives every
 authority-bearing ACP field and coordinator authentication context. Its safe task
-projection reports identity, lifecycle, agents, next action, execution/results,
-verification, failure/blocked state, and sanitized specialist evidence. It explicitly
+projection reports identity, all eight lifecycle states, lineage, agents, next action,
+execution/results, evidence counts/categories, verification, failure/blocked state,
+and sanitized specialist evidence. It explicitly
 separates execution completion (`AGENT_REPORT`) from verified outcome, which remains
 controlled by existing ACP `INDEPENDENT_VERIFICATION` transition rules.
 
@@ -563,6 +564,6 @@ controlled by existing ACP `INDEPENDENT_VERIFICATION` transition rules.
 - The model cannot grant paths, targets, task modes, capabilities, commits, pushes, or
   authentication/authorization context. Consequential capabilities remain excluded.
 - Request-ID prefix validation is not session isolation or session binding.
-- Phase 1+ observation expansion, workflow decomposition, specialist selection, and
-  execution operations are **NOT IMPLEMENTED** and require future authorized ACP-backed
+- Phase 2+ workflow decomposition, specialist selection, and execution operations are
+  **NOT IMPLEMENTED** and require future authorized ACP-backed
   policy work.
