@@ -14,6 +14,7 @@ const {
     classifyTaskResultForContinuation,
     validateGetTaskArguments,
     projectTaskForDeepSeek,
+    projectSpecialistRoutingSummary,
     observeTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
     normalizeMessages,
@@ -173,6 +174,50 @@ function rawRequest(port, headers, body) {
         assert.equal(automaticObservation.observation.continuation.submitted_in_this_execution, true);
         assert.equal(JSON.stringify(automaticObservation.observation).includes('hidden'), false);
         assert.equal(automaticObservation.observation.task.authorization, undefined);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('specialist routing summaries are server-derived, bounded, and observational', async () => {
+        taskRegistry.resetRegistry();
+        const cases = [
+            ['security', 'Audit authentication and credential handling', 'SECURITY', 'Security Specialist', 'Security Specialist'],
+            ['utility', 'Format the README documentation', 'UTILITY', 'Utility Specialist', 'Utility Specialist'],
+            ['implementation', 'Implement a code change', 'IMPLEMENTATION', 'Gemini Builder', 'Gemini Builder'],
+            ['review', 'Research the current coordinator behavior', 'REVIEW', 'Gemini', 'Gemini Reviewer']
+        ];
+        for (const [id, objective, classification, target, lane] of cases) {
+            const command = buildControlPlaneCommand({ operation: 'request_task', objective });
+            command.request_id = `deepseek-runtime-routing-${id}`;
+            assert.equal(taskRegistry.createTask(command).success, true);
+            const projection = projectTaskForDeepSeek(taskRegistry.getTask(command.request_id));
+            assert.deepEqual(projection.specialist_routing_summary, {
+                routing_classification: classification,
+                dispatch_status: 'PENDING',
+                assigned_specialist: target,
+                specialist_lane: lane
+            });
+            assert.equal(projection.authorization, undefined);
+            assert.equal(projection.specialist_routing_summary.repository, undefined);
+            assert.equal(projection.specialist_routing_summary.capabilities, undefined);
+        }
+        assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-routing-security', 'SELECTED').success, true);
+        assert.equal(projectTaskForDeepSeek(taskRegistry.getTask('deepseek-runtime-routing-security')).specialist_routing_summary.dispatch_status, 'SELECTED');
+
+        const humanReview = projectSpecialistRoutingSummary({
+            task: 'Consider this request', status: 'PENDING', current_agent: 'untrusted assignment'.repeat(50)
+        });
+        assert.deepEqual(humanReview, { routing_classification: 'HUMAN_REVIEW', dispatch_status: 'PENDING' });
+        const longTask = {
+            task: 'Review the request', status: `PENDING Bearer ${'a'.repeat(300)}`,
+            current_agent: `Gemini Bearer ${'b'.repeat(300)}`
+        };
+        const bounded = projectSpecialistRoutingSummary(longTask);
+        assert.equal(bounded.dispatch_status.length <= MAX_REPORT_HIGHLIGHT_LENGTH, true);
+        assert.equal(bounded.assigned_specialist.length <= MAX_REPORT_HIGHLIGHT_LENGTH, true);
+        assert.equal(bounded.dispatch_status.includes('Bearer ' + 'a'.repeat(300)), false);
+        assert.equal(bounded.assigned_specialist.includes('Bearer ' + 'b'.repeat(300)), false);
+        assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.model_operations, ['request_task', 'get_task']);
+        assert.equal(MAX_TOOL_ITERATIONS, 3);
         taskRegistry.resetRegistry();
     });
 

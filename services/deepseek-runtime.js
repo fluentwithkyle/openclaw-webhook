@@ -11,10 +11,10 @@ const WORKFLOW_TERMINAL_STATUSES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED
 const WORKFLOW_TERMINAL_OUTCOMES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']);
 
 const SPECIALIST_ROUTING_POLICY = Object.freeze({
-    GeminiReviewer: Object.freeze({ lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
-    SecuritySpecialist: Object.freeze({ lane: 'Security Specialist', target: 'Security Specialist', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
-    UtilitySpecialist: Object.freeze({ lane: 'Utility Specialist', target: 'Utility Specialist', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
-    GeminiBuilder: Object.freeze({ lane: 'Gemini Builder', target: 'Gemini Builder', task_mode: 'BUILDER', capabilities: Object.freeze(['read_only', 'modify_files', 'run_tests', 'commit', 'push']), permitted_paths: Object.freeze(['poc/']), authorization_required: true }),
+    GeminiReviewer: Object.freeze({ classification: 'REVIEW', lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
+    SecuritySpecialist: Object.freeze({ classification: 'SECURITY', lane: 'Security Specialist', target: 'Security Specialist', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
+    UtilitySpecialist: Object.freeze({ classification: 'UTILITY', lane: 'Utility Specialist', target: 'Utility Specialist', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
+    GeminiBuilder: Object.freeze({ classification: 'IMPLEMENTATION', lane: 'Gemini Builder', target: 'Gemini Builder', task_mode: 'BUILDER', capabilities: Object.freeze(['read_only', 'modify_files', 'run_tests', 'commit', 'push']), permitted_paths: Object.freeze(['poc/']), authorization_required: true }),
     Kilo: Object.freeze({ lane: 'Kilo', target: 'Kilo', task_mode: 'FAILOVER_EXECUTE', authorization_required: true })
 });
 
@@ -49,7 +49,7 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         specialist_routing: 'deterministic server policy', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
         originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
     }),
-    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification_reconciliation_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary', 'workflow_completion_summary']),
+    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'specialist_routing_summary', 'verification_reconciliation_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary', 'workflow_completion_summary']),
     state_semantics: Object.freeze({
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
@@ -391,6 +391,22 @@ function projectTaskAgentExecutions(task) {
     };
 }
 
+function projectSpecialistRoutingSummary(task) {
+    if (!task || typeof task.task !== 'string' || typeof task.status !== 'string') return null;
+    const route = routeSpecialistIntent(task.task);
+    const summary = {
+        routing_classification: route.classification || route.outcome,
+        dispatch_status: sanitizeStringValue(task.status).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH)
+    };
+    if (route.valid) {
+        if (typeof task.current_agent === 'string' && task.current_agent.trim()) {
+            summary.assigned_specialist = sanitizeStringValue(task.current_agent).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH);
+        }
+        summary.specialist_lane = sanitizeStringValue(route.lane).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH);
+    }
+    return summary.routing_classification ? summary : null;
+}
+
 function sanitizeReport(report) {
     if (!report || typeof report !== 'object') return report || null;
     if (Array.isArray(report)) return report.map(value => typeof value === 'string' ? sanitizeStringValue(value) : sanitizeReport(value));
@@ -627,6 +643,8 @@ function projectTaskForDeepSeek(task) {
     };
     const verificationReconciliationSummary = projectVerificationReconciliationSummary(evidence, agentExecutions);
     if (verificationReconciliationSummary) projection.verification_reconciliation_summary = verificationReconciliationSummary;
+    const specialistRoutingSummary = projectSpecialistRoutingSummary(task);
+    if (specialistRoutingSummary) projection.specialist_routing_summary = specialistRoutingSummary;
     return projection;
 }
 
@@ -825,6 +843,7 @@ module.exports = {
     classifyTaskResultForContinuation,
     observeTaskForDeepSeek,
     projectTaskForDeepSeek,
+    projectSpecialistRoutingSummary,
     createDeepSeekRuntimeHandler,
     getRuntimeConfig,
     normalizeMessages,
