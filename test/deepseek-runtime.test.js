@@ -8,6 +8,7 @@ const {
     MAX_TOOL_ITERATIONS,
     buildControlPlaneCommand,
     evaluateContinuationPolicy,
+    classifyTaskResultForContinuation,
     validateGetTaskArguments,
     projectTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
@@ -141,6 +142,7 @@ function rawRequest(port, headers, body) {
         completeDeepSeekReviewTask(parentRequestId);
 
         let childCommand;
+        let observedResult;
         let modelCallCount = 0;
         const result = await runDeepSeekConversation({
             messages: [{ role: 'user', content: 'Request the bounded follow-up.' }], env: env(),
@@ -152,7 +154,11 @@ function rawRequest(port, headers, body) {
                 }
                 modelCallCount++;
                 if (modelCallCount === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: parentRequestId }) } }] });
-                if (modelCallCount === 2) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the parent findings', parent_request_id: parentRequestId }) } }] });
+                if (modelCallCount === 2) {
+                    const toolMessage = body.messages.find(message => message.role === 'tool');
+                    observedResult = JSON.parse(toolMessage.content);
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the parent findings', parent_request_id: parentRequestId }) } }] });
+                }
                 return providerResponse({ role: 'assistant', content: 'Follow-up requested.' });
             }}
         });
@@ -162,6 +168,10 @@ function rawRequest(port, headers, body) {
         assert.equal(childCommand.task_mode, 'REVIEW');
         assert.deepEqual(childCommand.authorization.capabilities, ['read_only']);
         assert.deepEqual(childCommand.constraints.permitted_paths, ['poc/']);
+        assert.equal(observedResult.status, 'found');
+        assert.equal(observedResult.continuation.classification, 'eligible');
+        assert.equal(observedResult.continuation.eligible_for_next_decision, true);
+        assert.equal(observedResult.continuation.submitted_in_this_execution, false);
         assert.deepEqual(projectTaskForDeepSeek(taskRegistry.getTask(childCommand.request_id)).lineage, { parent_request_id: parentRequestId, superseded_by: null, cancelled: false });
         taskRegistry.resetRegistry();
     });
@@ -187,6 +197,56 @@ function rawRequest(port, headers, body) {
         assert.equal(taskRegistry.addEvidence('deepseek-runtime-agent-report-parent', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' }).success, true);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-agent-report-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-agent-report-parent'])).error, /COMPLETE/);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-agent-report-parent', 'deepseek-runtime-child', new Set()).error, /prior get_task/);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('result classification is server-derived and only complete independently verified results are eligible', async () => {
+        taskRegistry.resetRegistry();
+        assert.deepEqual(classifyTaskResultForContinuation(null), {
+            classification: 'invalid', eligible_for_next_decision: false, reason: 'Task result is invalid; continuation cannot proceed'
+        });
+        createDeepSeekReviewTask('deepseek-runtime-result-incomplete');
+        assert.equal(classifyTaskResultForContinuation(taskRegistry.getTask('deepseek-runtime-result-incomplete')).classification, 'incomplete');
+        completeDeepSeekReviewTask('deepseek-runtime-result-complete');
+        const eligible = classifyTaskResultForContinuation(taskRegistry.getTask('deepseek-runtime-result-complete'));
+        assert.deepEqual(eligible, { classification: 'eligible', eligible_for_next_decision: true, reason: null });
+        const observed = new Map([['deepseek-runtime-result-complete', eligible]]);
+        assert.equal(evaluateContinuationPolicy('deepseek-runtime-result-complete', 'deepseek-runtime-result-child', observed).valid, true);
+        taskRegistry.getTask('deepseek-runtime-result-complete').status = 'FAILED';
+        taskRegistry.persistCache();
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-result-complete', 'deepseek-runtime-result-child', observed).error, /FAILED/);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('submitted task correlation is returned only from the existing get_task observation result', async () => {
+        let requestId;
+        let resultContext;
+        let modelCalls = 0;
+        const client = { post: async (url, body) => {
+            if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                requestId = body.request_id;
+                const created = taskRegistry.createTask(body);
+                assert.equal(created.success, true);
+                return { data: { request_id: requestId, status: 'Task registered and dispatched' } };
+            }
+            modelCalls++;
+            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'request', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior' }) } }] });
+            if (modelCalls === 2) {
+                return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'observe', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) } }] });
+            }
+            const resultMessage = body.messages.filter(message => message.role === 'tool').pop();
+            assert(resultMessage);
+            resultContext = JSON.parse(resultMessage.content);
+            return providerResponse({ role: 'assistant', content: 'Observed the submitted task.' });
+        }};
+        taskRegistry.resetRegistry();
+        const result = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Review the coordinator.' }], env: env(), httpClient: client });
+        assert.equal(result.message.content, 'Observed the submitted task.');
+        assert.equal(resultContext.task.request_id, requestId);
+        assert.equal(resultContext.continuation.submitted_in_this_execution, true);
+        assert.equal(resultContext.continuation.eligible_for_next_decision, false);
+        assert.equal(resultContext.continuation.classification, 'incomplete');
+        assert.equal(resultContext.task.authorization, undefined);
         taskRegistry.resetRegistry();
     });
 
