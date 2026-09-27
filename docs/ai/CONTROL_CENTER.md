@@ -220,3 +220,8 @@ Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRU
 ### Increment 4.4 — Structured Failure & Blocked Diagnostics
 
 **IMPLEMENTED / VERIFIED:** the existing DeepSeek observation projection now provides bounded, sanitized, status-scoped `failure_summary` and `blocked_summary` fields alongside unchanged raw terminal projections. Summaries expose only recorded matching execution status, blocker counts, and clearly labeled agent commentary; they do not synthesize verification, authority, recovery actions, or continuation eligibility. The existing two operations, `MAX_TOOL_ITERATIONS = 3`, TaskRegistry/dispatcher authority, Director approval boundary, and 10-child observation bound remain unchanged.
+
+
+### Increment 4.4 Final Verification
+
+**IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.** Main HEAD `323694dd33356f70600a5a2c7dfbec3e5be89a67` contains PR #237. Source review confirms bounded status-scoped diagnostic summaries and unchanged authority/continuation boundaries. Codex runtime results remain agent evidence; independent Node/npm execution and CI evidence were unavailable. Final record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001.md`.
