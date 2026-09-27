@@ -46,7 +46,7 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         specialist_routing: 'deterministic server policy', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
         originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
     }),
-    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification', 'failure', 'blocked']),
+    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary']),
     state_semantics: Object.freeze({
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
@@ -291,7 +291,7 @@ function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults
 
 function sanitizeReport(report) {
     if (!report || typeof report !== 'object') return report || null;
-    if (Array.isArray(report)) return report.map(sanitizeReport);
+    if (Array.isArray(report)) return report.map(value => typeof value === 'string' ? sanitizeStringValue(value) : sanitizeReport(value));
 
     const sanitized = {};
     for (const [key, value] of Object.entries(report)) {
@@ -321,6 +321,7 @@ function sanitizeStringValue(str) {
     if (typeof str !== 'string') return str;
     return str
         .replace(/Bearer\s+[A-Za-z0-9_\-\.]+/gi, 'Bearer [REDACTED]')
+        .replace(/\b(api[_ -]?key|token|credential|authorization|password|director[_ -]?approval(?:[_ -]?(?:id|proof))?)([=:]?\s+)[A-Za-z0-9_\-\.]+/gi, '$1$2[REDACTED]')
         .replace(/api[_-]?key[=:]\s*[A-Za-z0-9_\-\.]+/gi, 'api_key=REDACTED');
 }
 
@@ -387,6 +388,46 @@ function projectStructuredEvidenceSummary(evidence, agentExecutions) {
     return Object.keys(summary.observed_facts).length > 0 || summary.agent_commentary ? summary : null;
 }
 
+function projectStructuredDiagnosticSummary(status, evidence, agentExecutions) {
+    const executionStatus = status === 'FAILED' ? 'failure' : 'blocked';
+    const sources = [
+        ...Object.entries(agentExecutions)
+            .filter(([, execution]) => execution && execution.status === executionStatus)
+            .map(([agent, execution]) => ({ agent, evidence_type: 'AGENT_EXECUTION', report: execution.result })),
+        ...evidence
+            .filter(record => record && record.verification_result === executionStatus)
+            .map(record => ({ agent: record.agent, evidence_type: record.evidence_type, report: record.report }))
+    ];
+    const observedExecution = Object.entries(agentExecutions)
+        .filter(([, execution]) => execution && execution.status === executionStatus)
+        .map(([agent, execution]) => ({ agent, status: execution.status }));
+    const blockerCounts = [];
+    const reportHighlights = [];
+    const blockerHighlights = [];
+    for (const source of sources) {
+        const sanitized = sanitizeReport(source.report);
+        if (!sanitized || typeof sanitized !== 'object') continue;
+        if (Array.isArray(sanitized.blockers)) {
+            blockerCounts.push({ agent: source.agent, blockers: sanitized.blockers.length });
+            for (const blocker of sanitized.blockers) {
+                if (typeof blocker === 'string' && blocker.trim().length > 0) {
+                    blockerHighlights.push({ agent: source.agent, source: 'agent_commentary', text: blocker.trim().slice(0, MAX_REPORT_HIGHLIGHT_LENGTH) });
+                }
+            }
+        }
+        const highlight = boundedReportHighlight(source.agent, sanitized);
+        if (highlight) reportHighlights.push(highlight);
+    }
+    const summary = { observed_facts: {} };
+    if (observedExecution.length > 0) summary.observed_facts.execution = observedExecution;
+    if (blockerCounts.length > 0) summary.observed_facts.report_counts = blockerCounts;
+    const commentary = {};
+    if (blockerHighlights.length > 0) commentary.blocker_highlights = blockerHighlights.slice(0, MAX_REPORT_HIGHLIGHTS);
+    if (reportHighlights.length > 0) commentary.report_highlights = reportHighlights.slice(0, MAX_REPORT_HIGHLIGHTS);
+    if (Object.keys(commentary).length > 0) summary.agent_commentary = commentary;
+    return Object.keys(summary.observed_facts).length > 0 || summary.agent_commentary ? summary : null;
+}
+
 function projectTaskForDeepSeek(task) {
     const evidence = Array.isArray(task.evidence) ? task.evidence : [];
     const independentVerification = evidence.filter(record => record && record.evidence_type === 'INDEPENDENT_VERIFICATION')
@@ -427,6 +468,8 @@ function projectTaskForDeepSeek(task) {
             categories: evidenceCategories
         },
         evidence_summary: projectStructuredEvidenceSummary(evidence, agentExecutions),
+        failure_summary: task.status === 'FAILED' ? projectStructuredDiagnosticSummary('FAILED', evidence, agentExecutions) : null,
+        blocked_summary: task.status === 'BLOCKED' ? projectStructuredDiagnosticSummary('BLOCKED', evidence, agentExecutions) : null,
         verification: {
             requirements: task.verification,
             independent_verification: independentVerification
