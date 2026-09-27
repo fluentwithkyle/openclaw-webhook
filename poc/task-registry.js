@@ -125,6 +125,26 @@ function createDirectorApproval(scope) {
   return { success: true, approval: record };
 }
 
+function revokePendingDirectorApprovals(requestId, reason) {
+  getCache();
+  let revoked = 0;
+  for (const [approvalId, record] of approvalCache.entries()) {
+    if (record.request_id === requestId && record.status === 'PENDING') {
+      record.status = 'REVOKED';
+      record.revoked_at = new Date().toISOString();
+      record.revocation_reason = reason;
+      approvalCache.set(approvalId, record);
+      revoked++;
+    }
+  }
+  return revoked;
+}
+
+function getDirectorApproval(approvalId) {
+  getCache();
+  return approvalCache.get(approvalId) || null;
+}
+
 function consumeDirectorApprovalAndCreateTask(command) {
   const cache = getCache();
   const approvalId = command.authorization && command.authorization.approval_id;
@@ -371,6 +391,7 @@ function supersedeTask(requestId, reason) {
 
   const newRequestId = requestId + '-superseded-' + Date.now();
 
+  revokePendingDirectorApprovals(requestId, 'task superseded');
   entry.lineage = entry.lineage || {};
   entry.lineage.superseded_by = newRequestId;
   entry.lineage.superseded_at = new Date().toISOString();
@@ -432,6 +453,7 @@ function cancelTask(requestId, reason) {
     return { success: false, error: 'Cannot cancel a completed task' };
   }
 
+  revokePendingDirectorApprovals(requestId, 'task cancelled');
   entry.lineage = entry.lineage || {};
   entry.lineage.cancelled = true;
   entry.lineage.cancelled_at = new Date().toISOString();
@@ -691,6 +713,8 @@ module.exports = {
   createDirectorApproval,
   createTaskWithDirectorAuthorization,
   consumeDirectorApprovalAndCreateTask,
+  getDirectorApproval,
+  revokePendingDirectorApprovals,
   getTask,
   updateTaskStatus,
   updateAgentResult,

@@ -48,11 +48,29 @@ function command(requestId) {
     const changed = command('director-auth-2'); changed.authorization.approval_id = approvalId;
     response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, changed);
     assert.equal(response.status, 403);
+    const cancelled = command('director-auth-cancelled');
+    taskRegistry.createTask({ ...cancelled, task_mode: 'REVIEW', authorization: { capabilities: ['read_only'] } });
+    const cancelledApproval = taskRegistry.createDirectorApproval(scope(cancelled)).approval;
+    assert.equal(taskRegistry.cancelTask(cancelled.request_id, 'cancelled by Director').success, true);
+    assert.equal(taskRegistry.getDirectorApproval(cancelledApproval.approval_id).status, 'REVOKED');
+    cancelled.authorization.approval_id = cancelledApproval.approval_id;
+    response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, cancelled);
+    assert.equal(response.status, 403);
+
+    const superseded = command('director-auth-superseded');
+    taskRegistry.createTask({ ...superseded, task_mode: 'REVIEW', authorization: { capabilities: ['read_only'] } });
+    const supersededApproval = taskRegistry.createDirectorApproval(scope(superseded)).approval;
+    assert.equal(taskRegistry.supersedeTask(superseded.request_id, 'superseded by Director').success, true);
+    assert.equal(taskRegistry.getDirectorApproval(supersededApproval.approval_id).status, 'REVOKED');
+    superseded.authorization.approval_id = supersededApproval.approval_id;
+    response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, superseded);
+    assert.equal(response.status, 403);
+
     const concurrentScope = command('director-auth-3');
     const issued = await request('/poc/director/approve', { 'x-director-approval-secret': process.env.DIRECTOR_APPROVAL_SECRET }, { scope: scope(concurrentScope) });
     concurrentScope.authorization.approval_id = issued.body.approval_id;
     const results = await Promise.all([request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, concurrentScope), request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, concurrentScope)]);
     assert.deepEqual(results.map(r => r.status).sort(), [202, 403]);
-    console.log('PASS: Director authorization issuance, scope binding, expiry, and single-use consumption');
+    console.log('PASS: Director authorization issuance, scope binding, expiry, and single-use consumption, cancellation, and supersession revocation');
   } finally { taskRegistry.resetRegistry(); server.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

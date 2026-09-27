@@ -2498,8 +2498,8 @@ The reconciled documentation distinguishes:
 
 **Task**: Implement the Phase 3.1 Director authorization infrastructure using the established TaskRegistry and ACP control plane.
 
-**Outcome**: IMPLEMENTED / VERIFIED. Added the sole authenticated `POST /poc/director/approve` issuance path, server-held Director approval records with 15-minute expiry and deterministic SHA-256 scope hashes, and atomic single-use consumption at the existing coordinator and Builder registration boundaries for consequential tasks. Component ingress authentication and parent lineage do not confer Director authority. The bounded DeepSeek control-plane operations and REVIEW/read_only/`poc/` authority remain unchanged. Phase 3.2 specialist routing is not implemented.
+**Outcome**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION. Added the sole authenticated `POST /poc/director/approve` issuance path, server-held Director approval records with 15-minute expiry and deterministic SHA-256 scope hashes, and atomic single-use consumption at the existing coordinator and Builder registration boundaries for consequential tasks. TaskRegistry cancellation and supersession revoke matching pending approvals. Component ingress authentication and parent lineage do not confer Director authority. The bounded DeepSeek control-plane operations and REVIEW/read_only/`poc/` authority remain unchanged. Phase 3.2 specialist routing is not implemented.
 
-**Verification**: Focused Director-authorization test and the complete `npm test` suite passed; final diff and whitespace checks were clean.
+**Verification**: Codex-focused Director-authorization test and the complete `npm test` suite passed; final diff and whitespace checks were clean. Independent Gemini VERIFY_RECONCILE remains required before any VERIFIED claim.
 
 **Commit Reference**: This commit.
