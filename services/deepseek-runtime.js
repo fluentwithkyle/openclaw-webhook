@@ -4,6 +4,8 @@ const taskRegistry = require('../poc/task-registry');
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
 const MAX_CHILD_TASK_OBSERVATIONS = 10;
+const MAX_REPORT_HIGHLIGHTS = 3;
+const MAX_REPORT_HIGHLIGHT_LENGTH = 240;
 
 const SPECIALIST_ROUTING_POLICY = Object.freeze({
     GeminiReviewer: Object.freeze({ lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
@@ -44,7 +46,7 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         specialist_routing: 'deterministic server policy', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
         originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
     }),
-    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence_summary', 'verification', 'failure', 'blocked']),
+    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification', 'failure', 'blocked']),
     state_semantics: Object.freeze({
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
@@ -331,6 +333,60 @@ function projectAgentExecution(agent) {
     };
 }
 
+function boundedReportHighlight(agent, report) {
+    const sanitized = sanitizeReport(report);
+    if (!sanitized || typeof sanitized !== 'object') return null;
+    const summary = typeof sanitized.summary === 'string' ? sanitized.summary :
+        sanitized.result && typeof sanitized.result.summary === 'string' ? sanitized.result.summary : null;
+    if (!summary || summary.trim().length === 0) return null;
+    return {
+        agent,
+        source: 'agent_commentary',
+        text: summary.trim().slice(0, MAX_REPORT_HIGHLIGHT_LENGTH)
+    };
+}
+
+function projectReportCounts(agent, report) {
+    const sanitized = sanitizeReport(report);
+    if (!sanitized || typeof sanitized !== 'object') return null;
+    const counts = {};
+    for (const field of ['verification', 'blockers', 'changed_files']) {
+        if (Array.isArray(sanitized[field])) counts[field] = sanitized[field].length;
+    }
+    return Object.keys(counts).length > 0 ? { agent, ...counts } : null;
+}
+
+function projectStructuredEvidenceSummary(evidence, agentExecutions) {
+    const observedExecution = Object.entries(agentExecutions)
+        .filter(([, execution]) => execution && typeof execution.status === 'string')
+        .map(([agent, execution]) => ({ agent, status: execution.status }));
+    const independentVerification = evidence.filter(record => record && record.evidence_type === 'INDEPENDENT_VERIFICATION');
+    const evidenceOutcomes = independentVerification
+        .filter(record => typeof record.verification_result === 'string')
+        .map(record => ({ agent: record.agent, status: record.verification_result }));
+    const highlights = [];
+    const reportCounts = [];
+    const reportSources = [
+        ...Object.entries(agentExecutions).map(([agent, execution]) => ({ agent, report: execution && execution.result })),
+        ...evidence.map(record => ({ agent: record && record.agent, report: record && record.report }))
+    ];
+    for (const source of reportSources) {
+        const highlight = boundedReportHighlight(source.agent, source.report);
+        if (highlight) highlights.push(highlight);
+        const counts = projectReportCounts(source.agent, source.report);
+        if (counts) reportCounts.push(counts);
+    }
+    const summary = { observed_facts: {} };
+    if (observedExecution.length > 0) summary.observed_facts.execution = observedExecution;
+    if (independentVerification.length > 0) {
+        summary.observed_facts.independent_verification = { count: independentVerification.length };
+        if (evidenceOutcomes.length > 0) summary.observed_facts.independent_verification.outcomes = evidenceOutcomes;
+    }
+    if (reportCounts.length > 0) summary.observed_facts.report_counts = reportCounts;
+    if (highlights.length > 0) summary.agent_commentary = { report_highlights: highlights.slice(0, MAX_REPORT_HIGHLIGHTS) };
+    return Object.keys(summary.observed_facts).length > 0 || summary.agent_commentary ? summary : null;
+}
+
 function projectTaskForDeepSeek(task) {
     const evidence = Array.isArray(task.evidence) ? task.evidence : [];
     const independentVerification = evidence.filter(record => record && record.evidence_type === 'INDEPENDENT_VERIFICATION')
@@ -370,6 +426,7 @@ function projectTaskForDeepSeek(task) {
             count: evidence.length,
             categories: evidenceCategories
         },
+        evidence_summary: projectStructuredEvidenceSummary(evidence, agentExecutions),
         verification: {
             requirements: task.verification,
             independent_verification: independentVerification
@@ -565,6 +622,8 @@ module.exports = {
     DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
     MAX_CHILD_TASK_OBSERVATIONS,
+    MAX_REPORT_HIGHLIGHTS,
+    MAX_REPORT_HIGHLIGHT_LENGTH,
     SPECIALIST_ROUTING_POLICY,
     routeSpecialistIntent,
     RuntimeError,

@@ -7,6 +7,8 @@ const {
     DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
     MAX_CHILD_TASK_OBSERVATIONS,
+    MAX_REPORT_HIGHLIGHTS,
+    MAX_REPORT_HIGHLIGHT_LENGTH,
     buildControlPlaneCommand,
     evaluateContinuationPolicy,
     classifyTaskResultForContinuation,
@@ -943,6 +945,38 @@ function rawRequest(port, headers, body) {
         assert.equal(projectedTask.authorization, undefined);
         assert.equal(projectedTask.child_tasks, undefined);
         assert.deepEqual(projectedTask.lineage, { parent_request_id: null, superseded_by: null, cancelled: false });
+    });
+
+    await test('structured evidence summary preserves bounded, sanitized facts and clearly labeled specialist commentary', async () => {
+        const task = {
+            request_id: 'deepseek-runtime-structured-evidence', task: 'Review specialist results', status: 'BLOCKED',
+            current_agent: null, next_agent: null, next_action: 'human_review', verification: 'Independent verification required',
+            kilo: { status: 'success', execution_id: 'kilo-1', report: { summary: 'Kilo report', verification: ['unit tests', 'lint'], blockers: [], changed_files: ['a.js'] } },
+            builder: { status: 'failure', execution_id: 'builder-1', report: { summary: 'Builder failed', verification: [], blockers: ['Recorded build failure'] } },
+            gemini: { status: 'success', execution_id: 'gemini-1', report: { summary: 'Gemini reviewed', verification: ['review'] } },
+            evidence: [
+                { evidence_type: 'INDEPENDENT_VERIFICATION', agent: 'Gemini Reviewer', verification_result: 'success', report: { summary: 'Reviewer verified', verification: ['review check'] } },
+                { evidence_type: 'AGENT_REPORT', agent: 'Security Specialist', verification_result: 'blocked', report: { summary: 'Security finding Bearer secret-value', blockers: ['Recorded security blocker'], token: 'hidden' } },
+                { evidence_type: 'AGENT_REPORT', agent: 'Utility Specialist', report: { summary: 'Utility check complete', verification: ['format check'] } }
+            ]
+        };
+        const projection = projectTaskForDeepSeek(task);
+        const summary = projection.evidence_summary;
+        assert.deepEqual(summary.observed_facts.execution, [
+            { agent: 'kilo', status: 'success' }, { agent: 'builder', status: 'failure' }, { agent: 'gemini', status: 'success' }
+        ]);
+        assert.deepEqual(summary.observed_facts.independent_verification, { count: 1, outcomes: [{ agent: 'Gemini Reviewer', status: 'success' }] });
+        assert.deepEqual(summary.observed_facts.report_counts[0], { agent: 'kilo', verification: 2, blockers: 0, changed_files: 1 });
+        assert.equal(summary.agent_commentary.report_highlights.length, MAX_REPORT_HIGHLIGHTS);
+        assert(summary.agent_commentary.report_highlights.every(highlight => highlight.source === 'agent_commentary'));
+        assert(summary.agent_commentary.report_highlights.every(highlight => highlight.text.length <= MAX_REPORT_HIGHLIGHT_LENGTH));
+        assert.equal(JSON.stringify(summary).includes('secret-value'), false);
+        assert.equal(projection.execution.kilo.result.summary, 'Kilo report');
+        assert.equal(projection.failure, null);
+        assert.equal(projection.blocked.status, 'BLOCKED');
+
+        const missing = projectTaskForDeepSeek({ request_id: 'deepseek-runtime-missing-evidence', task: 'Unknown', status: 'PENDING', evidence: [] });
+        assert.equal(missing.evidence_summary, null);
     });
 
     await test('safe projection separates agent execution reports from verified outcomes and exposes only sanitized evidence', async () => {
