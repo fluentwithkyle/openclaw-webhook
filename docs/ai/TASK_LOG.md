@@ -2626,3 +2626,16 @@ The reconciled documentation distinguishes:
 
 **Commit Reference**: `e0eb11887c5968aac34744df229e6e383fdacd8e`.
 \n\n| TASK-CHATGPT-DEEPSEEK-PARENT-CHILD-LINEAGE-NAVIGATION-FINAL-VERIFY-RECONCILE-001 | **COMPLETED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED** | ChatGPT Coordinator | Verified merged PR #235 on main at `ec6370c7e899f3100d6733d84c833561595004f5`. Confirmed bounded `get_task` child observation via `TaskRegistry.getTasksByParent()`, 10-child bound, existing sanitized projection, exactly two control-plane operations, MAX_TOOL_ITERATIONS=3, unchanged continuation/authorization boundaries. Final record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-PARENT-CHILD-LINEAGE-NAVIGATION-FINAL-VERIFY-RECONCILE-001.md`. Node/npm runtime execution and git diff --check were unavailable in this coordinator environment. |\n
+---
+
+## 2026-09-27 | TASK-CODEX-DEEPSEEK-STRUCTURED-SPECIALIST-EVIDENCE-SUMMARIZATION-IMPLEMENT-001
+
+**Task**: Add a bounded, deterministic, read-only structured specialist-evidence summary to the existing DeepSeek task-observation projection.
+
+**Outcome**: IMPLEMENTED / VERIFIED. `projectTaskForDeepSeek()` now retains the existing raw sanitized evidence and report projections while adding `evidence_summary`: recorded execution statuses, independent-verification count/outcomes, recorded-report array counts, and separately labeled bounded agent-commentary highlights. The summary is derived solely from TaskRegistry task records, remains absent when unsupported, and applies identically to bounded child projections.
+
+**Authority and security boundary**: The single `control_plane` still exposes only `request_task` and `get_task`; `MAX_TOOL_ITERATIONS` remains 3; TaskRegistry, `validateLineageForCreate()`, Director authorization, and COMPLETE plus INDEPENDENT_VERIFICATION continuation eligibility remain unchanged. Summary commentary is sanitized and capped at three 240-character highlights.
+
+**Verification**: Focused DeepSeek runtime tests passed (45/45); full `npm test` suite passed (625 passing assertions).
+
+**Commit Reference**: This entry is recorded in the implementation commit.
