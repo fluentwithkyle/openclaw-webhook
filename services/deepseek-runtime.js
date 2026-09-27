@@ -7,6 +7,8 @@ const MAX_CHILD_TASK_OBSERVATIONS = 10;
 const CHILD_TASK_SUMMARY_STATUSES = Object.freeze(['PENDING', 'SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE', 'FAILED', 'BLOCKED']);
 const MAX_REPORT_HIGHLIGHTS = 3;
 const MAX_REPORT_HIGHLIGHT_LENGTH = 240;
+const WORKFLOW_TERMINAL_STATUSES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED']);
+const WORKFLOW_TERMINAL_OUTCOMES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']);
 
 const SPECIALIST_ROUTING_POLICY = Object.freeze({
     GeminiReviewer: Object.freeze({ lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
@@ -47,7 +49,7 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         specialist_routing: 'deterministic server policy', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
         originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
     }),
-    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary']),
+    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary', 'workflow_completion_summary']),
     state_semantics: Object.freeze({
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
@@ -283,6 +285,8 @@ function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults
         projection.child_tasks_summary = summarizeChildTaskStatuses(allChildTasks);
         const childDiagnosticsSummary = summarizeChildTaskDiagnostics(allChildTasks);
         if (childDiagnosticsSummary) projection.child_diagnostics_summary = childDiagnosticsSummary;
+        const workflowCompletionSummary = summarizeWorkflowCompletion(allChildTasks);
+        if (workflowCompletionSummary) projection.workflow_completion_summary = workflowCompletionSummary;
         projection.child_tasks = allChildTasks.slice(0, MAX_CHILD_TASK_OBSERVATIONS).map(projectTaskForDeepSeek);
     }
     return {
@@ -332,6 +336,51 @@ function summarizeChildTaskDiagnostics(childTasks) {
         }
     }
     return summary.failed > 0 || summary.blocked > 0 ? summary : null;
+}
+
+function getWorkflowTerminalOutcome(childTask) {
+    if (taskRegistry.isCancelled(childTask.request_id)) return 'CANCELLED';
+    if (taskRegistry.isSuperseded(childTask.request_id)) return 'SUPERSEDED';
+    return WORKFLOW_TERMINAL_STATUSES.includes(childTask.status) ? childTask.status : null;
+}
+
+function classifyWorkflowOutcome(terminalStateCounts) {
+    const presentOutcomes = WORKFLOW_TERMINAL_OUTCOMES.filter(outcome => terminalStateCounts[outcome.toLowerCase()] > 0);
+    if (presentOutcomes.length === 1) {
+        return presentOutcomes[0] === 'COMPLETE' ? 'ALL_SUCCESS' : presentOutcomes[0];
+    }
+    return terminalStateCounts.complete > 0 ? 'PARTIAL_SUCCESS' : 'MIXED_TERMINAL';
+}
+
+function summarizeWorkflowCompletion(childTasks) {
+    const terminalStateCounts = WORKFLOW_TERMINAL_OUTCOMES.reduce((counts, outcome) => ({ ...counts, [outcome.toLowerCase()]: 0 }), {});
+    const completionHighlights = [];
+    for (const childTask of childTasks) {
+        const terminalOutcome = getWorkflowTerminalOutcome(childTask);
+        if (!terminalOutcome) return null;
+        terminalStateCounts[terminalOutcome.toLowerCase()]++;
+        if (terminalOutcome !== 'COMPLETE') continue;
+        const evidenceSummary = projectStructuredEvidenceSummary(
+            Array.isArray(childTask.evidence) ? childTask.evidence : [],
+            projectTaskAgentExecutions(childTask)
+        );
+        const highlights = evidenceSummary && evidenceSummary.agent_commentary && evidenceSummary.agent_commentary.report_highlights || [];
+        for (const highlight of highlights) {
+            if (completionHighlights.length >= MAX_REPORT_HIGHLIGHTS) break;
+            completionHighlights.push({
+                agent: sanitizeStringValue(String(highlight.agent || 'Unknown')).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH),
+                source: 'agent_commentary',
+                text: sanitizeStringValue(highlight.text).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH)
+            });
+        }
+    }
+    const summary = {
+        outcome: classifyWorkflowOutcome(terminalStateCounts),
+        total_children: childTasks.length,
+        terminal_state_counts: terminalStateCounts
+    };
+    if (completionHighlights.length > 0) summary.completion_highlights = completionHighlights;
+    return summary;
 }
 
 function projectTaskAgentExecutions(task) {
