@@ -14,6 +14,7 @@ const {
     classifyTaskResultForContinuation,
     validateGetTaskArguments,
     projectTaskForDeepSeek,
+    observeTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
     normalizeMessages,
     runDeepSeekConversation
@@ -731,6 +732,54 @@ function rawRequest(port, headers, body) {
         assert.equal(result.message.content, 'task status received');
     });
 
+    await test('child-task summary aggregates all authoritative lifecycle states without exposing child data', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-child-summary-parent';
+        createDeepSeekReviewTask(parentRequestId);
+        const statuses = ['PENDING', 'SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE', 'FAILED', 'BLOCKED'];
+        const childIds = [];
+        for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS + statuses.length; index++) {
+            const requestId = `deepseek-runtime-child-summary-${index}`;
+            childIds.push(requestId);
+            createDeepSeekReviewTask(requestId);
+            taskRegistry.getTask(requestId).parent_request_id = parentRequestId;
+            const status = statuses[index % statuses.length];
+            const transitions = {
+                PENDING: [], SELECTED: ['SELECTED'], PLANNED: ['SELECTED', 'PLANNED'],
+                EXECUTING: ['SELECTED', 'PLANNED', 'EXECUTING'],
+                VERIFIED: ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED'],
+                COMPLETE: ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE'],
+                FAILED: ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED'],
+                BLOCKED: ['SELECTED', 'PLANNED', 'EXECUTING', 'BLOCKED']
+            };
+            if (status === 'VERIFIED' || status === 'COMPLETE') {
+                assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+            }
+            for (const transition of transitions[status]) assert.equal(taskRegistry.updateTaskStatus(requestId, transition).success, true);
+        }
+        createDeepSeekReviewTask('deepseek-runtime-child-summary-unrelated');
+        const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
+        const summary = observation.task.child_tasks_summary;
+
+        assert.deepEqual(Object.keys(summary).sort(), ['blocked', 'complete', 'executing', 'failed', 'pending', 'planned', 'selected', 'total', 'verified']);
+        assert.deepEqual(summary, { total: childIds.length, pending: 3, selected: 3, planned: 2, executing: 2, verified: 2, complete: 2, failed: 2, blocked: 2 });
+        assert.equal(observation.task.child_tasks.length, MAX_CHILD_TASK_OBSERVATIONS);
+        assert.equal(observation.task.child_tasks.some(child => child.request_id === 'deepseek-runtime-child-summary-unrelated'), false);
+        assert.equal(JSON.stringify(summary).includes(childIds[0]), false);
+        assert.equal(JSON.stringify(summary).includes('authorization'), false);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('parent tasks without children omit the child-task summary', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-child-summary-empty-parent';
+        createDeepSeekReviewTask(parentRequestId);
+        const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
+        assert.equal(observation.task.child_tasks, undefined);
+        assert.equal(observation.task.child_tasks_summary, undefined);
+        taskRegistry.resetRegistry();
+    });
+
     await test('get_task includes bounded sanitized child observations without changing continuation authority', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-lineage-parent';
@@ -784,6 +833,7 @@ function rawRequest(port, headers, body) {
 
         assert.equal(result.message.content, 'Observed child tasks.');
         assert.equal(observation.task.child_tasks.length, MAX_CHILD_TASK_OBSERVATIONS);
+        assert.deepEqual(observation.task.child_tasks_summary, { total: MAX_CHILD_TASK_OBSERVATIONS + 1, pending: MAX_CHILD_TASK_OBSERVATIONS - 1, selected: 0, planned: 0, executing: 0, verified: 0, complete: 0, failed: 1, blocked: 1 });
         assert.deepEqual(observation.task.child_tasks.map(child => child.request_id), childIds.slice(0, MAX_CHILD_TASK_OBSERVATIONS));
         assert.equal(observation.task.child_tasks.some(child => child.request_id === 'deepseek-runtime-unrelated-task'), false);
         assert.deepEqual(observation.task.child_tasks[0].lineage, { parent_request_id: parentRequestId, superseded_by: null, cancelled: false });
