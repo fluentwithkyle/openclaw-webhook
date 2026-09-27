@@ -1,9 +1,13 @@
 const { dispatch: kiloDispatch } = require('../poc/kilo-transport');
 const { validate } = require('../poc/acp-engine');
 const geminiBuilderTrigger = require('../poc/gemini-builder-trigger');
+const geminiTrigger = require('../poc/gemini-trigger');
 
 const TARGET_KILO = 'Kilo';
 const TARGET_GEMINI_BUILDER = 'Gemini Builder';
+const TARGET_GEMINI = 'Gemini';
+const TARGET_SECURITY_SPECIALIST = 'Security Specialist';
+const TARGET_UTILITY_SPECIALIST = 'Utility Specialist';
 
 // Dispatcher for Kilo-targeted commands. Defaults to the existing Kilo
 // transport and is overridable (e.g. for tests) via setDispatcher.
@@ -86,6 +90,50 @@ async function dispatchBuilder(command) {
     };
 }
 
+async function dispatchReview(command) {
+    const v = validate(command);
+    if (v.status !== 'SUCCESS') {
+        return {
+            request_id: command.request_id,
+            status: 'BLOCKED',
+            error: `Execution blocked: ${v.error}`
+        };
+    }
+
+    const result = await geminiTrigger.dispatchGemini(
+        command.request_id,
+        command.task,
+        command.repository,
+        command.base_branch,
+        null,
+        process.env.ORCHESTRATOR_GH_TOKEN,
+        typeof command.verification === 'string' ? command.verification : JSON.stringify(command.verification || ''),
+        command.task_mode,
+        command.authorization.capabilities,
+        command.constraints.permitted_paths
+    );
+
+    if (result.success) {
+        return {
+            request_id: command.request_id,
+            status: 'SUCCESS',
+            message: result.message,
+            invocation_details: { statusCode: result.status_code }
+        };
+    }
+
+    return {
+        request_id: command.request_id,
+        status: 'FAILED',
+        error: result.error,
+        diagnostics: {
+            stage: result.stage || 'dispatch',
+            category: result.category || 'dispatch_failed',
+            status_code: result.status_code
+        }
+    };
+}
+
 // Target-aware dispatcher. Routes an already-validated ACP command to the
 // transport selected by its `target` field:
 //   - "Kilo"          -> existing Kilo transport (behavior preserved)
@@ -98,6 +146,9 @@ function dispatch(command) {
     }
     if (target === TARGET_GEMINI_BUILDER) {
         return dispatchBuilder(command);
+    }
+    if (target === TARGET_GEMINI || target === TARGET_SECURITY_SPECIALIST || target === TARGET_UTILITY_SPECIALIST) {
+        return dispatchReview(command);
     }
     return Promise.resolve({
         request_id: command && command.request_id,
@@ -119,5 +170,8 @@ module.exports = {
     setDispatcher,
     dispatch,
     TARGET_KILO,
-    TARGET_GEMINI_BUILDER
+    TARGET_GEMINI_BUILDER,
+    TARGET_GEMINI,
+    TARGET_SECURITY_SPECIALIST,
+    TARGET_UTILITY_SPECIALIST
 };
