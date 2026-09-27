@@ -328,6 +328,32 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
     throw new RuntimeError(400, 'TOOL_LOOP_BLOCKED', 'The model exceeded the tool-call limit');
 }
 
+function sendStreamingCompletion(res, message, model) {
+    const completionId = `chatcmpl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const created = Math.floor(Date.now() / 1000);
+    const writeEvent = payload => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    const metadata = { id: completionId, object: 'chat.completion.chunk', created };
+
+    res.status(200).set({
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive'
+    });
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+    writeEvent({
+        ...metadata,
+        model,
+        choices: [{ index: 0, delta: { role: 'assistant', content: message.content }, finish_reason: null }]
+    });
+    writeEvent({
+        ...metadata,
+        model,
+        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }]
+    });
+    res.end('data: [DONE]\n\n');
+}
+
 function createDeepSeekRuntimeHandler(options = {}) {
     return async (req, res) => {
         try {
@@ -336,6 +362,9 @@ function createDeepSeekRuntimeHandler(options = {}) {
                 env: options.env || process.env,
                 httpClient: options.httpClient || axios
             });
+            if (req.body && req.body.stream === true) {
+                return sendStreamingCompletion(res, result.message, req.body.model);
+            }
             return res.status(200).json({
                 choices: [{ message: result.message }],
                 tool_iterations: result.iterations
@@ -364,5 +393,6 @@ module.exports = {
     getRuntimeConfig,
     normalizeMessages,
     normalizeMessage,
-    runDeepSeekConversation
+    runDeepSeekConversation,
+    sendStreamingCompletion
 };
