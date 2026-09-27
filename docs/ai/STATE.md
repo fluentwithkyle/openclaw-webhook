@@ -977,3 +977,8 @@ Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRU
 **Status:** IMPLEMENTED / AGENT-REPORTED VERIFICATION.
 
 The existing DeepSeek parent observation now adds `child_tasks_summary` only when `TaskRegistry.getTasksByParent()` returns children. This bounded, read-only object contains only `total` and counts for `pending`, `selected`, `planned`, `executing`, `verified`, `complete`, `failed`, and `blocked`, computed from all authoritative TaskRegistry children before the unchanged 10-item sanitized `child_tasks` display bound. It does not expose child identifiers, reports, credentials, authorization material, or payloads, and does not change continuation, lineage, routing, Director authorization, lifecycle transitions, the two-operation control plane, or `MAX_TOOL_ITERATIONS = 3`.
+
+
+## Increment 4.5 Final Verification — 2026-09-27
+
+**TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001** independently inspected merged PR #238 on main at `7b6b5b312439bd7ba724d8bf02a6e63fd77dabba`. Classification: **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED**. The implementation derives the read-only `child_tasks_summary` from the complete TaskRegistry child set, preserves the 10-item detailed child bound, and introduces no authority or lifecycle changes. Codex's focused/full test results remain **AGENT-REPORTED VERIFICATION** because coordinator runtime execution was unavailable and the merged commit has no exposed CI status.
