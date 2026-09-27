@@ -256,3 +256,12 @@ The existing two-operation `control_plane`, `MAX_TOOL_ITERATIONS=3`, TaskRegistr
 **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.** PR #241 is merged to main as `5a733ff0a16a60193932dd7044dbaee3579f335e`. Independent source inspection confirms `verification_reconciliation_summary` is a read-only projection derived from existing `INDEPENDENT_VERIFICATION` evidence and existing reconciliation objects in agent execution/evidence reports. Existing sanitization/bounds, observation projections, two control-plane operations, MAX_TOOL_ITERATIONS=3, TaskRegistry/dispatcher/orchestrator, lineage, Director authorization, and server-derived authority remain intact. No second control plane, executor, retry loop, alternate state store, or authority path was introduced.
 
 PR-reported focused/full tests remain **AGENT-REPORTED VERIFICATION**; GitHub exposes no CI workflow run for the merge commit and independent runtime execution remains blocked. Durable record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-VERIFICATION-RECONCILIATION-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
+
+
+## Increment 4.9 Final Verification — 2026-09-27
+
+**IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.** PR #242 is merged to main as `6fb6b4a17d1085cd665fa0ba55a55f60501e35da`. Independent source inspection confirms the optional `specialist_routing_summary` reuses existing server-side specialist routing and reports stable routing classification, authoritative dispatch status, and bounded/sanitized specialist/lane observations. SECURITY, UTILITY, IMPLEMENTATION, REVIEW, and HUMAN_REVIEW routing semantics are covered by the implementation tests.
+
+The existing two-operation control plane, `MAX_TOOL_ITERATIONS=3`, TaskRegistry/dispatcher/orchestrator, lineage, Director authorization, and server-derived authority remain unchanged. No second control plane, executor, state store, retry path, or authority mechanism was introduced. PR-reported focused/full tests remain agent evidence; GitHub exposes no CI status for the merge commit and independent runtime execution remains blocked.
+
+Final record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTING-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
