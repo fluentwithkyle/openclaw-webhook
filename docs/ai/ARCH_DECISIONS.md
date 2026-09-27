@@ -582,11 +582,11 @@ The runtime already had one model-facing `control_plane`, bounded `get_task` obs
 
 ### Decision
 
-The existing `get_task` handler remains the sole result-observation path. It now attaches a server-derived continuation classification based only on current TaskRegistry lifecycle, cancellation/supersession lineage, and `INDEPENDENT_VERIFICATION` evidence; it also reports whether the task was submitted during the current runtime execution. Only a `COMPLETE` task with independent-verification evidence is eligible. The runtime records that observed classification locally for the bounded loop, rechecks current TaskRegistry facts, then calls the existing `validateLineageForCreate()` before any child submission.
+The existing `get_task` handler remains the sole result-observation path. It attaches a server-derived continuation classification based only on current TaskRegistry lifecycle, cancellation/supersession lineage, and `INDEPENDENT_VERIFICATION` evidence; it also reports whether the task was submitted during the current runtime execution. After successful `request_task` submission, the runtime automatically invokes that same observation projection once for the submitted request and returns it in the existing tool result. Only a `COMPLETE` task with independent-verification evidence is eligible. The runtime records that observed classification locally for the bounded loop, rechecks current TaskRegistry facts, then calls the existing `validateLineageForCreate()` before any child submission.
 
 ### Rationale
 
-This supplies sanitized result context to DeepSeek in the existing tool message while retaining the current loop, task identity, TaskRegistry, projection, dispatcher, orchestrator, and ACP boundary. Local same-execution correlation avoids a new persistence mechanism.
+This supplies sanitized result context to DeepSeek automatically in the existing `request_task` tool message while retaining the current loop, task identity, TaskRegistry, projection, dispatcher, orchestrator, and ACP boundary. The single immediate observation is not polling and local same-execution correlation avoids a new persistence mechanism.
 
 ### Consequences
 

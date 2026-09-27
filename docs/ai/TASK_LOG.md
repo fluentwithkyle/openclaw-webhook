@@ -2607,3 +2607,17 @@ The reconciled documentation distinguishes:
 **Reconciliation**: Current-state documentation was updated to distinguish implementation/static verification from runtime execution status. Historical failed/blocked records were preserved.
 
 **Research Record**: `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-BOUNDED-RESULT-DRIVEN-CONTINUATION-FINAL-VERIFY-RECONCILE-001.md`
+
+---
+
+## 2026-09-27 | TASK-CODEX-DEEPSEEK-AUTOMATIC-RESULT-CONSUMPTION-IMPLEMENT-001
+
+**Task**: Automatically consume a submitted specialist task's bounded same-execution result context so DeepSeek can make its next bounded decision without a separate human message.
+
+**Outcome**: IMPLEMENTED / VERIFIED. `request_task` now reuses the existing `get_task` TaskRegistry projection and server-derived continuation classification immediately after coordinator submission. The next model turn receives the sanitized observation in the existing tool result. There is no polling: the runtime performs one immediate TaskRegistry read within the existing `MAX_TOOL_ITERATIONS = 3` loop.
+
+**Authority and security boundary**: `control_plane` still exposes only `request_task` and `get_task`; TaskRegistry remains the sole state authority; the existing coordinator, dispatcher, and orchestrator remain authoritative. Specialist routing and all ACP authority fields remain server-derived. COMPLETE plus `INDEPENDENT_VERIFICATION` remains the sole eligible continuation state, current registry state is rechecked before child creation, and `validateLineageForCreate()` remains final lineage authority. Sanitized projections prevent credentials, secrets, raw stack traces, and authority-bearing fields from entering model-visible context.
+
+**Verification**: Focused runtime coverage confirms automatic projection reuse, same-execution correlation, classification, sanitization, and next-turn model consumption; required focused regressions and `npm test` passed.
+
+**Commit Reference**: `e0eb11887c5968aac34744df229e6e383fdacd8e`.
