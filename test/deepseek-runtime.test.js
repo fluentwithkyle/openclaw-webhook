@@ -778,6 +778,7 @@ function rawRequest(port, headers, body) {
         assert.equal(observation.task.child_tasks, undefined);
         assert.equal(observation.task.child_tasks_summary, undefined);
         assert.equal(observation.task.child_diagnostics_summary, undefined);
+        assert.equal(observation.task.workflow_completion_summary, undefined);
         taskRegistry.resetRegistry();
     });
 
@@ -847,6 +848,90 @@ function rawRequest(port, headers, body) {
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
         assert(observation.task.child_tasks_summary);
         assert.equal(observation.task.child_diagnostics_summary, undefined);
+        assert.equal(observation.task.workflow_completion_summary, undefined);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('workflow completion summary reports all-success terminal workflows with bounded sanitized highlights', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-workflow-success-parent';
+        createDeepSeekReviewTask(parentRequestId);
+        for (let index = 0; index < MAX_REPORT_HIGHLIGHTS + 1; index++) {
+            const childRequestId = `deepseek-runtime-workflow-success-${index}`;
+            completeDeepSeekReviewTask(childRequestId);
+            const child = taskRegistry.getTask(childRequestId);
+            child.parent_request_id = parentRequestId;
+            assert.equal(taskRegistry.updateAgentResult(childRequestId, 'Gemini Builder', {
+                status: 'success', execution_id: `${childRequestId}-execution`,
+                report: { summary: `Completed ${index}: token completion-token-${index}`, authorization: 'Bearer hidden' }
+            }).success, true);
+        }
+        const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
+        const summary = observation.task.workflow_completion_summary;
+        assert.deepEqual(summary.terminal_state_counts, { complete: MAX_REPORT_HIGHLIGHTS + 1, failed: 0, blocked: 0, cancelled: 0, superseded: 0 });
+        assert.equal(summary.outcome, 'ALL_SUCCESS');
+        assert.equal(summary.total_children, MAX_REPORT_HIGHLIGHTS + 1);
+        assert.equal(summary.completion_highlights.length, MAX_REPORT_HIGHLIGHTS);
+        assert(summary.completion_highlights.every(highlight => highlight.source === 'agent_commentary' && highlight.text.length <= MAX_REPORT_HIGHLIGHT_LENGTH));
+        assert.equal(JSON.stringify(summary).includes('completion-token'), false);
+        assert.equal(JSON.stringify(summary).includes('hidden'), false);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('workflow completion summary distinguishes mixed, failed, blocked, and cancelled registry outcomes', async () => {
+        const observeTerminalWorkflow = (suffix, statuses) => {
+            taskRegistry.resetRegistry();
+            const parentRequestId = `deepseek-runtime-workflow-${suffix}-parent`;
+            createDeepSeekReviewTask(parentRequestId);
+            for (const [index, status] of statuses.entries()) {
+                const childRequestId = `deepseek-runtime-workflow-${suffix}-${index}`;
+                createDeepSeekReviewTask(childRequestId);
+                const child = taskRegistry.getTask(childRequestId);
+                child.parent_request_id = parentRequestId;
+                if (status === 'COMPLETE') {
+                    assert.equal(taskRegistry.addEvidence(childRequestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+                    for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE']) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+                } else if (status === 'CANCELLED') {
+                    child.lineage.cancelled = true;
+                } else if (status === 'SUPERSEDED') {
+                    child.lineage.superseded_by = `${childRequestId}-replacement`;
+                } else {
+                    for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+                }
+            }
+            return observeTaskForDeepSeek(parentRequestId, new Set(), new Map()).task.workflow_completion_summary;
+        };
+        const mixed = observeTerminalWorkflow('mixed', ['COMPLETE', 'FAILED', 'BLOCKED']);
+        assert.equal(mixed.outcome, 'PARTIAL_SUCCESS');
+        assert.deepEqual(mixed.terminal_state_counts, { complete: 1, failed: 1, blocked: 1, cancelled: 0, superseded: 0 });
+        assert.equal(observeTerminalWorkflow('failed', ['FAILED']).outcome, 'FAILED');
+        assert.equal(observeTerminalWorkflow('blocked', ['BLOCKED']).outcome, 'BLOCKED');
+        const cancelled = observeTerminalWorkflow('cancelled', ['CANCELLED', 'SUPERSEDED']);
+        assert.equal(cancelled.outcome, 'MIXED_TERMINAL');
+        assert.deepEqual(cancelled.terminal_state_counts, { complete: 0, failed: 0, blocked: 0, cancelled: 1, superseded: 1 });
+        taskRegistry.resetRegistry();
+    });
+
+    await test('workflow completion summary aggregates terminal children beyond the detailed observation cap', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-workflow-cap-parent';
+        createDeepSeekReviewTask(parentRequestId);
+        for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS + 1; index++) {
+            const childRequestId = `deepseek-runtime-workflow-cap-${index}`;
+            createDeepSeekReviewTask(childRequestId);
+            taskRegistry.getTask(childRequestId).parent_request_id = parentRequestId;
+            const status = index === MAX_CHILD_TASK_OBSERVATIONS ? 'FAILED' : 'COMPLETE';
+            if (status === 'COMPLETE') {
+                assert.equal(taskRegistry.addEvidence(childRequestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+                for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE']) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+            } else {
+                for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+            }
+        }
+        const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
+        assert.equal(observation.task.child_tasks.length, MAX_CHILD_TASK_OBSERVATIONS);
+        assert.equal(observation.task.workflow_completion_summary.outcome, 'PARTIAL_SUCCESS');
+        assert.deepEqual(observation.task.workflow_completion_summary.terminal_state_counts, { complete: MAX_CHILD_TASK_OBSERVATIONS, failed: 1, blocked: 0, cancelled: 0, superseded: 0 });
         taskRegistry.resetRegistry();
     });
 
