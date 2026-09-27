@@ -1,7 +1,7 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-09-27
-**Updated By**: Gemini — TASK-GEMINI-DEEPSEEK-NEXT-COORDINATOR-INCREMENT-RESEARCH-005 — researched and documented Increment 4.5 (Child-Task Aggregate Progress & Status Summary).
+**Updated By**: Codex — TASK-CODEX-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-IMPLEMENT-001 — implemented Increment 4.5 (Child-Task Aggregate Progress & Status Summary).
 ---
 
 ## Project Status: ACTIVE (Transitional)
@@ -46,6 +46,7 @@ information; it exposes no authority fields. **Director Authorization Architectu
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | TASK-CODEX-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED; AGENT-REPORTED VERIFICATION** | Codex | Increment 4.4 adds bounded, read-only `failure_summary` and `blocked_summary` projections beside unchanged raw sanitized terminal details. Summaries expose only matching recorded agent execution status, recorded blocker counts, and bounded sanitized agent commentary; missing diagnostic evidence remains absent. It preserves the two-operation control plane, the 10-child bound, server-derived continuation, and Director authorization. |
+| TASK-CODEX-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED; AGENT-REPORTED VERIFICATION** | Codex | Increment 4.5 adds informational `child_tasks_summary` only for parents with children. It counts all TaskRegistry children by authoritative lifecycle status before the unchanged 10-child sanitized detail bound, without exposing child payloads or changing authority, continuation, lineage, routing, or lifecycle behavior. |
 | TASK-CODEX-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Added exactly one Director approval issuance path authenticated by `DIRECTOR_APPROVAL_SECRET`; approvals are server-held, 15-minute, SHA-256 scope-bound, and consumed once at consequential coordinator/Builder registration. Parent lineage and component authentication do not confer authority; cancellation and supersession revoke matching pending approvals; the DeepSeek REVIEW/read_only/`poc/` boundary is unchanged. Verified by the Phase 3.2 final independent regression execution. |
 | TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFICATION FAILED** | Codex | Superseded by the correction task after independent verification found unsupported specialist transport and Builder command-construction defects. |
 | TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-CORRECTION-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Codex | Correction commit `11d057bc756739f111aab9c0189108ca2e678e14` was independently verified by TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-FINAL-VERIFY-RECONCILE-001: focused, relevant regression, and full-suite tests passed; the report is filed at `docs/ai/gemini-acp-report.json`. |
@@ -970,3 +971,9 @@ The existing DeepSeek task observation projection now adds status-scoped, inform
 Verified main HEAD: `323694dd33356f70600a5a2c7dfbec3e5be89a67` (PR #237 merged). Direct source inspection confirms status-scoped bounded `failure_summary`/`blocked_summary`, sanitization, preserved raw terminal projections, 10-child observation inheritance, exactly two model-facing operations, MAX_TOOL_ITERATIONS=3, and unchanged continuation, lineage, TaskRegistry, dispatcher/orchestrator, and Director-authorization boundaries. Codex's 46/46 focused and full-suite results remain agent evidence; Node/npm execution and independent CI evidence were unavailable to this coordinator.
 
 Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001.md`.
+
+### Increment 4.5 — Child-Task Aggregate Progress & Status Summary
+
+**Status:** IMPLEMENTED / AGENT-REPORTED VERIFICATION.
+
+The existing DeepSeek parent observation now adds `child_tasks_summary` only when `TaskRegistry.getTasksByParent()` returns children. This bounded, read-only object contains only `total` and counts for `pending`, `selected`, `planned`, `executing`, `verified`, `complete`, `failed`, and `blocked`, computed from all authoritative TaskRegistry children before the unchanged 10-item sanitized `child_tasks` display bound. It does not expose child identifiers, reports, credentials, authorization material, or payloads, and does not change continuation, lineage, routing, Director authorization, lifecycle transitions, the two-operation control plane, or `MAX_TOOL_ITERATIONS = 3`.

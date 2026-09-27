@@ -47,6 +47,8 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 ## Implementation Status Note
 
+Increment 4.5 from `TASK-GEMINI-DEEPSEEK-NEXT-COORDINATOR-INCREMENT-RESEARCH-005` is **IMPLEMENTED / AGENT-REPORTED VERIFICATION** by `TASK-CODEX-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-IMPLEMENT-001`: it adds only read-only aggregate lifecycle counts across authoritative TaskRegistry children while preserving the bounded detailed-child projection and all control-plane and authority invariants.
+
 The Phase 3 consequential-authorization and specialist-routing research record remains the architectural basis. Its Phase 3.2 routing increment is **IMPLEMENTED / VERIFIED** under `TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-FINAL-VERIFY-RECONCILE-001`. Correction commit `11d057bc756739f111aab9c0189108ca2e678e14` was independently verified by executed focused, relevant regression, and complete-suite tests; `git diff --check` passed. The canonical verification report is filed at `docs/ai/gemini-acp-report.json`. Historical failure and blocked-verification records remain in `TASK_LOG.md`.
 
 ## Update Rules

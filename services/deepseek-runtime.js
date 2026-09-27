@@ -4,6 +4,7 @@ const taskRegistry = require('../poc/task-registry');
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
 const MAX_CHILD_TASK_OBSERVATIONS = 10;
+const CHILD_TASK_SUMMARY_STATUSES = Object.freeze(['PENDING', 'SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE', 'FAILED', 'BLOCKED']);
 const MAX_REPORT_HIGHLIGHTS = 3;
 const MAX_REPORT_HIGHLIGHT_LENGTH = 240;
 
@@ -276,9 +277,12 @@ function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults
 
     const result = classifyTaskResultForContinuation(task);
     observedTaskResults.set(requestId, result);
-    const childTasks = taskRegistry.getTasksByParent(requestId).slice(0, MAX_CHILD_TASK_OBSERVATIONS).map(projectTaskForDeepSeek);
+    const allChildTasks = taskRegistry.getTasksByParent(requestId);
     const projection = projectTaskForDeepSeek(task);
-    if (childTasks.length > 0) projection.child_tasks = childTasks;
+    if (allChildTasks.length > 0) {
+        projection.child_tasks_summary = summarizeChildTaskStatuses(allChildTasks);
+        projection.child_tasks = allChildTasks.slice(0, MAX_CHILD_TASK_OBSERVATIONS).map(projectTaskForDeepSeek);
+    }
     return {
         status: 'found',
         task: projection,
@@ -287,6 +291,18 @@ function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults
             submitted_in_this_execution: submittedTaskIds.has(requestId)
         }
     };
+}
+
+function summarizeChildTaskStatuses(childTasks) {
+    const summary = CHILD_TASK_SUMMARY_STATUSES.reduce((counts, status) => ({ ...counts, [status.toLowerCase()]: 0 }), {
+        total: childTasks.length
+    });
+    for (const childTask of childTasks) {
+        if (CHILD_TASK_SUMMARY_STATUSES.includes(childTask.status)) {
+            summary[childTask.status.toLowerCase()]++;
+        }
+    }
+    return summary;
 }
 
 function sanitizeReport(report) {
