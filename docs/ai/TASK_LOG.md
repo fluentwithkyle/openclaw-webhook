@@ -2491,3 +2491,15 @@ The reconciled documentation distinguishes:
 **Commit Reference**: Recorded in the task completion report.
 
 | TASK-CODEX-DEEPSEEK-PHASE-2-BOUNDED-LINEAGE-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED** | Codex | Added optional bounded `parent_request_id` to the existing DeepSeek `request_task` path and removed the model-facing `target` input. The runtime validates parent lineage using the existing TaskRegistry before coordinator submission; invalid, nonexistent, cancelled, and superseded parents fail closed. Child authority remains server-derived (`fluentwithkyle/openclaw-webhook`, `main`, Gemini Builder, REVIEW, read_only, `poc/`), and Phase 1 lineage observation remains intact. No new operation, control plane, registry, dispatcher, or authority elevation. Focused tests and the full `npm test` suite passed. Implementation commit: `e8ecb49097a9efb531df658848485fdd36888183`. |
+
+---
+
+## 2026-09-27 | TASK-CODEX-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-IMPLEMENT-001
+
+**Task**: Implement the Phase 3.1 Director authorization infrastructure using the established TaskRegistry and ACP control plane.
+
+**Outcome**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION. Added the sole authenticated `POST /poc/director/approve` issuance path, server-held Director approval records with 15-minute expiry and deterministic SHA-256 scope hashes, and atomic single-use consumption at the existing coordinator and Builder registration boundaries for consequential tasks. TaskRegistry cancellation and supersession revoke matching pending approvals. Component ingress authentication and parent lineage do not confer Director authority. The bounded DeepSeek control-plane operations and REVIEW/read_only/`poc/` authority remain unchanged. Phase 3.2 specialist routing is not implemented.
+
+**Verification**: Codex-focused Director-authorization test and the complete `npm test` suite passed; final diff and whitespace checks were clean. Independent Gemini VERIFY_RECONCILE remains required before any VERIFIED claim.
+
+**Commit Reference**: This commit.

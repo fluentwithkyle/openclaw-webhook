@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const { getDispatcher } = require('../services/transport-provider');
 const orchestrator = require('../poc/orchestrator');
-const { validateExecutionReport, validateACPCommand, VALID_AGENTS } = require('../poc/schemas/acp-schema');
+const { validateExecutionReport, validateACPCompliance, validateDirectorApprovalScope, VALID_AGENTS } = require('../poc/schemas/acp-schema');
 const taskRegistry = require('../poc/task-registry');
 const gitWebhook = require('../poc/github-webhook');
 const { createDeepSeekRuntimeHandler } = require('../services/deepseek-runtime');
@@ -78,6 +78,14 @@ const authenticateBuilderCallback = (req, res, next) => {
             stage: 'authentication blocked',
             error: 'Invalid or missing callback secret'
         });
+    }
+    next();
+};
+
+const authenticateDirectorApproval = (req, res, next) => {
+    const secret = req.headers['x-director-approval-secret'];
+    if (!secret || !process.env.DIRECTOR_APPROVAL_SECRET || secret !== process.env.DIRECTOR_APPROVAL_SECRET) {
+        return res.status(401).json({ request_id: req.body?.request_id || 'unknown', status: 'authentication blocked', stage: 'authentication blocked', error: 'Invalid or missing Director approval secret' });
     }
     next();
 };
@@ -242,7 +250,7 @@ router.post('/builder/dispatch', authenticatePoc, async (req, res) => {
         });
     }
 
-    const validation = validateACPCommand(command);
+    const validation = validateACPCompliance(command);
     if (!validation.valid) {
         return res.status(400).json({
             request_id: command?.request_id || 'unknown',
@@ -253,8 +261,13 @@ router.post('/builder/dispatch', authenticatePoc, async (req, res) => {
     }
 
     try {
-        const result = taskRegistry.createTask(command);
+        const result = taskRegistry.createTaskWithDirectorAuthorization(command);
         if (!result.success) {
+            if (result.authorization) {
+                return res.status(403).json({
+                    request_id: command.request_id, status: 'authorization blocked', stage: 'authorization blocked', error: result.error
+                });
+            }
             if (result.duplicate) {
                 return res.status(409).json({
                     request_id: command.request_id,
@@ -680,7 +693,7 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
 
     const command = buildResult.command;
 
-    const validation = validateACPCommand(command);
+    const validation = validateACPCompliance(command);
     if (!validation.valid) {
         return res.status(400).json({
             request_id: command.request_id,
@@ -693,6 +706,11 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
     try {
         const result = taskRegistry.createTask(command);
         if (!result.success) {
+            if (result.authorization) {
+                return res.status(403).json({
+                    request_id: command.request_id, status: 'authorization blocked', stage: 'authorization blocked', error: result.error
+                });
+            }
             if (result.duplicate) {
                 return res.status(409).json({
                     request_id: command.request_id,
@@ -785,10 +803,19 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
 
 router.post('/deepseek-runtime', authenticateChatboxGateway, createDeepSeekRuntimeHandler());
 
+router.post('/director/approve', authenticateDirectorApproval, (req, res) => {
+    const scope = req.body && req.body.scope;
+    const validation = validateDirectorApprovalScope(scope);
+    if (!validation.valid) return res.status(400).json({ request_id: scope?.request_id || 'unknown', status: 'validation blocked', stage: 'validation blocked', error: validation.error });
+    const result = taskRegistry.createDirectorApproval(scope);
+    if (!result.success) return res.status(400).json({ request_id: scope.request_id, status: 'validation blocked', stage: 'validation blocked', error: result.error });
+    return res.status(201).json({ request_id: scope.request_id, status: 'Director approval issued', approval_id: result.approval.approval_id, expiry: result.approval.expiry, scope_hash: result.approval.scope_hash });
+});
+
 router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) => {
     const command = req.body;
 
-    const validation = validateACPCommand(command);
+    const validation = validateACPCompliance(command);
     if (!validation.valid) {
         return res.status(400).json({
             request_id: command?.request_id || 'unknown',
@@ -799,8 +826,13 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
     }
 
     try {
-        const result = taskRegistry.createTask(command);
+        const result = taskRegistry.createTaskWithDirectorAuthorization(command);
         if (!result.success) {
+            if (result.authorization) {
+                return res.status(403).json({
+                    request_id: command.request_id, status: 'authorization blocked', stage: 'authorization blocked', error: result.error
+                });
+            }
             if (result.duplicate) {
                 return res.status(409).json({
                     request_id: command.request_id,
