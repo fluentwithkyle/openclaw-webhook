@@ -11,7 +11,8 @@ const {
   VALID_TASK_MODES,
   BUILDER_CAPABILITIES,
   RESEARCH_DOCUMENT_CAPABILITIES,
-  getRequiredCapabilitiesForMode
+  getRequiredCapabilitiesForMode,
+  LIFECYCLE_EVIDENCE_SEMANTICS
 } = require('../poc/schemas/acp-schema');
 
 function runTest(name, fn) {
@@ -84,6 +85,12 @@ function test(name, fn) {
 }
 
 // Schema validation tests
+test('Lifecycle evidence semantics distinguish execution reports from independent verification', () => {
+  assert.match(LIFECYCLE_EVIDENCE_SEMANTICS.AGENT_REPORT, /does not independently verify/);
+  assert.match(LIFECYCLE_EVIDENCE_SEMANTICS.INDEPENDENT_VERIFICATION, /EXECUTING -> VERIFIED/);
+  assertDeepEqual(LIFECYCLE_EVIDENCE_SEMANTICS.VERIFIED_OUTCOME_STATUSES, ['VERIFIED', 'COMPLETE']);
+});
+
 test('Valid ACP command passes validation', () => {
   const result = validateACPCommand(validCommand);
   assertEqual(result.valid, true);

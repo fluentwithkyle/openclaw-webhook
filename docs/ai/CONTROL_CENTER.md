@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-09-27
-**Updated By**: Codex — TASK-GEMINI-DEEPSEEK-FULL-COORDINATOR-DOCUMENTATION-PROJECT-001
+**Updated By**: Codex — TASK-CODEX-DEEPSEEK-COORDINATOR-CONTRACT-IMPLEMENT-001
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -19,11 +19,13 @@ model-facing tool has `request_task` (server-derived REVIEW/read-only/Gemini
 Builder/`poc/`) and sanitized namespace-constrained `get_task`; ACP, TaskRegistry,
 the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
-**Live evidence**: Director verified a fresh ChatBox Ping displays the Pong response
-through the SSE-compatible runtime. **Next action**: authorize Phase 0 Coordinator
-Contract / Capability Architecture; do not expand runtime tools until its operation,
-evidence, failure, verification, and Kyle-authorization policies are defined. Full
-current state: `STATE.md`; architecture: `ARCHITECTURE.md` §16.6; decision: ADR-018.
+**Phase 0 contract — IMPLEMENTED / VERIFIED**: the runtime policy formalizes the two
+existing operations, server-derived REVIEW/read-only `poc/` authority, sanitized task
+observation, and ACP-owned independent-verification semantics. It remains an
+extensible policy representation, not a second authority system. **Phase 1+ gaps**:
+no observation expansion, workflow decomposition, specialist selection, or
+consequential execution operations. Full current state: `STATE.md`; architecture:
+`ARCHITECTURE.md` §16.6; decisions: ADR-018 and ADR-019.
 
 ---
 
@@ -56,7 +58,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIV
 3. **Render Control Gate / Gatekeeper** — **PROPOSED / TARGET** (not implemented). Render is the future technical Control Gate between ChatGPT and repository execution. Layer 1 (Kilo↔Gemini orchestration stabilization) is prerequisite. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
 4. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
 5. **Automated test suite** — **IMPLEMENTED**. 18 test files with 450 tests covering ACP schema, TaskRegistry, Orchestrator, integration, Gemini trigger, Builder trigger, callbacks, polling, verifier, POC, coordinator, chatbox gateway, and verify-reconcile modes.
-6. **DeepSeek Coordinator Evolution** — **HIGH PRIORITY / ACTIVE**. Bounded runtime foundation is IMPLEMENTED / VERIFIED, including server-derived `request_task`, sanitized namespace-constrained `get_task`, and a Director-verified new-chat Ping/Pong display. Full conversational coordination remains PROPOSED / TARGET; Phase 0 contract is the next action.
+6. **DeepSeek Coordinator Evolution** — **HIGH PRIORITY / ACTIVE**. Bounded runtime foundation is IMPLEMENTED / VERIFIED, including server-derived `request_task`, sanitized namespace-constrained `get_task`, and a Director-verified new-chat Ping/Pong display. Full conversational coordination remains PROPOSED / TARGET; Phase 1+ capability work requires separate authorization.
 7. **Git completion-signal emitter and Path 2** — Signal emitter implemented (Issue #180, commit `7bec058`): `poc/signal-emitter.js` with `poc/signals/<request_id>.json` artifact. **Path 2 recovery IMPLEMENTED / VERIFIED** (Issue #175, commit `030f888`): `recoverTaskFromGitHub()` reconstructs task context from GitHub issue body when TaskRegistry is absent. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`). Architectural direction (Issue #172, ADR-016) APPROVED / PROPOSED / TARGET — fully documented. Remaining gap: **live end-to-end validation (GitHub push ↠ Render webhook ↠ Gemini dispatch) NOT verified**; tests use mocks. Test count discrepancy: signal artifact claims 337 regression (total 378); independently verified actual is 369 regression (total 410). See STATE.md for full details.
 8. **Chatbox → Render live integration gap** — `/poc/chatbox` remains distinct from the DeepSeek runtime endpoint; its prior network-error investigation remains unresolved.
 9. **DeepSeek Runtime response compatibility** — `/poc/deepseek-runtime` now returns OpenAI-compatible SSE for an explicit `stream: true` request: assistant chunk, `finish_reason: stop`, then `data: [DONE]`. The internal bounded tool loop and `control_plane` authority model remain unchanged, and non-streaming requests retain JSON. Focused regression coverage passes. **COMPLETED / LIVE VERIFIED**: Live Director verification confirmed a brand-new ChatBox conversation successfully sent "Ping." and received "Pong! 🏓 I’m here and ready to help. What can I do for you?". New-chat blank response issue is successfully resolved.

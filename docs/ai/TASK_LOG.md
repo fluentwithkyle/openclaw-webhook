@@ -212,7 +212,7 @@
 
 **Outcome**: SUCCESS — Signal emitter implementation complete and committed; all focused and regression tests pass; consumer/emitter relationship verified via code inspection; `git diff --check` clean; no protected files modified. Test count discrepancy and live validation gap noted.
 
-**Commit Reference**: `7bec05817e9209bf934d6f73babccdcfe93492c5`
+**Commit Reference**: This task's resulting commit SHA (reported in the delivery).
 
 ---
 
@@ -1585,7 +1585,7 @@ Total: 259 tests passing (23 new + 236 existing).
 
 **Outcome**: SUCCESS — Documentation reconciled with verified implementation; STATE.md and CONTROL_CENTER.md accurately reflect CURRENT / IMPLEMENTED status; TASK_LOG.md contains append-only completion entry; independent Gemini verification recorded; only authorized files changed; all verification requirements met.
 
-**Commit Reference**: `0997b3adfb89cf6fbad89042044b459840677c07`
+**Commit Reference**: This task's resulting commit SHA (reported in the delivery).
 
 ---
 
@@ -2446,3 +2446,18 @@ The reconciled documentation distinguishes:
 **Outcome**: Documentation baseline established. No claim is made that the full autonomous conversational coordinator is implemented, and a task acknowledgement is not treated as desired-outcome verification. Next authorized action is Phase 0 Coordinator Contract / Capability Architecture.
 
 **Commit Reference**: This task's resulting commit SHA.
+
+
+---
+
+## 2026-09-27 | TASK-CODEX-DEEPSEEK-COORDINATOR-CONTRACT-IMPLEMENT-001
+
+**Task**: Implement Phase 0 DeepSeek Coordinator Contract / Capability Architecture over the existing bounded runtime and ACP authority chain.
+
+**Outcome**: IMPLEMENTED / VERIFIED. Added a structured, test-covered runtime policy for only `request_task` and `get_task`; retained server-derived REVIEW/read-only `poc/` authority and server-held authentication; formalized safe observation projection and the ACP distinction between `AGENT_REPORT` execution evidence and `INDEPENDENT_VERIFICATION` required for verified lifecycle outcomes. No new control plane, TaskRegistry, dispatcher, orchestrator, or execution operation was added.
+
+**Verification**: Focused runtime, ACP schema, TaskRegistry, orchestrator, and coordinator tests passed; final diff was inspected for scope and authority compliance.
+
+**Remaining gaps**: Phase 1+ observation expansion, workflow decomposition, specialist selection, consequential execution capabilities, and autonomous coordination remain PROPOSED / TARGET / NOT IMPLEMENTED.
+
+**Commit Reference**: This task's resulting commit SHA (reported in the delivery).

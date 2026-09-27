@@ -1589,9 +1589,12 @@ only `request_task` and `get_task`.
   and `poc/` permitted paths. It then authenticates to `POST /poc/coordinator` using
   the server-held coordinator secret.
 * `get_task` accepts only a `deepseek-runtime-` request identifier, reads the existing
-  TaskRegistry, and returns a bounded sanitized projection (identity, lifecycle,
-  assignment, timestamps, builder/Gemini status and safe Gemini report fields). It
-  does not expose arbitrary task lookup or credentials.
+  TaskRegistry, and returns a bounded sanitized projection. Its Phase 0 shape covers
+  task identity, lifecycle (including execution-completed versus verified-outcome),
+  current/next agent, next action, execution/result information, verification
+  requirements and sanitized independent-verification evidence, plus failure/blocked
+  information. Prefix restriction is namespace validation, not session binding; it
+  does not expose arbitrary task lookup, credentials, or authority fields.
 * `/poc/coordinator` remains the trusted ingress: it authenticates the request,
   validates ACP, registers the task in the existing TaskRegistry, and dispatches via
   the existing dispatcher/orchestrator lifecycle.
@@ -1611,6 +1614,23 @@ ChatBox → /poc/deepseek-runtime → OpenRouter → DeepSeek
   → bounded control_plane → authenticated /poc/coordinator → ACP validation
   → TaskRegistry → existing dispatcher/orchestrator → specialist lane
 ```
+
+### Phase 0 Coordinator Contract / Capability Architecture (IMPLEMENTED / VERIFIED)
+
+`DEEPSEEK_COORDINATOR_POLICY` in the runtime is a structured, test-covered Phase 0
+contract, not a new control plane. It formalizes only `request_task` and `get_task`;
+server derives repository, base branch, target, `REVIEW` task mode, `read_only`
+capability, `poc/` paths, originator, coordinator authentication context, and
+verification requirement. Model output is validated as intent only and cannot grant
+capabilities, paths, targets, task modes, commits, pushes, or other authority.
+
+ACP lifecycle semantics remain authoritative: an `AGENT_REPORT` records execution
+information only, while `INDEPENDENT_VERIFICATION` is required by existing ACP state
+transitions before `VERIFIED` and `COMPLETE`. A terminal agent report therefore does
+not itself establish a verified outcome. The policy’s extension marker permits later
+Phase 1/2 additions only through future ACP-backed policy changes; workflow
+decomposition, specialist selection, consequential operations, and a new control
+plane are **GAPS / NOT IMPLEMENTED**.
 
 ### Authority Model (Current and Target)
 
