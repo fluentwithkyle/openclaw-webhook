@@ -5,7 +5,9 @@ const http = require('http');
 const {
     CONTROL_PLANE_TOOL,
     DEEPSEEK_COORDINATOR_POLICY,
+    MAX_TOOL_ITERATIONS,
     buildControlPlaneCommand,
+    evaluateContinuationPolicy,
     validateGetTaskArguments,
     projectTaskForDeepSeek,
     createDeepSeekRuntimeHandler,
@@ -39,6 +41,22 @@ async function test(name, fn) {
 
 function providerResponse(message) {
     return { data: { choices: [{ message }] } };
+}
+
+function createDeepSeekReviewTask(requestId) {
+    assert.equal(taskRegistry.createTask({
+        request_id: requestId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Parent review',
+        repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', constraints: { permitted_paths: ['poc/'] },
+        authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle'
+    }).success, true);
+}
+
+function completeDeepSeekReviewTask(requestId) {
+    createDeepSeekReviewTask(requestId);
+    for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus(requestId, status).success, true);
+    assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+    assert.equal(taskRegistry.updateTaskStatus(requestId, 'VERIFIED').success, true);
+    assert.equal(taskRegistry.updateTaskStatus(requestId, 'COMPLETE').success, true);
 }
 
 function coordinatorFailureClient(status, data) {
@@ -117,31 +135,24 @@ function rawRequest(port, headers, body) {
         assert.equal(command.task_mode, 'REVIEW');
     });
 
-    await test('request_task creates a bounded read-only child for a completed parent and preserves observable lineage', async () => {
-        const parentRequestId = 'deepseek-runtime-phase2-parent';
+    await test('observed independently verified task creates a bounded read-only continuation child', async () => {
+        const parentRequestId = 'deepseek-runtime-phase3-parent';
         taskRegistry.resetRegistry();
-        taskRegistry.createTask({
-            request_id: parentRequestId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Parent review',
-            repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', constraints: { permitted_paths: ['poc/'] },
-            authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle'
-        });
-        taskRegistry.updateTaskStatus(parentRequestId, 'SELECTED');
-        taskRegistry.updateTaskStatus(parentRequestId, 'PLANNED');
-        taskRegistry.updateTaskStatus(parentRequestId, 'EXECUTING');
-        taskRegistry.updateTaskStatus(parentRequestId, 'FAILED');
+        completeDeepSeekReviewTask(parentRequestId);
 
         let childCommand;
-        let callCount = 0;
+        let modelCallCount = 0;
         const result = await runDeepSeekConversation({
             messages: [{ role: 'user', content: 'Request the bounded follow-up.' }], env: env(),
             httpClient: { post: async (url, body) => {
-                callCount++;
-                if (callCount === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the parent findings', parent_request_id: parentRequestId }) } }] });
                 if (url === env().DEEPSEEK_COORDINATOR_URL) {
                     childCommand = body;
                     assert.equal(taskRegistry.createTask(body).success, true);
                     return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
                 }
+                modelCallCount++;
+                if (modelCallCount === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: parentRequestId }) } }] });
+                if (modelCallCount === 2) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the parent findings', parent_request_id: parentRequestId }) } }] });
                 return providerResponse({ role: 'assistant', content: 'Follow-up requested.' });
             }}
         });
@@ -155,27 +166,32 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
-    await test('request_task rejects nonexistent, cancelled, and superseded parents using TaskRegistry lineage rules', async () => {
-        const requestWithParent = async parentRequestId => runDeepSeekConversation({
-            messages: [{ role: 'user', content: 'Request follow-up.' }], env: env(),
-            httpClient: { post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review follow-up', parent_request_id: parentRequestId }) } }] }) }
-        });
+    await test('continuation policy rejects invalid, terminal, cancelled, superseded, and insufficiently verified parents', async () => {
         taskRegistry.resetRegistry();
-        await assert.rejects(() => requestWithParent('deepseek-runtime-missing-parent'), error => error.code === 'LINEAGE_VALIDATION_REJECTED' && /does not exist/.test(error.message));
-
-        const command = requestId => ({ request_id: requestId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Parent review', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle' });
-        taskRegistry.createTask(command('deepseek-runtime-cancelled-parent'));
+        const observed = new Set(['deepseek-runtime-missing-parent']);
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-missing-parent', 'deepseek-runtime-child', observed).error, /does not exist/);
+        createDeepSeekReviewTask('deepseek-runtime-cancelled-parent');
         taskRegistry.cancelTask('deepseek-runtime-cancelled-parent', 'cancelled');
-        await assert.rejects(() => requestWithParent('deepseek-runtime-cancelled-parent'), error => error.code === 'LINEAGE_VALIDATION_REJECTED' && /cancelled/.test(error.message));
-
-        taskRegistry.createTask(command('deepseek-runtime-superseded-parent'));
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-cancelled-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-cancelled-parent'])).error, /cancelled/);
+        createDeepSeekReviewTask('deepseek-runtime-superseded-parent');
         assert.equal(taskRegistry.supersedeTask('deepseek-runtime-superseded-parent', 'replacement required').success, true);
-        await assert.rejects(() => requestWithParent('deepseek-runtime-superseded-parent'), error => error.code === 'LINEAGE_VALIDATION_REJECTED' && /superseded/.test(error.message));
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-superseded-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-superseded-parent'])).error, /superseded/);
+        createDeepSeekReviewTask('deepseek-runtime-failed-parent');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-failed-parent', status).success, true);
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-failed-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-failed-parent'])).error, /FAILED/);
+        createDeepSeekReviewTask('deepseek-runtime-blocked-parent');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'BLOCKED']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-blocked-parent', status).success, true);
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-blocked-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-blocked-parent'])).error, /BLOCKED/);
+        createDeepSeekReviewTask('deepseek-runtime-agent-report-parent');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-agent-report-parent', status).success, true);
+        assert.equal(taskRegistry.addEvidence('deepseek-runtime-agent-report-parent', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' }).success, true);
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-agent-report-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-agent-report-parent'])).error, /COMPLETE/);
+        assert.match(evaluateContinuationPolicy('deepseek-runtime-agent-report-parent', 'deepseek-runtime-child', new Set()).error, /prior get_task/);
         taskRegistry.resetRegistry();
     });
 
-    await test('Phase 2 coordinator policy formalizes bounded lineage, authority, and ACP-owned verification', async () => {
-        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 2 bounded lineage');
+    await test('Phase 3 coordinator policy formalizes bounded continuation, authority, and ACP-owned verification', async () => {
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 3 bounded autonomous continuation');
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.model_operations, ['request_task', 'get_task']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities, ['read_only']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths, ['poc/']);
@@ -183,6 +199,32 @@ function rawRequest(port, headers, body) {
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.authorization_boundary.authority, 'ACP and Kyle');
         assert(DEEPSEEK_COORDINATOR_POLICY.authorization_boundary.excluded_capabilities.includes('push'));
         assert.match(DEEPSEEK_COORDINATOR_POLICY.state_semantics.independent_verification, /ACP lifecycle/);
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.continuation.required_parent_status, 'COMPLETE');
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.continuation.required_evidence, 'INDEPENDENT_VERIFICATION');
+        assert.equal(MAX_TOOL_ITERATIONS, 3);
+    });
+
+    await test('server enforces exactly three maximum control-plane tool iterations', async () => {
+        const toolCall = id => providerResponse({ role: 'assistant', content: null, tool_calls: [{
+            id: `call-${id}`, type: 'function', function: {
+                name: 'control_plane',
+                arguments: JSON.stringify({ operation: 'get_task', request_id: `deepseek-runtime-missing-${id}` })
+            }
+        }] });
+        let calls = 0;
+        const withinLimit = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Observe three tasks.' }], env: env(),
+            httpClient: { post: async () => {
+                calls++;
+                return calls <= MAX_TOOL_ITERATIONS ? toolCall(calls) : providerResponse({ role: 'assistant', content: 'Stopped.' });
+            } }
+        });
+        assert.equal(withinLimit.iterations, MAX_TOOL_ITERATIONS);
+        calls = 0;
+        await assert.rejects(() => runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Attempt four observations.' }], env: env(),
+            httpClient: { post: async () => toolCall(++calls) }
+        }), error => error.code === 'TOOL_LOOP_BLOCKED');
     });
 
     await test('tool contract exposes only intent-level fields', async () => {
