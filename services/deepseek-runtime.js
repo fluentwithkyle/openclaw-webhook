@@ -4,9 +4,9 @@ const taskRegistry = require('../poc/task-registry');
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 2;
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
-    phase: 'Phase 1',
+    phase: 'Phase 2 bounded lineage',
     model_operations: Object.freeze(['request_task', 'get_task']),
-    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'target']), target: 'Gemini Builder' }),
+    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']), target: 'Gemini Builder' }),
     get_task: Object.freeze({ model_fields: Object.freeze(['operation', 'request_id']), request_id_prefix: 'deepseek-runtime-' }),
     server_derived_authority: Object.freeze({
         repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', target: 'Gemini Builder',
@@ -37,7 +37,7 @@ const CONTROL_PLANE_TOOL = {
             properties: {
                 operation: { type: 'string', enum: ['request_task', 'get_task'] },
                 objective: { type: 'string', minLength: 1, maxLength: 2000 },
-                target: { type: 'string', enum: ['Gemini Builder'] },
+                parent_request_id: { type: 'string', minLength: 1, maxLength: 100 },
                 request_id: { type: 'string', minLength: 1, maxLength: 100 }
             }
         }
@@ -136,12 +136,16 @@ function buildControlPlaneCommand(args) {
     if (!args || typeof args !== 'object' || Array.isArray(args)) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
     }
-    if (Object.keys(args).length !== 3 || args.operation !== 'request_task' || args.target !== 'Gemini Builder' ||
-        typeof args.objective !== 'string' || args.objective.trim().length === 0 || args.objective.length > 2000) {
+    const hasParentRequestId = Object.prototype.hasOwnProperty.call(args, 'parent_request_id');
+    if (Object.keys(args).length !== (hasParentRequestId ? 3 : 2) || args.operation !== 'request_task' ||
+        typeof args.objective !== 'string' || args.objective.trim().length === 0 || args.objective.length > 2000 ||
+        (hasParentRequestId && (typeof args.parent_request_id !== 'string' || args.parent_request_id.trim().length === 0 ||
+            args.parent_request_id.length > 100 || args.parent_request_id !== args.parent_request_id.trim() ||
+            !args.parent_request_id.startsWith('deepseek-runtime-')))) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
     }
 
-    return {
+    const command = {
         protocol_version: '0.1',
         request_id: `deepseek-runtime-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         source: 'DeepSeek Runtime',
@@ -157,6 +161,8 @@ function buildControlPlaneCommand(args) {
         reporting: 'structured-json',
         originator: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.originator
     };
+    if (hasParentRequestId) command.parent_request_id = args.parent_request_id;
+    return command;
 }
 
 function validateGetTaskArguments(args) {
@@ -351,6 +357,12 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
 
         if (args.operation === 'request_task') {
             const command = buildControlPlaneCommand(args);
+            if (command.parent_request_id) {
+                const lineageCheck = taskRegistry.validateLineageForCreate(command.parent_request_id, command.request_id);
+                if (!lineageCheck.valid) {
+                    throw new RuntimeError(400, 'LINEAGE_VALIDATION_REJECTED', lineageCheck.error);
+                }
+            }
             let coordinatorResponse;
             try {
                 coordinatorResponse = await httpClient.post(config.coordinatorUrl, command, {

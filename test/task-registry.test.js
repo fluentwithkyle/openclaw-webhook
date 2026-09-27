@@ -92,6 +92,33 @@ test('createTask - Gemini Builder target sets current_agent to Gemini Builder', 
   cleanup();
 });
 
+test('createTask - preserves valid lineage and rejects nonexistent or cancelled parents', () => {
+  cleanup();
+  const parent = { ...validCommand, request_id: 'deepseek-runtime-parent', target: 'Gemini Builder' };
+  assertEqual(taskRegistry.createTask(parent).success, true);
+  taskRegistry.updateTaskStatus(parent.request_id, 'SELECTED');
+  taskRegistry.updateTaskStatus(parent.request_id, 'PLANNED');
+  taskRegistry.updateTaskStatus(parent.request_id, 'EXECUTING');
+  taskRegistry.updateTaskStatus(parent.request_id, 'FAILED');
+
+  const child = { ...validCommand, request_id: 'deepseek-runtime-child', target: 'Gemini Builder', parent_request_id: parent.request_id };
+  const childResult = taskRegistry.createTask(child);
+  assertEqual(childResult.success, true);
+  assertEqual(childResult.entry.parent_request_id, parent.request_id);
+
+  const missingResult = taskRegistry.createTask({ ...validCommand, request_id: 'deepseek-runtime-missing-child', parent_request_id: 'deepseek-runtime-missing' });
+  assertEqual(missingResult.success, false);
+  assert(missingResult.error.includes('does not exist'));
+
+  const cancelled = { ...validCommand, request_id: 'deepseek-runtime-cancelled-parent' };
+  taskRegistry.createTask(cancelled);
+  taskRegistry.cancelTask(cancelled.request_id, 'cancelled');
+  const cancelledResult = taskRegistry.createTask({ ...validCommand, request_id: 'deepseek-runtime-cancelled-child', parent_request_id: cancelled.request_id });
+  assertEqual(cancelledResult.success, false);
+  assert(cancelledResult.error.includes('cancelled'));
+  cleanup();
+});
+
 test('getTask - retrieves existing task', () => {
   cleanup();
   taskRegistry.createTask(validCommand);

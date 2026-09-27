@@ -50,7 +50,7 @@ function coordinatorFailureClient(status, data) {
                 return providerResponse({ role: 'assistant', tool_calls: [{
                     id: 'call-1',
                     type: 'function',
-                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'x', target: 'Gemini Builder' }) }
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'x' }) }
                 }] });
             }
             const error = new Error('sensitive coordinator detail');
@@ -99,7 +99,7 @@ function rawRequest(port, headers, body) {
         const calls = [];
         const client = { post: async (url, body, options) => {
             calls.push({ url, body, options });
-            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior', target: 'Gemini Builder' }) } }] });
+            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior' }) } }] });
             if (calls.length === 2) return { data: { status: 'Task registered and dispatched', request_id: body.request_id } };
             return providerResponse({ role: 'assistant', content: 'Review requested.' });
         } };
@@ -117,8 +117,65 @@ function rawRequest(port, headers, body) {
         assert.equal(command.task_mode, 'REVIEW');
     });
 
-    await test('Phase 1 coordinator policy formalizes bounded authority and ACP-owned verification', async () => {
-        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 1');
+    await test('request_task creates a bounded read-only child for a completed parent and preserves observable lineage', async () => {
+        const parentRequestId = 'deepseek-runtime-phase2-parent';
+        taskRegistry.resetRegistry();
+        taskRegistry.createTask({
+            request_id: parentRequestId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Parent review',
+            repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', constraints: { permitted_paths: ['poc/'] },
+            authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle'
+        });
+        taskRegistry.updateTaskStatus(parentRequestId, 'SELECTED');
+        taskRegistry.updateTaskStatus(parentRequestId, 'PLANNED');
+        taskRegistry.updateTaskStatus(parentRequestId, 'EXECUTING');
+        taskRegistry.updateTaskStatus(parentRequestId, 'FAILED');
+
+        let childCommand;
+        let callCount = 0;
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Request the bounded follow-up.' }], env: env(),
+            httpClient: { post: async (url, body) => {
+                callCount++;
+                if (callCount === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the parent findings', parent_request_id: parentRequestId }) } }] });
+                if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                    childCommand = body;
+                    assert.equal(taskRegistry.createTask(body).success, true);
+                    return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
+                }
+                return providerResponse({ role: 'assistant', content: 'Follow-up requested.' });
+            }}
+        });
+        assert.equal(result.message.content, 'Follow-up requested.');
+        assert.equal(childCommand.parent_request_id, parentRequestId);
+        assert.equal(childCommand.target, 'Gemini Builder');
+        assert.equal(childCommand.task_mode, 'REVIEW');
+        assert.deepEqual(childCommand.authorization.capabilities, ['read_only']);
+        assert.deepEqual(childCommand.constraints.permitted_paths, ['poc/']);
+        assert.deepEqual(projectTaskForDeepSeek(taskRegistry.getTask(childCommand.request_id)).lineage, { parent_request_id: parentRequestId, superseded_by: null, cancelled: false });
+        taskRegistry.resetRegistry();
+    });
+
+    await test('request_task rejects nonexistent, cancelled, and superseded parents using TaskRegistry lineage rules', async () => {
+        const requestWithParent = async parentRequestId => runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Request follow-up.' }], env: env(),
+            httpClient: { post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review follow-up', parent_request_id: parentRequestId }) } }] }) }
+        });
+        taskRegistry.resetRegistry();
+        await assert.rejects(() => requestWithParent('deepseek-runtime-missing-parent'), error => error.code === 'LINEAGE_VALIDATION_REJECTED' && /does not exist/.test(error.message));
+
+        const command = requestId => ({ request_id: requestId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Parent review', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle' });
+        taskRegistry.createTask(command('deepseek-runtime-cancelled-parent'));
+        taskRegistry.cancelTask('deepseek-runtime-cancelled-parent', 'cancelled');
+        await assert.rejects(() => requestWithParent('deepseek-runtime-cancelled-parent'), error => error.code === 'LINEAGE_VALIDATION_REJECTED' && /cancelled/.test(error.message));
+
+        taskRegistry.createTask(command('deepseek-runtime-superseded-parent'));
+        assert.equal(taskRegistry.supersedeTask('deepseek-runtime-superseded-parent', 'replacement required').success, true);
+        await assert.rejects(() => requestWithParent('deepseek-runtime-superseded-parent'), error => error.code === 'LINEAGE_VALIDATION_REJECTED' && /superseded/.test(error.message));
+        taskRegistry.resetRegistry();
+    });
+
+    await test('Phase 2 coordinator policy formalizes bounded lineage, authority, and ACP-owned verification', async () => {
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 2 bounded lineage');
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.model_operations, ['request_task', 'get_task']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities, ['read_only']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths, ['poc/']);
@@ -130,16 +187,17 @@ function rawRequest(port, headers, body) {
 
     await test('tool contract exposes only intent-level fields', async () => {
         const properties = CONTROL_PLANE_TOOL.function.parameters.properties;
-        for (const forbidden of ['capabilities', 'permitted_paths', 'authorization', 'repository', 'base_branch']) assert.equal(properties[forbidden], undefined);
+        for (const forbidden of ['capabilities', 'permitted_paths', 'authorization', 'repository', 'base_branch', 'target', 'task_mode']) assert.equal(properties[forbidden], undefined);
+        assert(properties.parent_request_id);
     });
 
     await test('arbitrary authority fields are rejected instead of influencing ACP', async () => {
-        assert.throws(() => buildControlPlaneCommand({ operation: 'request_task', objective: 'x', target: 'Gemini Builder', capabilities: ['push'] }), /not permitted/);
+        assert.throws(() => buildControlPlaneCommand({ operation: 'request_task', objective: 'x', capabilities: ['push'] }), /not permitted/);
     });
 
-    await test('unsupported target and operation fail closed', async () => {
+    await test('model-selected target and unsupported operations fail closed', async () => {
         assert.throws(() => buildControlPlaneCommand({ operation: 'request_task', objective: 'x', target: 'Kilo' }), /not permitted/);
-        assert.throws(() => buildControlPlaneCommand({ operation: 'execute', objective: 'x', target: 'Gemini Builder' }), /not permitted/);
+        assert.throws(() => buildControlPlaneCommand({ operation: 'execute', objective: 'x' }), /not permitted/);
     });
 
     await test('malformed tool arguments fail closed', async () => {
@@ -249,7 +307,7 @@ function rawRequest(port, headers, body) {
         } };
         const conversation = [
             { role: 'user', content: 'Check the calendar' },
-            { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Check calendar', target: 'Gemini Builder' }) } }] },
+            { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Check calendar' }) } }] },
             { role: 'tool', tool_call_id: 'call-1', content: '[{"status":"completed","coordinator":{"request_id":"test-1"}}]' }
         ];
         const result = await runDeepSeekConversation({ messages: conversation, env: env(), httpClient: client });
@@ -550,7 +608,7 @@ function rawRequest(port, headers, body) {
                             type: 'function',
                             function: {
                                 name: 'control_plane',
-                                arguments: JSON.stringify({ operation: 'request_task', objective: 'Inspect code', target: 'Gemini Builder' })
+                                arguments: JSON.stringify({ operation: 'request_task', objective: 'Inspect code' })
                             }
                         }]
                     });
