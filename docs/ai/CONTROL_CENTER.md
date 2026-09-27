@@ -235,6 +235,16 @@ Increment 4.5 is **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED*
 **Final verification record — TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001:** Increment 4.5 is **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED** at main `7b6b5b312439bd7ba724d8bf02a6e63fd77dabba`. Agent-reported focused/full test results remain **AGENT-REPORTED VERIFICATION**; no CI status is exposed for the merged commit. Durable record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
 
 
+## Increment 4.7 Final Verification — 2026-09-27
+
+**IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.** PR #240 is merged to main as `25e149e476d8c66626bb28d159c74aba3c99af`. Independent source inspection confirms parent-level `workflow_completion_summary` aggregates the complete TaskRegistry child collection while the detailed `child_tasks` projection remains capped at 10. `child_tasks_summary` and `child_diagnostics_summary` remain intact. Completion is emitted only after all children reach actual terminal outcomes (`COMPLETE`, `FAILED`, `BLOCKED`, or lineage stop conditions `CANCELLED`/`SUPERSEDED`); `VERIFIED` remains an intermediate lifecycle state.
+
+The implementation preserves the existing two-operation control plane, `MAX_TOOL_ITERATIONS=3`, server-derived authority, TaskRegistry/dispatcher/orchestrator, Director authorization, lineage, and COMPLETE + INDEPENDENT_VERIFICATION continuation boundary. No new control plane, executor, state store, retry path, or authority mechanism was introduced. Highlights reuse existing sanitization and bounds.
+
+PR-reported focused/full test results remain agent evidence. Independent Node/npm execution and CI evidence are unavailable in this environment, so runtime execution remains blocked. Final record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-WORKFLOW-COMPLETION-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
+
+---
+
 ## Increment 4.6 Final Verification — 2026-09-27
 
 **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.** PR #239 is merged to main as `34ad0b16e1361e5de0cbe71a09af92f91375fe44`. Direct source inspection confirms the new read-only `child_diagnostics_summary` aggregates authoritative FAILED/BLOCKED child status across the complete TaskRegistry parent-child collection while the detailed `child_tasks` projection remains capped at 10. Failure and blocker highlights reuse existing structured diagnostic projection, sanitization, and bounds. Diagnostics beyond the first 10 children are covered by implementation tests.
