@@ -1017,3 +1017,16 @@ Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-CHIL
 PR #241 is merged to main at `5a733ff0a16a60193932dd7044dbaee3579f335e`. Direct source inspection confirms the new read-only `verification_reconciliation_summary` is derived from existing `INDEPENDENT_VERIFICATION` evidence and existing reconciliation objects in agent execution/evidence reports, with existing sanitization and bounded-highlight helpers. The existing observation projections, two model-facing control-plane operations, MAX_TOOL_ITERATIONS=3, TaskRegistry/dispatcher/orchestrator, lineage, Director authorization, and server-derived authority boundaries remain unchanged. The implementation diff is limited to `services/deepseek-runtime.js` and `test/deepseek-runtime.test.js`.
 
 PR-reported 55 focused tests and full `npm test` remain **AGENT-REPORTED VERIFICATION**. GitHub exposes no workflow runs for the merged commit, and independent Node/npm execution is unavailable in the coordinator environment. Durable verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-VERIFICATION-RECONCILIATION-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
+
+
+### Increment 4.9 — Specialist Routing & Dispatch Rationale Summary
+
+**Status:** IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.
+
+PR #242 is merged to main as `6fb6b4a17d1085cd665fa0ba55a55f60501e35da`. Direct source inspection confirms the optional read-only `specialist_routing_summary` reuses the existing server-side `routeSpecialistIntent()` policy and exposes stable routing classification, authoritative task dispatch status, and bounded/sanitized assigned specialist/lane information. SECURITY, UTILITY, IMPLEMENTATION, REVIEW, and HUMAN_REVIEW classifications are covered by implementation tests. The summary exposes no authority-bearing fields or raw routing expressions.
+
+Exactly two model-facing control-plane operations (`request_task`, `get_task`) remain, `MAX_TOOL_ITERATIONS=3` remains unchanged, and TaskRegistry/dispatcher/orchestrator, lineage, Director authorization, and server-derived authority remain authoritative. No second control plane, executor, alternate state store, retry path, or authority mechanism was introduced. The implementation diff is limited to `services/deepseek-runtime.js` and `test/deepseek-runtime.test.js`.
+
+PR-reported 56 focused tests and full `npm test` remain **AGENT-REPORTED VERIFICATION**. GitHub exposes no CI status for the merge commit and independent Node/npm execution is unavailable, so runtime execution remains **BLOCKED**.
+
+Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTING-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
