@@ -759,6 +759,12 @@ function rawRequest(port, headers, body) {
         for (const [index, status] of ['FAILED', 'BLOCKED'].entries()) {
             for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal(taskRegistry.updateTaskStatus(childIds[index + 1], transition).success, true);
         }
+        assert.equal(taskRegistry.updateAgentResult(childIds[1], 'Gemini Builder', {
+            status: 'failure', execution_id: 'child-failure', report: { summary: 'Child failure token child-token', blockers: ['Child failure blocker'] }
+        }).success, true);
+        assert.equal(taskRegistry.updateAgentResult(childIds[2], 'Gemini Builder', {
+            status: 'blocked', execution_id: 'child-blocked', report: { summary: 'Child blocked', blockers: ['Child blocker'] }
+        }).success, true);
         taskRegistry.getTask(childIds[3]).lineage.cancelled = true;
         taskRegistry.getTask(childIds[4]).lineage.superseded_by = 'deepseek-runtime-lineage-replacement';
         taskRegistry.persistCache();
@@ -786,6 +792,10 @@ function rawRequest(port, headers, body) {
         assert(observation.task.child_tasks[0].verification.independent_verification.length >= 1);
         assert.equal(JSON.stringify(observation.task.child_tasks[0]).includes('hidden'), false);
         assert.deepEqual(observation.task.child_tasks.slice(1, 5).map(child => child.lifecycle.status), ['FAILED', 'BLOCKED', 'PENDING', 'PENDING']);
+        assert.equal(observation.task.child_tasks[1].failure_summary.observed_facts.report_counts[0].blockers, 1);
+        assert.equal(observation.task.child_tasks[1].blocked_summary, null);
+        assert.equal(observation.task.child_tasks[2].blocked_summary.observed_facts.report_counts[0].blockers, 1);
+        assert.equal(observation.task.child_tasks[2].failure_summary, null);
         assert.equal(observation.task.child_tasks[3].lineage.cancelled, true);
         assert.equal(observation.task.child_tasks[4].lineage.superseded_by, 'deepseek-runtime-lineage-replacement');
         assert.equal(observation.continuation.eligible_for_next_decision, false);
@@ -977,6 +987,46 @@ function rawRequest(port, headers, body) {
 
         const missing = projectTaskForDeepSeek({ request_id: 'deepseek-runtime-missing-evidence', task: 'Unknown', status: 'PENDING', evidence: [] });
         assert.equal(missing.evidence_summary, null);
+    });
+
+    await test('failed and blocked tasks expose status-scoped bounded sanitized diagnostic summaries', async () => {
+        const longBlocker = `token secret-token ${'x'.repeat(MAX_REPORT_HIGHLIGHT_LENGTH + 20)}`;
+        const failed = projectTaskForDeepSeek({
+            request_id: 'deepseek-runtime-failure-summary', task: 'Failed review', status: 'FAILED', evidence: [],
+            builder: { status: 'failure', execution_id: 'builder-failure', report: { summary: 'Build failed: apiKey secret-api-key', blockers: [longBlocker, 'credential secret-credential', 'third blocker', 'fourth blocker'] } },
+            gemini: { status: 'failure', execution_id: 'gemini-failure', report: { summary: 'Review failed', blockers: ['review blocker'] } }
+        });
+        assert.deepEqual(failed.failure_summary.observed_facts.execution, [
+            { agent: 'builder', status: 'failure' }, { agent: 'gemini', status: 'failure' }
+        ]);
+        assert.deepEqual(failed.failure_summary.observed_facts.report_counts, [
+            { agent: 'builder', blockers: 4 }, { agent: 'gemini', blockers: 1 }
+        ]);
+        assert.equal(failed.failure_summary.agent_commentary.blocker_highlights.length, MAX_REPORT_HIGHLIGHTS);
+        assert(failed.failure_summary.agent_commentary.blocker_highlights.every(highlight => highlight.source === 'agent_commentary' && highlight.text.length <= MAX_REPORT_HIGHLIGHT_LENGTH));
+        assert.equal(JSON.stringify(failed.failure_summary).includes('secret-token'), false);
+        assert.equal(JSON.stringify(failed.failure_summary).includes('secret-api-key'), false);
+        assert.equal(JSON.stringify(failed.failure_summary).includes('secret-credential'), false);
+        assert.equal(failed.blocked_summary, null);
+        assert.equal(failed.failure.status, 'FAILED');
+
+        const blocked = projectTaskForDeepSeek({
+            request_id: 'deepseek-runtime-blocked-summary', task: 'Blocked review', status: 'BLOCKED',
+            builder: { status: 'blocked', execution_id: 'builder-blocked', report: { summary: 'Waiting for authorization proof', blockers: ['Director approval_id approval-value is unavailable'] } },
+            evidence: [{ evidence_type: 'AGENT_REPORT', agent: 'Security Specialist', verification_result: 'blocked', report: { summary: 'Blocked by Bearer secret-value', blockers: ['authorization secret-authorization'] } }]
+        });
+        assert.deepEqual(blocked.blocked_summary.observed_facts.execution, [{ agent: 'builder', status: 'blocked' }]);
+        assert.deepEqual(blocked.blocked_summary.observed_facts.report_counts, [
+            { agent: 'builder', blockers: 1 }, { agent: 'Security Specialist', blockers: 1 }
+        ]);
+        assert.equal(JSON.stringify(blocked.blocked_summary).includes('secret-value'), false);
+        assert.equal(JSON.stringify(blocked.blocked_summary).includes('approval-value'), false);
+        assert.equal(blocked.failure_summary, null);
+        assert.equal(blocked.blocked.status, 'BLOCKED');
+
+        const unsupported = projectTaskForDeepSeek({ request_id: 'deepseek-runtime-no-diagnostics', task: 'Unknown failure', status: 'FAILED', evidence: [] });
+        assert.equal(unsupported.failure_summary, null);
+        assert.equal(unsupported.blocked_summary, null);
     });
 
     await test('safe projection separates agent execution reports from verified outcomes and exposes only sanitized evidence', async () => {

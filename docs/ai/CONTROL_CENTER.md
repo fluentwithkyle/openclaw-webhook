@@ -215,3 +215,8 @@ TASK-GEMINI-DEEPSEEK-BOUNDED-RESULT-DRIVEN-CONTINUATION-FINAL-VERIFY-RECONCILE-0
 Current main: `3d0a5519f56e9027bac27089e13133c6c95ca2aa` (PR #236 merged). The bounded `evidence_summary` implementation is structurally consistent with the existing DeepSeek coordinator authority chain. Runtime test results reported by Codex remain agent evidence because the coordinator could not execute Node/npm and GitHub exposes no CI run for the implementation commit.
 
 Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRUCTURED-SPECIALIST-EVIDENCE-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001.md`.
+
+
+### Increment 4.4 — Structured Failure & Blocked Diagnostics
+
+**IMPLEMENTED / VERIFIED:** the existing DeepSeek observation projection now provides bounded, sanitized, status-scoped `failure_summary` and `blocked_summary` fields alongside unchanged raw terminal projections. Summaries expose only recorded matching execution status, blocker counts, and clearly labeled agent commentary; they do not synthesize verification, authority, recovery actions, or continuation eligibility. The existing two operations, `MAX_TOOL_ITERATIONS = 3`, TaskRegistry/dispatcher authority, Director approval boundary, and 10-child observation bound remain unchanged.
