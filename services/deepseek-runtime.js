@@ -3,6 +3,7 @@ const taskRegistry = require('../poc/task-registry');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
+const MAX_CHILD_TASK_OBSERVATIONS = 10;
 
 const SPECIALIST_ROUTING_POLICY = Object.freeze({
     GeminiReviewer: Object.freeze({ lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
@@ -57,6 +58,7 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         max_tool_iterations: MAX_TOOL_ITERATIONS,
         result_classification: 'server-derived from TaskRegistry lifecycle, lineage, and evidence only'
     }),
+    observation: Object.freeze({ max_child_tasks: MAX_CHILD_TASK_OBSERVATIONS }),
     authorization_boundary: Object.freeze({
         authority: 'ACP and Kyle',
         excluded_capabilities: Object.freeze(['modify_files', 'commit', 'push', 'run_tests', 'FAILOVER_EXECUTE', 'BUILDER'])
@@ -272,9 +274,12 @@ function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults
 
     const result = classifyTaskResultForContinuation(task);
     observedTaskResults.set(requestId, result);
+    const childTasks = taskRegistry.getTasksByParent(requestId).slice(0, MAX_CHILD_TASK_OBSERVATIONS).map(projectTaskForDeepSeek);
+    const projection = projectTaskForDeepSeek(task);
+    if (childTasks.length > 0) projection.child_tasks = childTasks;
     return {
         status: 'found',
-        task: projectTaskForDeepSeek(task),
+        task: projection,
         continuation: {
             ...result,
             submitted_in_this_execution: submittedTaskIds.has(requestId)
@@ -559,6 +564,7 @@ module.exports = {
     CONTROL_PLANE_TOOL,
     DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
+    MAX_CHILD_TASK_OBSERVATIONS,
     SPECIALIST_ROUTING_POLICY,
     routeSpecialistIntent,
     RuntimeError,

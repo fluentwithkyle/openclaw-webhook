@@ -6,6 +6,7 @@ const {
     CONTROL_PLANE_TOOL,
     DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
+    MAX_CHILD_TASK_OBSERVATIONS,
     buildControlPlaneCommand,
     evaluateContinuationPolicy,
     classifyTaskResultForContinuation,
@@ -297,6 +298,7 @@ function rawRequest(port, headers, body) {
         assert.match(DEEPSEEK_COORDINATOR_POLICY.state_semantics.independent_verification, /ACP lifecycle/);
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.continuation.required_parent_status, 'COMPLETE');
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.continuation.required_evidence, 'INDEPENDENT_VERIFICATION');
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.observation.max_child_tasks, MAX_CHILD_TASK_OBSERVATIONS);
         assert.equal(MAX_TOOL_ITERATIONS, 3);
     });
 
@@ -727,6 +729,67 @@ function rawRequest(port, headers, body) {
         assert.equal(result.message.content, 'task status received');
     });
 
+    await test('get_task includes bounded sanitized child observations without changing continuation authority', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-lineage-parent';
+        createDeepSeekReviewTask(parentRequestId);
+        const childIds = [];
+        for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS + 1; index++) {
+            const requestId = `deepseek-runtime-lineage-child-${index}`;
+            childIds.push(requestId);
+            assert.equal(taskRegistry.createTask({
+                request_id: requestId, source: 'DeepSeek Runtime', target: 'Gemini', task: `Child review ${index}`,
+                repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW',
+                constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review',
+                originator: 'Kyle'
+            }).success, true);
+            taskRegistry.getTask(requestId).parent_request_id = parentRequestId;
+        }
+        assert.equal(taskRegistry.createTask({
+            request_id: 'deepseek-runtime-unrelated-task', source: 'DeepSeek Runtime', target: 'Gemini', task: 'Unrelated review',
+            repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW',
+            constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', originator: 'Kyle'
+        }).success, true);
+        assert.equal(taskRegistry.updateAgentResult(childIds[0], 'Gemini', {
+            status: 'success', execution_id: 'child-execution', report: { summary: 'verified', token: 'hidden', authorization: 'Bearer hidden' }
+        }).success, true);
+        assert.equal(taskRegistry.addEvidence(childIds[0], 'INDEPENDENT_VERIFICATION', 'Gemini', { summary: 'verified', secret: 'hidden' }).success, true);
+        for (const [index, status] of ['FAILED', 'BLOCKED'].entries()) {
+            for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal(taskRegistry.updateTaskStatus(childIds[index + 1], transition).success, true);
+        }
+        taskRegistry.getTask(childIds[3]).lineage.cancelled = true;
+        taskRegistry.getTask(childIds[4]).lineage.superseded_by = 'deepseek-runtime-lineage-replacement';
+        taskRegistry.persistCache();
+
+        let observation;
+        let calls = 0;
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Observe parent lineage.' }], env: env(),
+            httpClient: { post: async (url, body) => {
+                if (url === env().DEEPSEEK_COORDINATOR_URL) throw new Error('get_task must not dispatch');
+                calls++;
+                if (calls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'observe-parent', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: parentRequestId }) } }] });
+                observation = JSON.parse(body.messages.find(message => message.role === 'tool').content);
+                return providerResponse({ role: 'assistant', content: 'Observed child tasks.' });
+            } }
+        });
+
+        assert.equal(result.message.content, 'Observed child tasks.');
+        assert.equal(observation.task.child_tasks.length, MAX_CHILD_TASK_OBSERVATIONS);
+        assert.deepEqual(observation.task.child_tasks.map(child => child.request_id), childIds.slice(0, MAX_CHILD_TASK_OBSERVATIONS));
+        assert.equal(observation.task.child_tasks.some(child => child.request_id === 'deepseek-runtime-unrelated-task'), false);
+        assert.deepEqual(observation.task.child_tasks[0].lineage, { parent_request_id: parentRequestId, superseded_by: null, cancelled: false });
+        assert.equal(observation.task.child_tasks[0].execution.gemini.result.token, undefined);
+        assert.equal(observation.task.child_tasks[0].execution.gemini.result.authorization, undefined);
+        assert(observation.task.child_tasks[0].verification.independent_verification.length >= 1);
+        assert.equal(JSON.stringify(observation.task.child_tasks[0]).includes('hidden'), false);
+        assert.deepEqual(observation.task.child_tasks.slice(1, 5).map(child => child.lifecycle.status), ['FAILED', 'BLOCKED', 'PENDING', 'PENDING']);
+        assert.equal(observation.task.child_tasks[3].lineage.cancelled, true);
+        assert.equal(observation.task.child_tasks[4].lineage.superseded_by, 'deepseek-runtime-lineage-replacement');
+        assert.equal(observation.continuation.eligible_for_next_decision, false);
+        taskRegistry.resetRegistry();
+    });
+
     await test('multi-turn conversation executes request_task then get_task', async () => {
         let dispatchedRequestId = null;
         let openRouterCallCount = 0;
@@ -878,6 +941,7 @@ function rawRequest(port, headers, body) {
         assert(projectedTask.execution.kilo);
         assert.equal(projectedTask.constraints, undefined);
         assert.equal(projectedTask.authorization, undefined);
+        assert.equal(projectedTask.child_tasks, undefined);
         assert.deepEqual(projectedTask.lineage, { parent_request_id: null, superseded_by: null, cancelled: false });
     });
 
