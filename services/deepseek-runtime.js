@@ -49,7 +49,7 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         specialist_routing: 'deterministic server policy', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
         originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
     }),
-    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary', 'workflow_completion_summary']),
+    observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'verification_reconciliation_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary', 'workflow_completion_summary']),
     state_semantics: Object.freeze({
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
@@ -490,6 +490,54 @@ function projectStructuredEvidenceSummary(evidence, agentExecutions) {
     return Object.keys(summary.observed_facts).length > 0 || summary.agent_commentary ? summary : null;
 }
 
+function projectVerificationReconciliationSummary(evidence, agentExecutions) {
+    const independentVerification = evidence.filter(record => record && record.evidence_type === 'INDEPENDENT_VERIFICATION');
+    const reconciliationSources = [
+        ...Object.entries(agentExecutions).map(([agent, execution]) => ({ agent, report: execution && execution.result })),
+        ...evidence.map(record => ({ agent: record && record.agent, report: record && record.report }))
+    ];
+    const reconciliation = [];
+    let reconciliationCount = 0;
+    const highlights = [];
+    for (const source of reconciliationSources) {
+        const report = sanitizeReport(source.report);
+        const details = report && report.reconciliation;
+        if (!details || typeof details !== 'object' || Array.isArray(details) || typeof details.status !== 'string') continue;
+        const observed = {
+            agent: sanitizeStringValue(String(source.agent || 'Unknown')).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH),
+            status: sanitizeStringValue(details.status).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH)
+        };
+        if (Array.isArray(details.changed_files)) observed.changed_files = details.changed_files.length;
+        reconciliationCount++;
+        if (reconciliation.length < MAX_REPORT_HIGHLIGHTS) reconciliation.push(observed);
+        const highlight = boundedReportHighlight(source.agent, report);
+        if (highlight && highlights.length < MAX_REPORT_HIGHLIGHTS) highlights.push(highlight);
+    }
+    if (independentVerification.length === 0 && reconciliationCount === 0) return null;
+
+    const summary = { observed_facts: {} };
+    if (independentVerification.length > 0) {
+        const outcomes = [];
+        for (const record of independentVerification) {
+            if (typeof record.verification_result !== 'string' || outcomes.length >= MAX_REPORT_HIGHLIGHTS) continue;
+            outcomes.push({
+                agent: sanitizeStringValue(String(record.agent || 'Unknown')).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH),
+                status: sanitizeStringValue(record.verification_result).slice(0, MAX_REPORT_HIGHLIGHT_LENGTH)
+            });
+        }
+        summary.observed_facts.independent_verification = { evidence_count: independentVerification.length };
+        if (outcomes.length > 0) summary.observed_facts.independent_verification.outcomes = outcomes;
+    }
+    if (reconciliation.length > 0) {
+        summary.observed_facts.reconciliation = {
+            count: reconciliationCount,
+            outcomes: reconciliation
+        };
+    }
+    if (highlights.length > 0) summary.agent_commentary = { reconciliation_highlights: highlights };
+    return summary;
+}
+
 function projectStructuredDiagnosticSummary(status, evidence, agentExecutions) {
     const executionStatus = status === 'FAILED' ? 'failure' : 'blocked';
     const sources = [
@@ -545,7 +593,7 @@ function projectTaskForDeepSeek(task) {
     const verifiedOutcome = task.status === 'VERIFIED' || task.status === 'COMPLETE';
     const terminalDetails = { status: task.status, agent_execution: agentExecutions };
 
-    return {
+    const projection = {
         request_id: task.request_id,
         task: task.task,
         lifecycle: {
@@ -577,6 +625,9 @@ function projectTaskForDeepSeek(task) {
         created_at: task.created_at,
         updated_at: task.updated_at
     };
+    const verificationReconciliationSummary = projectVerificationReconciliationSummary(evidence, agentExecutions);
+    if (verificationReconciliationSummary) projection.verification_reconciliation_summary = verificationReconciliationSummary;
+    return projection;
 }
 
 function parseToolArguments(toolCall) {
