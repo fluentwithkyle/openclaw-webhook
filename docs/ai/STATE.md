@@ -1,7 +1,7 @@
 ## Current AI Project State
 
-**Last Updated**: 2026-09-26
-**Updated By**: ChatGPT Coordinator — TASK-CHATGPT-DEEPSEEK-DOCUMENTATION-RECONCILE-002 — reconciled independently verified DeepSeek runtime dispatch/result-retrieval state and corrected prior documentation delivery record.
+**Last Updated**: 2026-09-27
+**Updated By**: Codex — TASK-CODEX-CHATBOX-NEW-CHAT-RESPONSE-COMPATIBILITY-FIX-002 — added OpenAI-compatible SSE responses for explicit runtime streaming requests.
 ---
 
 ## Project Status: ACTIVE (Transitional)
@@ -26,6 +26,7 @@
 |------|--------|-------|-------|
 | DeepSeek Chatbox Runtime Boundary Research (TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001) | **COMPLETED (RESEARCH)** | Gemini | Researched and durably documented the DeepSeek Chatbox runtime boundary and tool-execution architecture (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001.md`). Answered all 8 required verification items: current Chatbox ingress (`POST /poc/chatbox`), current Direct ACP coordinator path (`POST /poc/coordinator`), OpenRouter's role (model proxy and provider router, application-side tool execution), repository absence of server-side DeepSeek/OpenRouter tool execution runtime, exact missing boundary between `tool_call` and coordinator, accuracy of ADR-017, prerequisite for Milestone 0 connectivity testing (baseline ping reachability), and unresolved configuration questions. Updated RESEARCH_INDEX.md, TASK_LOG.md, and STATE.md. No implementation performed. |
 | TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED / LIVE DISPATCH VERIFIED / RESULT RETRIEVAL GAP** | Codex Builder | Server-side OpenRouter/DeepSeek runtime exists at /poc/deepseek-runtime with one bounded control_plane tool. Runtime message normalization correction is at commit 65a8ed3. Live validation established successful read-only Builder dispatch through the existing control-plane path and confirmed asynchronous TaskRegistry/orchestration can progress beyond dispatch. The runtime currently returns the dispatch acknowledgement/task identity rather than retrieving the eventual asynchronous task result for the ChatBox-facing conversation. Result/status retrieval through the existing control plane is PROPOSED / NOT IMPLEMENTED / NOT AUTHORIZED. End-to-end ChatBox success remains unverified. |
+| TASK-CODEX-CHATBOX-NEW-CHAT-RESPONSE-COMPATIBILITY-FIX-002 | **COMPLETED / LIVE VERIFICATION PENDING** | Codex | For `stream: true`, `/poc/deepseek-runtime` now emits OpenAI-compatible SSE `chat.completion.chunk` events containing the final assistant response, a `finish_reason: stop` event, and `data: [DONE]`. The internal non-streaming OpenRouter tool loop and the bounded `control_plane` authority model are unchanged; requests without `stream: true` retain the ordinary JSON response contract. Focused regression coverage passes. Live ChatBox display verification was not performed in this execution. |
 | TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | **COMPLETED** | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit RESEARCH_DOCUMENT branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Root cause of prior 048e9b1 push failure: gemini-builder.yml pushes via the auto-generated GITHUB_TOKEN, which GitHub restricts from pushing .github/workflows/* changes (commit landed locally in the runner but push was rejected); a properly-scoped owner token (Kilo GH_TOKEN) pushes the same workflow-file change successfully. Durable Builder-lane fix (PAT secret for .github/workflows/* pushes) is outside this task's permitted_paths. |
 | Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. 237/289 tests verified post-remediation in pre-Builder state (347 total after Path 2 recovery); **450/450 tests pass across 18 test files** at commit `8a56fe6` (including `gemini-builder-trigger.test.js` with 9 tests). |
 | Gemini Builder execution infrastructure | **IMPLEMENTED / VERIFIED** | Gemini Builder | Complete test coverage: `gemini-builder-trigger.test.js` (9 tests), Builder callback tests (3 in gemini-callback), Builder lifecycle tests in orchestrator, schema tests for BUILDER mode, workflow-expression tests for `gemini-builder.yml`. All 9 Builder-trigger tests pass; full suite: **450/450 tests pass across 18 test files**. Implementation commit `f1e21ec`; tests commit `53dfa23`; merged via `8a56fe6`. |
@@ -692,13 +693,21 @@ Connection check reported: **Connection successful!**
 - **UNKNOWN**: Whether the streaming compatibility concern is the cause of the blank response.
 - **UNKNOWN**: Whether another Chatbox client-side condition prevents the request.
 
-### Streaming Compatibility Concern (Unresolved)
+### Streaming Response Compatibility (Implemented; Live Verification Pending)
 
-**VERIFIED repository state** — The current server runtime (`services/deepseek-runtime.js:180-183`) returns ordinary JSON in the form `{ choices: [{ message: result.message }], tool_iterations: result.iterations }`. It does **NOT** implement an OpenAI SSE streaming response.
+**VERIFIED repository state** — When the incoming request explicitly sets `stream: true`, the runtime now responds as OpenAI-compatible SSE: `Content-Type: text/event-stream`, an assistant `chat.completion.chunk` carrying the completed response content, a terminating `finish_reason: "stop"` chunk, and `data: [DONE]`. The runtime deliberately retains its ordinary JSON response for requests without `stream: true`.
+
+**VERIFIED local regression** — The focused runtime test submits the captured compatibility condition (`Accept: text/event-stream`, `stream: true`, and `Ping.`), parses the SSE response as an OpenAI-compatible client, recovers the expected assistant content, and verifies termination.
+
+**NOT VERIFIED** — A new live ChatBox conversation displaying this post-fix response has not been observed during this execution.
+
+### Streaming Compatibility Concern (Historical)
+
+**Historical pre-fix behavior** — The runtime formerly returned ordinary JSON in the form `{ choices: [{ message: result.message }], tool_iterations: result.iterations }` even for streaming requests. The explicit-streaming behavior is superseded by the SSE implementation above.
 
 **VERIFIED repository state** — Chatbox has an SSE-specific wrapper (`src/shared/models/utils/openai-chat-sse-termination.ts`) that handles streamed OpenAI Chat Completions responses.
 
-This is a **known compatibility concern** — Chatbox's custom OpenAI-compatible provider may expect an SSE streaming response, while the runtime returns non-streaming JSON. However, **this is NOT proven to be the reason** the normal chat request was not observed in Render logs. The streaming concern must be recorded as an unresolved compatibility concern, not as a confirmed root cause. The stronger signal is that no request was observed in Render request logs at all.
+The prior ordinary-JSON behavior was a compatibility concern. Direct Proxyman capture subsequently confirmed that ChatBox reaches the runtime with `stream: true` and accepts `text/event-stream`; this task implements the corresponding SSE response. Live post-fix display verification remains pending.
 
 ### State Progression
 

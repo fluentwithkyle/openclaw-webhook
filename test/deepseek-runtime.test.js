@@ -70,6 +70,18 @@ function request(port, headers, body) {
     });
 }
 
+function rawRequest(port, headers, body) {
+    return new Promise((resolve, reject) => {
+        const req = http.request({ hostname: '127.0.0.1', port, path: '/poc/deepseek-runtime', method: 'POST', headers: { 'Content-Type': 'application/json', ...headers } }, res => {
+            let response = '';
+            res.on('data', chunk => response += chunk);
+            res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: response }));
+        });
+        req.on('error', reject);
+        req.end(JSON.stringify(body));
+    });
+}
+
 (async () => {
     await test('normal OpenRouter response is returned without a coordinator call', async () => {
         let calls = 0;
@@ -357,6 +369,52 @@ function request(port, headers, body) {
     await test('valid structured content parts continue to normalize correctly', async () => {
         const structured = normalizeMessages([{ role: 'user', content: [{ type: 'text', text: 'Hello' }, { type: 'text', text: ' World' }] }]);
         assert.equal(structured[0].content, 'Hello World');
+    });
+
+    await test('streaming request returns an OpenAI-compatible SSE completion for ChatBox', async () => {
+        const app = express();
+        app.use(express.json());
+        app.post('/poc/deepseek-runtime', createDeepSeekRuntimeHandler({
+            env: env(),
+            httpClient: { post: async () => providerResponse({ role: 'assistant', content: "Pong! 🏓 I'm here and ready. What can I help you with?" }) }
+        }));
+        const server = await new Promise(resolve => {
+            const instance = app.listen(3012, () => resolve(instance));
+        });
+        try {
+            const response = await rawRequest(3012, { Accept: 'text/event-stream' }, {
+                model: 'deepseek/deepseek-v4-flash',
+                messages: [{ role: 'user', content: 'Ping.' }],
+                stream: true
+            });
+            assert.equal(response.status, 200);
+            assert.match(response.headers['content-type'], /^text\/event-stream/);
+            const events = response.body.trim().split('\n\n');
+            assert.equal(events.at(-1), 'data: [DONE]');
+            const chunks = events.slice(0, -1).map(event => JSON.parse(event.slice('data: '.length)));
+            const content = chunks.map(chunk => chunk.choices[0].delta.content || '').join('');
+            assert.equal(content, "Pong! 🏓 I'm here and ready. What can I help you with?");
+            assert.equal(chunks.at(-1).choices[0].finish_reason, 'stop');
+        } finally {
+            await new Promise(resolve => server.close(resolve));
+        }
+    });
+
+    await test('non-streaming request retains the JSON response contract', async () => {
+        const response = {};
+        const handler = createDeepSeekRuntimeHandler({
+            env: env(),
+            httpClient: { post: async () => providerResponse({ role: 'assistant', content: 'ordinary JSON response' }) }
+        });
+        await handler({ body: { messages: [{ role: 'user', content: 'hello' }] } }, {
+            status: code => {
+                response.status = code;
+                return { json: body => { response.body = body; } };
+            }
+        });
+        assert.equal(response.status, 200);
+        assert.equal(response.body.choices[0].message.content, 'ordinary JSON response');
+        assert.equal(response.body.tool_iterations, 0);
     });
 
     await test('runtime route accepts custom-header and Bearer gateway authentication while rejecting missing or invalid credentials', async () => {

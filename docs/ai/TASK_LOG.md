@@ -2412,3 +2412,16 @@ The reconciled documentation distinguishes:
 **Verification**: Branch/main state, prior commit changed-file scope, permitted documentation paths, and status distinctions verified; git diff --check to be run before persistence.
 
 **Commit Reference**: Resulting commit SHA reported by this execution.
+
+
+---
+
+## 2026-09-27 | TASK-CODEX-CHATBOX-NEW-CHAT-RESPONSE-COMPATIBILITY-FIX-002
+
+**Task**: Correct the `/poc/deepseek-runtime` response protocol for the verified ChatBox request that sends `stream: true` and accepts `text/event-stream`.
+
+**Outcome**: Implemented the narrow response-boundary fix. Explicit streaming requests now receive OpenAI-compatible SSE `chat.completion.chunk` events containing only the final assistant response content, followed by a `finish_reason: "stop"` event and `data: [DONE]`. Non-streaming requests preserve the pre-existing JSON contract. The internal non-streaming OpenRouter tool loop and bounded `control_plane` authority model were not changed.
+
+**Verification**: `node test/deepseek-runtime.test.js` passed with regression coverage that parses the exact Ping response from SSE and verifies termination. Live ChatBox display verification was not performed.
+
+**Commit Reference**: Recorded in the task completion report.
