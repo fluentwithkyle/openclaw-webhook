@@ -2682,3 +2682,18 @@ The reconciled documentation distinguishes:
 **Research Record**: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`
 
 **Reconciliation**: Current documentation distinguishes implementation, static verification, agent-reported verification, and runtime execution blocked. No architectural decision changed; `ARCH_DECISIONS.md` required no update.
+
+
+## 2026-09-27 | TASK-CHATGPT-DEEPSEEK-CHILD-DIAGNOSTIC-AGGREGATION-FINAL-VERIFY-RECONCILE-001
+
+**Task**: Independently verify and reconcile Increment 4.6 Child Diagnostic Aggregation & Recovery Context after PR #239 merge.
+
+**Verified Main HEAD**: `34ad0b16e1361e5de0cbe71a09af92f91375fe44`.
+
+**Implementation**: PR #239 merged with implementation head `94d25c80be102cbd3be9de1cb4d1b7c5670703f0`. Source inspection confirms complete-child aggregation before the 10-item detailed-child bound, authoritative FAILED/BLOCKED counts, bounded sanitized failure/blocker highlights, omission when no diagnostic children exist, and unrelated-task isolation. Existing `child_tasks_summary`, control-plane surface, continuation, lineage, Director authorization, TaskRegistry authority, and `MAX_TOOL_ITERATIONS=3` remain unchanged.
+
+**Outcome**: **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED**. Codex reported successful focused DeepSeek tests, full `npm test`, relevant regression suites, and `git diff --check`; those results remain agent evidence. Node/npm execution and independent CI evidence were unavailable to this coordinator environment.
+
+**Reconciliation**: STATE.md, CONTROL_CENTER.md, TASK_LOG.md, and RESEARCH_INDEX.md were reconciled to the verified merged state. ARCH_DECISIONS.md required no change because Increment 4.6 extends an existing observation projection without introducing a new architectural authority or decision.
+
+**Research Record**: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-CHILD-DIAGNOSTIC-AGGREGATION-FINAL-VERIFY-RECONCILE-001.md`.

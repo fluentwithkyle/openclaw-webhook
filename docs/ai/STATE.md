@@ -982,3 +982,16 @@ The existing DeepSeek parent observation now adds `child_tasks_summary` only whe
 ## Increment 4.5 Final Verification — 2026-09-27
 
 **TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001** independently inspected merged PR #238 on main at `7b6b5b312439bd7ba724d8bf02a6e63fd77dabba`. Classification: **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED**. The implementation derives the read-only `child_tasks_summary` from the complete TaskRegistry child set, preserves the 10-item detailed child bound, and introduces no authority or lifecycle changes. Codex's focused/full test results remain **AGENT-REPORTED VERIFICATION** because coordinator runtime execution was unavailable and the merged commit has no exposed CI status.
+
+
+### Increment 4.6 — Child Diagnostic Aggregation & Recovery Context
+
+**Status:** IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.
+
+PR #239 is merged to main as `34ad0b16e1361e5de0cbe71a09af92f91375fe44`; the implementation branch head was `94d25c80be102cbd3be9de1cb4d1b7c5670703f0`. Direct source inspection confirms that `observeTaskForDeepSeek()` obtains the complete `TaskRegistry.getTasksByParent(requestId)` collection, computes `child_tasks_summary` and the new read-only `child_diagnostics_summary` before the unchanged 10-item `child_tasks` detail bound, and preserves the existing projection/sanitization helpers.
+
+The new summary reports authoritative FAILED/BLOCKED child counts plus bounded, separately labeled failure/blocker highlights. Existing sanitization and `MAX_REPORT_HIGHLIGHTS` / `MAX_REPORT_HIGHLIGHT_LENGTH` bounds are reused. Tests added to the implementation explicitly exercise diagnostics beyond the first 10 detailed children, unrelated-task isolation, omission for non-diagnostic children, and secret/authority-field sanitization. No control-plane operation, authority path, lifecycle rule, continuation rule, TaskRegistry authority, Director authorization boundary, or `MAX_TOOL_ITERATIONS = 3` behavior changed.
+
+Codex reported focused DeepSeek, full-suite, regression, and `git diff --check` success in PR #239. Those results remain **AGENT-REPORTED VERIFICATION**. Node/npm execution and independent CI evidence are unavailable to this coordinator environment, so runtime execution is **BLOCKED**, not independently verified.
+
+Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-CHILD-DIAGNOSTIC-AGGREGATION-FINAL-VERIFY-RECONCILE-001.md`.

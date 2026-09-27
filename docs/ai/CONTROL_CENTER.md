@@ -233,3 +233,10 @@ Increment 4.5 is **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED*
 
 
 **Final verification record — TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001:** Increment 4.5 is **IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED** at main `7b6b5b312439bd7ba724d8bf02a6e63fd77dabba`. Agent-reported focused/full test results remain **AGENT-REPORTED VERIFICATION**; no CI status is exposed for the merged commit. Durable record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
+
+
+## Increment 4.6 Final Verification — 2026-09-27
+
+**IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED.** PR #239 is merged to main as `34ad0b16e1361e5de0cbe71a09af92f91375fe44`. Direct source inspection confirms the new read-only `child_diagnostics_summary` aggregates authoritative FAILED/BLOCKED child status across the complete TaskRegistry parent-child collection while the detailed `child_tasks` projection remains capped at 10. Failure and blocker highlights reuse existing structured diagnostic projection, sanitization, and bounds. Diagnostics beyond the first 10 children are covered by implementation tests.
+
+The existing two-operation `control_plane`, `MAX_TOOL_ITERATIONS=3`, TaskRegistry/dispatcher/orchestrator authority, Director authorization, lineage, and COMPLETE + INDEPENDENT_VERIFICATION continuation boundary remain unchanged. Codex's reported test results are preserved as agent evidence; independent Node/npm execution and CI evidence remain unavailable. Final record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-CHILD-DIAGNOSTIC-AGGREGATION-FINAL-VERIFY-RECONCILE-001.md`.
