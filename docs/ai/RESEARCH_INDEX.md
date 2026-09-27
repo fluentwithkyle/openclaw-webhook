@@ -41,7 +41,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 ## Implementation Status Note
 
-The Phase 3 consequential-authorization and specialist-routing research record remains the architectural basis. Its Phase 3.2 routing increment is **IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION** by `TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-IMPLEMENT-001`; no new research record was created.
+The Phase 3 consequential-authorization and specialist-routing research record remains the architectural basis. Its Phase 3.2 routing increment is **IMPLEMENTED / VERIFICATION FAILED** under `TASK-CHATGPT-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-VERIFY-RECONCILE-001`; no new research record was created. Independent verification found that the existing dispatcher supports only Kilo and Gemini Builder, leaving the newly classified Security Specialist and Utility Specialist targets without a dispatch transport, and found a Builder-route command-construction defect. A correction implementation task is required before Phase 3.2 can be independently verified.
 
 ## Update Rules
 
