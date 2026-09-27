@@ -52,4 +52,6 @@ The Phase 3 consequential-authorization and specialist-routing research record r
 - Never include secrets, credentials, or sensitive production values in any research record or index entry.
 
 
+- **TASK-CHATGPT-DEEPSEEK-AUTOMATIC-RESULT-CONSUMPTION-FINAL-VERIFY-RECONCILE-001** — Independent source/test review of the merged automatic same-execution result-consumption implementation. Main HEAD `65cdf972c53f176cbea1bfd7d76eece98060cadf` is present and structurally consistent; runtime execution remains BLOCKED because Node/npm repository execution is unavailable. Durable verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-AUTOMATIC-RESULT-CONSUMPTION-FINAL-VERIFY-RECONCILE-001.md`.
+
 - **TASK-GEMINI-DEEPSEEK-BOUNDED-RESULT-DRIVEN-CONTINUATION-FINAL-VERIFY-RECONCILE-001** — Independent source/test review of the merged bounded result-driven continuation implementation. Main HEAD `dec780bc9e9bd3b71a8eff506663780fc96e78a6` verified; authority and continuation boundaries are structurally consistent. Runtime test execution remains UNKNOWN/BLOCKED in the coordinator environment. Durable verification record: `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-BOUNDED-RESULT-DRIVEN-CONTINUATION-FINAL-VERIFY-RECONCILE-001.md`.
