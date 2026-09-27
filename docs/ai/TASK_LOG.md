@@ -2554,3 +2554,23 @@ The reconciled documentation distinguishes:
 **Blocking discrepancy**: This execution environment cannot run the required Node commands or `npm test`: the container cannot reach GitHub, and the connected GitHub interface provides repository read/write operations but no repository shell, workflow-dispatch, or artifact-upload execution. The canonical `gemini-acp-report` artifact therefore could not be filed from this execution.
 **Required completion action**: Execute the specified focused tests, full `npm test`, and `git diff --check` in an environment with repository execution, then file the canonical `gemini-acp-report` artifact. Re-run independent VERIFY_RECONCILE and only then mark Phase 3.2 VERIFIED.
 **Production behavior changed by this reconciliation**: none.
+
+---
+
+## 2026-09-27 | TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-FINAL-VERIFY-RECONCILE-001
+
+**Task**: Complete the final independent execution verification and durable reconciliation of the Phase 3.2 specialist-routing correction against actual current main-branch repository state.
+
+**Verification Result**: **SUCCESS — PHASE 3.2 IMPLEMENTED / VERIFIED**.
+
+**Implementation verified**: Correction commit `11d057bc756739f111aab9c0189108ca2e678e14` is present. Security Specialist and Utility Specialist are server-selected REVIEW/read_only/`poc/` routes that enter the existing target-aware dispatcher and existing Gemini review workflow transport; unavailable review transport returns safe FAILED output without Builder or Kilo fallback. Builder command construction server-derives capabilities, permitted paths, repository, base branch, and activation metadata; the existing Director authorization gate rejects missing approval and permits matching approval dispatch. Kilo is not selected by ordinary model intent and has no new authorization path.
+
+**Executed verification**: `node test/specialist-routing.test.js` passed (1/1); `node test/transport-provider.test.js` passed (13/13); `node test/director-authorization.test.js` passed (1/1); `node test/deepseek-runtime.test.js` passed (40/40). Relevant ACP/TaskRegistry/orchestrator/coordinator tests passed: schema 47/47, TaskRegistry 21/21, orchestrator 29/29, coordinator 19/19, and verify-reconcile 67/67. Complete `npm test` passed. `git diff --check` passed before reconciliation edits.
+
+**ACP and authorization invariants confirmed**: Exactly one model-facing `control_plane` exposes only `request_task` and `get_task`; `/poc/coordinator`, TaskRegistry, the dispatcher, and the orchestrator remain the authoritative single boundary/components; no generic HTTP executor or model-controlled execution path exists; `MAX_TOOL_ITERATIONS` remains exactly 3; and `parent_request_id` remains lineage context rather than authority. Director authorization regression coverage confirms approval issuance, request/task binding, immutable scope hash, expiry, single-use/concurrent consumption, replay rejection, cancellation, supersession, scope mismatch, missing approval rejection, and rejection of model issuance, parent-lineage authority, and specialist-created/broadened authorization.
+
+**Canonical report**: Filed `docs/ai/gemini-acp-report.json` with the actual executed verification result. This locally persisted ACP-report payload is the durable record for this independent verification; it does not claim a GitHub Actions workflow execution.
+
+**Reconciliation**: Updated STATE.md, CONTROL_CENTER.md, and RESEARCH_INDEX.md to IMPLEMENTED / VERIFIED. Historical original implementation, failed verification, correction implementation, and blocked-verification records above are preserved. No production source was modified.
+
+**Commit Reference**: This reconciliation commit.

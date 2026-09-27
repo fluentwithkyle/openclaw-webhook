@@ -41,7 +41,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 ## Implementation Status Note
 
-The Phase 3 consequential-authorization and specialist-routing research record remains the architectural basis. Its Phase 3.2 routing increment is **IMPLEMENTED / NOT VERIFIED** under `TASK-CHATGPT-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-CORRECTION-VERIFY-RECONCILE-001`. The correction is present on main and source inspection confirms the prior dispatcher and Builder command-construction defects are addressed. Independent execution remains blocked because this environment cannot run the required Node test suite or file the canonical `gemini-acp-report` artifact. Phase 3.2 must remain unverified until those execution and artifact requirements are completed.
+The Phase 3 consequential-authorization and specialist-routing research record remains the architectural basis. Its Phase 3.2 routing increment is **IMPLEMENTED / VERIFIED** under `TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-FINAL-VERIFY-RECONCILE-001`. Correction commit `11d057bc756739f111aab9c0189108ca2e678e14` was independently verified by executed focused, relevant regression, and complete-suite tests; `git diff --check` passed. The canonical verification report is filed at `docs/ai/gemini-acp-report.json`. Historical failure and blocked-verification records remain in `TASK_LOG.md`.
 
 ## Update Rules
 
