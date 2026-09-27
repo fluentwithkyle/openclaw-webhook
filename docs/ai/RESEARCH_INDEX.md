@@ -39,6 +39,10 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 | TASK-GEMINI-DEEPSEEK-PHASE-3-CONSEQUENTIAL-AUTHORIZATION-AND-SPECIALIST-ROUTING-RESEARCH-001 | 2026-09-27 | Gemini | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE-3-CONSEQUENTIAL-AUTHORIZATION-AND-SPECIALIST-ROUTING-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-ARCHITECTURE-DECISION-001 | 2026-09-27 | Gemini | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-ARCHITECTURE-DECISION-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 
+## Implementation Status Note
+
+The Phase 3 consequential-authorization and specialist-routing research record remains the architectural basis. Its Phase 3.2 routing increment is **IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION** by `TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-IMPLEMENT-001`; no new research record was created.
+
 ## Update Rules
 
 - Every `RESEARCH_DOCUMENT` task must add a new entry to this index when its research record is created.

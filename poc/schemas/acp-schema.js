@@ -30,7 +30,7 @@ const EXECUTION_REPORT_REQUIRED_FIELDS = [
   'blockers'
 ];
 
-const VALID_AGENTS = ['Kilo', 'Gemini', 'Gemini Builder'];
+const VALID_AGENTS = ['Kilo', 'Gemini', 'Gemini Builder', 'Security Specialist', 'Utility Specialist'];
 const VALID_STATUSES = ['success', 'failure', 'blocked'];
 
 const TASK_REGISTRY_REQUIRED_FIELDS = [

@@ -3,14 +3,44 @@ const taskRegistry = require('../poc/task-registry');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
+
+const SPECIALIST_ROUTING_POLICY = Object.freeze({
+    GeminiReviewer: Object.freeze({ lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
+    SecuritySpecialist: Object.freeze({ lane: 'Security Specialist', target: 'Security Specialist', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
+    UtilitySpecialist: Object.freeze({ lane: 'Utility Specialist', target: 'Utility Specialist', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
+    GeminiBuilder: Object.freeze({ lane: 'Gemini Builder', target: 'Gemini Builder', task_mode: 'BUILDER', authorization_required: true }),
+    Kilo: Object.freeze({ lane: 'Kilo', target: 'Kilo', task_mode: 'FAILOVER_EXECUTE', authorization_required: true })
+});
+
+function routeSpecialistIntent(objective, trustedContext = {}) {
+    const normalized = typeof objective === 'string' ? objective.trim() : '';
+    if (!normalized) return { valid: false, outcome: 'HUMAN_REVIEW', reason: 'A non-empty intent is required for specialist routing' };
+    const intent = normalized.toLowerCase();
+    if (/\b(auth(?:entication|orization)?|credential|secret|token|password|crypto(?:graphy|graphic)?|encrypt(?:ion)?|decrypt(?:ion)?|security[ -]?(?:boundary|review)|trust[ -]?boundary)\b/.test(intent)) {
+        return { valid: true, ...SPECIALIST_ROUTING_POLICY.SecuritySpecialist, dispatchable: true };
+    }
+    if (/\b(documentation|docs?|format(?:ting)?|typo|readme|boilerplate|text transformation)\b/.test(intent)) {
+        return { valid: true, ...SPECIALIST_ROUTING_POLICY.UtilitySpecialist, dispatchable: true };
+    }
+    if (/\b(implement|implementation|modify|change code|fix|build|refactor|commit|push|write code)\b/.test(intent)) {
+        return { valid: false, ...SPECIALIST_ROUTING_POLICY.GeminiBuilder, outcome: 'HUMAN_REVIEW', reason: 'Consequential Builder routing requires separately issued Director authorization with trusted scope' };
+    }
+    if (trustedContext.explicit_kilo_failover === true) {
+        return { valid: false, ...SPECIALIST_ROUTING_POLICY.Kilo, outcome: 'HUMAN_REVIEW', reason: 'Kilo failover routing requires separately issued Director authorization with trusted scope' };
+    }
+    if (/\b(review|research|analy[sz]e|audit|assess|investigate|explain|inspect)\b/.test(intent)) {
+        return { valid: true, ...SPECIALIST_ROUTING_POLICY.GeminiReviewer, dispatchable: true };
+    }
+    return { valid: false, outcome: 'HUMAN_REVIEW', reason: 'Specialist routing could not safely classify the intent' };
+}
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
     phase: 'Phase 3 bounded autonomous continuation',
     model_operations: Object.freeze(['request_task', 'get_task']),
-    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']), target: 'Gemini Builder' }),
+    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']), specialist_routing: 'server policy' }),
     get_task: Object.freeze({ model_fields: Object.freeze(['operation', 'request_id']), request_id_prefix: 'deepseek-runtime-' }),
     server_derived_authority: Object.freeze({
-        repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', target: 'Gemini Builder',
-        task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
+        repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main',
+        specialist_routing: 'deterministic server policy', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
         originator: 'Kyle', authentication_context: 'server-held coordinator secret', verification: 'Review the bounded poc/ scope and return structured findings.'
     }),
     observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence_summary', 'verification', 'failure', 'blocked']),
@@ -139,7 +169,7 @@ function normalizeMessages(messages) {
     return messages.map(normalizeMessage);
 }
 
-function buildControlPlaneCommand(args) {
+function buildControlPlaneCommand(args, trustedContext) {
     if (!args || typeof args !== 'object' || Array.isArray(args)) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
     }
@@ -152,18 +182,20 @@ function buildControlPlaneCommand(args) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
     }
 
+    const route = routeSpecialistIntent(args.objective, trustedContext);
+    if (!route.valid) throw new RuntimeError(403, 'SPECIALIST_ROUTING_BLOCKED', route.reason, { lane: route.lane || 'Human review', outcome: route.outcome });
     const command = {
         protocol_version: '0.1',
         request_id: `deepseek-runtime-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         source: 'DeepSeek Runtime',
-        target: 'Gemini Builder',
+        target: route.target,
         task_type: 'model-mediated-review',
         repository: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.repository,
         base_branch: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.base_branch,
         task: args.objective.trim(),
-        task_mode: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.task_mode,
-        constraints: { permitted_paths: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths.slice() },
-        authorization: { capabilities: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities.slice() },
+        task_mode: route.task_mode,
+        constraints: { permitted_paths: route.permitted_paths.slice() },
+        authorization: { capabilities: route.capabilities.slice() },
         verification: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.verification,
         reporting: 'structured-json',
         originator: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.originator
@@ -488,6 +520,8 @@ module.exports = {
     CONTROL_PLANE_TOOL,
     DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
+    SPECIALIST_ROUTING_POLICY,
+    routeSpecialistIntent,
     RuntimeError,
     buildControlPlaneCommand,
     validateGetTaskArguments,

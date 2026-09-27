@@ -2503,3 +2503,16 @@ The reconciled documentation distinguishes:
 **Verification**: Codex-focused Director-authorization test and the complete `npm test` suite passed; final diff and whitespace checks were clean. Independent Gemini VERIFY_RECONCILE remains required before any VERIFIED claim.
 
 **Commit Reference**: This commit.
+
+
+---
+
+## 2026-09-27 | TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-IMPLEMENT-001
+
+**Task**: Implement the smallest deterministic server-side specialist-routing increment over the verified Phase 3.1 Director authorization boundary.
+
+**Outcome**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION. Added deterministic intent classification inside the existing DeepSeek runtime. The server, not model output, derives Gemini Reviewer, Security Specialist, and Utility Specialist REVIEW/read-only routes. Security-sensitive intent selects the Security Specialist policy; utility/documentation intent selects Utility Specialist; review/research selects Gemini Reviewer. Consequential Builder and Kilo failover classifications require separate Director authorization and otherwise fail closed to explicit human review. Ambiguous intent also fails closed. No approval is issued or inherited, and no second control plane, registry, dispatcher, or model-facing execution tool was added.
+
+**Verification**: Focused runtime and specialist-routing tests passed; complete `npm test` and final whitespace/diff checks were run. Independent Gemini verification is still required before any VERIFIED claim.
+
+**Commit Reference**: This commit.
