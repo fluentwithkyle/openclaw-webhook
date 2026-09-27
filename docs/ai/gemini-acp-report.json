@@ -1,0 +1,97 @@
+{
+  "request_id": "TASK-CHATGPT-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-CORRECTION-VERIFY-RECONCILE-001",
+  "agent": "Gemini Reviewer",
+  "status": "VERIFIED",
+  "task": "Phase 3.2 specialist routing correction — independent verification of deterministic server-side specialist routing policy closing prior dispatcher and Builder command-construction defects",
+  "repository": "fluentwithkyle/openclaw-webhook",
+  "base_branch": "main",
+  "current_head_sha": "9d984dfe3eaf5bd56586c4f005b8359a80227afc",
+  "changed_files": ["docs/ai/gemini-acp-report.json", "docs/ai/STATE.md", "docs/ai/CONTROL_CENTER.md", "docs/ai/TASK_LOG.md", "docs/ai/RESEARCH_INDEX.md"],
+  "verification": [
+    {
+      "requirement": "Security Specialist routes to existing Gemini review workflow transport",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Security Specialist uses the existing read-only Gemini review workflow transport'"
+    },
+    {
+      "requirement": "Utility Specialist routes to existing Gemini review workflow transport",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Utility Specialist uses the existing read-only Gemini review workflow transport'"
+    },
+    {
+      "requirement": "Specialist review transport fails safely when workflow dispatch unavailable",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Specialist review transport fails safely when its workflow dispatch is unavailable'"
+    },
+    {
+      "requirement": "Unrecognized target fails closed without defaulting to Kilo or Builder",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Unrecognized target fails closed without defaulting to Kilo or Builder'"
+    },
+    {
+      "requirement": "Missing target fails closed",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Missing target fails closed'"
+    },
+    {
+      "requirement": "Builder dispatch receives server-derived fields (request_id, task, repository, base_branch, verification, task_mode, capabilities, permitted_paths)",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Builder dispatch receives request_id, task, repository, base_branch, verification, task_mode, capabilities, permitted_paths'"
+    },
+    {
+      "requirement": "Builder dispatch blocked when ACP validation rejects the command",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Builder dispatch blocked when ACP validation rejects the command'"
+    },
+    {
+      "requirement": "Builder dispatch fails when GitHub token is missing",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Builder dispatch fails when GitHub token is missing'"
+    },
+    {
+      "requirement": "Builder dispatchGeminiBuilder failure normalizes to FAILED",
+      "verdict": "PASS",
+      "evidence": "test/transport-provider.test.js — 'Builder dispatchGeminiBuilder failure normalizes to FAILED'"
+    },
+    {
+      "requirement": "Model authority fields cannot override server-derived routing/authority",
+      "verdict": "PASS",
+      "evidence": "test/deepseek-runtime.test.js — 'arbitrary authority fields are rejected instead of influencing ACP'"
+    },
+    {
+      "requirement": "Model cannot select Kilo or override target through control_plane",
+      "verdict": "PASS",
+      "evidence": "test/deepseek-runtime.test.js — 'model-selected target and unsupported operations fail closed'"
+    },
+    {
+      "requirement": "Single control_plane tool with only request_task and get_task",
+      "verdict": "PASS",
+      "evidence": "test/deepseek-runtime.test.js — 'control_plane tool exposes get_task operation and request_id parameter'"
+    },
+    {
+      "requirement": "MAX_TOOL_ITERATIONS enforced at exactly 3",
+      "verdict": "PASS",
+      "evidence": "test/deepseek-runtime.test.js — 'server enforces exactly three maximum control-plane tool iterations'"
+    },
+    {
+      "requirement": "Director authorization regression safety preserved",
+      "verdict": "PASS",
+      "evidence": "test/director-authorization.test.js — 'Director authorization issuance, scope binding, expiry, and single-use consumption, cancellation, and supersession revocation'"
+    },
+    {
+      "requirement": "Full test suite passes with 0 failures",
+      "verdict": "PASS",
+      "evidence": "npm test — 40 passed, 0 failed (deepseek-runtime); 13 passed, 0 failed (transport-provider); 26 passed, 0 failed (chatbox-gateway); 26 passed, 0 failed (gemini-callback); 15 passed, 0 failed (kilo-callback); 10 passed, 0 failed (kilo-polling); 13 passed, 0 failed (gemini-builder-trigger); 18 passed, 0 failed (kilo-verifier); 77 passed, 0 failed (github-webhook); 41 passed, 0 failed (signal-emitter); 46 passed, 0 failed (schema); 17 passed, 0 failed (task-registry); 29 passed, 0 failed (orchestrator); 11 passed, 0 failed (integration); 19 passed, 0 failed (coordinator); 67 passed, 0 failed (verify-reconcile); 70 passed, 0 failed (reliability-enforcement); 23 passed, 0 failed (reliability-enforcement-final)"
+    },
+    {
+      "requirement": "No whitespace errors in diff",
+      "verdict": "PASS",
+      "evidence": "git diff --check — clean"
+    }
+  ],
+  "result": {
+    "commit": "9d984dfe3eaf5bd56586c4f005b8359a80227afc",
+    "status": "SUCCESS",
+    "summary": "Phase 3.2 specialist routing correction independently verified. The correction closes prior dispatcher and Builder command-construction defects. Security Specialist and Utility Specialist route through the existing Gemini review workflow transport. Unrecognized/missing targets fail closed. Builder dispatch is server-derived with no model authority override. MAX_TOOL_ITERATIONS = 3 enforced. Single control_plane tool. Director authorization regression safety intact. All tests pass with 0 failures."
+  }
+}

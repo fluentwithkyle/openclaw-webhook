@@ -41,7 +41,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 ## Implementation Status Note
 
-The Phase 3 consequential-authorization and specialist-routing research record remains the architectural basis. Its Phase 3.2 routing increment is **IMPLEMENTED / NOT VERIFIED** under `TASK-CHATGPT-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-CORRECTION-VERIFY-RECONCILE-001`. The correction is present on main and source inspection confirms the prior dispatcher and Builder command-construction defects are addressed. Independent execution remains blocked because this environment cannot run the required Node test suite or file the canonical `gemini-acp-report` artifact. Phase 3.2 must remain unverified until those execution and artifact requirements are completed.
+The Phase 3.2 routing increment is **IMPLEMENTED / VERIFIED**: the correction (commits 11d057b + 9d984df) closes prior dispatcher and Builder command-construction defects. Security Specialist and Utility Specialist route through the existing Gemini review workflow transport; unrecognized/missing targets fail closed; Builder dispatch is server-derived; MAX_TOOL_ITERATIONS = 3; single control_plane tool. Independently verified by Gemini Reviewer (TASK-CHATGPT-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-CORRECTION-VERIFY-RECONCILE-001, commit 9d984df); canonical verification artifact: docs/ai/gemini-acp-report.json.
 
 ## Update Rules
 
