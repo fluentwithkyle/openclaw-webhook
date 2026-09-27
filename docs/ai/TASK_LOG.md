@@ -2477,3 +2477,5 @@ The reconciled documentation distinguishes:
 **Verification**: Focused DeepSeek runtime, ACP schema, TaskRegistry, and orchestrator tests passed; full suite result recorded in the completion report. Final diff reviewed for scope and Phase 2+ expansion.
 
 **Commit Reference**: Recorded in the task completion report.
+
+| TASK-CODEX-DEEPSEEK-PHASE-2-BOUNDED-LINEAGE-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED** | Codex | Added optional bounded `parent_request_id` to the existing DeepSeek `request_task` path and removed the model-facing `target` input. The runtime validates parent lineage using the existing TaskRegistry before coordinator submission; invalid, nonexistent, cancelled, and superseded parents fail closed. Child authority remains server-derived (`fluentwithkyle/openclaw-webhook`, `main`, Gemini Builder, REVIEW, read_only, `poc/`), and Phase 1 lineage observation remains intact. No new operation, control plane, registry, dispatcher, or authority elevation. Focused tests and the full `npm test` suite passed. Implementation commit: `e8ecb49097a9efb531df658848485fdd36888183`. |

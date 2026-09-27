@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-09-27
-**Updated By**: Gemini — VERIFY_RECONCILE (TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001)
+**Updated By**: Codex — EXECUTE (TASK-CODEX-DEEPSEEK-PHASE-2-BOUNDED-LINEAGE-IMPLEMENT-001)
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -23,10 +23,12 @@ the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 existing operations, server-derived REVIEW/read-only `poc/` authority, sanitized task
 observation across all eight lifecycle states (including lineage, execution, evidence,
 verification, and failure/blocked information), and ACP-owned independent-verification
-semantics. It remains an
-extensible policy representation, not a second authority system. **Phase 2+ gaps**:
-workflow decomposition, specialist selection, or
-consequential execution operations. Full current state: `STATE.md`; architecture:
+semantics. **Phase 2 bounded lineage — IMPLEMENTED**: the existing `request_task`
+accepts optional `parent_request_id`, validates it through TaskRegistry lineage rules,
+and preserves the server-derived Gemini Builder/REVIEW/read_only/`poc/` envelope. The
+model-facing `target` field was removed; parent lineage is correlation only, never
+authority. **Remaining gaps**: specialist selection or consequential execution
+operations. Full current state: `STATE.md`; architecture:
 `ARCHITECTURE.md` §16.6; decisions: ADR-018 and ADR-019.
 
 ---
