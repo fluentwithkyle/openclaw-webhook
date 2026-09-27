@@ -1567,134 +1567,124 @@ The Kilo Cloud Agent HTTP webhook trigger is a confirmed Kilo capability. The sp
 
 ⸻
 
-16.6 DeepSeek Coordinator Integration (Hybrid: Ingress Implemented / Full Coordinator Proposed)
+16.6 DeepSeek Coordinator Evolution — Full Conversational Coordination
 
-The **DeepSeek Coordinator Project** connects DeepSeek's natural-language coordination capability to the existing GitHub-native AI control plane. The current implementation status is hybrid and must be strictly distinguished:
+The existing **DeepSeek Coordinator Project** is the implemented foundation. The
+**DeepSeek Coordinator Evolution — Full Conversational Coordination** project is the
+active HIGH PRIORITY next phase. It expands coordination intelligence, not raw
+authority. Status labels below distinguish repository-verified implementation from a
+future target; historical documents that predate the runtime do not override this
+section.
 
-### Status Summary
-* **CURRENT / IMPLEMENTED / VERIFIED**: The authenticated machine-to-machine DeepSeek Coordinator ingress (`POST /poc/coordinator`), header authentication (`x-deepseek-coordinator-secret` / `DEEPSEEK_COORDINATOR_SECRET`), ACP command validation (`validateACPCommand` in `poc/schemas/acp-schema.js`), TaskRegistry registration (`taskRegistry.createTask` in `poc/task-registry.js`), and existing Kilo/Builder dispatcher routing (`getDispatcher()`).
-* **PROPOSED / TARGET**: DeepSeek as the human-facing conversational coordinator managing the complete task lifecycle above the ACP control plane.
-* **GAP / NOT YET IMPLEMENTED**: Complete outcome/workflow decomposition, specialist selection, research activation, asynchronous status retrieval, specialist-result consumption, next-action reasoning, verification/reconciliation orchestration, bounded multi-turn continuation, and end-to-end feedback loops.
+### Implemented and Verified Foundation
 
----
+`POST /poc/deepseek-runtime` is an authenticated ChatBox-facing runtime. It calls the
+configured OpenRouter chat-completions endpoint using the configured model and exposes
+exactly one model-facing function tool, `control_plane`. The tool currently permits
+only `request_task` and `get_task`.
 
-### Required Target Architecture (PROPOSED / TARGET)
+* `request_task` accepts only an objective and the `Gemini Builder` target. The server,
+  not the model, constructs the ACP command: repository
+  `fluentwithkyle/openclaw-webhook`, base branch `main`, `REVIEW` mode, `read_only`,
+  and `poc/` permitted paths. It then authenticates to `POST /poc/coordinator` using
+  the server-held coordinator secret.
+* `get_task` accepts only a `deepseek-runtime-` request identifier, reads the existing
+  TaskRegistry, and returns a bounded sanitized projection (identity, lifecycle,
+  assignment, timestamps, builder/Gemini status and safe Gemini report fields). It
+  does not expose arbitrary task lookup or credentials.
+* `/poc/coordinator` remains the trusted ingress: it authenticates the request,
+  validates ACP, registers the task in the existing TaskRegistry, and dispatches via
+  the existing dispatcher/orchestrator lifecycle.
+* The OpenRouter tool loop is deliberately bounded (`MAX_TOOL_ITERATIONS = 2`) and
+  permits one `control_plane` call per model turn. Streaming requests receive
+  OpenAI-compatible SSE assistant content, a `finish_reason: stop`, and `data: [DONE]`;
+  non-streaming requests retain JSON.
+* **VERIFIED live evidence supplied by the Director**: a new ChatBox conversation sent
+  `Ping.` and displayed `Pong! 🏓 I’m here and ready to help. What can I do for you?`.
+  This verifies the post-fix ChatBox display path, not every future coordinator
+  capability.
 
-The intended conversational coordinator architecture flow:
+Current implemented path:
 
 ```
-Kyle / Human (Director)
-    ↓
-ChatBox (Ingress)
-    ↓
-DeepSeek Coordinator (Reasoning & Coordination Intelligence)
-    ↓
-1. Understand human intent
-2. Determine desired outcome
-3. Determine required workflow
-4. Research existing infrastructure when required
-5. Select appropriate specialist lane (Gemini Architect/Reviewer, Gemini Builder, Kilo, etc.)
-6. Initiate authorized work through ACP
-7. Track TaskRegistry state
-8. Consume specialist results / evidence
-9. Determine next authorized action
-10. Implementation / review / security / verification
-11. Reconcile durable project state
-12. Continue until verified outcome
-    ↓
-Report outcome to Kyle
+ChatBox → /poc/deepseek-runtime → OpenRouter → DeepSeek
+  → bounded control_plane → authenticated /poc/coordinator → ACP validation
+  → TaskRegistry → existing dispatcher/orchestrator → specialist lane
 ```
 
-DeepSeek is the reasoning and coordination intelligence. The existing ACP/control-plane infrastructure remains the authority and execution boundary.
+### Authority Model (Current and Target)
 
----
+| Component | Role |
+|---|---|
+| Kyle | Director and final authorization authority. |
+| DeepSeek | Conversational reasoning and coordination intelligence; model output is untrusted for authority. |
+| DeepSeek runtime | Bounded model-facing tool interface and server-side policy enforcement. |
+| ACP / `/poc/coordinator` | Authoritative validation, authorization, registration, and dispatch contract. |
+| TaskRegistry | Durable task-state and correlation mechanism. |
+| Existing orchestrator / dispatcher | Execution lifecycle and specialist routing. |
+| Gemini | Architect, reviewer, and research specialist. |
+| Gemini Builder | Primary implementation, execution, and testing specialist. |
+| Kilo | Available explicitly-targeted execution/failover lane. |
+| GitHub | Durable repository and project truth. |
 
-### Coordinator Capabilities Matrix
+DeepSeek must never receive direct repository authority, GitHub credentials,
+unrestricted filesystem access, arbitrary capabilities, arbitrary paths, or a generic
+HTTP executor. No second control plane, TaskRegistry, orchestrator, or dispatcher may
+be introduced. Authority-bearing ACP fields remain server-derived policy.
 
-| # | Capability | Status | Description |
-|---|---|---|---|
-| 1 | Understand human intent | PROPOSED / TARGET | Comprehend natural-language requests from Chatbox. |
-| 2 | Determine desired outcome | PROPOSED / TARGET | Translate user requests into concrete project goals. |
-| 3 | Decompose workflow | GAP / NOT YET IMPLEMENTED | Deconstruct complex goals into structured task sequences. |
-| 4 | Determine research need | GAP / NOT YET IMPLEMENTED | Identify when repository research is required. |
-| 5 | Activate research specialist | GAP / NOT YET IMPLEMENTED | Trigger research workflow (`RESEARCH_DOCUMENT` mode). |
-| 6 | Consume research results | GAP / NOT YET IMPLEMENTED | Read and interpret specialist research reports. |
-| 7 | Select specialist lane | GAP / NOT YET IMPLEMENTED | Choose between Gemini Architect, Gemini Builder, Kilo, etc. |
-| 8 | Activate architecture work | PROPOSED / TARGET | Initiate review/planning via ACP (`REVIEW` mode). |
-| 9 | Activate implementation | PROPOSED / TARGET | Initiate coding/building via ACP (`FAILOVER_EXECUTE` or Builder mode). |
-| 10 | Activate security review | PROPOSED / TARGET | Trigger Security Specialist evaluation when required. |
-| 11 | Track async task execution | GAP / NOT YET IMPLEMENTED | Monitor asynchronous task progress in TaskRegistry. |
-| 12 | Retrieve task status | GAP / NOT YET IMPLEMENTED | Query TaskRegistry and provider endpoints for state. |
-| 13 | Retrieve specialist results | GAP / NOT YET IMPLEMENTED | Access specialist execution results and evidence. |
-| 14 | Consume verification evidence | GAP / NOT YET IMPLEMENTED | Review independent verification reports and test outputs. |
-| 15 | Determine next action | GAP / NOT YET IMPLEMENTED | Reason about whether to continue, retry, review, verify, or escalate. |
-| 16 | Bounded multi-turn loop | GAP / NOT YET IMPLEMENTED | Execute state-driven continuation without unbounded recursion. |
-| 17 | Initiate verification / reconciliation | PROPOSED / TARGET | Trigger verification and documentation reconciliation (`VERIFY_RECONCILE` mode). |
-| 18 | Detect blocked/failed work | CURRENT / IMPLEMENTED | Identify dispatch failures or blocked states via ACP/TaskRegistry status. |
-| 19 | Escalate to Kyle | CURRENT / IMPLEMENTED | Surface unresolved decisions or authorization gates to Director. |
-| 20 | Report verified outcome | PROPOSED / TARGET | Present final verified results to Chatbox / Kyle. |
+### Capability Matrix
 
----
+| Capability | Status | Current evidence / required gap |
+|---|---|---|
+| Conversational ingress and final response | IMPLEMENTED / VERIFIED for Ping display | Runtime accepts ChatBox-compatible requests and SSE; complete work-outcome reporting is a GAP. |
+| Bounded task request | IMPLEMENTED / VERIFIED | One server-derived, read-only `request_task` policy for Gemini Builder and `poc/`. |
+| Bounded task observation | IMPLEMENTED / VERIFIED | `get_task` is namespace-constrained and sanitizes its TaskRegistry projection. |
+| Workflow decomposition, research need, specialist selection | GAP | No policy-controlled multi-step workflow planner or lane-selection contract. |
+| Research, architecture, implementation, security activation | GAP | No expanded coordinator operation set; all consequential work still requires existing ACP authorization. |
+| Result/evidence interpretation and next action | GAP | Observation exists; consuming evidence and determining an authorized continuation do not. |
+| Verification/reconciliation orchestration | GAP | Completion and independently verified desired outcome remain distinct. |
+| State-driven continuation | GAP | Current model tool loop is bounded for one request, not an autonomous coordinator loop. |
+| Failure/blocked recovery and Kyle escalation | PROPOSED / TARGET | Must be explicit policy and human-authorization gates, not model self-authorization. |
 
-### Current Verified Implementation (CURRENT / IMPLEMENTED / VERIFIED)
+### Desired Lifecycle (PROPOSED / TARGET)
 
-The authenticated machine-to-machine Coordinator ingress (`POST /poc/coordinator`) has been implemented and verified in `routes/poc.js`.
+Human intent enters through ChatBox. DeepSeek determines the intended outcome and
+whether research/workflow decomposition is needed, then selects only a server-policy
+permitted operation. Existing specialist lanes execute through ACP; TaskRegistry
+tracks the asynchronous lifecycle. DeepSeek observes bounded status, results, and
+verification evidence, determines the next authorized action in a bounded
+state-driven continuation, distinguishes execution completion from independently
+verified outcome, escalates unresolved authorization or architecture decisions to
+Kyle, and reports the verified result through ChatBox.
 
-* **Ingress Route**: `POST /poc/coordinator`
-* **Authentication**: Header `x-deepseek-coordinator-secret` verified against environment variable `DEEPSEEK_COORDINATOR_SECRET` (distinct from `KILO_CALLBACK_SECRET` and `GEMINI_CALLBACK_SECRET`).
-* **Validation**: Submitted payloads are validated through the existing ACP schema (`validateACPCommand` in `poc/schemas/acp-schema.js`).
-* **Registration**: Validated commands are registered through the existing TaskRegistry (`taskRegistry.createTask` in `poc/task-registry.js`).
-* **Dispatch**: After successful registration, commands are dispatched through the existing dispatcher via `getDispatcher()` (the same mechanism used by `/poc/kilo`). Registration failure prevents dispatch (returns 500 without dispatching).
-* **Provider Persistence**: Provider identifiers returned by the dispatcher are persisted in the TaskRegistry.
-* **Response Status Codes**: 202 on successful dispatch (SUCCESS), 401 on auth failure, 400 on malformed/invalid ACP, 409 on duplicate request_id, 403 on dispatch BLOCKED, 500 on dispatch FAILED or registry/dispatch failure.
+### Phased Evolution and Acceptance Criteria (PROPOSED / TARGET)
 
-The implemented execution path is:
-```
-DeepSeek Coordinator → authenticated `POST /poc/coordinator` → existing ACP validation → existing TaskRegistry → existing Kilo/Builder dispatcher → existing execution path
-```
+1. **Phase 0 — Coordinator Contract / Capability Architecture:** define strongly typed
+   operations, server policy mapping, evidence contract, state transitions, and Kyle
+   authorization gates before expanding tools.
+2. **Phase 1 — Observation:** extend only bounded status/result/evidence access as
+   justified; build on the current `get_task` foundation.
+3. **Phase 2 — Bounded Coordination:** add policy-controlled workflow operations that
+   map to existing ACP modes, capabilities, paths, targets, verification requirements,
+   and authorization gates.
+4. **Phase 3 — Autonomous Coordination Loop:** implement bounded state-driven
+   intent → workflow → dispatch → observe → evidence → next action → verification →
+   completion/escalation, never an arbitrary large tool loop.
 
----
+Future acceptance scenarios are: research-only work that consumes and reports a
+verified research result; implementation work that tracks execution and verification
+evidence; failed/blocked work that performs only authorized recovery or escalates;
+human authorization boundaries that stop rather than self-authorize; and
+verification/reconciliation that explicitly distinguishes completed work from a
+verified desired outcome.
 
-### Known Coordinator Gaps (GAP / NOT YET IMPLEMENTED)
+### Remaining Unknowns
 
-The following capabilities remain unimplemented and must not be documented as operational:
-
-A. **Outcome/workflow decomposition**: DeepSeek cannot yet autonomously decompose goals into multiple multi-step ACP workflows.
-B. **Specialist selection**: The runtime currently constrains action rather than providing complete bounded specialist selection across Gemini (Architect/Reviewer), Gemini Builder, and Kilo.
-C. **Research activation**: No automated triggering of research workflows from DeepSeek conversation context.
-D. **Asynchronous status retrieval**: DeepSeek receives dispatch acknowledgement but lacks the coordinator feedback loop to poll TaskRegistry state.
-E. **Specialist-result consumption**: DeepSeek lacks bounded access to specialist reports and verification evidence.
-F. **Next-action reasoning**: DeepSeek cannot yet autonomously reason about continuation, escalation, or verification steps.
-G. **Verification/reconciliation orchestration**: Complete automated driving of research → implementation → review → verification → reconciliation is not yet operational.
-H. **Bounded multi-turn continuation**: A state-driven continuation loop is PROPOSED / TARGET, not yet implemented.
-I. **Authorization/state gates**: State transitions (prepared → authorized → executing → verified → complete → blocked) are enforced server-side by TaskRegistry, but DeepSeek's reasoning does not grant repository authority.
-
----
-
-### Security / Authority Boundary
-
-The architecture strictly establishes the following authority hierarchy:
-
-* **Kyle** = Final authorization authority (Director).
-* **ACP coordinator** = Authoritative command validation + registration + dispatch.
-* **TaskRegistry** = Durable task state.
-* **Orchestrator / dispatcher** = Execution lifecycle.
-* **Specialists** (Gemini, Gemini Builder, Kilo, Security Specialist) = Research / architecture / implementation / security / verification.
-* **DeepSeek runtime** = Bounded tool interface + server-side policy enforcement.
-* **DeepSeek** = Reasoning + coordination intelligence.
-
-#### Prohibited DeepSeek Privileges
-DeepSeek must **NOT** be represented as having:
-* Direct repository authority;
-* Direct GitHub credentials;
-* Arbitrary execution privileges;
-* Unrestricted filesystem access;
-* Arbitrary capabilities;
-* Arbitrary permitted paths;
-* Authority to bypass ACP;
-* Authority to create a second control plane, second TaskRegistry, second orchestrator, or generic HTTP executor.
-
-Authority-bearing fields must remain **server-derived and policy-controlled**. Model output remains **untrusted** with respect to authority.
+The precise smallest viable coordinator capability/policy representation, the exact
+result/evidence projection required for each future operation, and the human
+authorization gates for consequential multi-step workflows are **UNKNOWN** pending
+Phase 0. A possible capability registry is policy only—not a second control plane—and
+is not authorized or implemented by this documentation project.
 
 ⸻
 

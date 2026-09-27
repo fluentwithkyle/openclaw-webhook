@@ -78,6 +78,17 @@ The Project Bootstrap gate is the mandatory precondition for:
 
 ---
 
+## DeepSeek Coordinator Evolution Guard
+
+For the active **DeepSeek Coordinator Evolution — Full Conversational Coordination**
+project, consult `STATE.md`, `ARCHITECTURE.md` §16.6, and ADR-018 before constructing
+work. DeepSeek is reasoning/coordination intelligence only; its runtime is a bounded
+tool interface with server-side policy enforcement. ACP, TaskRegistry, the existing
+orchestrator/dispatcher, GitHub, and Kyle remain authoritative. A task acknowledgement
+is not desired-outcome verification. Proposed multi-step coordination, result/evidence
+interpretation, and continuation require a separate explicit ACP authorization; do not
+create a second control plane or use model output as authority.
+
 ## Protocol Gate
 
 ### Mandatory Protocol Review

@@ -480,3 +480,53 @@ This decision does **not** approve implementation. It constrains any future impl
 - **Prohibited** (no exceptions): a second `TaskRegistry`; a second orchestrator (`poc/orchestrator.js` remains sole); a second dispatcher (`getDispatcher()` remains sole); a parallel control plane; a generic unrestricted HTTP executor; any bypass around ACP validation (`poc/acp-engine.js` / schema `validateAuthorization`); model-supplied secrets, credentials, capabilities, endpoints, targets, or paths.
 - **Security boundary**: DeepSeek receives only the narrow `control_plane` tool interface; all secrets, credentials, and ACP authority remain server-side.
 - This decision aligns with ADR-005 (Specialist Lanes with ACP Boundary), ADR-006 (Persistent AI Project State), ADR-010 (Qwen Router Activation), ADR-015 (Chatbox Gateway), and ADR-016 (Git Completion-Signal Path 2 Recovery).
+
+---
+
+## ADR-018: DeepSeek Coordinator Evolution Retains the Existing Authority Chain
+
+### Status
+
+**APPROVED ARCHITECTURAL DIRECTION / IMPLEMENTED FOUNDATION / PROPOSED TARGET.**
+The bounded runtime foundation is implemented on current main; full conversational
+coordination is not yet implemented.
+
+### Context
+
+Current main contains `services/deepseek-runtime.js`, a ChatBox-facing OpenRouter
+runtime with one model-facing `control_plane` tool. It server-derives ACP authority for
+its narrow `request_task` operation and provides a namespace-constrained, sanitized
+`get_task` observation operation. Earlier research records correctly described a
+pre-runtime target, but cannot describe current main as though the runtime did not
+exist. The project needs a durable next-phase boundary without creating a competing
+control plane.
+
+### Decision
+
+DeepSeek is the conversational reasoning/coordinator intelligence, not an authority
+layer. The runtime remains a bounded model-facing interface plus server-side policy
+enforcement. ACP remains the sole command validation/authorization/registration and
+dispatch contract; TaskRegistry remains durable task state; the existing
+orchestrator/dispatcher remains the lifecycle; GitHub remains durable project truth;
+and Kyle retains final authorization authority.
+
+Future coordinator expansion must use a small set of strongly typed, server-policy
+operations mapped to existing ACP modes, capabilities, paths, targets, verification
+requirements, and human authorization gates. It must use bounded state-driven
+continuation and durable TaskRegistry/specialist evidence, explicitly distinguish task
+completion from independently verified outcome, and escalate unresolved decisions to
+Kyle.
+
+### Consequences
+
+- No second control plane, TaskRegistry, orchestrator, dispatcher, generic HTTP
+  executor, direct repository/GitHub access, arbitrary path/capability, or
+  model-generated authority is permitted.
+- Current `request_task` and `get_task` are foundation capabilities only; they do not
+  implement workflow decomposition, specialist selection/activation, evidence
+  interpretation, verification/reconciliation orchestration, or full outcome
+  reporting.
+- Phase 0 must define the minimal coordinator contract, policy, evidence projection,
+  failure/blocked handling, and Kyle authorization gates before runtime expansion.
+- A future capability registry, if justified, is policy representation only—not a
+  replacement authority system.

@@ -1,7 +1,7 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-09-27
-**Updated By**: Codex — TASK-CODEX-CHATBOX-NEW-CHAT-RESPONSE-COMPATIBILITY-FIX-002 — added OpenAI-compatible SSE responses for explicit runtime streaming requests.
+**Updated By**: Codex — TASK-GEMINI-DEEPSEEK-FULL-COORDINATOR-DOCUMENTATION-PROJECT-001 — reconciled the active Coordinator Evolution baseline from current source and verified live evidence.
 ---
 
 ## Project Status: ACTIVE (Transitional)
@@ -20,12 +20,35 @@
 
 ---
 
+## Active High-Priority Project — DeepSeek Coordinator Evolution — Full Conversational Coordination
+
+**Status**: ACTIVE / HIGH PRIORITY. The existing DeepSeek Coordinator Project is the
+**IMPLEMENTED / VERIFIED foundation**, not a duplicate project. Current `main`
+implements ChatBox → `/poc/deepseek-runtime` → OpenRouter → DeepSeek → bounded
+`control_plane` → authenticated `/poc/coordinator` → ACP → TaskRegistry → existing
+dispatcher/orchestrator → specialist lane. `control_plane` permits server-derived,
+read-only `request_task` and namespace-constrained, sanitized `get_task`; it has no
+model-granted authority. The bounded runtime loop is not the full conversational
+coordinator.
+
+**VERIFIED live evidence**: Director observed a new ChatBox Ping display the Pong
+response after the SSE compatibility fix. **GAP**: workflow decomposition, specialist
+selection/activation, research orchestration, evidence/result interpretation,
+next-action reasoning, verification/reconciliation orchestration, state-driven
+continuation, and full verified-outcome reporting. **Next authorized action**: Phase 0
+Coordinator Contract / Capability Architecture—define the smallest server policy and
+human-authorization gates before any runtime expansion. See `ARCHITECTURE.md` §16.6
+and ADR-018. Historical live-validation statements below are superseded where they
+conflict with this current baseline.
+
+---
+
 ## Active Tasks
 
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | DeepSeek Chatbox Runtime Boundary Research (TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001) | **COMPLETED (RESEARCH)** | Gemini | Researched and durably documented the DeepSeek Chatbox runtime boundary and tool-execution architecture (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-CHATBOX-RUNTIME-BOUNDARY-RESEARCH-001.md`). Answered all 8 required verification items: current Chatbox ingress (`POST /poc/chatbox`), current Direct ACP coordinator path (`POST /poc/coordinator`), OpenRouter's role (model proxy and provider router, application-side tool execution), repository absence of server-side DeepSeek/OpenRouter tool execution runtime, exact missing boundary between `tool_call` and coordinator, accuracy of ADR-017, prerequisite for Milestone 0 connectivity testing (baseline ping reachability), and unresolved configuration questions. Updated RESEARCH_INDEX.md, TASK_LOG.md, and STATE.md. No implementation performed. |
-| TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED / LIVE DISPATCH VERIFIED / RESULT RETRIEVAL GAP** | Codex Builder | Server-side OpenRouter/DeepSeek runtime exists at /poc/deepseek-runtime with one bounded control_plane tool. Runtime message normalization correction is at commit 65a8ed3. Live validation established successful read-only Builder dispatch through the existing control-plane path and confirmed asynchronous TaskRegistry/orchestration can progress beyond dispatch. The runtime currently returns the dispatch acknowledgement/task identity rather than retrieving the eventual asynchronous task result for the ChatBox-facing conversation. Result/status retrieval through the existing control plane is PROPOSED / NOT IMPLEMENTED / NOT AUTHORIZED. End-to-end ChatBox success remains unverified. |
+| TASK-CODEX-DEEPSEEK-CHATBOX-RUNTIME-IMPLEMENTATION-001 | **COMPLETED / IMPLEMENTED / LIVE DISPATCH VERIFIED / RESULT RETRIEVAL GAP** | Codex Builder | Server-side OpenRouter/DeepSeek runtime exists at `/poc/deepseek-runtime` with one bounded `control_plane` tool. Current source adds `get_task`: only DeepSeek-runtime namespace identifiers may be observed and the result is sanitized. The runtime remains a bounded foundation, not the full coordinator. Director later VERIFIED a new ChatBox Ping/Pong display after SSE compatibility work; the earlier end-to-end-unknown statement is historical. |
 | TASK-CODEX-DEEPSEEK-CHATBOX-NEW-CHAT-RESPONSE-COMPATIBILITY-FIX-002 | **COMPLETED / LIVE VERIFIED** | Codex / Gemini (Verify) | For `stream: true`, `/poc/deepseek-runtime` now emits OpenAI-compatible SSE `chat.completion.chunk` events containing the final assistant response, a `finish_reason: stop` event, and `data: [DONE]`. The internal non-streaming OpenRouter tool loop and the bounded `control_plane` authority model are unchanged; requests without `stream: true` retain the ordinary JSON response contract. Focused regression coverage passes. **Live verification by Director confirmed**: a brand-new ChatBox conversation sent "Ping." and successfully displayed "Pong! 🏓 I’m here and ready to help. What can I do for you?". The new-chat blank-response issue is successfully resolved. |
 | TASK-KILO-GITHUB-WORKFLOW-WRITE-AUTH-AND-GEMINI-DELIVERY-001 | **COMPLETED** | Kilo | Delivered RESEARCH_DOCUMENT routing to .github/workflows/main.yml (explicit RESEARCH_DOCUMENT branch, no FAILOVER_EXECUTE fall-through) and recognized RESEARCH_DOCUMENT in GEMINI.md; committed d9298b0 and pushed to origin/main; independently verified on remote main. Root cause of prior 048e9b1 push failure: gemini-builder.yml pushes via the auto-generated GITHUB_TOKEN, which GitHub restricts from pushing .github/workflows/* changes (commit landed locally in the runner but push was rejected); a properly-scoped owner token (Kilo GH_TOKEN) pushes the same workflow-file change successfully. Durable Builder-lane fix (PAT secret for .github/workflows/* pushes) is outside this task's permitted_paths. |
 | Kilo ↔ Gemini post-commit test remediation | **COMPLETED** | Kilo | Fixed orchestrator syntax error (missing `function determineNextAction` declaration), fixed `getOrchestrationState` test, updated `poc/github-webhook.js` to handle `trigger_builder` flow (calls `triggerGeminiBuilder` after Kilo success), updated stale `trigger_gemini` assertions in github-webhook/kilo-callback/kilo-polling tests. 237/289 tests verified post-remediation in pre-Builder state (347 total after Path 2 recovery); **450/450 tests pass across 18 test files** at commit `8a56fe6` (including `gemini-builder-trigger.test.js` with 9 tests). |
@@ -626,9 +649,9 @@ These must be answered by the investigation plan above (questions 1–4 and 8) b
 
 ---
 
-## DeepSeek Runtime Live Validation Status
+## DeepSeek Runtime Live Validation Status (Historical Pre-SSE Record)
 
-**Status**: Live end-to-end Chatbox → Render `/poc/deepseek-runtime` execution NOT VERIFIED. Chatbox connection check reported successful; normal Chatbox chat requests were not observed in Render request logs.
+**Historical status**: This section preserves the pre-SSE investigation record. It is superseded for the new-chat display question by the Director-verified Ping/Pong result in the active project baseline above; it does not establish the complete future coordinator lifecycle.
 
 This section is distinct from the Chatbox Gateway (`/poc/chatbox`) integration gap documented above. The DeepSeek runtime is a separate authenticated endpoint (`POST /poc/deepseek-runtime`) that hosts the OpenRouter/DeepSeek model/tool-call loop.
 
@@ -673,7 +696,7 @@ Connection check reported: **Connection successful!**
 ### Verified Facts
 
 - **VERIFIED repository state**: Runtime implementation exists and is merged on `main` (commit `934dee2`). `services/deepseek-runtime.js` provides `POST /poc/deepseek-runtime` (route `routes/poc.js:773`), authenticated by `authenticateChatboxGateway` (`CHATBOX_GATEWAY_SECRET`).
-- **VERIFIED repository state**: The runtime exposes exactly one model-facing tool — `control_plane` — accepting only `operation` (`request_task`), `objective`, and `target` (`Gemini Builder`). Server-side policy supplies all authority-bearing fields (repository, base branch, task_mode `REVIEW`, capabilities `read_only`, permitted paths `poc/`).
+- **VERIFIED repository state**: The runtime exposes exactly one model-facing tool — `control_plane` — accepting `operation` (`request_task` or `get_task`). `request_task` accepts only `objective` and `target` (`Gemini Builder`); `get_task` accepts only a DeepSeek-runtime namespace request ID and returns a sanitized projection. Server-side policy supplies all authority-bearing fields (repository, base branch, task_mode `REVIEW`, capabilities `read_only`, permitted paths `poc/`).
 - **VERIFIED externally observed**: Chatbox provider connection check reported "Connection successful!".
 - **VERIFIED externally observed / repository-documented**: Chatbox source confirms custom API host/path support — `normalizeOpenAIApiHostAndPath` in `src/shared/utils/llm_utils.ts` trims, strips trailing `/`, adds leading `/` to `apiPath`, adds `https://` if missing, recognizes a full `/chat/completions` URL, and preserves an explicitly-supplied custom path.
 - **VERIFIED externally observed / repository-documented**: Chatbox custom OpenAI code in `src/shared/providers/definitions/models/custom-openai.ts` constructs the request URL as `${apiHost}${apiPath}` — the configured endpoint resolves to `https://openclaw-webhook-iz6s.onrender.com/poc/deepseek-runtime`.
@@ -699,7 +722,7 @@ Connection check reported: **Connection successful!**
 
 **VERIFIED local regression** — The focused runtime test submits the captured compatibility condition (`Accept: text/event-stream`, `stream: true`, and `Ping.`), parses the SSE response as an OpenAI-compatible client, recovers the expected assistant content, and verifies termination.
 
-**NOT VERIFIED** — A new live ChatBox conversation displaying this post-fix response has not been observed during this execution.
+**Historical / superseded** — a new live ChatBox conversation had not been observed during that earlier execution. Director later VERIFIED the new-chat Ping/Pong display; the full future coordinator lifecycle remains unverified.
 
 ### Streaming Compatibility Concern (Historical)
 
@@ -707,7 +730,7 @@ Connection check reported: **Connection successful!**
 
 **VERIFIED repository state** — Chatbox has an SSE-specific wrapper (`src/shared/models/utils/openai-chat-sse-termination.ts`) that handles streamed OpenAI Chat Completions responses.
 
-The prior ordinary-JSON behavior was a compatibility concern. Direct Proxyman capture subsequently confirmed that ChatBox reaches the runtime with `stream: true` and accepts `text/event-stream`; this task implements the corresponding SSE response. Live post-fix display verification remains pending.
+The prior ordinary-JSON behavior was a compatibility concern. Direct Proxyman capture subsequently confirmed that ChatBox reaches the runtime with `stream: true` and accepts `text/event-stream`; this task implements the corresponding SSE response. The live post-fix display is later Director-verified; this paragraph is historical.
 
 ### State Progression
 

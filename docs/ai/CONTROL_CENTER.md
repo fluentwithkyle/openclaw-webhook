@@ -5,8 +5,26 @@
 
 Designed for Kyle checking the project from a phone.
 
-**Last Updated**: 2026-09-26
-**Updated By**: ChatGPT Coordinator — TASK-CHATGPT-DEEPSEEK-DOCUMENTATION-RECONCILE-002
+**Last Updated**: 2026-09-27
+**Updated By**: Codex — TASK-GEMINI-DEEPSEEK-FULL-COORDINATOR-DOCUMENTATION-PROJECT-001
+---
+
+## High-Priority Focus — DeepSeek Coordinator Evolution
+
+**Active project**: **DeepSeek Coordinator Evolution — Full Conversational Coordination**.
+The prior DeepSeek Coordinator Project is its **IMPLEMENTED / VERIFIED foundation**,
+not a parallel runtime. Current source verifies a bounded ChatBox → runtime →
+OpenRouter/DeepSeek → `control_plane` → ACP/TaskRegistry/dispatcher path. The only
+model-facing tool has `request_task` (server-derived REVIEW/read-only/Gemini
+Builder/`poc/`) and sanitized namespace-constrained `get_task`; ACP, TaskRegistry,
+the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
+
+**Live evidence**: Director verified a fresh ChatBox Ping displays the Pong response
+through the SSE-compatible runtime. **Next action**: authorize Phase 0 Coordinator
+Contract / Capability Architecture; do not expand runtime tools until its operation,
+evidence, failure, verification, and Kyle-authorization policies are defined. Full
+current state: `STATE.md`; architecture: `ARCHITECTURE.md` §16.6; decision: ADR-018.
+
 ---
 
 ## Architectural Note
@@ -38,7 +56,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIV
 3. **Render Control Gate / Gatekeeper** — **PROPOSED / TARGET** (not implemented). Render is the future technical Control Gate between ChatGPT and repository execution. Layer 1 (Kilo↔Gemini orchestration stabilization) is prerequisite. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
 4. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
 5. **Automated test suite** — **IMPLEMENTED**. 18 test files with 450 tests covering ACP schema, TaskRegistry, Orchestrator, integration, Gemini trigger, Builder trigger, callbacks, polling, verifier, POC, coordinator, chatbox gateway, and verify-reconcile modes.
-6. **DeepSeek Coordinator Project** — **HIGH PRIORITY**. Authenticated `POST /poc/coordinator` ingress implemented and verified in `routes/poc.js`. After successful registration, the command is dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Registration failure prevents dispatch; provider identifiers persisted on successful dispatch. 19 coordinator tests pass; 170 total tests pass. (IMPLEMENTED / VERIFIED)
+6. **DeepSeek Coordinator Evolution** — **HIGH PRIORITY / ACTIVE**. Bounded runtime foundation is IMPLEMENTED / VERIFIED, including server-derived `request_task`, sanitized namespace-constrained `get_task`, and a Director-verified new-chat Ping/Pong display. Full conversational coordination remains PROPOSED / TARGET; Phase 0 contract is the next action.
 7. **Git completion-signal emitter and Path 2** — Signal emitter implemented (Issue #180, commit `7bec058`): `poc/signal-emitter.js` with `poc/signals/<request_id>.json` artifact. **Path 2 recovery IMPLEMENTED / VERIFIED** (Issue #175, commit `030f888`): `recoverTaskFromGitHub()` reconstructs task context from GitHub issue body when TaskRegistry is absent. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`). Architectural direction (Issue #172, ADR-016) APPROVED / PROPOSED / TARGET — fully documented. Remaining gap: **live end-to-end validation (GitHub push ↠ Render webhook ↠ Gemini dispatch) NOT verified**; tests use mocks. Test count discrepancy: signal artifact claims 337 regression (total 378); independently verified actual is 369 regression (total 410). See STATE.md for full details.
 8. **Chatbox → Render live integration gap** — `/poc/chatbox` remains distinct from the DeepSeek runtime endpoint; its prior network-error investigation remains unresolved.
 9. **DeepSeek Runtime response compatibility** — `/poc/deepseek-runtime` now returns OpenAI-compatible SSE for an explicit `stream: true` request: assistant chunk, `finish_reason: stop`, then `data: [DONE]`. The internal bounded tool loop and `control_plane` authority model remain unchanged, and non-streaming requests retain JSON. Focused regression coverage passes. **COMPLETED / LIVE VERIFIED**: Live Director verification confirmed a brand-new ChatBox conversation successfully sent "Ping." and received "Pong! 🏓 I’m here and ready to help. What can I do for you?". New-chat blank response issue is successfully resolved.
@@ -133,22 +151,22 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 
 ---
 
-## DeepSeek Coordinator Project (HIGH PRIORITY)
+## DeepSeek Coordinator Foundation and Evolution (HIGH PRIORITY)
 
 | Field | Detail |
 |-------|--------|
-| **Project Name** | DeepSeek Coordinator — GitHub-Native AI Control Plane Integration |
+| **Project Name** | DeepSeek Coordinator Evolution — Full Conversational Coordination |
 | **Priority** | HIGH |
-| **Current Status** | ACTIVE / IMPLEMENTED / VERIFIED |
-| **Objective** | Connect DeepSeek's natural-language coordination to the existing GitHub-native ACP control plane via Direct ACP |
-| **Agreed Architecture** | DeepSeek emits canonical ACP JSON directly → Authenticated `POST /poc/coordinator` → Existing ACP validator (`validateACPCommand`) + TaskRegistry (`taskRegistry.createTask`) → Existing Kilo dispatcher (`getDispatcher()`) → Existing Kilo execution path → GitHub verification → DeepSeek → Chatbox. Documented in `ARCHITECTURE.md` Section 16.6. |
-| **Current Gap** | **CLOSED / IMPLEMENTED** — Authenticated `POST /poc/coordinator` ingress implemented in `routes/poc.js`, authenticated via `x-deepseek-coordinator-secret` / `DEEPSEEK_COORDINATOR_SECRET`, validated via `validateACPCommand`, registered via `taskRegistry.createTask`. After successful registration, dispatched through the existing Kilo dispatcher via `getDispatcher()` (same mechanism as `/poc/kilo`). Registration failure prevents dispatch. Provider identifiers persisted on successful dispatch. Implementation commit `950983a` (dispatch bridge) on top of `5613214` (initial ingress). |
+| **Current Status** | ACTIVE / HIGH PRIORITY; foundation IMPLEMENTED / VERIFIED; full coordinator PROPOSED / TARGET |
+| **Objective** | Expand bounded DeepSeek coordination intelligence without expanding authority or replacing ACP, TaskRegistry, the existing orchestrator/dispatcher, GitHub, or Kyle. |
+| **Agreed Architecture** | ChatBox → `/poc/deepseek-runtime` → OpenRouter/DeepSeek → bounded `control_plane` → authenticated `/poc/coordinator` → ACP → TaskRegistry → existing dispatcher/orchestrator → specialist lane. Server derives authority; no second control plane. |
+| **Current Gap** | Workflow decomposition, specialist selection/activation, evidence/result interpretation, next-action reasoning, verification/reconciliation orchestration, bounded state-driven continuation, and verified-outcome reporting. |
 | **Relevant Components** | `poc/schemas/acp-schema.js`, `poc/task-registry.js`, `poc/orchestrator.js`, `services/transport-provider.js`, `routes/poc.js`, `.github/workflows/main.yml`, `poc/command.json`, `test/coordinator.test.js` |
-| **Next Concrete Action** | None — Coordinator ingress fully implemented and verified |
+| **Next Concrete Action** | Phase 0 Coordinator Contract / Capability Architecture; define minimal policy, evidence, failure, verification, and Kyle-authorization gates before runtime expansion. |
 | **Authorization State** | Implementation authorized and executed via ACP task TASK-KILO-DEEPSEEK-COORDINATOR-INGRESS-IMPLEMENT-001 (capabilities: inspect, modify, test, commit, push). Commit and push to main authorized. |
-| **Details** | See `docs/ai/STATE.md` → DeepSeek Coordinator Project section |
+| **Details** | See `docs/ai/STATE.md` → Active High-Priority Project and `ARCHITECTURE.md` §16.6. |
 | **Test Results** | 19/19 coordinator tests pass. 170 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator). |
-| **Bounded OpenRouter Runtime** | **IMPLEMENTED / LIVE DISPLAY VALIDATION PENDING** — authenticated `POST /poc/deepseek-runtime` hosts the existing bounded OpenRouter model/tool loop and exactly one intent-only `control_plane` tool with server-derived REVIEW authority. For incoming `stream: true`, it now emits OpenAI-compatible SSE assistant content, a `finish_reason: stop` chunk, and `data: [DONE]`; requests without that flag retain ordinary JSON. Focused parser regression coverage passes. Live ChatBox display confirmation remains pending. |
+| **Bounded OpenRouter Runtime** | **IMPLEMENTED / VERIFIED FOUNDATION** — exactly one model-facing `control_plane` with server-derived `request_task` and sanitized namespace-constrained `get_task`; bounded loop; SSE for `stream: true`, JSON otherwise. Director VERIFIED fresh ChatBox Ping/Pong display. This is not the full coordinator. |
 
 ---
 
