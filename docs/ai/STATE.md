@@ -1,7 +1,7 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-09-28
-**Updated By**: Codex — TASK-CODEX-SYSTEMIC-AUTONOMY-RELIABILITY-AND-STRATEGIC-ALIGNMENT-HARDENING-001
+**Updated By**: ChatGPT — TASK-CHATGPT-DEEPSEEK-PHASE-0-STATE-RECONCILIATION-001
 
 ## Current Strategic State — Authoritative for Alignment
 
@@ -12,32 +12,19 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
 §16.6 remains authoritative for intended architecture.
 
 - **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 0 —
-  Coordinator Contract**, **PARTIALLY COMPLETE / REQUIRES FORMAL RECONCILIATION**.
-- **Completed requirements**: Stage 1 network path; Phase 1 bounded observation.
-- **Unresolved required next work**: `phase-0-contract-reconciliation`: reconcile and
-  design the typed Coordinator Contract / Capability Architecture, including server
-  policy mapping, evidence contract, state transitions, and Kyle authorization gates.
-- **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 acceptance
-  requires independent verification of the contract and a Kyle-authorized transition.
-- **Production enforcement**: DeepSeek `request_task` evaluates the projection on the
-  server before it constructs an ACP command or calls `/poc/coordinator`; an alignment
-  failure is `STRATEGIC_ALIGNMENT_BLOCKED` and cannot reach TaskRegistry or dispatch.
-  The projection's SHA-256 must match this file. Alignment remains pending Kyle/ACP
-  authorization; no model-generated exception is accepted.
-- **Stop/escalation**: No task is selectable merely because it is technically correct,
-  locally useful, or ACP-compliant. Missing, stale, contradictory, or unverifiable
-  state; a completed requirement; unmet prerequisites; or no required next work is
-  `BLOCKED` and escalated to Kyle. Recommendation, authorization, execution,
-  independent verification, and strategic convergence are separate states.
+  Coordinator Contract**, **IMPLEMENTED / INDEPENDENTLY VERIFIED; TRANSITION DECISION PENDING**.
+- **Completed requirements**: Stage 1 network path; Phase 1 bounded observation; Phase 0 Coordinator Contract.
+- **Unresolved required next work**: Kyle's explicit Phase 0 convergence/transition decision, based on the independently verified contract and existing roadmap evidence.
+- **Evidence**: Phase 0 implementation commit `ec9c476fba29022bb1487ac1d3aa1797da256165`; independent verification/reconciliation commit `53110da3f0d79a56397fa3362b769f19f91c6498`.
+- **Production enforcement**: DeepSeek `request_task` evaluates the projection on the server before it constructs an ACP command or calls `/poc/coordinator`; an alignment failure is `STRATEGIC_ALIGNMENT_BLOCKED` and cannot reach TaskRegistry or dispatch. The projection's SHA-256 must match this file.
+- **Transition rule**: Technical implementation and independent verification establish Phase 0 completion evidence; roadmap phase convergence and any consequential transition remain Kyle's decision. No model-generated exception or automatic phase transition is accepted.
 
-**Research reconciliation**: The systemic-failure research record's statement that
-Phase 0–3 was simply complete is historical/advisory and incorrect. Current
-`ARCHITECTURE.md` §16.6 establishes Phase 0 as partial, Phase 1 as essentially
-complete, Phase 2 as substantially built/in progress, and Phase 3 as a future target.
-Increments 4.1–4.9 were technically valid implementation history that substantially
-advanced Phase 1 and Phase 2 foundations, but they were not authorization to generate
-another increment; the divergence was selecting 4.10-style work without reconciling
-the required Phase 0 checkpoint.
+**Research reconciliation**: The systemic-failure research record's statement that Phase 0–3 was simply complete is historical/advisory and incorrect. Current
+`ARCHITECTURE.md` §16.6 establishes Phase 0 as the current verified checkpoint,
+Phase 1 as essentially complete, Phase 2 as substantially built/in progress, and
+Phase 3 as a future target. Increments 4.1–4.9 are implementation history and do not
+automatically authorize another increment.
+
 ---
 
 ## Project Status: ACTIVE (Transitional)
