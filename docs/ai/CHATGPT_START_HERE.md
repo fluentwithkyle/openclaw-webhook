@@ -273,6 +273,36 @@ applies within Action Construction; this contract does not replace or weaken it.
 
 ---
 
+## 6. Coordinator Communication Contract
+
+The **Coordinator Communication Contract** (`docs/ai/COMMUNICATION_CONTRACT.md`)
+establishes the authoritative communication requirements for ChatGPT Coordinator
+sessions. It is the single, durable reference for how the Coordinator communicates
+with Director Kyle.
+
+A fresh Coordinator session must **explicitly load the Communication Contract during
+initialization** and apply it for every response. The contract establishes:
+
+- Lead with the actionable answer or decision.
+- Give Kyle the minimum information required to act or authorize.
+- Produce the complete task immediately when a task is the established next action.
+- Present VERIFIED, UNKNOWN, BLOCKER, and NEXT ACTION when those distinctions
+  materially affect the decision.
+- Keep explanations proportional to the decision being made.
+- Suppress internal verification details (raw hashes, internal IDs, tool mechanics,
+  implementation trivia, process metadata) unless explicitly requested.
+- Use plain-language references to commits, PRs, branches, and implementation state.
+- Preserve Kyle's role as Director and final authorization authority.
+- Keep preparation, authorization, execution, and verification clearly separated.
+- Optimize for forward progress rather than conversational continuity.
+
+The full contract lives in `docs/ai/COMMUNICATION_CONTRACT.md`. This document,
+`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 10), and
+`docs/ai/TASK_STANDARD.md` reference that contract rather than duplicating its
+content, ensuring one consistent contract across all coordinator documents.
+
+---
+
 ## 7. What To Do When Kyle Gives a Project Request
 
 Follow this procedure. Do not invent a new workflow. Bootstrap is governed by the
@@ -370,8 +400,9 @@ canonical Bootstrap Contract above (this document); this procedure applies it.
 | `docs/ai/STATE.md` | Current live project state (active tasks, blockers, project status) |
 | `docs/ai/CONTROL_CENTER.md` | Derived human-facing dashboard |
 | `docs/ai/TASK_LOG.md` | Historical task records |
-| `docs/ai/ARCH_DECISIONS.md` | Architectural decisions (ADR-001 through ADR-017) |
+| `docs/ai/ARCH_DECISIONS.md` | Architectural decisions (ADR-001 through ADR-019) |
 | `docs/ai/RESEARCH_INDEX.md` | Index of durable research records |
+| `docs/ai/COMMUNICATION_CONTRACT.md` | Coordinator Communication Contract (canonical, referenced by this document, the operating protocol, and the task standard) |
 | `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` | ChatGPT Control Gate research |
 | `docs/ai/KILO_INTEGRATION.md` | Kilo external integration contract |
 | `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md` | Kilo↔Gemini orchestration backbone |
@@ -392,9 +423,10 @@ If you are reading this as a freshly initialized instance:
    incomplete — result `NOT READY — PROJECT BOOTSTRAP INCOMPLETE` — if any required
    element cannot be established; no consequential action may proceed until bootstrap
    is complete.
-4. Read `docs/ai/README.md`, then `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`,
-   then `docs/ai/TASK_STANDARD.md` (Protocol Review).
-5. Read `docs/ai/STATE.md` and `docs/ai/CONTROL_CENTER.md` for current status.
-6. Proceed to the procedure in Section 7 (What To Do).
+   4. Read `docs/ai/README.md`, then `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`,
+      then `docs/ai/TASK_STANDARD.md` (Protocol Review).
+   5. Read `docs/ai/COMMUNICATION_CONTRACT.md` (Coordinator Communication Contract).
+   6. Read `docs/ai/STATE.md` and `docs/ai/CONTROL_CENTER.md` for current status.
+   7. Proceed to the procedure in Section 7 (What To Do).
 
 The repository is the durable context. Begin there.

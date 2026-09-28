@@ -256,7 +256,34 @@ The execution agent refreshes CONTROL_CENTER.md as part of the task verification
 - No automated synchronization of CONTROL_CENTER.md is introduced by this standard.
 - CONTROL_CENTER.md must never grant the execution agent unrestricted authority over project-state documentation.
 
-## 7. Concrete Example
+## 10. Coordinator Task Construction Communication Requirement
+
+When the Coordinator (ChatGPT) prepares an ACP task artifact for presentation to
+Kyle, the **Coordinator Communication Contract** (`docs/ai/COMMUNICATION_CONTRACT.md`)
+establishes the communication requirements for that presentation. This contract is
+incorporated into task construction as a coordinator task-construction requirement:
+
+- The final task artifact must remain **complete and machine-checkable** while the
+  surrounding presentation remains concise.
+- The Coordinator must lead with the actionable answer or decision and present the
+  complete artifact immediately when the next action is clear.
+- Internal verification details (raw hashes, internal IDs, tool mechanics,
+  implementation trivia, process metadata) must be suppressed unless they
+  materially affect the decision or Kyle explicitly requests them.
+- Plain-language references to commits, PRs, branches, and implementation state
+  are preferred over raw technical identifiers.
+- Preparation, authorization, execution, and verification remain clearly
+  separated; the complete approved artifact must be shown to Kyle before
+  consequential posting/sending.
+
+The full contract lives in `docs/ai/COMMUNICATION_CONTRACT.md`. This section,
+`docs/ai/CHATGPT_START_HERE.md` (Section 6), and
+`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 10) reference that
+contract rather than duplicating its content.
+
+---
+
+## 11. Appendix: Canonical ACP Artifact vs. Prose Task Description
 
 ```json
 {

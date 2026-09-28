@@ -77,6 +77,11 @@ information; it exposes no authority fields. **Director Authorization Architectu
 
 ---
 
+## Current Active Work
+
+| Task | Status | Owner | Notes |
+| TASK-KILO-COORDINATOR-COMMUNICATION-CONTRACT-IMPLEMENT-001 | **COMPLETED / IMPLEMENTED / VERIFIED** | Kilo | Established a durable Coordinator Communication Contract as the single authoritative source for coordinator communication behavior. Created `docs/ai/COMMUNICATION_CONTRACT.md`; referenced it from `CHATGPT_START_HERE.md` (bootstrap, Section 6), `CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 10), and `TASK_STANDARD.md` (Section 10). Consolidated the existing inline communication guidance from Section 10 of the operating protocol into the contract, eliminating duplicate communication rules. Updated `STATE.md`, `CONTROL_CENTER.md`, `TASK_LOG.md`, and `README.md`. Documentation-only; no production code, GitHub Actions, or secrets modified. `git diff --check` clean. |
+
 ## Active Tasks
 
 | Task | Status | Owner | Notes |

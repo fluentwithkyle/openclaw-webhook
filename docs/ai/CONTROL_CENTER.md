@@ -92,6 +92,7 @@ Updated By | Kilo — VERIFY_RECONCILE (TASK-KILO-RECONCILE-DEEPSEEK-CHATBOX-LIV
 | Task | Status | Owner |
 | Gemini Builder transition documentation reconciliation | ACTIVE | Gemini | TASK-GEMINI-RECONCILE-BUILDER-TRANSITION-RESEARCH-PLAN-001 |
 |------|--------|-------|
+| Coordinator Communication Contract | IMPLEMENTED / VERIFIED | Kilo | `docs/ai/COMMUNICATION_CONTRACT.md` established as canonical contract; referenced from `CHATGPT_START_HERE.md`, `CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, and `TASK_STANDARD.md` |
 | Persistent AI project state system | IMPLEMENTED | Kilo |
 | Kilo External Integration Contract documentation | IMPLEMENTED | Kilo |
 | ChatGPT consequential-action stop gate hardening | IMPLEMENTED | ChatGPT | Verified in commit `3ce42ac159dd8c73d7e043d7bc57692f6c5ecde` |
@@ -218,9 +219,10 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 
 - **Architecture:** ARCHITECTURE.md (authoritative for intended architecture)
 - **State:** docs/ai/STATE.md (authoritative current project state)
-- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-017)
+- **Decisions:** docs/ai/ARCH_DECISIONS.md (ADR-001 through ADR-019)
 - **Task History:** docs/ai/TASK_LOG.md
 - **Cold Start:** docs/ai/CHATGPT_START_HERE.md (canonical bootstrap contract — fresh-instance entry point)
+- **Communication Contract:** docs/ai/COMMUNICATION_CONTRACT.md (canonical coordinator communication standard)
 - **Docs:** docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md
 
 
