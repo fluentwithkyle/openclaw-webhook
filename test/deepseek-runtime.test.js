@@ -9,11 +9,13 @@ const {
     MAX_CHILD_TASK_OBSERVATIONS,
     MAX_REPORT_HIGHLIGHTS,
     MAX_REPORT_HIGHLIGHT_LENGTH,
+    WORKFLOW_STEP_POLICY,
     ACP_LIFECYCLE_STATES,
     LINEAGE_CONTROL_SEMANTICS,
     routeSpecialistIntent,
     buildControlPlaneCommand,
     evaluateContinuationPolicy,
+    evaluateWorkflowStepPolicy,
     classifyTaskResultForContinuation,
     validateGetTaskArguments,
     projectTaskForDeepSeek,
@@ -265,6 +267,49 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
+    await test('server-authoritative workflow policy permits a completed independently verified review step', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-workflow-parent';
+        completeDeepSeekReviewTask(parentRequestId);
+        const observed = new Map([[parentRequestId, classifyTaskResultForContinuation(taskRegistry.getTask(parentRequestId))]]);
+        const result = evaluateWorkflowStepPolicy(parentRequestId, 'review', 'deepseek-runtime-workflow-child', observed);
+        assert.deepEqual(result, { valid: true, authorization_required: false });
+        assert.equal(WORKFLOW_STEP_POLICY.review.task_mode, 'REVIEW');
+        assert.deepEqual(WORKFLOW_STEP_POLICY.review.capabilities, ['read_only']);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('workflow progression rejects incompatible lifecycle, failed, blocked, invalid lineage, and execution-only predecessors', async () => {
+        taskRegistry.resetRegistry();
+        const observed = new Set(['deepseek-runtime-workflow-missing']);
+        assert.match(evaluateWorkflowStepPolicy('deepseek-runtime-workflow-missing', 'review', 'deepseek-runtime-workflow-child', observed).error, /does not exist/);
+
+        createDeepSeekReviewTask('deepseek-runtime-workflow-executing');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-workflow-executing', status).success, true);
+        assert.equal(taskRegistry.addEvidence('deepseek-runtime-workflow-executing', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' }).success, true);
+        assert.match(evaluateWorkflowStepPolicy('deepseek-runtime-workflow-executing', 'review', 'deepseek-runtime-workflow-child', new Set(['deepseek-runtime-workflow-executing'])).error, /COMPLETE/);
+
+        for (const [requestId, status] of [['deepseek-runtime-workflow-failed', 'FAILED'], ['deepseek-runtime-workflow-blocked', 'BLOCKED']]) {
+            createDeepSeekReviewTask(requestId);
+            for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal(taskRegistry.updateTaskStatus(requestId, transition).success, true);
+            assert.match(evaluateWorkflowStepPolicy(requestId, 'review', 'deepseek-runtime-workflow-child', new Set([requestId])).error, new RegExp(status));
+        }
+        taskRegistry.resetRegistry();
+    });
+
+    await test('workflow implementation step remains server-derived and requires Director authorization at the ACP boundary', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-workflow-implementation-parent';
+        completeDeepSeekReviewTask(parentRequestId);
+        const observed = new Map([[parentRequestId, classifyTaskResultForContinuation(taskRegistry.getTask(parentRequestId))]]);
+        assert.deepEqual(evaluateWorkflowStepPolicy(parentRequestId, 'implementation', 'deepseek-runtime-workflow-implementation-child', observed), { valid: true, authorization_required: true });
+        assert.equal(WORKFLOW_STEP_POLICY.implementation.target, 'Gemini Builder');
+        assert.equal(WORKFLOW_STEP_POLICY.implementation.task_mode, 'BUILDER');
+        assert.deepEqual(WORKFLOW_STEP_POLICY.implementation.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+        assert.throws(() => buildControlPlaneCommand({ operation: 'request_task', objective: 'Review this implementation plan', parent_request_id: parentRequestId, workflow_step: 'implementation', target: 'Kilo' }), /not permitted/);
+        taskRegistry.resetRegistry();
+    });
+
     await test('continuation policy rejects invalid, terminal, cancelled, superseded, and insufficiently verified parents', async () => {
         taskRegistry.resetRegistry();
         const observed = new Set(['deepseek-runtime-missing-parent']);
@@ -339,8 +384,8 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
-    await test('Phase 0 coordinator contract formalizes bounded operations, authority, and ACP-owned verification', async () => {
-        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 0 Coordinator Contract / Capability Architecture');
+    await test('Phase 2 bounded coordination preserves the coordinator contract, authority, and ACP-owned verification', async () => {
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 2 — Bounded Coordination');
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.model_operations, ['request_task', 'get_task']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities, ['read_only']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths, ['poc/']);

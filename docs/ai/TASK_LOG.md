@@ -2776,3 +2776,17 @@ existing Director authorization.
 **Remaining item**: Independent verification and Kyle's explicit transition decision remain required. This implementation does not declare Phase 0 strategically converged or transition the roadmap.
 
 **Commit Reference**: This implementation commit.
+
+---
+
+## 2026-09-28 | TASK-CODEX-DEEPSEEK-PHASE-2-BOUNDED-COORDINATION-IMPLEMENT-001
+
+**Task**: Implement the Phase 2 bounded workflow-step validation and explicit stage-progression policy.
+
+**Outcome**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION. The DeepSeek runtime accepts only the enumerated `review` and `implementation` workflow steps when a parent request is supplied. Server-side policy rechecks prior bounded observation, authoritative TaskRegistry lifecycle, independent-verification evidence, lineage, repository/branch scope, and predecessor task mode before coordinator submission. Review remains read-only; implementation derives the existing Builder scope but remains blocked unless the existing Director approval is supplied and consumed at `/poc/coordinator`. No new control plane, executor, registry, authorization path, or model-selected authority field was introduced.
+
+**Verification**: Focused workflow-policy coverage and the relevant ACP schema, TaskRegistry, integration, Director-authorization, and complete suite checks were executed. The repository's committed strategic-state projection is stale relative to `STATE.md`; its fail-closed behavior was observed before the suite was rerun against a temporary hash-aligned copy of that existing projection. The committed projection was restored unchanged.
+
+**Remaining item**: Independent verification and any strategic phase-transition decision remain with the Director.
+
+**Commit Reference**: This implementation commit.

@@ -11,6 +11,10 @@ const MAX_REPORT_HIGHLIGHTS = 3;
 const MAX_REPORT_HIGHLIGHT_LENGTH = 240;
 const WORKFLOW_TERMINAL_STATUSES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED']);
 const WORKFLOW_TERMINAL_OUTCOMES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']);
+const WORKFLOW_STEP_POLICY = Object.freeze({
+    review: Object.freeze({ target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']), predecessor_task_mode: 'REVIEW', authorization_required: false }),
+    implementation: Object.freeze({ target: 'Gemini Builder', task_mode: 'BUILDER', capabilities: Object.freeze(['read_only', 'modify_files', 'run_tests', 'commit', 'push']), permitted_paths: Object.freeze(['poc/']), predecessor_task_mode: 'REVIEW', authorization_required: true })
+});
 
 const SPECIALIST_ROUTING_POLICY = Object.freeze({
     GeminiReviewer: Object.freeze({ classification: 'REVIEW', lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']) }),
@@ -42,10 +46,10 @@ function routeSpecialistIntent(objective, trustedContext = {}) {
     return { valid: false, outcome: 'HUMAN_REVIEW', reason: 'Specialist routing could not safely classify the intent' };
 }
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
-    phase: 'Phase 0 Coordinator Contract / Capability Architecture',
+    phase: 'Phase 2 — Bounded Coordination',
     model_operations: Object.freeze(['request_task', 'get_task']),
     request_task: Object.freeze({
-        model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']),
+        model_fields: Object.freeze(['operation', 'objective', 'parent_request_id', 'workflow_step']),
         prohibited_authority_fields: Object.freeze(['target', 'repository', 'base_branch', 'task_mode', 'capabilities', 'permitted_paths', 'authorization', 'commit', 'push']),
         strategic_alignment: 'server-side authoritative state validation before ACP submission',
         specialist_routing: 'server policy',
@@ -77,6 +81,13 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         max_tool_iterations: MAX_TOOL_ITERATIONS,
         result_classification: 'server-derived from TaskRegistry lifecycle, lineage, and evidence only'
     }),
+    workflow_progression: Object.freeze({
+        model_steps: Object.freeze(Object.keys(WORKFLOW_STEP_POLICY)),
+        requires_parent_observation: true,
+        requires_completed_independently_verified_predecessor: true,
+        authority: 'TaskRegistry lifecycle, lineage, and ACP metadata are evaluated server-side',
+        authorization: 'Consequential implementation steps require existing Director authorization at /poc/coordinator'
+    }),
     observation: Object.freeze({ max_child_tasks: MAX_CHILD_TASK_OBSERVATIONS }),
     authorization_boundary: Object.freeze({
         authority: 'ACP and Kyle',
@@ -97,6 +108,7 @@ const CONTROL_PLANE_TOOL = {
                 operation: { type: 'string', enum: ['request_task', 'get_task'] },
                 objective: { type: 'string', minLength: 1, maxLength: 2000 },
                 parent_request_id: { type: 'string', minLength: 1, maxLength: 100 },
+                workflow_step: { type: 'string', enum: Object.keys(WORKFLOW_STEP_POLICY) },
                 request_id: { type: 'string', minLength: 1, maxLength: 100 }
             }
         }
@@ -196,11 +208,14 @@ function buildControlPlaneCommand(args, trustedContext = {}) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
     }
     const hasParentRequestId = Object.prototype.hasOwnProperty.call(args, 'parent_request_id');
-    if (Object.keys(args).length !== (hasParentRequestId ? 3 : 2) || args.operation !== 'request_task' ||
+    const hasWorkflowStep = Object.prototype.hasOwnProperty.call(args, 'workflow_step');
+    const expectedFieldCount = 2 + (hasParentRequestId ? 1 : 0) + (hasWorkflowStep ? 1 : 0);
+    if (Object.keys(args).length !== expectedFieldCount || args.operation !== 'request_task' ||
         typeof args.objective !== 'string' || args.objective.trim().length === 0 || args.objective.length > 2000 ||
         (hasParentRequestId && (typeof args.parent_request_id !== 'string' || args.parent_request_id.trim().length === 0 ||
             args.parent_request_id.length > 100 || args.parent_request_id !== args.parent_request_id.trim() ||
-            !args.parent_request_id.startsWith('deepseek-runtime-')))) {
+            !args.parent_request_id.startsWith('deepseek-runtime-'))) ||
+        (hasWorkflowStep && (!hasParentRequestId || typeof args.workflow_step !== 'string' || !Object.prototype.hasOwnProperty.call(WORKFLOW_STEP_POLICY, args.workflow_step)))) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
     }
 
@@ -208,14 +223,14 @@ function buildControlPlaneCommand(args, trustedContext = {}) {
     if (strategicAlignment.status !== 'ALIGNED_PENDING_AUTHORIZATION') {
         throw new RuntimeError(403, 'STRATEGIC_ALIGNMENT_BLOCKED', strategicAlignment.detail || 'Strategic alignment could not be established', { strategic_code: strategicAlignment.code, escalation: strategicAlignment.escalation });
     }
-    const route = routeSpecialistIntent(args.objective, trustedContext);
+    const route = hasWorkflowStep ? { valid: true, ...WORKFLOW_STEP_POLICY[args.workflow_step], dispatchable: true } : routeSpecialistIntent(args.objective, trustedContext);
     if (!route.valid) throw new RuntimeError(403, 'SPECIALIST_ROUTING_BLOCKED', route.reason, { lane: route.lane || 'Human review', outcome: route.outcome });
     const command = {
         protocol_version: '0.1',
         request_id: `deepseek-runtime-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         source: 'DeepSeek Runtime',
         target: route.target,
-        task_type: 'model-mediated-review',
+        task_type: hasWorkflowStep ? `model-mediated-workflow-${args.workflow_step}` : 'model-mediated-review',
         repository: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.repository,
         base_branch: DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.base_branch,
         task: args.objective.trim(),
@@ -231,6 +246,7 @@ function buildControlPlaneCommand(args, trustedContext = {}) {
         command.activation_surface = 'workflow_dispatch';
     }
     if (hasParentRequestId) command.parent_request_id = args.parent_request_id;
+    if (hasWorkflowStep) command.workflow_step = args.workflow_step;
     return command;
 }
 
@@ -267,6 +283,24 @@ function evaluateContinuationPolicy(parentRequestId, newRequestId, observedTaskI
     const currentResult = classifyTaskResultForContinuation(parent);
     if (!currentResult.eligible_for_next_decision) return { valid: false, error: currentResult.reason };
     return taskRegistry.validateLineageForCreate(parentRequestId, newRequestId);
+}
+
+function evaluateWorkflowStepPolicy(parentRequestId, workflowStep, newRequestId, observedTaskIds) {
+    if (!Object.prototype.hasOwnProperty.call(WORKFLOW_STEP_POLICY, workflowStep)) {
+        return { valid: false, error: 'Requested workflow step is not permitted by the server policy' };
+    }
+    const continuation = evaluateContinuationPolicy(parentRequestId, newRequestId, observedTaskIds);
+    if (!continuation.valid) return continuation;
+
+    const parent = taskRegistry.getTask(parentRequestId);
+    const policy = WORKFLOW_STEP_POLICY[workflowStep];
+    if (parent.repository !== DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.repository || parent.base_branch !== DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.base_branch) {
+        return { valid: false, error: 'Parent task ACP metadata does not match the server-authoritative repository scope' };
+    }
+    if (parent.task_mode !== policy.predecessor_task_mode) {
+        return { valid: false, error: `Workflow step ${workflowStep} requires a ${policy.predecessor_task_mode} predecessor task` };
+    }
+    return { valid: true, authorization_required: policy.authorization_required };
 }
 
 function classifyTaskResultForContinuation(task) {
@@ -749,7 +783,9 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
         if (args.operation === 'request_task') {
             const command = buildControlPlaneCommand(args);
             if (command.parent_request_id) {
-                const continuationCheck = evaluateContinuationPolicy(command.parent_request_id, command.request_id, observedTaskResults);
+                const continuationCheck = command.workflow_step
+                    ? evaluateWorkflowStepPolicy(command.parent_request_id, command.workflow_step, command.request_id, observedTaskResults)
+                    : evaluateContinuationPolicy(command.parent_request_id, command.request_id, observedTaskResults);
                 if (!continuationCheck.valid) {
                     throw new RuntimeError(400, 'CONTINUATION_POLICY_REJECTED', continuationCheck.error);
                 }
@@ -852,6 +888,7 @@ module.exports = {
     MAX_CHILD_TASK_OBSERVATIONS,
     MAX_REPORT_HIGHLIGHTS,
     MAX_REPORT_HIGHLIGHT_LENGTH,
+    WORKFLOW_STEP_POLICY,
     ACP_LIFECYCLE_STATES,
     LINEAGE_CONTROL_SEMANTICS,
     SPECIALIST_ROUTING_POLICY,
@@ -860,6 +897,7 @@ module.exports = {
     buildControlPlaneCommand,
     validateGetTaskArguments,
     evaluateContinuationPolicy,
+    evaluateWorkflowStepPolicy,
     classifyTaskResultForContinuation,
     observeTaskForDeepSeek,
     projectTaskForDeepSeek,
