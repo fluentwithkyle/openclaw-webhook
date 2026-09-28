@@ -1,5 +1,6 @@
 const axios = require('axios');
 const taskRegistry = require('../poc/task-registry');
+const { evaluateCoordinatorIntent } = require('../poc/strategic-alignment');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
@@ -42,7 +43,7 @@ function routeSpecialistIntent(objective, trustedContext = {}) {
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
     phase: 'Phase 3 bounded autonomous continuation',
     model_operations: Object.freeze(['request_task', 'get_task']),
-    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']), specialist_routing: 'server policy' }),
+    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']), strategic_alignment: 'server-side authoritative state validation before ACP submission', specialist_routing: 'server policy' }),
     get_task: Object.freeze({ model_fields: Object.freeze(['operation', 'request_id']), request_id_prefix: 'deepseek-runtime-' }),
     server_derived_authority: Object.freeze({
         repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main',
@@ -177,7 +178,7 @@ function normalizeMessages(messages) {
     return messages.map(normalizeMessage);
 }
 
-function buildControlPlaneCommand(args, trustedContext) {
+function buildControlPlaneCommand(args, trustedContext = {}) {
     if (!args || typeof args !== 'object' || Array.isArray(args)) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
     }
@@ -190,6 +191,10 @@ function buildControlPlaneCommand(args, trustedContext) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
     }
 
+    const strategicAlignment = evaluateCoordinatorIntent(args.objective, trustedContext.strategicStateOptions);
+    if (strategicAlignment.status !== 'ALIGNED_PENDING_AUTHORIZATION') {
+        throw new RuntimeError(403, 'STRATEGIC_ALIGNMENT_BLOCKED', strategicAlignment.detail || 'Strategic alignment could not be established', { strategic_code: strategicAlignment.code, escalation: strategicAlignment.escalation });
+    }
     const route = routeSpecialistIntent(args.objective, trustedContext);
     if (!route.valid) throw new RuntimeError(403, 'SPECIALIST_ROUTING_BLOCKED', route.reason, { lane: route.lane || 'Human review', outcome: route.outcome });
     const command = {

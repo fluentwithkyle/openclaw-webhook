@@ -24,11 +24,36 @@
       "prerequisites": [
         "stage-1-network-path"
       ],
-      "enables": "phase-2-bounded-coordination"
+      "enables": "phase-2-bounded-coordination",
+      "objective_terms": [
+        "coordinator contract"
+      ],
+      "acceptance_criteria": [
+        "phase-0-contract-defined"
+      ],
+      "expected_advancement": "A reconciled Coordinator Contract unlocks Kyle review of the Phase 0 transition.",
+      "convergence_condition": "phase-0-contract-defined"
+    },
+    {
+      "id": "phase-0-contract-evidence-inventory",
+      "classification": "B",
+      "prerequisites": [
+        "stage-1-network-path"
+      ],
+      "enables": "phase-0-contract-reconciliation",
+      "objective_terms": [
+        "contract evidence inventory"
+      ],
+      "acceptance_criteria": [
+        "phase-0-evidence-inventory-complete"
+      ],
+      "expected_advancement": "Evidence inventory enables the required Coordinator Contract reconciliation.",
+      "convergence_condition": "phase-0-evidence-inventory-complete"
     }
   ],
   "required_next_work": [
-    "phase-0-contract-reconciliation"
+    "phase-0-contract-reconciliation",
+    "phase-0-contract-evidence-inventory"
   ],
   "prerequisites": [
     {
@@ -41,5 +66,6 @@
     "Kyle authorization of any consequential transition or implementation work."
   ],
   "reconciliation_note": "The systemic-failure research claim that Phase 0\u20133 was simply complete is incorrect. ARCHITECTURE.md \u00a716.6 is authoritative: Phase 0 is partial and requires reconciliation, Phase 1 is essentially complete, Phase 2 is substantially built/in progress, and Phase 3 is a future target.",
-  "authoritative_sources_agree": true
+  "authoritative_sources_agree": true,
+  "state_md_sha256": "ca39c71eedfa2f586c4b4eac122eae760e3bf65c2ee2ae62dcfa86b9f5a8ecb2"
 }

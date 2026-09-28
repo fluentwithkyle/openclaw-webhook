@@ -19,6 +19,11 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
   policy mapping, evidence contract, state transitions, and Kyle authorization gates.
 - **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 acceptance
   requires independent verification of the contract and a Kyle-authorized transition.
+- **Production enforcement**: DeepSeek `request_task` evaluates the projection on the
+  server before it constructs an ACP command or calls `/poc/coordinator`; an alignment
+  failure is `STRATEGIC_ALIGNMENT_BLOCKED` and cannot reach TaskRegistry or dispatch.
+  The projection's SHA-256 must match this file. Alignment remains pending Kyle/ACP
+  authorization; no model-generated exception is accepted.
 - **Stop/escalation**: No task is selectable merely because it is technically correct,
   locally useful, or ACP-compliant. Missing, stale, contradictory, or unverifiable
   state; a completed requirement; unmet prerequisites; or no required next work is

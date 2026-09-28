@@ -32,7 +32,7 @@ function command(requestId) {
     const cmd = command('director-auth-1');
     let response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, cmd);
     assert.equal(response.status, 403);
-    const serverDerivedBuilder = buildControlPlaneCommand({ operation: 'request_task', objective: 'Implement the approved poc change' });
+    const serverDerivedBuilder = buildControlPlaneCommand({ operation: 'request_task', objective: 'Implement coordinator contract' });
     assert.equal(serverDerivedBuilder.target, 'Gemini Builder');
     assert.deepEqual(serverDerivedBuilder.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
     assert.deepEqual(serverDerivedBuilder.constraints.permitted_paths, ['poc/']);

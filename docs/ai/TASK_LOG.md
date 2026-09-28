@@ -2747,3 +2747,12 @@ rewriting the historical artifact.
 **Verification**: `node test/strategic-alignment.test.js`; `npm test`; `git diff --check`.
 
 **Commit Reference**: Recorded in this task's implementation commit.
+
+
+## 2026-09-28 | TASK-CODEX-SYSTEMIC-AUTONOMY-RELIABILITY-AND-STRATEGIC-ALIGNMENT-HARDENING-001 Follow-up
+
+**Outcome**: Closed the production-enforcement gap. The DeepSeek runtime invokes the
+fail-closed alignment evaluator before ACP submission, backed by a SHA-validated
+`STATE.md` projection. Production-path and adversarial tests confirm invalid model
+intent cannot reach TaskRegistry/dispatch and aligned consequential work still requires
+existing Director authorization.

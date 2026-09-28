@@ -126,6 +126,11 @@ advancement, and convergence criterion. It returns only `ALIGNED_PENDING_AUTHORI
 or a fail-closed `BLOCKED` result; it cannot authorize, dispatch, mutate TaskRegistry,
 or mark a phase complete.
 
+For model-mediated DeepSeek `request_task`, this evaluation occurs server-side in
+`services/deepseek-runtime.js` before the existing ACP coordinator submission. A failed
+projection check or alignment decision must prevent TaskRegistry creation and dispatch.
+The JSON projection carries a SHA-256 of canonical `STATE.md`; a mismatch is blocked.
+
 A technical report, passing tests, research recommendation, or ACP-valid task does not
 establish strategic convergence. Convergence requires the authoritative phase
 acceptance criteria and independent desired-outcome verification; phase transition then

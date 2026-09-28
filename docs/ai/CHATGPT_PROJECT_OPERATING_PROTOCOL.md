@@ -203,6 +203,11 @@ alignment is insufficient. The result must be `ALIGNED_PENDING_AUTHORIZATION` or
 `BLOCKED`; a blocked result preserves evidence, identifies the missing/conflicting
 state, and escalates to Kyle.
 
+At runtime, DeepSeek model intent enters the existing `control_plane`; the server
+validates strategic state and alignment before constructing the ACP command. Only then
+does the existing ACP authorization, TaskRegistry, and dispatcher/orchestrator path run.
+A blocked alignment result is an escalation, not an authorization exception.
+
 The gate separately records technical correctness, strategic alignment, phase
 completion, desired-outcome verification, authorization, and convergence. Research
 may recommend work but cannot promote itself or another research increment into an

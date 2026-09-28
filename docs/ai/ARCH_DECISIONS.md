@@ -668,3 +668,13 @@ Kyle rather than creating another local increment.
 executor, queue, TaskRegistry, dispatch path, or authority. Research and agent output
 remain advisory. Tests cover off-roadmap work, future-phase work, stale/self-attested
 state, completed requirements, missing state, the 4.1–4.9/4.10 replay, and convergence.
+
+
+### ADR-022 Implementation Follow-up — Production Enforcement
+
+The evaluator is enforced at the existing DeepSeek runtime `request_task` command
+construction boundary, before ACP coordinator submission. The runtime validates the
+projection SHA-256 against `STATE.md`, derives the requirement mapping and its
+advancement/convergence facts from authoritative state, and blocks before TaskRegistry
+or dispatch on any failure. This adds no execution authority: an aligned result remains
+pending existing Director/ACP authorization.

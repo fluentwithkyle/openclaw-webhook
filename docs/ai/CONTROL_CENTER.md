@@ -40,6 +40,13 @@ Phases 0–3 were complete is corrected in `STATE.md`; see `ARCHITECTURE.md` §1
 
 ---
 
+## Enforced Coordinator Gate
+
+DeepSeek `request_task` now checks the SHA-bound `STATE.md` projection and authoritative
+requirement mapping before ACP submission. Unaligned work cannot create TaskRegistry
+state or dispatch. Aligned work remains pending the existing Kyle/ACP authorization;
+this dashboard remains derived from `STATE.md`.
+
 ## Architectural Note
 The project has completed the transition from Kilo Cloud Agent (transitional/legacy) to Gemini Builder (active/target).
 - **Coordinator**: ChatGPT

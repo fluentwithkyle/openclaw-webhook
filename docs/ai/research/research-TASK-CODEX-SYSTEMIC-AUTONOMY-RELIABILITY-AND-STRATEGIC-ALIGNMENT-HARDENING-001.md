@@ -63,3 +63,22 @@ a hidden authority path, nor an incident-specific phrase rule.
 - **prerequisites_satisfied**: Stage 1 Network Path COMPLETE / VERIFIED
 - **phase_unlock_or_advancement**: An independently verified contract and Kyle-reviewed phase transition
 - **alignment_conclusion**: PASS — implementation is governance-only and does not authorize consequential work
+
+## Enforcement Follow-up
+
+The initial evaluator was not on the production request path. It is now invoked by
+`services/deepseek-runtime.js` in `buildControlPlaneCommand()` after model arguments
+are validated and before routing, ACP submission, TaskRegistry creation, or dispatch.
+The actual path is: model intent → runtime `control_plane` → authoritative projection
+hash validation and strategic evaluation → existing ACP coordinator authorization →
+TaskRegistry → existing dispatcher/orchestrator. A failure returns
+`STRATEGIC_ALIGNMENT_BLOCKED` and makes no coordinator request.
+
+The projection contains the SHA-256 hash of canonical `STATE.md`; loading fails closed
+when it does not match. Requirement-owned objective terms, acceptance criteria,
+expected advancement, and convergence condition are evaluated server-side, so proposal
+prose cannot supply those values. A B-class enabling requirement is permitted only when
+the authoritative requirement supplies a dependency it enables. Alignment remains
+`ALIGNED_PENDING_AUTHORIZATION`; it never supplies Director approval. There is no
+model-created strategic exception: any exceptional request blocks and escalates to Kyle
+for a separately authorized decision.

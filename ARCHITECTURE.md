@@ -1618,7 +1618,9 @@ record and `docs/ai/strategic-state.json` is its machine-readable projection for
 repository's deterministic alignment evaluator. The projection is policy evidence only:
 it does not create an execution authority, control plane, TaskRegistry, dispatcher, or
 roadmap that competes with this architecture. A mismatch fails closed and requires
-reconciliation of `STATE.md`.
+reconciliation of `STATE.md`. `request_task` enforces this evaluation inside
+`services/deepseek-runtime.js` before ACP command construction and coordinator
+submission; a failure cannot create TaskRegistry state or invoke dispatch.
 
 No substantive work is selected merely because it is technically valid, locally useful,
 or ACP-compliant. It must trace to the authoritative current strategic objective, an
