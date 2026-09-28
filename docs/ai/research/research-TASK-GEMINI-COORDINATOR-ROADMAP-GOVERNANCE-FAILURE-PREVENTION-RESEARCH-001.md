@@ -140,6 +140,20 @@ A research agent or task generator must classify every proposed task into one of
 
 ---
 
+## Roadmap Alignment
+
+- **authoritative_roadmap**: `ARCHITECTURE.md` §16.6 (DeepSeek Coordinator Evolution), `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md` (Coordinator Phases), `docs/ai/ARCH_DECISIONS.md` ADR-018/ADR-019 (Coordinator Authority Chain), `docs/ai/STATE.md` (Current Coordinator Roadmap Status table).
+- **current_phase**: Phase 0 — Coordinator Contract / Capability Architecture (Partially Complete / Requires Formal Reconciliation). Phase 1 (Observation) is essentially complete / implemented. Phase 2 (Bounded Coordination) is substantially built. Phase 3 (Autonomous Coordination Loop) is not yet complete / future target.
+- **phase_completion_status**: Phase 0 is PARTIALLY COMPLETE and REQUIRES FORMAL RECONCILIATION — the explicit architectural checkpoint for completing the Coordinator Contract & Capability Architecture is identified but not formally concluded. Phase 1 observation is substantially implemented via Increments 4.1–4.9. Phase 2 has foundational infrastructure (Director authorization, specialist routing) but is not fully complete.
+- **relevant_prior_work**: Increments 4.1–4.9 implemented Phase 1 observation capabilities (task lifecycle, lineage, evidence, diagnostics, workflow completion, verification/reconciliation, routing rationale). Phase 0 contract was established via `request_task`/`get_task` (TASK-CODEX-DEEPSEEK-COORDINATOR-CONTRACT-IMPLEMENT-001). Phase 2 foundation built via Phase 3.1 Director Authorization (TASK-CODEX-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-IMPLEMENT-001) and Phase 3.2 Specialist Routing (TASK-CODEX-DEEPSEEK-PHASE-3.2-SPECIALIST-ROUTING-CORRECTION-001, commit `11d057bc756739f111aab9c0189108ca2e678e14`).
+- **proposed_task_classification**: **Category B — Enabling/Foundation Work**. This governance research task is enabling work required to establish the Roadmap Alignment Gate that governs all future task generation. Without this gate, future coordinator tasks cannot be reliably directed toward Phase 0 completion. The governance mechanism is documentation-only (no runtime changes), satisfying the constraint against a second control plane.
+- **roadmap_requirement_addressed**: The governing roadmap requires a mechanism to prevent task selection drift from roadmap phases into local micro-optimization loops. Phase 0 (Coordinator Contract) is the immediate architectural checkpoint, and the absence of a roadmap gate is the root cause of drift. This task addresses that gap.
+- **prerequisites_satisfied**: Yes — the research record references all authoritative roadmap documents, existing governance controls (TASK_STANDARD.md, CHATGPT_PROJECT_OPERATING_PROTOCOL.md), and the historical Increment 4.1–4.9 sequence. No runtime or architectural prerequisites are required for a documentation/governance implementation task.
+- **phase_unlock_or_advancement**: Once the Roadmap Alignment Gate is in place, future coordinator task generation is directed toward Phase 0 Coordinator Contract completion before any further Phase 1/2/3 capability expansion. The gate itself does not start Phase 0 implementation; it ensures Phase 0 is selected as the required next work.
+- **alignment_conclusion**: **Gate PASSED**. The proposed task (documentation-only Roadmap Alignment Gate implementation) is Enabling/Foundation Work (Category B) that directly supports the governing roadmap by establishing the mandatory gate that was identified as the root governance failure. No runtime, application, or architectural changes are introduced. The gate classification is consistent with `ARCHITECTURE.md` §16.6 and ADR-018, which state Phase 0 is the immediate next checkpoint.
+
+---
+
 ## 7. Verification & Evidence Basis
 
 - **Baseline Established**: Inspected current `main` branch state, `ARCHITECTURE.md`, `STATE.md`, `CONTROL_CENTER.md`, and historical increment research records (`INCREMENT-RESEARCH-001` to `009`).

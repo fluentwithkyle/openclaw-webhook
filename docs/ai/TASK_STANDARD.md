@@ -55,6 +55,88 @@ This requirement corresponds to the Solution Simplicity Gate in `docs/ai/CHATGPT
 
 Repository-level instructions (`GEMINI.md`, `ARCHITECTURE.md`) take precedence over task requests. Any conflict between a task request and repository rules must result in a `status: blocked` report.
 
+---
+
+## 3.1 Mandatory Roadmap Alignment Gate
+
+Before proposing, generating, or authorizing any substantive task, research increment, or work selection, the coordinator/task author must pass the mandatory **Roadmap Alignment Gate**. This gate is mandatory, not advisory. It exists to prevent the coordinator from repeatedly selecting locally useful incremental capabilities when the governing project roadmap requires a different phase or prerequisite first.
+
+The gate forces task generation, research, and work selection to answer:
+
+> What does the governing roadmap require now, what phase are we in, is that phase complete, and does this proposed task advance that phase?
+
+### 3.1.1 Required Gate Establishing Fields
+
+Before proposing or generating substantive work, the coordinator/task author must establish:
+
+* **authoritative_roadmap** — the authoritative document(s) defining the governing roadmap (e.g., `ARCHITECTURE.md` §16.6, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`, `docs/ai/ARCH_DECISIONS.md`, `docs/ai/STATE.md`).
+* **current_roadmap_phase** — the active phase of the governing roadmap.
+* **phase_completion_status** — whether all prerequisites of the current phase are satisfied.
+* **relevant_prior_work** — what prior tasks already established the baseline.
+* **required_prerequisites_satisfied** — whether the prerequisites blocking the proposed work are satisfied.
+* **proposed_task_mapping** — why the proposed task strictly belongs to the current phase (or is justified Enabling/Foundation Work).
+* **phase_unlock_or_advancement** — what subsequent phase or milestone the task is expected to unlock.
+* **alignment_conclusion** — the gate's decision: pass, reject, or blocked with rationale.
+
+### 3.1.2 Mandatory Work Classification
+
+Every proposed task must be explicitly classified into one of four mutually exclusive categories:
+
+* **A — Roadmap-Required Work**: Directly implements an explicit requirement of the current incomplete roadmap phase. *(Permitted)*
+* **B — Enabling/Foundation Work**: Required technical foundation before a roadmap phase can be started or completed. *(Permitted only with documented dependency justification)*
+* **C — Optional Optimization**: Improves an existing feature without advancing roadmap phases. *(Prohibited if the current phase has unfulfilled prerequisites)*
+* **D — Premature Capability Expansion**: Implements features of a future phase (e.g., Phase 2/3 operations) while an earlier phase (e.g., Phase 0/1) is incomplete. *(Strictly prohibited)*
+
+The classification must affect task selection. A task classified as C or D while the current phase remains incomplete must not be selected as the default next task.
+
+### 3.1.3 Prohibited Wording Pattern
+
+The standard explicitly prohibits the wording pattern that caused the previous governance drift:
+
+> "identify the single smallest/highest-value next capability"
+
+This phrasing must not be used to override the governing roadmap. The gate must instead prioritize roadmap-required work (A) and prerequisites (B) over local optimization (C) or premature expansion (D).
+
+### 3.1.4 Classification Affects Selection
+
+* A task that merely expands or optimizes a capability in a later phase while an earlier roadmap phase remains incomplete must not become the default next task.
+* Once a phase is complete, the gate directs work toward the next roadmap phase rather than continuing indefinitely with optional refinements to the previous phase.
+* Enabling/Foundation Work is permitted when genuinely required to unlock the current roadmap phase. The distinction must be based on documented dependency and roadmap relationship, not subjective preference.
+
+### 3.1.5 Gate Enforcement
+
+The coordinator must evaluate the gate before approving any task generation. If the gate is not satisfied:
+
+* **status: blocked**
+* Report the specific unmet gate field(s) or missing classification.
+* Do not proceed with task generation, research, or work selection.
+
+This gate is enforced in the ChatGPT Coordinator operating protocol at `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 2.5, Roadmap Alignment Decision Gate) and applies to all research records at `docs/ai/research/` (Section 4 of this standard).
+
+---
+
+### 3.2 Research Record Roadmap Alignment Section
+
+Every durable research record under `docs/ai/research/` must contain a mandatory `## Roadmap Alignment` section. This section must include, at minimum:
+
+```markdown
+## Roadmap Alignment
+
+- **authoritative_roadmap**: [The governing roadmap document(s) — e.g., `ARCHITECTURE.md` §16.6, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`, `docs/ai/ARCH_DECISIONS.md`, `docs/ai/STATE.md`]
+- **current_phase**: [The active roadmap phase — e.g., Phase 0 — Coordinator Contract]
+- **phase_completion_status**: [Whether the current phase is complete and all prerequisites satisfied]
+- **relevant_prior_work**: [Prior tasks/completed work that established the baseline]
+- **proposed_task_classification**: [A, B, C, or D per Section 3.1.2, with justification]
+- **roadmap_requirement_addressed**: [The specific roadmap requirement the proposed task addresses]
+- **prerequisites_satisfied**: [Whether required prerequisites are satisfied, with evidence]
+- **phase_unlock_or_advancement**: [What phase or milestone the task is expected to unlock]
+- **alignment_conclusion**: [Gate decision: pass, reject, or blocked, with rationale]
+```
+
+This makes roadmap alignment auditable from the durable repository record rather than dependent on conversational context. The section must use the exact field names above so that future automated or manual review can verify gate compliance.
+
+This section is enforced in the ChatGPT Coordinator operating protocol at `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 2.5) and applies to all research records and task-generation decisions.
+
 ## 4. Relationship with ACP
 
 This standard provides the human-readable envelope for task delegation. The Agent Command Protocol (ACP) is the *proposed* future machine-readable protocol for executing these tasks.
@@ -266,6 +348,7 @@ The capabilities field must contain exactly these four capabilities. Selecting R
 7. The research record, index entry, and TASK_LOG reference must be created/updated during the same authorized research execution.
 8. Research records must link/reference the actual repository evidence used; agent assertions must not be presented as independently verified facts.
 9. A RESEARCH_DOCUMENT task is not complete until the research record, index entry, and TASK_LOG reference have been persisted, committed, and pushed.
+10. **Roadmap Alignment section**: Each research record must contain a mandatory `## Roadmap Alignment` section (see Section 3.2) establishing the authoritative roadmap, current phase, phase completion status, relevant prior work, proposed task classification, roadmap requirement addressed, prerequisites satisfied, expected phase advancement/unlock, and alignment conclusion. This makes roadmap alignment auditable from the durable repository record rather than dependent on conversational context.
 
 **Permitted paths:** Restricted to the research/documentation surface: `docs/ai/research/`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`, `docs/ai/README.md`, `docs/ai/ARCH_DECISIONS.md`, `poc/schemas/acp-schema.js`, and `test/schema.test.js`.
 

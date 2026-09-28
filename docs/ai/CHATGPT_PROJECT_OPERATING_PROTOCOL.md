@@ -57,11 +57,16 @@ defined by the authorization gate (Section 14).
 
 The full operating sequence is:
 
-**Project Bootstrap complete → Protocol Review complete → Applicable Requirements extracted → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution → Independent Verification → Stop**
+**Project Bootstrap complete → Protocol Review complete → Roadmap Alignment Gate → Applicable Requirements extracted → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution → Independent Verification → Stop**
 
 The canonical definitions of the three preparation phases, the Bootstrap Completion
 Check, and the fail-closed result reside in `docs/ai/CHATGPT_START_HERE.md`
 (Bootstrap Contract). This protocol depends on that contract and does not redefine it.
+
+The Roadmap Alignment Gate (Section 2.5) is a mandatory precondition for Action
+Construction. It establishes that the proposed work is governed by the authoritative
+roadmap rather than local micro-optimization. See `docs/ai/TASK_STANDARD.md`
+(Section 3.1) for the gate's full definition.
 
 ### Integration with Existing Procedures
 
@@ -139,6 +144,7 @@ This gate does not require ChatGPT to expose hidden chain-of-thought or private 
 
 The protocol gate is the mandatory precondition for:
 
+- The Roadmap Alignment Gate (Section 2.5).
 - The Solution Simplicity Gate.
 - The Standard Project Flow (Section 3).
 - The Project Status Procedure (Section 4).
@@ -146,6 +152,45 @@ The protocol gate is the mandatory precondition for:
 - The Consequential Action Stop Gate (Section 14).
 - The Standard Completion Loop (Section 12).
 - The Human Intent Translation Protocol operating modes (Section 16.4).
+
+### Roadmap Alignment Decision Gate
+
+Before approving any task generation, research increment, or substantive work selection, the ChatGPT Coordinator must establish and document the Roadmap Alignment Gate as defined in `docs/ai/TASK_STANDARD.md` (Section 3.1). This gate is mandatory and is not optional reasoning.
+
+Before ChatGPT Coordinator proposes or creates a substantive implementation/research task, it must establish:
+
+1. **authoritative_roadmap** — the governing roadmap document(s) (e.g., `ARCHITECTURE.md` §16.6, `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md`, `docs/ai/ARCH_DECISIONS.md`, `docs/ai/STATE.md`).
+2. **current_roadmap_phase** — the active phase of the governing roadmap.
+3. **phase_completion** — whether the current phase and its prerequisites are satisfied.
+4. **required_next_work** — the specific roadmap requirement the proposed task addresses.
+5. **proposed_task_mapping** — why the proposed task belongs to the current phase (or is justified as Enabling/Foundation Work).
+6. **prerequisite_status** — whether required prerequisites are satisfied, with evidence.
+7. **expected_phase_advancement** — what phase or milestone the task is expected to unlock.
+
+The Coordinator must classify the proposed work as one of:
+
+* **A — Roadmap-Required Work**: Directly implements an explicit requirement of the current incomplete roadmap phase. *(Permitted)*
+* **B — Enabling/Foundation Work**: Required technical foundation before a roadmap phase can be started or completed. *(Permitted with documented justification)*
+* **C — Optional Optimization**: Improves an existing feature without advancing roadmap phases. *(Prohibited if the current phase has unfulfilled prerequisites)*
+* **D — Premature Capability Expansion**: Implements features of a future phase while an earlier phase is incomplete. *(Strictly Prohibited)*
+
+The Coordinator must be able to recognize when technically valid work is strategically premature. A task classified as C or D while the current phase remains incomplete must not be selected as the next task.
+
+The Coordinator must explicitly preserve:
+
+* Kyle as final authorization authority;
+* ACP as the sole authority boundary;
+* TaskRegistry as durable task state;
+* The existing dispatcher/orchestrator as execution authority;
+* Model output as untrusted intent;
+* Server-side derivation of authority-bearing fields;
+* No second control plane.
+
+**Gate enforcement**: If the Roadmap Alignment Gate cannot be satisfied — if the authoritative roadmap, current phase, phase completion, or roadmap requirement cannot be established — the Coordinator must report `status: blocked` and must not propose or create the task. The Coordinator must not infer authority or expand scope.
+
+This gate integrates with the existing workflow and does not create a competing process:
+
+**Project Bootstrap complete → Protocol Review complete → Roadmap Alignment Gate → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution → Independent Verification → Stop**
 
 ## Solution Simplicity Gate
 
@@ -186,7 +231,7 @@ The gate is intentionally lightweight. It does **not** require exhaustive invest
 
 The Solution Simplicity Gate is integrated into the existing workflow as an evaluation step within Action Construction and Authorized Execution. It does **not** create a competing process:
 
-**Project Bootstrap complete → Protocol Review complete → Applicable Requirements extracted → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution (Solution Simplicity Validation) → Independent Verification → Stop**
+**Project Bootstrap complete → Protocol Review complete → Roadmap Alignment Gate → Applicable Requirements extracted → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution (Solution Simplicity Validation) → Independent Verification → Stop**
 
 The gate preserves all existing protocol requirements, including mandatory protocol review, repository/state verification, explicit capabilities, least privilege, authentication boundaries, specialist lanes, task modes, persistence, and VERIFY_RECONCILE semantics.
 
