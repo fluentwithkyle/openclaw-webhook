@@ -645,6 +645,33 @@ Adopt the **Roadmap Alignment Gate** as a mandatory governance requirement acros
 - Future coordinator task generation is directed toward Phase 0 Coordinator Contract completion before any further Phase 1/2/3 capability expansion.
 - This decision aligns with ADR-005 (Specialist Lanes with ACP Boundary), ADR-006 (Persistent AI Project State), ADR-018 (DeepSeek Coordinator Evolution Retains Existing Authority Chain), and ADR-019 (Phase 1 Observation Uses Existing ACP Authority).
 
+## ADR-023: Phase 0 Coordinator Contract Reconciliation
+
+**Status**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION
+
+**Context**: The authoritative roadmap identifies Phase 0 as partially complete and
+requires a formal Coordinator Contract reconciliation. The completed research record
+incorrectly described `CANCELLED` and `SUPERSEDED` as ACP lifecycle states and risked
+confusing broad TaskRegistry lineage behavior with the narrower DeepSeek continuation
+policy.
+
+**Decision**: The runtime contract explicitly limits model-facing operations to
+`request_task` and `get_task`, with all authority-bearing ACP fields derived by server
+policy. ACP lifecycle states are limited to `PENDING`, `SELECTED`, `PLANNED`,
+`EXECUTING`, `VERIFIED`, `COMPLETE`, `BLOCKED`, and `FAILED`. `CANCELLED` and
+`SUPERSEDED` remain existing TaskRegistry lineage/control semantics. `AGENT_REPORT`
+is execution evidence only; `INDEPENDENT_VERIFICATION` gates verified outcomes.
+DeepSeek continuation requires prior bounded observation, `COMPLETE`, independent
+verification, and valid TaskRegistry lineage, while generic registry lineage behavior
+remains unchanged.
+
+**Consequences**: No new control plane, TaskRegistry, dispatcher, state store, or
+consequential Coordinator operation is introduced. Technical completion remains
+separate from independent verification, roadmap convergence, and Kyle's phase
+transition decision.
+
+---
+
 ## ADR-022: Canonical Strategic-State Projection and Fail-Closed Alignment
 
 **Status**: IMPLEMENTED / VERIFIED (governance evaluator and deterministic regression coverage)

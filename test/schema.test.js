@@ -6,6 +6,8 @@ const {
   isValidStateTransition,
   createInitialTaskRegistryEntry,
   VALID_STATE_TRANSITIONS,
+  ACP_LIFECYCLE_STATES,
+  LINEAGE_CONTROL_SEMANTICS,
   VALID_AGENTS,
   VALID_STATUSES,
   VALID_TASK_MODES,
@@ -89,6 +91,14 @@ test('Lifecycle evidence semantics distinguish execution reports from independen
   assert.match(LIFECYCLE_EVIDENCE_SEMANTICS.AGENT_REPORT, /does not independently verify/);
   assert.match(LIFECYCLE_EVIDENCE_SEMANTICS.INDEPENDENT_VERIFICATION, /EXECUTING -> VERIFIED/);
   assertDeepEqual(LIFECYCLE_EVIDENCE_SEMANTICS.VERIFIED_OUTCOME_STATUSES, ['VERIFIED', 'COMPLETE']);
+  assert.match(LIFECYCLE_EVIDENCE_SEMANTICS.LINEAGE_CONTROL_SEMANTICS, /not ACP lifecycle states/);
+});
+
+test('ACP lifecycle states exclude TaskRegistry cancellation and supersession control semantics', () => {
+  assertDeepEqual(ACP_LIFECYCLE_STATES, ['PENDING', 'SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE', 'BLOCKED', 'FAILED']);
+  assertDeepEqual(LINEAGE_CONTROL_SEMANTICS, ['CANCELLED', 'SUPERSEDED']);
+  assertEqual(VALID_STATE_TRANSITIONS.CANCELLED, undefined);
+  assertEqual(VALID_STATE_TRANSITIONS.SUPERSEDED, undefined);
 });
 
 test('Valid ACP command passes validation', () => {

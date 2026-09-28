@@ -2758,3 +2758,17 @@ fail-closed alignment evaluator before ACP submission, backed by a SHA-validated
 `STATE.md` projection. Production-path and adversarial tests confirm invalid model
 intent cannot reach TaskRegistry/dispatch and aligned consequential work still requires
 existing Director authorization.
+
+---
+
+## 2026-09-28 | TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-IMPLEMENT-001
+
+**Task**: Implement the Phase 0 Coordinator Contract / Capability Architecture reconciliation.
+
+**Outcome**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION. Formalized the bounded `request_task` and `get_task` contract in the existing runtime policy, including model input fields, prohibited authority-bearing fields, server-derived policy, sanitized observation semantics, evidence semantics, and lifecycle versus lineage/control semantics. ACP lifecycle state constants now explicitly exclude `CANCELLED` and `SUPERSEDED`; those remain TaskRegistry cancellation/supersession lineage controls. The existing DeepSeek continuation gate is covered as the narrower policy requiring prior observation, `COMPLETE`, `INDEPENDENT_VERIFICATION`, and valid TaskRegistry lineage; `FAILED` and `BLOCKED` parents are rejected. No new control plane, registry, dispatcher, queue, state store, consequential Coordinator operation, or model-controlled approval mechanism was added.
+
+**Verification**: Focused DeepSeek runtime, ACP schema, TaskRegistry, coordinator, strategic-alignment, and full regression tests were run; final diff and whitespace checks were inspected.
+
+**Remaining item**: Independent verification and Kyle's explicit transition decision remain required. This implementation does not declare Phase 0 strategically converged or transition the roadmap.
+
+**Commit Reference**: This implementation commit.
