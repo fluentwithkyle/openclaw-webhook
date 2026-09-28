@@ -2,70 +2,76 @@
   "schema_version": 1,
   "authority": "This file is the machine-readable projection of STATE.md's authoritative Current Strategic State section. STATE.md controls any conflict; historical research and dashboards are advisory/derived.",
   "roadmap_id": "deepseek-coordinator-evolution-16.6",
-  "current_phase": "phase-0-coordinator-contract",
-  "phase_status": "PARTIALLY_COMPLETE_REQUIRES_FORMAL_RECONCILIATION",
-  "current_strategic_objective": "Formally reconcile and design the complete Coordinator Contract and Capability Architecture before another substantive coordinator implementation increment.",
+  "current_phase": "phase-2-bounded-coordination",
+  "phase_status": "IN_PROGRESS_SUBSTANTIALLY_BUILT",
+  "current_strategic_objective": "Implement policy-controlled workflow operations for Phase 2 — Bounded Coordination, mapping to existing ACP modes, capabilities, paths, targets, verification requirements, and authorization gates. Requires separate Kyle authorization for consequential work.",
   "phase_acceptance_criteria": [
-    "A reconciled coordinator contract identifies typed operations, server policy mapping, evidence contract, state transitions, and Kyle authorization gates.",
-    "The reconciliation identifies the next authorized architectural checkpoint or escalates it to Kyle."
+    "Bounded coordination operations map to existing ACP modes (REVIEW/read_only/poc/) and only elevate to BUILDER/FAILOVER_EXECUTE/write/committed/push with a valid Director approval proof.",
+    "Server-side specialist routing policy classifies intent to specialist lanes without model authority.",
+    "State-driven continuation is bounded with MAX_TOOL_ITERATIONS and requires COMPLETE plus INDEPENDENT_VERIFICATION.",
+    "Independent verification confirms Phase 2 implementation and security boundary."
   ],
   "completed_requirements": [
     {
-      "id": "stage-1-network-path"
+      "id": "stage-1-network-path",
+      "status": "COMPLETE_VERIFIED"
     },
     {
-      "id": "phase-1-observation"
+      "id": "phase-0-coordinator-contract",
+      "status": "COMPLETE_INDEPENDENTLY_VERIFIED",
+      "verification_commit": "53110da",
+      "implementation_commit": "ec9c476"
+    },
+    {
+      "id": "phase-1-observation",
+      "status": "COMPLETE_INDEPENDENTLY_VERIFIED",
+      "verification_commit": "8c77901",
+      "implementation_commit": "8c77901"
     }
   ],
   "unresolved_requirements": [
     {
-      "id": "phase-0-contract-reconciliation",
+      "id": "phase-2-bounded-coordination",
       "classification": "A",
       "prerequisites": [
-        "stage-1-network-path"
+        "phase-0-coordinator-contract",
+        "phase-1-observation"
       ],
-      "enables": "phase-2-bounded-coordination",
+      "enables": "phase-3-autonomous-coordination-loop",
       "objective_terms": [
-        "coordinator contract"
+        "bounded coordination",
+        "workflow operations",
+        "specialist routing"
       ],
       "acceptance_criteria": [
-        "phase-0-contract-defined"
+        "phase-2-bounded-coordination-implemented"
       ],
-      "expected_advancement": "A reconciled Coordinator Contract unlocks Kyle review of the Phase 0 transition.",
-      "convergence_condition": "phase-0-contract-defined"
-    },
-    {
-      "id": "phase-0-contract-evidence-inventory",
-      "classification": "B",
-      "prerequisites": [
-        "stage-1-network-path"
-      ],
-      "enables": "phase-0-contract-reconciliation",
-      "objective_terms": [
-        "contract evidence inventory"
-      ],
-      "acceptance_criteria": [
-        "phase-0-evidence-inventory-complete"
-      ],
-      "expected_advancement": "Evidence inventory enables the required Coordinator Contract reconciliation.",
-      "convergence_condition": "phase-0-evidence-inventory-complete"
+      "expected_advancement": "Phase 2 bounded coordination unlocks policy-controlled workflow operations and specialist routing within the existing authority chain.",
+      "convergence_condition": "phase-2-bounded-coordination-implemented"
     }
   ],
   "required_next_work": [
-    "phase-0-contract-reconciliation",
-    "phase-0-contract-evidence-inventory"
+    "phase-2-bounded-coordination"
   ],
   "prerequisites": [
     {
       "id": "stage-1-network-path",
       "status": "COMPLETE_VERIFIED"
+    },
+    {
+      "id": "phase-0-coordinator-contract",
+      "status": "COMPLETE_INDEPENDENTLY_VERIFIED"
+    },
+    {
+      "id": "phase-1-observation",
+      "status": "COMPLETE_INDEPENDENTLY_VERIFIED"
     }
   ],
   "phase_transition_conditions": [
-    "Independent verification of the Phase 0 acceptance criteria.",
-    "Kyle authorization of any consequential transition or implementation work."
+    "Phase 0 and Phase 1 are INDEPENDENTLY VERIFIED (implementation commits ec9c476 and 8c77901; verification commits 53110da and 8c77901).",
+    "Kyle authorization of any consequential Phase 2 work or implementation transition."
   ],
-  "reconciliation_note": "The systemic-failure research claim that Phase 0\u20133 was simply complete is incorrect. ARCHITECTURE.md \u00a716.6 is authoritative: Phase 0 is partial and requires reconciliation, Phase 1 is essentially complete, Phase 2 is substantially built/in progress, and Phase 3 is a future target.",
+  "reconciliation_note": "Phase 0 Coordinator Contract is COMPLETE / INDEPENDENTLY VERIFIED (implementation ec9c476; independent verification/reconciliation 53110da). Phase 1 Observation is COMPLETE / INDEPENDENTLY VERIFIED (implementation/verification 8c77901). Phase 2 — Bounded Coordination is the current active roadmap phase (IN PROGRESS / SUBSTANTIALLY BUILT). Phase 3 remains a future target. ARCHITECTURE.md §16.6 is authoritative.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "ca39c71eedfa2f586c4b4eac122eae760e3bf65c2ee2ae62dcfa86b9f5a8ecb2"
+  "state_md_sha256": "16cc515aa90299d2a530301fa1b9d0dc0432eb418e08bcfcd8d2bb7f8830bc14"
 }

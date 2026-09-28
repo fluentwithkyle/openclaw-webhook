@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-09-28
-**Updated By**: Gemini — TASK-GEMINI-ARCHITECTURE-ROADMAP-RECONCILIATION-001
+**Updated By**: Kilo — TASK-KILO-DEEPSEEK-PHASE-0-AND-1-DURABLE-STATE-RECONCILIATION-001
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -19,16 +19,11 @@ model-facing tool has `request_task` (server-derived REVIEW/read-only/Gemini
 Builder/`poc/`) and sanitized namespace-constrained `get_task`; ACP, TaskRegistry,
 the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
-**Phase 0 Coordinator Contract — IMPLEMENTED / INDEPENDENTLY VERIFIED AND RECONCILED (Commit ec9c476)**: the runtime policy now explicitly formalizes the two
-existing operations, server-derived REVIEW/read-only `poc/` authority, sanitized task
-observation across all eight lifecycle states (including lineage, execution, evidence,
-verification, and failure/blocked information), and ACP-owned independent-verification
-semantics. The ACP lifecycle is limited to eight states; `CANCELLED` and `SUPERSEDED`
-remain lineage/control semantics. Coordinator continuation requires prior observation,
-`COMPLETE`, `INDEPENDENT_VERIFICATION`, and valid TaskRegistry lineage; `FAILED` and
-`BLOCKED` parents cannot continue successfully. No consequential Coordinator operation
-is added, and independent verification is complete (Commit `ec9c476`). Strategic Phase 0 convergence and phase transition remain Kyle's decision. Full current state: `STATE.md`; architecture:
-`ARCHITECTURE.md` §16.6; decisions: ADR-018 and ADR-019.
+**Phase 0 — Coordinator Contract**: **COMPLETE / INDEPENDENTLY VERIFIED** (implementation commit `ec9c476`; independent verification/reconciliation commit `53110da`). The runtime contract formalizes `request_task` and `get_task`, server-derived REVIEW/read-only `poc/` authority, sanitized task observation across all eight lifecycle states, evidence semantics (AGENT_REPORT vs INDEPENDENT_VERIFICATION), lifecycle/lineage semantics (CANCELLED/SUPERSEDED are TaskRegistry lineage controls, not ACP lifecycle states), and continuation requirements (prior observation, COMPLETE, INDEPENDENT_VERIFICATION, valid lineage). No consequential Coordinator operation is added. Full current state: `STATE.md`; architecture: `ARCHITECTURE.md` §16.6; decisions: ADR-018, ADR-019, ADR-023.
+
+**Phase 1 — Observation**: **COMPLETE / INDEPENDENTLY VERIFIED** (PR #225, commit `8c77901`, TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001). Extends `get_task` with safe coverage for all eight ACP lifecycle states, lineage, agent execution reports, evidence counts/categories, independent verification, verification requirements, and failure/blocked information. No authority fields or second control plane. Phase 2+ capabilities remain GAP / PROPOSED / TARGET.
+
+**Current roadmap phase**: **Phase 2 — Bounded Coordination** (IN PROGRESS / SUBSTANTIALLY BUILT). Phase 2 requires separate Kyle authorization for consequential work. Phase 3 — Autonomous Coordination Loop — remains a future target.
 
 ---
 
