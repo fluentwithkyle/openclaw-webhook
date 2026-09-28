@@ -25,6 +25,7 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
   commit `8c77901`, TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001).
   Phase 2 prerequisites: requires Phase 0 contract and Phase 1 observation as
   established foundations, plus Kyle authorization for consequential work.
+- **Phase 2 workflow-step policy implementation**: merged implementation commit cd12ff76e44528be93e1e5dab37b3a78748f9aea is present on main. Independent verification is **BLOCKED** because the canonical gemini-acp-report / gemini-acp-report.json artifact for this verification task is not present; the repository artifact currently belongs to a different prior task. Static source inspection confirms the implementation adds server-authoritative review and implementation workflow-step policy and retains the existing ACP boundary, but runtime test execution is unavailable in this coordinator environment. The Phase 2 roadmap therefore remains IN PROGRESS / SUBSTANTIALLY BUILT.
 - **Phase 0 independent verification**: `TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-VERIFY-RECONCILE-001`
   (2026-09-28) independently verified the Phase 0 Coordinator Contract implementation
   (commit `ec9c476`): confirmed `request_task`/`get_task` contract, server-derived

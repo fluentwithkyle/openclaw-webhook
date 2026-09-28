@@ -71,7 +71,14 @@
     "Phase 0 and Phase 1 are INDEPENDENTLY VERIFIED (implementation commits ec9c476 and 8c77901; verification commits 53110da and 8c77901).",
     "Kyle authorization of any consequential Phase 2 work or implementation transition."
   ],
-  "reconciliation_note": "Phase 0 Coordinator Contract is COMPLETE / INDEPENDENTLY VERIFIED (implementation ec9c476; independent verification/reconciliation 53110da). Phase 1 Observation is COMPLETE / INDEPENDENTLY VERIFIED (implementation/verification 8c77901). Phase 2 — Bounded Coordination is the current active roadmap phase (IN PROGRESS / SUBSTANTIALLY BUILT). Phase 3 remains a future target. ARCHITECTURE.md §16.6 is authoritative.",
+  "reconciliation_note": "Phase 0 Coordinator Contract and Phase 1 Observation remain COMPLETE / INDEPENDENTLY VERIFIED. Phase 2 — Bounded Coordination remains IN PROGRESS / SUBSTANTIALLY BUILT. Merged workflow-step policy implementation commit cd12ff76e44528be93e1e5dab37b3a78748f9aea is present on main, but independent verification is BLOCKED because the required canonical gemini-acp-report artifact for this verification task is unavailable and runtime execution is unavailable in this coordinator environment. ARCHITECTURE.md §16.6 remains authoritative.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "16cc515aa90299d2a530301fa1b9d0dc0432eb418e08bcfcd8d2bb7f8830bc14"
+  "state_md_sha256": "2587d547f5d9c8b99295578fad8214b88a58fddd142246030d3c356c0047065a",
+  "verification_status": {
+    "phase_2_workflow_step_policy_implementation_commit": "cd12ff76e44528be93e1e5dab37b3a78748f9aea",
+    "status": "BLOCKED",
+    "reason": "Required canonical gemini-acp-report/gemini-acp-report.json artifact for this verification task is unavailable; repository artifact belongs to a different prior task. Runtime execution is also unavailable in this coordinator environment.",
+    "static_inspection": "COMPLETED",
+    "phase_transition": "NOT CLAIMED"
+  }
 }

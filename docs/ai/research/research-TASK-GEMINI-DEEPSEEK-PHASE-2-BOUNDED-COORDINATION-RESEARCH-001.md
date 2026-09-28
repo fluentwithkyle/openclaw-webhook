@@ -98,3 +98,12 @@
 - **phase_completion_status**: IN PROGRESS / SUBSTANTIALLY BUILT
 - **unresolved_requirement**: Policy-controlled workflow operations that map to existing ACP modes, capabilities, paths, targets, verification requirements, and authorization gates.
 - **alignment_conclusion**: **Gate PASSED**. The proposed increment directly fulfills the explicit Phase 2 requirement in `ARCHITECTURE.md` §16.6 without introducing speculative capabilities, second control planes, or bypassing server authority.
+
+
+## 2026-09-29 — Independent Verification / Reconciliation
+
+- **Target implementation commit**: cd12ff76e44528be93e1e5dab37b3a78748f9aea (merged PR #248).
+- **Static source inspection**: The merged runtime defines an enumerated WORKFLOW_STEP_POLICY for review and implementation; derives target, task mode, capabilities, and permitted paths from server policy; rejects model-supplied authority-bearing fields; rechecks prior observation, COMPLETE lifecycle, INDEPENDENT_VERIFICATION, lineage, repository/base branch, and predecessor mode; and retains /poc/coordinator, TaskRegistry, dispatcher/orchestrator, and Director authorization boundaries. No second control plane or generic executor is introduced in the reviewed diff.
+- **Independent runtime execution**: **UNAVAILABLE** in this coordinator environment.
+- **Canonical Gemini verification artifact**: **UNAVAILABLE for this task**. docs/ai/gemini-acp-report.json exists on main but records a different prior verification task, so it cannot be used as evidence for this task.
+- **Verification status**: **BLOCKED** under the task's fail-closed artifact-verification requirement. Phase 2 remains IN PROGRESS / SUBSTANTIALLY BUILT; no phase transition is claimed.

@@ -25,6 +25,8 @@ the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
 **Current roadmap phase**: **Phase 2 — Bounded Coordination** (IN PROGRESS / SUBSTANTIALLY BUILT). Phase 2 requires separate Kyle authorization for consequential work. Phase 3 — Autonomous Coordination Loop — remains a future target.
 
+**Phase 2 workflow-step policy verification**: Implementation commit cd12ff76e44528be93e1e5dab37b3a78748f9aea is present on main. Independent verification is **BLOCKED** because the canonical gemini-acp-report / gemini-acp-report.json artifact for the verification task is unavailable; the repository copy belongs to a different prior task. Static inspection supports the server-authoritative policy design, while runtime execution is unavailable in this coordinator environment. Phase 2 remains IN PROGRESS / SUBSTANTIALLY BUILT.
+
 ---
 
 ## Strategic Alignment Control
