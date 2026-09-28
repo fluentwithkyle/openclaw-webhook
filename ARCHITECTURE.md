@@ -1611,6 +1611,25 @@ Increments 4.1 through 4.9 represent the concrete implementation history on `mai
 
 **Next Architectural Checkpoint**: **Phase 0 — Coordinator Contract** is established as the immediate next architectural checkpoint after documentation reconciliation. Substantive future Coordinator work must begin with research and design of the complete Coordinator Contract & Capability Architecture before another implementation increment is authorized.
 
+### Strategic Alignment and Convergence Invariant
+
+For Coordinator evolution work, `STATE.md` is the authoritative live strategic-state
+record and `docs/ai/strategic-state.json` is its machine-readable projection for the
+repository's deterministic alignment evaluator. The projection is policy evidence only:
+it does not create an execution authority, control plane, TaskRegistry, dispatcher, or
+roadmap that competes with this architecture. A mismatch fails closed and requires
+reconciliation of `STATE.md`.
+
+No substantive work is selected merely because it is technically valid, locally useful,
+or ACP-compliant. It must trace to the authoritative current strategic objective, an
+unresolved roadmap requirement (or its documented enabling dependency), proved
+prerequisites, expected advancement, and explicit convergence criterion. The evaluator
+cannot authorize, dispatch, or advance phase state. Missing or contradictory strategic
+truth, a completed requirement, or an unproved dependency yields `BLOCKED` and Kyle
+escalation. Technical completion is distinct from independent desired-outcome
+verification and phase convergence; convergence triggers a Kyle transition decision,
+not automatic generation of another increment.
+
 ### Implemented and Verified Foundation
 
 `POST /poc/deepseek-runtime` is an authenticated ChatBox-facing runtime. It calls the

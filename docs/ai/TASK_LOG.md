@@ -2731,3 +2731,19 @@ The reconciled documentation distinguishes:
 
 
 2026-09-27 | TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTING-SUMMARY-FINAL-VERIFY-RECONCILE-001 | Independently verified and reconciled Increment 4.9 after PR #242 merge. Main implementation merge commit `6fb6b4a17d1085cd665fa0ba55a55f60501e35da`. Source inspection confirms optional read-only `specialist_routing_summary` reuses server-side `routeSpecialistIntent()`, exposes stable routing classification and authoritative dispatch status with bounded/sanitized specialist/lane data, and preserves all existing projections and ACP authority boundaries. PR-reported 56 focused tests/full npm test/git diff check remain agent evidence; GitHub exposes no CI status and independent runtime execution is blocked. | IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED | Reconciliation record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTING-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`
+## 2026-09-28 | TASK-CODEX-SYSTEMIC-AUTONOMY-RELIABILITY-AND-STRATEGIC-ALIGNMENT-HARDENING-001
+
+**Task**: Implement generalized fail-closed strategic alignment and convergence controls.
+
+**Outcome**: IMPLEMENTED / VERIFIED. `STATE.md` is now explicitly the canonical live
+strategic state with a subordinate machine-readable projection. The deterministic
+evaluator rejects stale, absent, locally useful, future-phase, completed-requirement,
+and unproved-prerequisite proposals; it separates alignment, authorization, execution,
+independent verification, and convergence. The 4.1–4.9 regression rejects a 4.10-style
+increment and directs the required Phase 0 reconciliation or Kyle escalation. The
+systemic research record's incorrect Phase 0–3-complete claim is reconciled without
+rewriting the historical artifact.
+
+**Verification**: `node test/strategic-alignment.test.js`; `npm test`; `git diff --check`.
+
+**Commit Reference**: Recorded in this task's implementation commit.

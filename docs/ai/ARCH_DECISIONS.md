@@ -644,3 +644,27 @@ Adopt the **Roadmap Alignment Gate** as a mandatory governance requirement acros
 - The authoritative roadmap (Phase 0 → Phase 1 → Phase 2 → Phase 3 progression in `ARCHITECTURE.md` §16.6) remains unchanged.
 - Future coordinator task generation is directed toward Phase 0 Coordinator Contract completion before any further Phase 1/2/3 capability expansion.
 - This decision aligns with ADR-005 (Specialist Lanes with ACP Boundary), ADR-006 (Persistent AI Project State), ADR-018 (DeepSeek Coordinator Evolution Retains Existing Authority Chain), and ADR-019 (Phase 1 Observation Uses Existing ACP Authority).
+
+## ADR-022: Canonical Strategic-State Projection and Fail-Closed Alignment
+
+**Status**: IMPLEMENTED / VERIFIED (governance evaluator and deterministic regression coverage)
+
+**Context**: ADR-021 made roadmap alignment mandatory but left it largely procedural.
+The systemic-failure research was advisory and incorrectly claimed the Phase 0–3
+roadmap was simply complete. Current `ARCHITECTURE.md` §16.6 instead establishes
+Phase 0 as partially complete and requiring reconciliation, Phase 1 as essentially
+complete, Phase 2 as substantially built/in progress, and Phase 3 as a future target.
+
+**Decision**: `STATE.md` is formalized as the authoritative current strategic state;
+`docs/ai/strategic-state.json` is its versioned machine-readable projection, subordinate
+to `STATE.md`. `poc/strategic-alignment.js` evaluates proposals against that projection
+and fails closed unless a proposal maps to the active phase's authoritative unresolved
+requirement, proves prerequisites, uses matching A/B classification, and declares
+advancement and convergence. It distinguishes alignment from authorization, execution,
+independent verification, and convergence. Convergence escalates a phase transition to
+Kyle rather than creating another local increment.
+
+**Consequences**: This reuses existing repository governance and introduces no runtime
+executor, queue, TaskRegistry, dispatch path, or authority. Research and agent output
+remain advisory. Tests cover off-roadmap work, future-phase work, stale/self-attested
+state, completed requirements, missing state, the 4.1–4.9/4.10 replay, and convergence.

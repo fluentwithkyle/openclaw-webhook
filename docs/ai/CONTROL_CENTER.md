@@ -5,7 +5,7 @@
 
 Designed for Kyle checking the project from a phone.
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 **Updated By**: Gemini — TASK-GEMINI-ARCHITECTURE-ROADMAP-RECONCILIATION-001
 ---
 
@@ -25,6 +25,18 @@ observation across all eight lifecycle states (including lineage, execution, evi
 verification, and failure/blocked information), and ACP-owned independent-verification
 semantics. **Increment 4.5 child-task aggregate progress — IMPLEMENTED / AGENT-REPORTED VERIFICATION**: parent observations now include a bounded, read-only `child_tasks_summary` for parents with children, counting every TaskRegistry child by the eight authoritative lifecycle states before preserving the existing 10-item sanitized child-detail bound. It adds no operation, authority, or lifecycle behavior. **Phase 2 bounded lineage — IMPLEMENTED / VERIFIED**: independently verified by Gemini (TASK-GEMINI-DEEPSEEK-PHASE-2-BOUNDED-LINEAGE-VERIFY-RECONCILE-001). The existing `request_task` accepts optional `parent_request_id`, validates it through TaskRegistry lineage rules, and preserves the server-derived Gemini Builder/REVIEW/read_only/`poc/` envelope. The model-facing `target` field was removed; parent lineage is correlation only, never authority. **Phase 3 bounded autonomous coordination — IMPLEMENTED / VERIFIED**: independently verified by Gemini (TASK-GEMINI-DEEPSEEK-PHASE-3-BOUNDED-AUTONOMOUS-COORDINATION-VERIFY-RECONCILE-001, commit `026b86f` / PR #227). Adds bounded continuation requiring prior `get_task` observation, a COMPLETE parent with `INDEPENDENT_VERIFICATION` evidence, and TaskRegistry lineage validation, under the existing REVIEW/read_only/`poc/` envelope with `MAX_TOOL_ITERATIONS` enforced at exactly 3; terminal/invalid/active/insufficiently verified parents are rejected. **Director Authorization Architecture Decision (TASK-GEMINI-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-ARCHITECTURE-DECISION-001) — COMPLETED (RESEARCH)**: Researched and resolved trusted Director authorization architecture (cryptographically signed/authenticated approval proofs, single-use, scope-bound, zero inheritance from parent lineage). See `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE-3.1-DIRECTOR-AUTHORIZATION-ARCHITECTURE-DECISION-001.md`. **Phase 3.1 Director Authorization Infrastructure — IMPLEMENTED / VERIFIED**: approval issuance, scope binding/hash, expiry, single-use consumption, replay rejection, cancellation, supersession, scope mismatch, missing approval, and parent-lineage/model-issuance rejection passed independent regression execution. **Phase 3.2 specialist routing — IMPLEMENTED / VERIFIED**: correction commit `11d057bc756739f111aab9c0189108ca2e678e14` was independently verified with focused and full tests. Security Specialist and Utility Specialist use the existing review transport and fail safely; Builder authority is server-derived and remains behind the Director gate; Kilo has no ordinary-model route. **Automatic same-execution result consumption — IMPLEMENTED / VERIFIED**: after `request_task` submission, the runtime reuses its existing sanitized `get_task` projection and server-derived eligibility classification once in the same tool result. That lets the next bounded DeepSeek turn reason over the result without another human message or `get_task` call; this is not polling. COMPLETE plus `INDEPENDENT_VERIFICATION` may inform the next bounded decision only; terminal, invalid, missing, active, cancelled, superseded, and insufficient results stop safely while TaskRegistry lineage and Director authorization remain authoritative. Full current state: `STATE.md`; architecture:
 `ARCHITECTURE.md` §16.6; decisions: ADR-018 and ADR-019.
+
+---
+
+## Strategic Alignment Control
+
+**Current required checkpoint:** Phase 0 Coordinator Contract reconciliation. `STATE.md`
+is the live authority and `docs/ai/strategic-state.json` is its machine-readable
+projection; this dashboard is derived only. The evaluator fails closed for stale or
+missing state, unmatched/completed requirements, unmet prerequisites, optional/future
+work, or insufficient convergence evidence. It returns pending authorization only;
+Kyle remains the sole transition/authorization authority. The historical claim that
+Phases 0–3 were complete is corrected in `STATE.md`; see `ARCHITECTURE.md` §16.6.
 
 ---
 

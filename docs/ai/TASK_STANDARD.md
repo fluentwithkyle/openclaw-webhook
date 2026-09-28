@@ -115,6 +115,22 @@ This gate is enforced in the ChatGPT Coordinator operating protocol at `docs/ai/
 
 ---
 
+### 3.1.6 Machine-Checkable Strategic State and Convergence
+
+The canonical live state is `STATE.md`; its machine-readable projection is
+`docs/ai/strategic-state.json`. A task's declared fields are evidence to evaluate,
+not authority to advance the roadmap. The evaluator (`poc/strategic-alignment.js`)
+requires exact roadmap identity/current phase, an authoritative unresolved requirement,
+proved prerequisites, A/B classification matching the requirement, expected
+advancement, and convergence criterion. It returns only `ALIGNED_PENDING_AUTHORIZATION`
+or a fail-closed `BLOCKED` result; it cannot authorize, dispatch, mutate TaskRegistry,
+or mark a phase complete.
+
+A technical report, passing tests, research recommendation, or ACP-valid task does not
+establish strategic convergence. Convergence requires the authoritative phase
+acceptance criteria and independent desired-outcome verification; phase transition then
+escalates to Kyle rather than auto-generating another task.
+
 ### 3.2 Research Record Roadmap Alignment Section
 
 Every durable research record under `docs/ai/research/` must contain a mandatory `## Roadmap Alignment` section. This section must include, at minimum:

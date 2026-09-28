@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "authority": "This file is the machine-readable projection of STATE.md's authoritative Current Strategic State section. STATE.md controls any conflict; historical research and dashboards are advisory/derived.",
+  "roadmap_id": "deepseek-coordinator-evolution-16.6",
+  "current_phase": "phase-0-coordinator-contract",
+  "phase_status": "PARTIALLY_COMPLETE_REQUIRES_FORMAL_RECONCILIATION",
+  "current_strategic_objective": "Formally reconcile and design the complete Coordinator Contract and Capability Architecture before another substantive coordinator implementation increment.",
+  "phase_acceptance_criteria": [
+    "A reconciled coordinator contract identifies typed operations, server policy mapping, evidence contract, state transitions, and Kyle authorization gates.",
+    "The reconciliation identifies the next authorized architectural checkpoint or escalates it to Kyle."
+  ],
+  "completed_requirements": [
+    {
+      "id": "stage-1-network-path"
+    },
+    {
+      "id": "phase-1-observation"
+    }
+  ],
+  "unresolved_requirements": [
+    {
+      "id": "phase-0-contract-reconciliation",
+      "classification": "A",
+      "prerequisites": [
+        "stage-1-network-path"
+      ],
+      "enables": "phase-2-bounded-coordination"
+    }
+  ],
+  "required_next_work": [
+    "phase-0-contract-reconciliation"
+  ],
+  "prerequisites": [
+    {
+      "id": "stage-1-network-path",
+      "status": "COMPLETE_VERIFIED"
+    }
+  ],
+  "phase_transition_conditions": [
+    "Independent verification of the Phase 0 acceptance criteria.",
+    "Kyle authorization of any consequential transition or implementation work."
+  ],
+  "reconciliation_note": "The systemic-failure research claim that Phase 0\u20133 was simply complete is incorrect. ARCHITECTURE.md \u00a716.6 is authoritative: Phase 0 is partial and requires reconciliation, Phase 1 is essentially complete, Phase 2 is substantially built/in progress, and Phase 3 is a future target.",
+  "authoritative_sources_agree": true
+}
