@@ -28,6 +28,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
 | TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTING-SUMMARY-FINAL-VERIFY-RECONCILE-001 | 2026-09-27 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTING-SUMMARY-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — final verification/reconciliation entry |
+| TASK-GEMINI-COORDINATOR-ROADMAP-GOVERNANCE-FAILURE-PREVENTION-RESEARCH-001 | 2026-09-28 | Gemini | `docs/ai/research/research-TASK-GEMINI-COORDINATOR-ROADMAP-GOVERNANCE-FAILURE-PREVENTION-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-CHATGPT-DEEPSEEK-VERIFICATION-RECONCILIATION-SUMMARY-FINAL-VERIFY-RECONCILE-001 | 2026-09-27 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-VERIFICATION-RECONCILIATION-SUMMARY-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — final verification/reconciliation entry |
 | TASK-CHATGPT-DEEPSEEK-WORKFLOW-COMPLETION-SUMMARY-FINAL-VERIFY-RECONCILE-001 | 2026-09-27 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-WORKFLOW-COMPLETION-SUMMARY-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — appended final verification/reconciliation entry |
 | TASK-GEMINI-ARCHITECTURE-ROADMAP-RECONCILIATION-001 | 2026-09-27 | Gemini | `docs/ai/research/research-TASK-GEMINI-ARCHITECTURE-ROADMAP-RECONCILIATION-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
