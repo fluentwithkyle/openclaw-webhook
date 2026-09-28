@@ -19,7 +19,7 @@ model-facing tool has `request_task` (server-derived REVIEW/read-only/Gemini
 Builder/`poc/`) and sanitized namespace-constrained `get_task`; ACP, TaskRegistry,
 the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
-**Phase 0 Coordinator Contract — IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION**: the runtime policy now explicitly formalizes the two
+**Phase 0 Coordinator Contract — IMPLEMENTED / INDEPENDENTLY VERIFIED AND RECONCILED (Commit ec9c476)**: the runtime policy now explicitly formalizes the two
 existing operations, server-derived REVIEW/read-only `poc/` authority, sanitized task
 observation across all eight lifecycle states (including lineage, execution, evidence,
 verification, and failure/blocked information), and ACP-owned independent-verification
@@ -27,8 +27,7 @@ semantics. The ACP lifecycle is limited to eight states; `CANCELLED` and `SUPERS
 remain lineage/control semantics. Coordinator continuation requires prior observation,
 `COMPLETE`, `INDEPENDENT_VERIFICATION`, and valid TaskRegistry lineage; `FAILED` and
 `BLOCKED` parents cannot continue successfully. No consequential Coordinator operation
-is added, and strategic Phase 0 convergence still requires independent verification
-and Kyle's decision. Full current state: `STATE.md`; architecture:
+is added, and independent verification is complete (Commit `ec9c476`). Strategic Phase 0 convergence and phase transition remain Kyle's decision. Full current state: `STATE.md`; architecture:
 `ARCHITECTURE.md` §16.6; decisions: ADR-018 and ADR-019.
 
 ---
