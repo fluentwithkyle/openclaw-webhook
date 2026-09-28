@@ -5,7 +5,7 @@
 
 Designed for Kyle checking the project from a phone.
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 **Updated By**: Gemini — TASK-GEMINI-ARCHITECTURE-ROADMAP-RECONCILIATION-001
 ---
 
@@ -27,6 +27,25 @@ semantics. **Increment 4.5 child-task aggregate progress — IMPLEMENTED / AGENT
 `ARCHITECTURE.md` §16.6; decisions: ADR-018 and ADR-019.
 
 ---
+
+## Strategic Alignment Control
+
+**Current required checkpoint:** Phase 0 Coordinator Contract reconciliation. `STATE.md`
+is the live authority and `docs/ai/strategic-state.json` is its machine-readable
+projection; this dashboard is derived only. The evaluator fails closed for stale or
+missing state, unmatched/completed requirements, unmet prerequisites, optional/future
+work, or insufficient convergence evidence. It returns pending authorization only;
+Kyle remains the sole transition/authorization authority. The historical claim that
+Phases 0–3 were complete is corrected in `STATE.md`; see `ARCHITECTURE.md` §16.6.
+
+---
+
+## Enforced Coordinator Gate
+
+DeepSeek `request_task` now checks the SHA-bound `STATE.md` projection and authoritative
+requirement mapping before ACP submission. Unaligned work cannot create TaskRegistry
+state or dispatch. Aligned work remains pending the existing Kyle/ACP authorization;
+this dashboard remains derived from `STATE.md`.
 
 ## Architectural Note
 The project has completed the transition from Kilo Cloud Agent (transitional/legacy) to Gemini Builder (active/target).

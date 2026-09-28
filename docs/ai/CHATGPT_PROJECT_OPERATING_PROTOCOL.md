@@ -192,6 +192,28 @@ This gate integrates with the existing workflow and does not create a competing 
 
 **Project Bootstrap complete → Protocol Review complete → Roadmap Alignment Gate → Repository/State Verification complete → Action Construction (Solution Simplicity Evaluation) → ACP Compliance Verification → Kyle Authorization → Authorized Execution → Independent Verification → Stop**
 
+## Strategic-State Enforcement
+
+For the DeepSeek Coordinator roadmap, the Coordinator must evaluate the task against
+`STATE.md` and its machine-readable projection, `docs/ai/strategic-state.json`, using
+`poc/strategic-alignment.js` before task construction. This is a deterministic
+validation aid, not an authority or control plane: ACP, TaskRegistry, the existing
+dispatcher/orchestrator, and Kyle retain their existing roles. A declaration of
+alignment is insufficient. The result must be `ALIGNED_PENDING_AUTHORIZATION` or
+`BLOCKED`; a blocked result preserves evidence, identifies the missing/conflicting
+state, and escalates to Kyle.
+
+At runtime, DeepSeek model intent enters the existing `control_plane`; the server
+validates strategic state and alignment before constructing the ACP command. Only then
+does the existing ACP authorization, TaskRegistry, and dispatcher/orchestrator path run.
+A blocked alignment result is an escalation, not an authorization exception.
+
+The gate separately records technical correctness, strategic alignment, phase
+completion, desired-outcome verification, authorization, and convergence. Research
+may recommend work but cannot promote itself or another research increment into an
+authorized task. Once phase criteria are independently verified, transition is an
+escalation for Kyle, not permission for a 4.10-style local increment.
+
 ## Solution Simplicity Gate
 
 ### Mandatory Solution Simplicity Evaluation

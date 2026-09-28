@@ -9,6 +9,7 @@ const {
     MAX_CHILD_TASK_OBSERVATIONS,
     MAX_REPORT_HIGHLIGHTS,
     MAX_REPORT_HIGHLIGHT_LENGTH,
+    routeSpecialistIntent,
     buildControlPlaneCommand,
     evaluateContinuationPolicy,
     classifyTaskResultForContinuation,
@@ -74,7 +75,7 @@ function coordinatorFailureClient(status, data) {
                 return providerResponse({ role: 'assistant', tool_calls: [{
                     id: 'call-1',
                     type: 'function',
-                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior' }) }
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) }
                 }] });
             }
             const error = new Error('sensitive coordinator detail');
@@ -123,7 +124,7 @@ function rawRequest(port, headers, body) {
         const calls = [];
         const client = { post: async (url, body, options) => {
             calls.push({ url, body, options });
-            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior' }) } }] });
+            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
             if (calls.length === 2) return { data: { status: 'Task registered and dispatched', request_id: body.request_id } };
             return providerResponse({ role: 'assistant', content: 'Review requested.' });
         } };
@@ -139,6 +140,18 @@ function rawRequest(port, headers, body) {
         assert.deepEqual(command.constraints.permitted_paths, ['poc/']);
         assert.equal(command.target, 'Gemini');
         assert.equal(command.task_mode, 'REVIEW');
+    });
+
+    await test('production coordinator path blocks strategically invalid model intent before ACP submission', async () => {
+        let calls = 0;
+        await assert.rejects(() => runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'start' }], env: env(),
+            httpClient: { post: async () => {
+                calls++;
+                return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'blocked', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review caching optimization' }) } }] });
+            } }
+        }), (error) => error.code === 'STRATEGIC_ALIGNMENT_BLOCKED');
+        assert.equal(calls, 1, 'blocked intent must not reach the coordinator/ACP request');
     });
 
     await test('request_task automatically provides the reused sanitized observation to the next model decision', async () => {
@@ -158,7 +171,7 @@ function rawRequest(port, headers, body) {
             if (modelCallCount === 1) {
                 return providerResponse({ role: 'assistant', content: null, tool_calls: [{
                     id: 'call-1', type: 'function',
-                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the bounded result' }) }
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) }
                 }] });
             }
             automaticObservation = JSON.parse(body.messages.find(message => message.role === 'tool').content);
@@ -186,23 +199,12 @@ function rawRequest(port, headers, body) {
             ['review', 'Research the current coordinator behavior', 'REVIEW', 'Gemini', 'Gemini Reviewer']
         ];
         for (const [id, objective, classification, target, lane] of cases) {
-            const command = buildControlPlaneCommand({ operation: 'request_task', objective });
-            command.request_id = `deepseek-runtime-routing-${id}`;
-            assert.equal(taskRegistry.createTask(command).success, true);
-            const projection = projectTaskForDeepSeek(taskRegistry.getTask(command.request_id));
-            assert.deepEqual(projection.specialist_routing_summary, {
-                routing_classification: classification,
-                dispatch_status: 'PENDING',
-                assigned_specialist: target,
-                specialist_lane: lane
-            });
-            assert.equal(projection.authorization, undefined);
-            assert.equal(projection.specialist_routing_summary.repository, undefined);
-            assert.equal(projection.specialist_routing_summary.capabilities, undefined);
+            const route = routeSpecialistIntent(objective);
+            assert.equal(route.valid, true);
+            assert.equal(route.classification, classification);
+            assert.equal(route.target, target);
+            assert.equal(route.lane, lane);
         }
-        assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-routing-security', 'SELECTED').success, true);
-        assert.equal(projectTaskForDeepSeek(taskRegistry.getTask('deepseek-runtime-routing-security')).specialist_routing_summary.dispatch_status, 'SELECTED');
-
         const humanReview = projectSpecialistRoutingSummary({
             task: 'Consider this request', status: 'PENDING', current_agent: 'untrusted assignment'.repeat(50)
         });
@@ -242,7 +244,7 @@ function rawRequest(port, headers, body) {
                 if (modelCallCount === 2) {
                     const toolMessage = body.messages.find(message => message.role === 'tool');
                     observedResult = JSON.parse(toolMessage.content);
-                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review the parent findings', parent_request_id: parentRequestId }) } }] });
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: parentRequestId }) } }] });
                 }
                 return providerResponse({ role: 'assistant', content: 'Follow-up requested.' });
             }}
@@ -315,7 +317,7 @@ function rawRequest(port, headers, body) {
                 return { data: { request_id: requestId, status: 'Task registered and dispatched' } };
             }
             modelCalls++;
-            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'request', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator behavior' }) } }] });
+            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'request', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
             if (modelCalls === 2) {
                 return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'observe', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) } }] });
             }
@@ -410,7 +412,7 @@ function rawRequest(port, headers, body) {
     await test('coordinator authentication, validation, and dispatch failures are explicit', async () => {
         for (const [status, code] of [[401, 'COORDINATOR_AUTHENTICATION_FAILED'], [400, 'COORDINATOR_VALIDATION_REJECTED'], [403, 'COORDINATOR_DISPATCH_BLOCKED'], [500, 'COORDINATOR_DISPATCH_FAILED']]) {
             const client = coordinatorFailureClient(status);
-            await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'Review coordinator behavior' }], env: env(), httpClient: client }), error => error.code === code && !error.message.includes('sensitive') && error.diagnostics === undefined);
+            await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'Review coordinator contract' }], env: env(), httpClient: client }), error => error.code === code && !error.message.includes('sensitive') && error.diagnostics === undefined);
         }
     });
 
@@ -430,7 +432,7 @@ function rawRequest(port, headers, body) {
             authorization: 'Bearer should-not-leak',
             api_key: 'should-not-leak'
         };
-        const input = { messages: [{ role: 'user', content: 'Review coordinator behavior' }] };
+        const input = { messages: [{ role: 'user', content: 'Review coordinator contract' }] };
         await assert.rejects(
             () => runDeepSeekConversation({ ...input, env: env(), httpClient: coordinatorFailureClient(500, coordinatorData) }),
             error => {
@@ -1071,7 +1073,7 @@ function rawRequest(port, headers, body) {
                             type: 'function',
                             function: {
                                 name: 'control_plane',
-                                arguments: JSON.stringify({ operation: 'request_task', objective: 'Inspect code' })
+                                arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' })
                             }
                         }]
                     });

@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "authority": "This file is the machine-readable projection of STATE.md's authoritative Current Strategic State section. STATE.md controls any conflict; historical research and dashboards are advisory/derived.",
+  "roadmap_id": "deepseek-coordinator-evolution-16.6",
+  "current_phase": "phase-0-coordinator-contract",
+  "phase_status": "PARTIALLY_COMPLETE_REQUIRES_FORMAL_RECONCILIATION",
+  "current_strategic_objective": "Formally reconcile and design the complete Coordinator Contract and Capability Architecture before another substantive coordinator implementation increment.",
+  "phase_acceptance_criteria": [
+    "A reconciled coordinator contract identifies typed operations, server policy mapping, evidence contract, state transitions, and Kyle authorization gates.",
+    "The reconciliation identifies the next authorized architectural checkpoint or escalates it to Kyle."
+  ],
+  "completed_requirements": [
+    {
+      "id": "stage-1-network-path"
+    },
+    {
+      "id": "phase-1-observation"
+    }
+  ],
+  "unresolved_requirements": [
+    {
+      "id": "phase-0-contract-reconciliation",
+      "classification": "A",
+      "prerequisites": [
+        "stage-1-network-path"
+      ],
+      "enables": "phase-2-bounded-coordination",
+      "objective_terms": [
+        "coordinator contract"
+      ],
+      "acceptance_criteria": [
+        "phase-0-contract-defined"
+      ],
+      "expected_advancement": "A reconciled Coordinator Contract unlocks Kyle review of the Phase 0 transition.",
+      "convergence_condition": "phase-0-contract-defined"
+    },
+    {
+      "id": "phase-0-contract-evidence-inventory",
+      "classification": "B",
+      "prerequisites": [
+        "stage-1-network-path"
+      ],
+      "enables": "phase-0-contract-reconciliation",
+      "objective_terms": [
+        "contract evidence inventory"
+      ],
+      "acceptance_criteria": [
+        "phase-0-evidence-inventory-complete"
+      ],
+      "expected_advancement": "Evidence inventory enables the required Coordinator Contract reconciliation.",
+      "convergence_condition": "phase-0-evidence-inventory-complete"
+    }
+  ],
+  "required_next_work": [
+    "phase-0-contract-reconciliation",
+    "phase-0-contract-evidence-inventory"
+  ],
+  "prerequisites": [
+    {
+      "id": "stage-1-network-path",
+      "status": "COMPLETE_VERIFIED"
+    }
+  ],
+  "phase_transition_conditions": [
+    "Independent verification of the Phase 0 acceptance criteria.",
+    "Kyle authorization of any consequential transition or implementation work."
+  ],
+  "reconciliation_note": "The systemic-failure research claim that Phase 0\u20133 was simply complete is incorrect. ARCHITECTURE.md \u00a716.6 is authoritative: Phase 0 is partial and requires reconciliation, Phase 1 is essentially complete, Phase 2 is substantially built/in progress, and Phase 3 is a future target.",
+  "authoritative_sources_agree": true,
+  "state_md_sha256": "ca39c71eedfa2f586c4b4eac122eae760e3bf65c2ee2ae62dcfa86b9f5a8ecb2"
+}
