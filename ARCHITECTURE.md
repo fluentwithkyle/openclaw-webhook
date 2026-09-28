@@ -1692,6 +1692,22 @@ through future ACP-backed policy changes; workflow
 decomposition, specialist selection, consequential operations, and a new control
 plane are **GAPS / NOT IMPLEMENTED**.
 
+### Phase 0 Coordinator Contract Reconciliation
+
+The implemented Coordinator Contract is limited to `request_task` and `get_task`.
+Their model-facing input shapes are explicit and reject authority-bearing fields;
+the server derives repository, branch, target, mode, capabilities, paths, originator,
+coordinator authentication, and verification requirements before the existing ACP
+boundary. `AGENT_REPORT` is execution evidence only. `INDEPENDENT_VERIFICATION` is
+required for `VERIFIED` and `COMPLETE` transitions. The eight ACP lifecycle states are
+`PENDING`, `SELECTED`, `PLANNED`, `EXECUTING`, `VERIFIED`, `COMPLETE`, `BLOCKED`, and
+`FAILED`; `CANCELLED` and `SUPERSEDED` remain TaskRegistry lineage/control semantics,
+not lifecycle states. Coordinator continuation additionally requires prior `get_task`
+observation, `COMPLETE`, independent-verification evidence, and valid TaskRegistry
+lineage; `FAILED` and `BLOCKED` cannot serve as successful predecessors. This technical
+implementation does not itself establish Phase 0 convergence or authorize a phase
+transition; independent verification and Kyle's decision remain required.
+
 ### Authority Model (Current and Target)
 
 | Component | Role |

@@ -28,7 +28,7 @@ Based on direct inspection of the repository on `main`:
 2. **Operations Supported**: The `control_plane` tool permits exactly two operations:
    - `request_task`: Constructs an ACP command on the server side (target: Gemini Builder, task mode: `REVIEW`, capability: `read_only`, permitted paths: `poc/`) and submits it to `POST /poc/coordinator` using `DEEPSEEK_COORDINATOR_SECRET`.
    - `get_task`: Accepts a namespace-restricted `deepseek-runtime-` request ID, reads the TaskRegistry, and returns a safe sanitized projection covering all eight ACP lifecycle states (`PENDING`, `SELECTED`, `PLANNED`, `EXECUTING`, `VERIFIED`, `COMPLETE`, `FAILED`, `BLOCKED`), lineage, agent execution reports, evidence categories, independent verification evidence, verification requirements, and failure/blocked summaries.
-3. **Execution Bounds**: The runtime tool loop is bounded by `MAX_TOOL_ITERATIONS = 2` (with Phase 3 bounded continuation allowing up to 3 iterations under strict prior-observation and completion constraints).
+3. **Execution Bounds**: The runtime tool loop is bounded by its server-held iteration limit. The Phase 0 contract does not grant additional operations or authority through that loop.
 4. **Authority Separation**: Model output is treated strictly as intent, never authority. All authority-bearing fields (capabilities, permitted paths, targets, task modes, commit/push authority) are server-derived policy. No second TaskRegistry, dispatcher, orchestrator, or generic HTTP executor exists.
 5. **Phase 0 Status**: The repository's authoritative state (`ARCHITECTURE.md` §16.6 and `STATE.md`) designates Phase 0 as **PARTIALLY COMPLETE / REQUIRES FORMAL RECONCILIATION**. While foundational operations (`request_task` / `get_task`) and observation increments (Increments 4.1–4.9) were implemented, a formal Phase 0 contract checkpoint was required before advancing to substantive Phase 2/3 features.
 
@@ -92,13 +92,13 @@ The coordinator lifecycle maps directly onto the authoritative ACP and TaskRegis
    - `EXECUTING` → `VERIFIED` (requires `INDEPENDENT_VERIFICATION` evidence)
    - `VERIFIED` → `COMPLETE` (requires independent verification and reconciliation)
    - Any active state → `FAILED` or `BLOCKED` upon error or blocking condition
-   - Active/Pending states → `CANCELLED` or `SUPERSEDED` upon explicit directive
-3. **Terminal States**: `COMPLETE`, `FAILED`, `BLOCKED`, `CANCELLED`, `SUPERSEDED`.
-4. **Verification Gates**: `EXECUTING` → `VERIFIED` cannot occur without an independent verification evidence record.
-5. **Continuation Gates**: A child task creation (`request_task` with `parent_request_id`) requires the parent to be in `COMPLETE` state with `INDEPENDENT_VERIFICATION` evidence, observed previously via `get_task`.
-6. **Cancellation / Supersession Behavior**: Cancelling or superseding a parent task immediately revokes pending child creation and invalidates any matching pending Director approvals.
-7. **Failure / Blocked Handling**: Fails closed; diagnostic summaries are projected read-only without granting authority; execution halts and requires human intervention or Kyle escalation.
-8. **Kyle Escalation Points**: Any architectural conflict, strategic alignment failure, unverified implementation, or request for consequential capability without a valid approval proof.
+3. **Lineage/control semantics**: `CANCELLED` and `SUPERSEDED` are represented through existing TaskRegistry cancellation and supersession lineage/control mechanisms. They are not ACP lifecycle states and are not entries in `VALID_STATE_TRANSITIONS`.
+4. **Terminal ACP lifecycle states**: `COMPLETE`, `FAILED`, and `BLOCKED`. Cancellation and supersession remain separately observable lineage/control facts.
+5. **Verification Gates**: `EXECUTING` → `VERIFIED` cannot occur without an independent verification evidence record.
+6. **Coordinator continuation gates**: DeepSeek state-driven continuation requires a prior `get_task` observation, a parent in `COMPLETE`, `INDEPENDENT_VERIFICATION` evidence, and valid existing TaskRegistry lineage. A `FAILED` or `BLOCKED` parent is never a successful predecessor. This stricter Coordinator policy does not redefine intentionally broader generic TaskRegistry lineage behavior.
+7. **Cancellation / Supersession Behavior**: Cancelling or superseding a parent immediately blocks Coordinator continuation and invalidates matching pending Director approvals through the existing TaskRegistry mechanisms.
+8. **Failure / Blocked Handling**: Fails closed; diagnostic summaries are projected read-only without granting authority; execution halts and requires human intervention or Kyle escalation.
+9. **Kyle Escalation Points**: Any architectural conflict, strategic alignment failure, unverified implementation, or request for consequential capability without a valid approval proof.
 
 ---
 
@@ -145,10 +145,9 @@ Phase 0 is formally accepted when the following objective criteria are independe
 
 ## 9. Phase Transition Condition & Recommendation
 
-- **Evidence establishing `phase-0-contract-defined`**: This research record, combined with the implemented baseline runtime (`services/deepseek-runtime.js`) and verified test suites (`test/deepseek-runtime.test.js`, `test/coordinator.test.js`), provides complete, independently verifiable evidence that Phase 0 is defined and reconciled.
-- **Remaining Director Decision Required**: After independent verification of this research record, Kyle (Director) must formally issue a phase transition decision to advance from Phase 0 (Coordinator Contract) to the next roadmap phase.
-- **Exact Recommendation**: Stop at this convergence point. The required next action is:
-  `independent verification → Kyle Director transition decision → next roadmap task.`
+- **Implementation evidence**: This research record, the bounded runtime contract, and focused tests provide implementation evidence for the Phase 0 contract.
+- **Remaining independent verification and Director decision**: The authoritative roadmap remains **PARTIALLY COMPLETE / REQUIRES FORMAL RECONCILIATION** until independent verification and Kyle's explicit transition decision. Technical implementation is not strategic convergence.
+- **Exact Recommendation**: Stop after independent verification and request Kyle's phase-transition decision; do not autonomously advance the roadmap.
 
 ---
 
@@ -156,10 +155,10 @@ Phase 0 is formally accepted when the following objective criteria are independe
 
 - **Authoritative Roadmap**: `ARCHITECTURE.md` §16.6, `docs/ai/STATE.md`, `docs/ai/strategic-state.json`, `docs/ai/ARCH_DECISIONS.md`
 - **Current Phase**: Phase 0 — Coordinator Contract
-- **Phase Completion Status**: **COMPLETED / RECONCILED** (transitioning from PARTIALLY COMPLETE upon independent verification and Director approval)
+- **Phase Completion Status**: **PARTIALLY COMPLETE / REQUIRES FORMAL RECONCILIATION** pending independent verification and Kyle's transition decision.
 - **Relevant Prior Work**: Stage 1 network path; existing DeepSeek runtime; `request_task` / `get_task` contract; Phase 1 observation; Phase 2 bounded coordination foundations; Phase 3.1 Director authorization; Phase 3.2 specialist routing
 - **Required Prerequisite**: Stage 1 network path COMPLETE / VERIFIED
 - **Proposed Task Classification**: A — Roadmap-Required Work
 - **Roadmap Requirement Addressed**: `phase-0-contract-reconciliation`
 - **Phase Unlock / Advancement**: Establishes the authoritative Coordinator Contract / Capability Architecture required before further substantive Coordinator capability expansion
-- **Alignment Conclusion**: **ALIGNED — CONVERGENCE REACHED PENDING INDEPENDENT VERIFICATION & DIRECTOR TRANSITION**
+- **Alignment Conclusion**: **ALIGNED_PENDING_AUTHORIZATION**; implementation completion remains distinct from independent verification and strategic convergence.

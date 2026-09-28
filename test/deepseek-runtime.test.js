@@ -9,6 +9,8 @@ const {
     MAX_CHILD_TASK_OBSERVATIONS,
     MAX_REPORT_HIGHLIGHTS,
     MAX_REPORT_HIGHLIGHT_LENGTH,
+    ACP_LIFECYCLE_STATES,
+    LINEAGE_CONTROL_SEMANTICS,
     routeSpecialistIntent,
     buildControlPlaneCommand,
     evaluateContinuationPolicy,
@@ -337,8 +339,8 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
-    await test('Phase 3 coordinator policy formalizes bounded continuation, authority, and ACP-owned verification', async () => {
-        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 3 bounded autonomous continuation');
+    await test('Phase 0 coordinator contract formalizes bounded operations, authority, and ACP-owned verification', async () => {
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 0 Coordinator Contract / Capability Architecture');
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.model_operations, ['request_task', 'get_task']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities, ['read_only']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths, ['poc/']);
@@ -346,6 +348,10 @@ function rawRequest(port, headers, body) {
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.authorization_boundary.authority, 'ACP and Kyle');
         assert(DEEPSEEK_COORDINATOR_POLICY.authorization_boundary.excluded_capabilities.includes('push'));
         assert.match(DEEPSEEK_COORDINATOR_POLICY.state_semantics.independent_verification, /ACP lifecycle/);
+        assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.state_semantics.lifecycle_states, ACP_LIFECYCLE_STATES);
+        assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.state_semantics.lineage_control_semantics, LINEAGE_CONTROL_SEMANTICS);
+        assert.equal(ACP_LIFECYCLE_STATES.includes('CANCELLED'), false);
+        assert.equal(ACP_LIFECYCLE_STATES.includes('SUPERSEDED'), false);
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.continuation.required_parent_status, 'COMPLETE');
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.continuation.required_evidence, 'INDEPENDENT_VERIFICATION');
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.observation.max_child_tasks, MAX_CHILD_TASK_OBSERVATIONS);
@@ -379,6 +385,7 @@ function rawRequest(port, headers, body) {
         const properties = CONTROL_PLANE_TOOL.function.parameters.properties;
         for (const forbidden of ['capabilities', 'permitted_paths', 'authorization', 'repository', 'base_branch', 'target', 'task_mode']) assert.equal(properties[forbidden], undefined);
         assert(properties.parent_request_id);
+        assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.request_task.prohibited_authority_fields, ['target', 'repository', 'base_branch', 'task_mode', 'capabilities', 'permitted_paths', 'authorization', 'commit', 'push']);
     });
 
     await test('arbitrary authority fields are rejected instead of influencing ACP', async () => {

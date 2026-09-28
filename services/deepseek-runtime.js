@@ -1,11 +1,12 @@
 const axios = require('axios');
 const taskRegistry = require('../poc/task-registry');
 const { evaluateCoordinatorIntent } = require('../poc/strategic-alignment');
+const { ACP_LIFECYCLE_STATES, LINEAGE_CONTROL_SEMANTICS } = require('../poc/schemas/acp-schema');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
 const MAX_CHILD_TASK_OBSERVATIONS = 10;
-const CHILD_TASK_SUMMARY_STATUSES = Object.freeze(['PENDING', 'SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE', 'FAILED', 'BLOCKED']);
+const CHILD_TASK_SUMMARY_STATUSES = ACP_LIFECYCLE_STATES;
 const MAX_REPORT_HIGHLIGHTS = 3;
 const MAX_REPORT_HIGHLIGHT_LENGTH = 240;
 const WORKFLOW_TERMINAL_STATUSES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED']);
@@ -41,10 +42,20 @@ function routeSpecialistIntent(objective, trustedContext = {}) {
     return { valid: false, outcome: 'HUMAN_REVIEW', reason: 'Specialist routing could not safely classify the intent' };
 }
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
-    phase: 'Phase 3 bounded autonomous continuation',
+    phase: 'Phase 0 Coordinator Contract / Capability Architecture',
     model_operations: Object.freeze(['request_task', 'get_task']),
-    request_task: Object.freeze({ model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']), strategic_alignment: 'server-side authoritative state validation before ACP submission', specialist_routing: 'server policy' }),
-    get_task: Object.freeze({ model_fields: Object.freeze(['operation', 'request_id']), request_id_prefix: 'deepseek-runtime-' }),
+    request_task: Object.freeze({
+        model_fields: Object.freeze(['operation', 'objective', 'parent_request_id']),
+        prohibited_authority_fields: Object.freeze(['target', 'repository', 'base_branch', 'task_mode', 'capabilities', 'permitted_paths', 'authorization', 'commit', 'push']),
+        strategic_alignment: 'server-side authoritative state validation before ACP submission',
+        specialist_routing: 'server policy',
+        result: 'ACP coordinator acknowledgement; authority-bearing ACP fields are not model controlled'
+    }),
+    get_task: Object.freeze({
+        model_fields: Object.freeze(['operation', 'request_id']),
+        request_id_prefix: 'deepseek-runtime-',
+        result: 'bounded sanitized observation only; no authority-bearing ACP fields'
+    }),
     server_derived_authority: Object.freeze({
         repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main',
         specialist_routing: 'deterministic server policy', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']),
@@ -52,6 +63,8 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
     }),
     observation_projection: Object.freeze(['identity', 'lifecycle', 'lineage', 'agents', 'next_action', 'execution', 'evidence', 'evidence_summary', 'specialist_routing_summary', 'verification_reconciliation_summary', 'verification', 'failure', 'failure_summary', 'blocked', 'blocked_summary', 'workflow_completion_summary']),
     state_semantics: Object.freeze({
+        lifecycle_states: ACP_LIFECYCLE_STATES,
+        lineage_control_semantics: LINEAGE_CONTROL_SEMANTICS,
         agent_report: 'execution evidence only',
         independent_verification: 'required by the ACP lifecycle before VERIFIED or COMPLETE',
         verified_outcome: 'only ACP lifecycle status VERIFIED or COMPLETE'
@@ -839,6 +852,8 @@ module.exports = {
     MAX_CHILD_TASK_OBSERVATIONS,
     MAX_REPORT_HIGHLIGHTS,
     MAX_REPORT_HIGHLIGHT_LENGTH,
+    ACP_LIFECYCLE_STATES,
+    LINEAGE_CONTROL_SEMANTICS,
     SPECIALIST_ROUTING_POLICY,
     routeSpecialistIntent,
     RuntimeError,
