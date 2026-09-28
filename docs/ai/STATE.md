@@ -1,7 +1,7 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-09-28
-**Updated By**: Codex — TASK-CODEX-SYSTEMIC-AUTONOMY-RELIABILITY-AND-STRATEGIC-ALIGNMENT-HARDENING-001
+**Updated By**: Kilo — TASK-KILO-DEEPSEEK-PHASE-0-AND-1-DURABLE-STATE-RECONCILIATION-001
 
 ## Current Strategic State — Authoritative for Alignment
 
@@ -11,19 +11,48 @@ strategic-alignment evaluator; it is not a second roadmap or execution authority
 they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.md`
 §16.6 remains authoritative for intended architecture.
 
-- **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 0 —
-  Coordinator Contract**, **PARTIALLY COMPLETE / REQUIRES FORMAL RECONCILIATION**.
-- **Completed requirements**: Stage 1 network path; Phase 1 bounded observation.
-- **Unresolved required next work**: `phase-0-contract-reconciliation`: reconcile and
-  design the typed Coordinator Contract / Capability Architecture, including server
-  policy mapping, evidence contract, state transitions, and Kyle authorization gates.
-- **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 acceptance
-  requires independent verification of the contract and a Kyle-authorized transition.
+- **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 2 —
+  Bounded Coordination**, **IN PROGRESS / SUBSTANTIALLY BUILT**.
+- **Completed requirements**: Stage 1 network path; Phase 0 Coordinator Contract;
+  Phase 1 Observation.
+- **Unresolved required next work**: `phase-2-bounded-coordination`: implement
+  policy-controlled workflow operations that map to existing ACP modes, capabilities,
+  paths, targets, verification requirements, and authorization gates.
+- **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 is COMPLETE /
+  INDEPENDENTLY VERIFIED (implementation commit `ec9c476`; independent
+  verification/reconciliation commit `53110da`). Phase 1 is COMPLETE / INDEPENDENTLY
+  VERIFIED (implementation commit `8c77901`; independent verification/reconciliation
+  commit `8c77901`, TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001).
+  Phase 2 prerequisites: requires Phase 0 contract and Phase 1 observation as
+  established foundations, plus Kyle authorization for consequential work.
+- **Phase 0 independent verification**: `TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-VERIFY-RECONCILE-001`
+  (2026-09-28) independently verified the Phase 0 Coordinator Contract implementation
+  (commit `ec9c476`): confirmed `request_task`/`get_task` contract, server-derived
+  REVIEW/read_only/poc/ authority, sanitized observation across all eight lifecycle
+  states, evidence semantics, lifecycle/lineage semantics, continuation requirements,
+  strategic-alignment enforcement, and regression coverage (500+ tests across 18 test
+  files). Reconciliation commit `53110da` updated CONTROL_CENTER.md and TASK_LOG.md.
+  Phase 0 convergence is established; the phase transition to Phase 2 is Kyle's
+  decision.
+- **Phase 1 independent verification**: `TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001`
+  (2026-09-27) independently verified the Phase 1 Observation implementation (PR #225,
+  commit `8c77901`): confirmed exactly one `control_plane` tool with `request_task`
+  and `get_task`; server-derived `request_task` authority (REVIEW, read_only, poc/);
+  namespace-constrained `get_task` (deepseek-runtime-*); safe observation projection
+  covering all eight ACP lifecycle states (PENDING, SELECTED, PLANNED, EXECUTING,
+  VERIFIED, COMPLETE, FAILED, BLOCKED), lineage, agent execution reports vs
+  independent verification, evidence categories, verification requirements, and
+  failure/blocked information; ACP/TaskRegistry/orchestrator authority preservation; no
+  second control plane or expanded model authority. Phase 2+ capabilities remain
+  GAP / PROPOSED / TARGET.
 - **Production enforcement**: DeepSeek `request_task` evaluates the projection on the
   server before it constructs an ACP command or calls `/poc/coordinator`; an alignment
   failure is `STRATEGIC_ALIGNMENT_BLOCKED` and cannot reach TaskRegistry or dispatch.
-  The projection's SHA-256 must match this file. Alignment remains pending Kyle/ACP
-  authorization; no model-generated exception is accepted.
+  The projection's SHA-256 must match this file.
+- **Transition rule**: Technical implementation and independent verification establish
+  Phase 0 and Phase 1 completion evidence; Phase 2 is now the active roadmap phase.
+  Consequential Phase 2 implementation work and any phase transition remain Kyle's
+  decision. No model-generated exception or automatic phase transition is accepted.
 - **Stop/escalation**: No task is selectable merely because it is technically correct,
   locally useful, or ACP-compliant. Missing, stale, contradictory, or unverifiable
   state; a completed requirement; unmet prerequisites; or no required next work is
@@ -32,12 +61,13 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
 
 **Research reconciliation**: The systemic-failure research record's statement that
 Phase 0–3 was simply complete is historical/advisory and incorrect. Current
-`ARCHITECTURE.md` §16.6 establishes Phase 0 as partial, Phase 1 as essentially
-complete, Phase 2 as substantially built/in progress, and Phase 3 as a future target.
-Increments 4.1–4.9 were technically valid implementation history that substantially
-advanced Phase 1 and Phase 2 foundations, but they were not authorization to generate
-another increment; the divergence was selecting 4.10-style work without reconciling
-the required Phase 0 checkpoint.
+`ARCHITECTURE.md` §16.6 establishes Phase 0 as now complete and independently verified,
+Phase 1 as essentially complete and independently verified, Phase 2 as the active
+roadmap phase (substantially built / in progress), and Phase 3 as a future target.
+Increments 4.1–4.9 are implementation history that substantially advanced Phase 1 and
+Phase 2 foundations; Phase 0 and Phase 1 are now reconciled as complete after
+independent verification. Phase 2 bounded coordination requires separate Kyle
+authorization for consequential work.
 
 ---
 
