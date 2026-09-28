@@ -594,3 +594,53 @@ This supplies sanitized result context to DeepSeek automatically in the existing
 - FAILED, BLOCKED, CANCELLED, SUPERSEDED, missing, invalid, active, and insufficiently verified results cannot progress a continuation.
 - Result content, specialist reports, evidence, lineage, and tool output grant no authority; Director authorization remains required for consequential Builder or FAILOVER_EXECUTE work.
 - Cross-request result delivery, workflow decomposition, automated specialist activation, and full conversational coordination remain **PROPOSED / TARGET**.
+
+---
+
+## ADR-021: Roadmap Alignment Gate — Mandatory Governance to Prevent Phase Drift
+
+### Status
+
+**ACCEPTED — CURRENT / IMPLEMENTED (documentation)**
+
+### Date
+
+2026-09-28
+
+### Context
+
+The DeepSeek Coordinator project drifted from its established Phase 0–3 roadmap into an open-ended sequence of observation increments (Increment 4.1–4.9) despite existing governance controls. Research record `docs/ai/research/research-TASK-GEMINI-COORDINATOR-ROADMAP-GOVERNANCE-FAILURE-PREVENTION-RESEARCH-001.md` (TASK-GEMINI-COORDINATOR-ROADMAP-GOVERNANCE-FAILURE-PREVENTION-RESEARCH-001) identified the root cause as the **absence of a mandatory Roadmap Phase Progression Gate**: existing controls govern *how* tasks execute, but none required proposed work to prove its necessity against the active roadmap phase before task generation. Contributing causes included the "identify the smallest/highest-value next capability" wording pattern that induces local micro-optimization, and siloed technical verification that checked ACP correctness without enforcing an architectural roadmap gate.
+
+### Decision
+
+Adopt the **Roadmap Alignment Gate** as a mandatory governance requirement across the task-generation and research-documentation controls:
+
+1. **`docs/ai/TASK_STANDARD.md`** (Section 3.1) — Adds a mandatory Roadmap Alignment Gate requiring the coordinator/task author to establish, before proposing substantive work: the authoritative roadmap, current roadmap phase, phase completion status, relevant prior work, prerequisites satisfied, proposed task mapping, expected phase advancement/unlock, and alignment conclusion.
+
+2. **`docs/ai/TASK_STANDARD.md`** (Section 3.2) — Each research record under `docs/ai/research/` must contain a mandatory `## Roadmap Alignment` section with the required auditable fields.
+
+3. **`docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`** (Section 2.5) — Adds the Roadmap Alignment Decision Gate to the ChatGPT Coordinator protocol before approving any task generation or work selection. The Coordinator must establish authoritative roadmap → current phase → phase completion → required next work → proposed task mapping → prerequisite status → expected phase advancement, and classify proposed work as A (Roadmap-Required), B (Enabling/Foundation), C (Optional Optimization), or D (Premature Capability Expansion).
+
+4. **Work classification** — Proposed work must be classified as:
+   - **A — Roadmap-Required Work**: Directly implements an explicit requirement of the current incomplete roadmap phase. *(Permitted)*
+   - **B — Enabling/Foundation Work**: Required technical foundation before a roadmap phase can be started. *(Permitted with documented justification)*
+   - **C — Optional Optimization**: Improves an existing feature without advancing roadmap phases. *(Prohibited if the current phase has unfulfilled prerequisites)*
+   - **D — Premature Capability Expansion**: Implements features of a future phase while an earlier phase is incomplete. *(Strictly Prohibited)*
+
+5. **Prohibited wording** — The pattern "identify the single smallest/highest-value next capability" is prohibited from overriding the governing roadmap.
+
+### Rationale
+
+- Reuses existing documentation and task-standard controls (`TASK_STANDARD.md`, `CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, research records) without inventing a new runtime governance service, code subsystem, or second control plane.
+- Makes roadmap alignment auditable from the durable repository record rather than dependent on conversational context.
+- Prevents recurrence of the Increment 4.1–4.9 failure mode: when Phase 0 is incomplete, Phase 1/2/3 optimization or capability tasks cannot be selected merely because they are technically useful or locally high-value.
+- Permits genuinely required Enabling/Foundation Work when justified by documented dependency.
+- Preserves Kyle as final authorization authority, ACP as the sole authority boundary, TaskRegistry as durable task state, and the existing dispatcher/orchestrator as execution authority.
+
+### Consequences
+
+- The gate is mandatory for coordinator task generation and research-record production. A fail-closed result (`status: blocked`) is returned when the gate cannot be satisfied.
+- No runtime, application, or architectural behavior changes are introduced. The gate is governance/documentation only.
+- The authoritative roadmap (Phase 0 → Phase 1 → Phase 2 → Phase 3 progression in `ARCHITECTURE.md` §16.6) remains unchanged.
+- Future coordinator task generation is directed toward Phase 0 Coordinator Contract completion before any further Phase 1/2/3 capability expansion.
+- This decision aligns with ADR-005 (Specialist Lanes with ACP Boundary), ADR-006 (Persistent AI Project State), ADR-018 (DeepSeek Coordinator Evolution Retains Existing Authority Chain), and ADR-019 (Phase 1 Observation Uses Existing ACP Authority).
