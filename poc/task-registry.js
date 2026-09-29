@@ -571,6 +571,53 @@ function setNextAction(requestId, nextAction) {
   return { success: true, entry };
 }
 
+function createCoordinationContext(requestId, maxAutonomousTurns) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+  if (!entry) return { success: false, error: 'Task not found' };
+  if (entry.coordination_context) return { success: true, context: entry.coordination_context, existing: true };
+  const context = {
+    context_id: requestId,
+    root_request_id: requestId,
+    current_request_id: requestId,
+    autonomous_turns: 0,
+    max_autonomous_turns: maxAutonomousTurns,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  entry.coordination_context = context;
+  entry.updated_at = context.updated_at;
+  cache.set(requestId, entry);
+  persistCache();
+  return { success: true, context };
+}
+
+function advanceCoordinationContext(contextId, currentRequestId) {
+  const entry = getTask(contextId);
+  const context = entry && entry.coordination_context;
+  if (!context || context.context_id !== contextId) return { success: false, error: 'Coordination context not found' };
+  if (context.autonomous_turns >= context.max_autonomous_turns) return { success: false, error: 'Coordination context autonomous-turn limit exhausted' };
+  context.autonomous_turns++;
+  context.current_request_id = currentRequestId;
+  context.updated_at = new Date().toISOString();
+  entry.updated_at = context.updated_at;
+  memoryCache.set(contextId, entry);
+  persistCache();
+  return { success: true, context };
+}
+
+function setCoordinationContextCurrent(contextId, currentRequestId) {
+  const entry = getTask(contextId);
+  const context = entry && entry.coordination_context;
+  if (!context || context.context_id !== contextId) return { success: false, error: 'Coordination context not found' };
+  context.current_request_id = currentRequestId;
+  context.updated_at = new Date().toISOString();
+  entry.updated_at = context.updated_at;
+  memoryCache.set(contextId, entry);
+  persistCache();
+  return { success: true, context };
+}
+
 function getAllTasks() {
   const cache = getCache();
   return Array.from(cache.values());
@@ -720,6 +767,9 @@ module.exports = {
   updateTaskStatus,
   updateAgentResult,
   setNextAction,
+  createCoordinationContext,
+  advanceCoordinationContext,
+  setCoordinationContextCurrent,
   getAllTasks,
   getTasksByStatus,
   deleteTask,

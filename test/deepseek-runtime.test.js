@@ -6,6 +6,7 @@ const {
     CONTROL_PLANE_TOOL,
     DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
+    MAX_AUTONOMOUS_COORDINATION_TURNS,
     MAX_CHILD_TASK_OBSERVATIONS,
     MAX_REPORT_HIGHLIGHTS,
     MAX_REPORT_HIGHLIGHT_LENGTH,
@@ -17,6 +18,7 @@ const {
     evaluateContinuationPolicy,
     evaluateWorkflowStepPolicy,
     classifyTaskResultForContinuation,
+    resolveCoordinationContext,
     validateGetTaskArguments,
     projectTaskForDeepSeek,
     projectSpecialistRoutingSummary,
@@ -413,6 +415,37 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
+    await test('TaskRegistry-backed coordination contexts correlate bounded autonomous runtime turns', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-context-parent';
+        completeDeepSeekReviewTask(parentRequestId);
+        assert.deepEqual(taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        const client = { post: async () => providerResponse({ role: 'assistant', content: 'Validated coordination state.' }) };
+        const first = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId });
+        assert.equal(first.message.content, 'Validated coordination state.');
+        assert.equal(taskRegistry.getTask(parentRequestId).coordination_context.autonomous_turns, 1);
+        await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId });
+        assert.equal(taskRegistry.getTask(parentRequestId).coordination_context.autonomous_turns, 2);
+        await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId }), error => error.code === 'COORDINATION_TURN_EXHAUSTED');
+        taskRegistry.resetRegistry();
+    });
+
+    await test('coordination contexts fail closed for missing, stale, terminal, and mismatched lineage state', async () => {
+        taskRegistry.resetRegistry();
+        assert.throws(() => resolveCoordinationContext('deepseek-runtime-no-context'), /missing or invalid/);
+        const failedId = 'deepseek-runtime-context-failed';
+        createDeepSeekReviewTask(failedId);
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus(failedId, status).success, true);
+        assert.equal(taskRegistry.createCoordinationContext(failedId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        assert.throws(() => resolveCoordinationContext(failedId), error => error.code === 'COORDINATION_ESCALATION_REQUIRED');
+        const parentId = 'deepseek-runtime-context-lineage';
+        completeDeepSeekReviewTask(parentId);
+        assert.equal(taskRegistry.createCoordinationContext(parentId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        assert.equal(taskRegistry.createTask({ request_id: 'deepseek-runtime-context-active-child', source: 'DeepSeek Runtime', target: 'Gemini', task: 'Child', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle', parent_request_id: parentId }).success, true);
+        assert.throws(() => resolveCoordinationContext(parentId), /active child task/);
+        taskRegistry.resetRegistry();
+    });
+
     await test('submitted task correlation is returned only from the existing get_task observation result', async () => {
         let requestId;
         let resultContext;
@@ -445,8 +478,8 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
-    await test('Phase 2 bounded coordination preserves the coordinator contract, authority, and ACP-owned verification', async () => {
-        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 2 — Bounded Coordination');
+    await test('Phase 3 bounded coordination contexts preserve the coordinator contract, authority, and ACP-owned verification', async () => {
+        assert.equal(DEEPSEEK_COORDINATOR_POLICY.phase, 'Phase 3 — Autonomous Coordination Loop (first bounded increment)');
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.model_operations, ['request_task', 'get_task']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.capabilities, ['read_only']);
         assert.deepEqual(DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.permitted_paths, ['poc/']);
@@ -462,6 +495,7 @@ function rawRequest(port, headers, body) {
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.continuation.required_evidence, 'INDEPENDENT_VERIFICATION');
         assert.equal(DEEPSEEK_COORDINATOR_POLICY.observation.max_child_tasks, MAX_CHILD_TASK_OBSERVATIONS);
         assert.equal(MAX_TOOL_ITERATIONS, 3);
+        assert.equal(MAX_AUTONOMOUS_COORDINATION_TURNS, 2);
     });
 
     await test('server enforces exactly three maximum control-plane tool iterations', async () => {
