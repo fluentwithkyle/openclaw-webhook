@@ -415,7 +415,7 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
-    await test('TaskRegistry-backed coordination contexts correlate bounded autonomous runtime turns', async () => {
+    await test('coordination context resolution does not consume a turn without a dispatched continuation', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-context-parent';
         completeDeepSeekReviewTask(parentRequestId);
@@ -423,10 +423,9 @@ function rawRequest(port, headers, body) {
         const client = { post: async () => providerResponse({ role: 'assistant', content: 'Validated coordination state.' }) };
         const first = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId });
         assert.equal(first.message.content, 'Validated coordination state.');
-        assert.equal(taskRegistry.getTask(parentRequestId).coordination_context.autonomous_turns, 1);
+        assert.equal(taskRegistry.getTask(parentRequestId).coordination_context.autonomous_turns, 0);
         await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId });
-        assert.equal(taskRegistry.getTask(parentRequestId).coordination_context.autonomous_turns, 2);
-        await assert.rejects(() => runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId }), error => error.code === 'COORDINATION_TURN_EXHAUSTED');
+        assert.equal(taskRegistry.getTask(parentRequestId).coordination_context.autonomous_turns, 0);
         taskRegistry.resetRegistry();
     });
 
@@ -442,13 +441,31 @@ function rawRequest(port, headers, body) {
             }
             modelCalls++;
             if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'root', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
-            if (modelCalls === 2) return providerResponse({ role: 'assistant', content: 'Initial review completed.' });
+            if (modelCalls === 2) {
+                const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
+                assert.equal(context.autonomous_turns, 0);
+                assert.equal(context.current_request_id, submitted[0].request_id);
+                return providerResponse({ role: 'assistant', content: 'Initial review completed.' });
+            }
             if (modelCalls === 3) {
                 const observation = body.messages.find(message => message.role === 'system' && message.content.includes('Server-derived coordination observation'));
                 assert(observation, 'the next autonomous turn must receive a server-derived observation');
                 return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: submitted[0].request_id, workflow_step: 'review' }) } }] });
             }
-            return providerResponse({ role: 'assistant', content: 'Bounded coordination completed.' });
+            if (modelCalls === 4) {
+                const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
+                assert.equal(context.autonomous_turns, 1);
+                assert.equal(context.current_request_id, submitted[1].request_id);
+                return providerResponse({ role: 'assistant', content: 'First continuation completed.' });
+            }
+            if (modelCalls === 5) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'second-follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: submitted[1].request_id, workflow_step: 'review' }) } }] });
+            if (modelCalls === 6) {
+                const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
+                assert.equal(context.autonomous_turns, 2);
+                assert.equal(context.current_request_id, submitted[2].request_id);
+                return providerResponse({ role: 'assistant', content: 'Bounded coordination completed.' });
+            }
+            throw new Error('the exhausted durable coordination budget must prevent another model turn');
         }};
 
         const result = await runDeepSeekConversation({
@@ -456,10 +473,16 @@ function rawRequest(port, headers, body) {
             autonomousCoordination: true
         });
         assert.equal(result.message.content, 'Bounded coordination completed.');
-        assert.equal(submitted.length, 2);
+        assert.equal(submitted.length, 3);
         assert.equal(submitted[1].parent_request_id, submitted[0].request_id);
-        assert.equal(taskRegistry.getTask(submitted[0].request_id).coordination_context.current_request_id, submitted[1].request_id);
-        assert.equal(taskRegistry.getTask(submitted[0].request_id).coordination_context.autonomous_turns, MAX_AUTONOMOUS_COORDINATION_TURNS);
+        assert.equal(submitted[2].parent_request_id, submitted[1].request_id);
+        const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
+        assert.equal(context.context_id, submitted[0].request_id);
+        assert.equal(context.root_request_id, submitted[0].request_id);
+        assert.equal(context.current_request_id, submitted[2].request_id);
+        assert.equal(context.autonomous_turns, MAX_AUTONOMOUS_COORDINATION_TURNS);
+        assert.equal(taskRegistry.getTask(submitted[2].request_id).coordination_context, undefined);
+        assert.equal(modelCalls, 6);
         assert.equal(MAX_TOOL_ITERATIONS, 3);
         taskRegistry.resetRegistry();
     });

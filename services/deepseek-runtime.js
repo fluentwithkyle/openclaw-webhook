@@ -362,9 +362,7 @@ function resolveCoordinationContext(contextId) {
     }
     const lineage = taskRegistry.validateLineageForCreate(current.request_id, `coordination-probe-${contextId}`);
     if (!lineage.valid) throw new RuntimeError(400, 'COORDINATION_STATE_REJECTED', lineage.error);
-    const advanced = taskRegistry.advanceCoordinationContext(contextId, current.request_id);
-    if (!advanced.success) throw new RuntimeError(409, 'COORDINATION_TURN_EXHAUSTED', advanced.error);
-    return advanced.context;
+    return context;
 }
 
 function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults) {
@@ -857,8 +855,8 @@ async function runDeepSeekTurn({ messages, env, httpClient = axios, coordination
                 const contextResult = taskRegistry.createCoordinationContext(command.request_id, MAX_AUTONOMOUS_COORDINATION_TURNS);
                 if (contextResult.success) createdCoordinationContext = contextResult.context;
             } else {
-                const contextResult = taskRegistry.setCoordinationContextCurrent(coordinationContext.context_id, command.request_id);
-                if (!contextResult.success) throw new RuntimeError(400, 'INVALID_COORDINATION_CONTEXT', contextResult.error);
+                const contextResult = taskRegistry.advanceCoordinationContext(coordinationContext.context_id, command.request_id);
+                if (!contextResult.success) throw new RuntimeError(409, 'COORDINATION_TURN_EXHAUSTED', contextResult.error);
             }
             toolResultContent = JSON.stringify({
                 status: 'completed',

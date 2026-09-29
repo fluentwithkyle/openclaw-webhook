@@ -2860,3 +2860,14 @@ existing Director authorization.
 **Verification**: Focused DeepSeek runtime tests and the complete `npm test` suite passed; `git diff --check` passed.
 
 **Commit Reference**: `ab795d19a348bd9a21c617ef520b1137f495a31c`.
+
+
+## 2026-09-29 | TASK-CODEX-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-LOOP-CORRECTION-001
+
+**Task**: Correct durable autonomous-turn accounting in the Phase 3 coordination-loop implementation.
+
+**Outcome**: IMPLEMENTED / VERIFIED. Coordination-context resolution now validates persisted root context without consuming a turn. After a policy-approved child dispatch, the runtime calls the existing `advanceCoordinationContext()` operation on that root context, which atomically increments the durable turn count and updates its current request. The runtime continues from the root context only; children do not carry coordination context.
+
+**Verification**: Focused DeepSeek runtime tests and the complete `npm test` suite passed; `git diff --check` passed.
+
+**Commit Reference**: `bcdc1b4e8063a528f71849537f51a6c14461e7aa`.
