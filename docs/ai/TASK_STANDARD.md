@@ -133,8 +133,13 @@ The JSON projection carries a SHA-256 of canonical `STATE.md`; a mismatch is blo
 
 A technical report, passing tests, research recommendation, or ACP-valid task does not
 establish strategic convergence. Convergence requires the authoritative phase
-acceptance criteria and independent desired-outcome verification; phase transition then
-escalates to Kyle rather than auto-generating another task.
+acceptance criteria and independent desired-outcome verification; once those requirements
+are satisfied, phase transition escalates to Kyle for an explicit decision. Kyle's
+authorization is the authorization to invoke the existing phase-transition gate; a
+separate implementation task is not required merely to record or obtain that
+authorization. The gate remains mandatory and enforces all convergence, verification,
+prerequisite, acceptance, authorization-binding, and state-synchronization conditions
+before the transition succeeds.
 
 ### 3.2 Research Record Roadmap Alignment Section
 

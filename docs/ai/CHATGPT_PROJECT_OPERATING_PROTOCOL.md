@@ -1588,6 +1588,18 @@ Document and preserve the existing boundaries:
 
 ### 17.11 Gemini-Specific Constraint
 
+### 17.12 Phase-Transition Authorization Procedure
+
+When the authoritative roadmap phase has satisfied its documented convergence requirements and independent verification is recorded, an explicit Kyle/Director authorization to transition is the authorization to invoke the existing phase-transition gate. The authorization itself does not require a separate implementation task merely to record, obtain, or execute that decision.
+
+The transition sequence is:
+
+**Convergence requirements satisfied → independent verification recorded → Kyle/Director authorizes transition → existing phase-transition gate executes → STATE.md and strategic-state.json are synchronized → next substantive roadmap-phase task may begin.**
+
+The phase-transition gate remains mandatory. Director authorization does not bypass convergence, independent verification, acceptance criteria, prerequisites, authorization binding, projection validation, or any other gate condition. The gate performs the mechanical state transition; substantive implementation of the newly active phase begins only after the gate succeeds.
+
+A phase-transition authorization therefore has three distinct elements: the Director's decision to transition, the gate's mechanical execution of that decision, and subsequent substantive work in the newly active phase. These are not separate authorization cycles.
+
 - Gemini comments go to the established Gemini research issue when that is the configured activation mechanism.
 - **Do NOT add wording permitting ChatGPT to create a new issue when Gemini needs activation.**
 - **Do NOT establish an alternate Gemini issue-based activation path.**
