@@ -619,15 +619,13 @@ Automated tests, event fixtures, contract tests, and a formal test script remain
 
 12.1 Architectural role of AI
 
-AI agents operate around the production system.
+AI agents operate around the production system. They do not replace Render's business-logic boundary or Google Apps Script's Google-specific adapter boundary.
 
-They do not replace the production system's business-logic boundaries.
+CURRENT / IMPLEMENTED FOUNDATION
 
-The AI development system consists of the current DeepSeek Coordinator architecture:
+The verified current AI coordination architecture is:
 
-CURRENT / IMPLEMENTED (Foundation & Observation) / PROPOSED (Autonomous Loop)
-
-Kyle
+Kyle — Director / Final Authority
 ↓
 ChatBox
 ↓
@@ -639,370 +637,220 @@ bounded model-facing control_plane
 ↓
 server-side policy / authorization
 ↓
-existing ACP
+existing ACP via /poc/coordinator
 ↓
 TaskRegistry + existing dispatcher/orchestrator
 ↓
-specialist execution/review/research lanes (Gemini Builder, Gemini Reviewer, Security Specialist, Utility Specialist, Kilo)
+explicitly targeted specialist execution/review/research lanes
 ↓
-execution result + evidence + verification
+execution result + evidence + independent verification
 ↓
 TaskRegistry
 ↓
-DeepSeek observation / next-action reasoning
+DeepSeek observation / bounded next-action reasoning
 ↓
 continue / verify / recover / escalate
 ↓
 Kyle
 
-(Note: Legacy router references such as Qwen router and separate control gates are superseded by the direct ChatBox → DeepSeek Coordinator architecture, but preserved below for historical context.)
+The specialist layer is:
 
-The specialist layer contains distinct execution and review lanes:
+* Gemini Builder — primary implementation, execution, and testing specialist.
+* Gemini Reviewer — Architect / Planner / Reviewer, read-only advisory lane.
+* Security AI — risk-tiered Security Specialist lane.
+* Utility AI — General Utility Specialist lane.
+* Kilo — explicitly targeted execution/failover lane.
 
-* Gemini Reviewer — Architect, Planner, and Reviewer (read-only advisory lane)
-* Gemini Builder — Primary implementation, execution, and testing specialist (`BUILDER` mode)
-* Security AI — Security Specialist (risk-tiered security review lane)
-* Utility AI — General Utility Specialist
-* Kilo — Available explicitly-targeted execution/failover lane
-
-Label this entire multi-agent architecture:
-
-PROPOSED / TARGET
-
-Do not describe unimplemented components as currently operational.
-
-⸻
+The implemented coordination foundation and Phase 3 capabilities are CURRENT / IMPLEMENTED / VERIFIED as documented in Section 16.6. Phase 4 is PROPOSED / TARGET.
 
 12.2 Kyle — Director / Final Authority
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED GOVERNANCE
 
-Kyle is the final human authority.
+Kyle is the final human authorization authority.
 
-AI agents operate within explicitly defined roles and explicitly authorized boundaries.
+AI agents operate within explicitly defined roles, capabilities, paths, lifecycle state, verification requirements, and authorization boundaries. No AI may independently redefine the architecture or expand its own authority.
 
-No AI may independently redefine the overall architecture or expand its own authority.
+12.3 ChatBox and DeepSeek Coordinator
 
-⸻
+CURRENT / IMPLEMENTED
 
-12.3 ChatGPT — Control / Human-Facing Interface
+ChatBox is the conversational ingress and user-facing interface for the DeepSeek Coordinator runtime.
 
-PROPOSED / TARGET
+The DeepSeek Coordinator runtime provides the bounded model-facing control_plane boundary. DeepSeek supplies untrusted intent and workflow reasoning; the server derives authority-bearing ACP fields from policy and authorization.
 
-ChatGPT is the primary human-facing development control/interface.
+DeepSeek does not receive direct repository authority, GitHub credentials, unrestricted filesystem access, arbitrary capabilities, arbitrary paths, or a generic HTTP executor.
 
-Responsibilities include:
+The current runtime path is:
 
-* receiving Kyle's requests;
-* understanding the overall system;
-* coordinating specialist AI lanes;
-* initiating authorized development workflows;
-* interacting with connected development infrastructure when explicitly authorized;
-* interpreting verified execution reports;
-* presenting results and decisions to Kyle.
+ChatBox
+→ /poc/deepseek-runtime
+→ OpenRouter / DeepSeek
+→ bounded control_plane
+→ authenticated /poc/coordinator
+→ ACP validation
+→ TaskRegistry
+→ existing dispatcher/orchestrator
+→ targeted specialist lane
 
-ChatGPT is NOT the architecture authority.
+The runtime's model-facing control_plane is bounded by server-side policy and existing ACP authority.
 
-Gemini holds the Architect / Planner / Reviewer role.
+12.4 Specialist roles
 
-ChatGPT must rely on verified execution results rather than claiming successful execution based on assumptions.
+Gemini Builder — Primary implementation, execution, and testing specialist.
 
-Future requirement: a dedicated hardcoded ChatGPT AI control/operating policy defining:
+Gemini Reviewer — Architect / Planner / Reviewer and read-only advisory lane.
 
-* role;
-* authority;
-* limitations;
-* execution boundaries;
-* escalation to Gemini;
-* use of Kilo;
-* security-review requirements;
-* secret handling;
-* verification requirements;
-* reliance on execution reports;
-* Kyle's final authority.
+Security AI — Security Specialist activated according to risk-tiered policy.
 
-Do not create that policy file during this task unless it already exists.
+Utility AI — General Utility Specialist for appropriately scoped low-complexity work.
 
-⸻
+Kilo — explicitly targeted execution/failover lane. Kilo is not the default Builder / Implementer / Tester when Gemini Builder is available.
 
-12.4 Qwen — Router
-
-DEPRECATED / HISTORICAL (Superseded by DeepSeek Coordinator)
-
-Legacy Qwen router references are superseded by the direct ChatBox → DeepSeek Coordinator architecture. They are retained here for historical context only and must not be treated as active architectural components.
-
-⸻
+These role definitions are architectural roles. A role definition does not itself authorize an implementation, capability, commit, or push.
 
 12.5 ACP — Formal Command Boundary
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED
 
-The existing ACP specification (Section 16.3) remains the canonical command protocol.
+ACP remains the authoritative command boundary between coordinator policy and specialist execution.
 
-Do not invent a second competing protocol.
+The active boundary is:
 
-The formal boundary is:
-
-Qwen
+DeepSeek Coordinator
 ↓
-ACP command
+server-derived policy / authorization
 ↓
-Authorized specialist / execution lane
+existing ACP
+↓
+/poc/coordinator
+↓
+TaskRegistry
+↓
+existing dispatcher/orchestrator
+↓
+authorized specialist lane
 
-The ACP command must establish the authorized context, including as applicable:
+The server, not model output, derives authority-bearing ACP fields including repository, base branch, target, task mode, capabilities, permitted paths, originator, and verification requirements.
 
-* originator;
-* intended target;
-* repository;
-* base branch;
-* permitted task;
-* constraints;
-* verification requirements;
-* reporting requirements.
+ACP does not create a second control plane. TaskRegistry remains the authoritative task-state mechanism and the existing dispatcher/orchestrator remains the execution authority.
 
-Anything outside the authorized ACP command is out of scope.
+12.6 Authority and verification invariants
 
-⸻
+The following invariants are authoritative:
 
-12.6 Gemini — Architect / Planner / Reviewer
+* DeepSeek/model output is untrusted intent.
+* Authority-bearing ACP fields are server-derived.
+* The model cannot self-authorize consequential operations.
+* Director authorization remains authoritative where required.
+* TaskRegistry remains the durable task-state and correlation mechanism.
+* Independent verification remains distinct from execution completion.
+* A terminal execution report does not by itself establish a verified desired outcome.
+* Continuation requires validated lifecycle state, lineage, evidence, verification, and bounded-turn conditions.
+* There is one substantive convergence authority: /poc/strategic-alignment.js.
+* There is one phase-transition mechanism: /poc/phase-transition-gate.js.
+* There is one control plane.
+* No competing TaskRegistry, dispatcher, orchestrator, or strategic state model may be introduced.
 
-PROPOSED / TARGET
+12.7 Phase 3 — Autonomous Coordination Loop
 
-Gemini replaces the previously proposed NVIDIA Nemotron role.
+COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED
 
-Gemini is the higher-reasoning architectural and planning specialist.
+Phase 3 established the bounded coordination lifecycle:
 
-Responsibilities include:
+intent → workflow → dispatch → observe → evidence → next action → verification → completion/escalation
 
-* architecture;
-* system design;
-* implementation planning;
-* complex technical reasoning;
-* difficult debugging analysis;
-* research;
-* reviewing proposed implementations;
-* technical review.
+Verified Phase 3 capabilities include:
 
-Gemini provides architectural/technical direction.
+* durable coordination context;
+* authoritative root/current task lineage;
+* bounded autonomous coordination turns;
+* autonomous-turn accounting distinct from MAX_TOOL_ITERATIONS;
+* server-derived workflow-step sequencing;
+* review → implementation → verification → reconciliation sequencing;
+* server-derived terminal completion and failure/block escalation;
+* fail-closed handling of terminal, failed, blocked, stale, insufficient-verification, and exhausted states;
+* Director authorization boundaries;
+* untrusted model output;
+* single-control-plane architecture;
+* preservation of ACP and TaskRegistry authority.
 
-Gemini does not replace Kilo as the primary repository Builder / Implementer / Tester.
+Phase 3 is not an unbounded autonomous agent loop. Progression remains bounded by lifecycle state, lineage, evidence, independent verification, authorization, and turn controls.
 
-⸻
-
-12.7 Security AI — Security Specialist
-
-PROPOSED / TARGET
-
-Define an independent Security AI lane.
-
-Its purpose is dedicated security analysis and security-focused work.
-
-Responsibilities may include:
-
-* vulnerability analysis;
-* secrets and credential exposure review;
-* authentication/authorization review;
-* dependency/security review;
-* security-focused implementation;
-* security verification.
-
-The Security AI should remain conceptually independent from the AI that designs the implementation.
-
-Do not invent a specific security product, model, endpoint, integration, or implementation unless one already exists in the repository.
-
-Activation Model
-
-The Security Specialist is activated based on risk classification of the task or code change under review. Three risk tiers govern activation:
-
-* Mandatory — Security Specialist review is required before the task may proceed to implementation. Applies to: authentication/authorization changes, credential handling, secrets management, cross-system trust boundaries, cryptographic operations, security-critical infrastructure changes, and any task explicitly flagged with security_review_required: true in the ACP command.
-* Conditional — Security Specialist review is triggered when the task touches areas with elevated security surface area. Applies to: webhook endpoint modifications, API contract changes, data persistence layer changes, dependency updates, CI/CD pipeline modifications, and any task where security_audit_context indicates relevant security concerns.
-* Advisory — Security Specialist may be consulted at the discretion of the routing layer (Qwen) or the Architect (Gemini) for general security hygiene, best-practice validation, or when the task author requests a security perspective.
-
-Authority Model
-
-The Security Specialist operates as an advisory and gatekeeping authority, not an implementation authority.
-
-* Advisory Authority — The Security Specialist produces a Security Audit Report containing findings, risk ratings, and recommendations. This report informs the Architect (Gemini) and the Director (Kyle) but does not itself authorize or block commits.
-* Gatekeeping Authority — For Mandatory-tier tasks, the Security Specialist must complete its review and produce a Security Audit Report before the ACP command for implementation may be issued to Kilo. The Orchestrator (or routing layer) enforces this gate by requiring the Security Audit Report as a precondition for the implementation ACP command.
-* No Implementation Authority — The Security Specialist does not write production code, modify files, or execute implementation tasks. Its output is a structured Security Audit Report consumed by the Architect and the Orchestrator.
-
-Risk-Based Activation Criteria (Mandatory / Conditional / Advisory)
-
-| Tier | Trigger | Examples | Gate |
-||------|---------|----------|------|
-|| Mandatory | security_review_required: true in ACP command; auth/credential/secrets changes; cross-system trust boundary modifications; cryptographic operations | Apps Script authentication hardening (ADR-004), ACP authorization changes, webhook secret handling, encryption/decryption logic | Implementation ACP command blocked until Security Audit Report produced |
-|| Conditional | security_audit_context indicates relevant concerns; webhook/API/persistence/CI/CD changes; dependency updates | New webhook endpoint, Cal.com/Tally event handling changes, CRM schema migration, GitHub Actions workflow modifications, npm dependency upgrades | Implementation ACP command may proceed with Security Specialist consultation; report produced in parallel |
-|| Advisory | General security hygiene requests; best-practice validation; routing layer or Architect discretion | Documentation security review, utility script review, low-risk refactoring | No gate; Security Specialist consulted optionally |
-
-Open Architectural Decisions (Security Specialist)
-
-The following three decisions remain OPEN and are not resolved by this architectural foundation. They are documented here to preserve the open state and prevent premature closure.
-
-1. Qwen Router Trigger Logic Refinement
-   - The exact logic by which the Qwen Router determines Security Specialist activation (Mandatory/Conditional/Advisory) is not yet finalized.
-   - Current approach: risk classification based on ACP fields (security_review_required, security_audit_context) and task-type heuristics.
-   - Open questions: Should Qwen use a rule engine, a model-based classifier, or a hybrid? How are false positives/negatives handled? Who owns the rule set?
-
-2. Security Audit Report Persistence Mechanism
-   - The format, storage location, and retrieval mechanism for Security Audit Reports within `docs/ai/` is not yet defined.
-   - Candidates: dedicated `docs/ai/security-audits/` directory with structured JSON/Markdown reports; integration into `STATE.md` or `ARCH_DECISIONS.md`; external artifact store with references in `docs/ai/`.
-   - Open questions: Report schema, versioning, retention, searchability, and correlation with ACP request_id.
-
-3. Security Specialist Callback Mechanism to Orchestrator
-   - The mechanism by which the Security Specialist returns its Security Audit Report to the Orchestrator (or routing layer) and signals gate completion is not yet defined.
-   - Candidates: ACP execution report extension; dedicated webhook/callback endpoint; polling-based status check; file-based signal in `docs/ai/`.
-   - Open questions: Synchronous vs asynchronous callback; timeout and retry semantics; how the Orchestrator correlates the report with the pending implementation ACP command.
-
-These open decisions are explicitly PROPOSED / TARGET. Do not claim they are implemented. They will be resolved through future authorized architectural work.
-
-⸻
-
-12.8 Utility AI — General Utility Specialist
+12.8 Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation
 
 PROPOSED / TARGET
 
-Add a General Utility Specialist lane.
+Objective:
 
-Its purpose is to handle low-complexity, repetitive, or routine tasks without unnecessarily consuming the resources of a higher-reasoning model.
+Extend the verified Phase 3 bounded DeepSeek coordination foundation into scaled conversational orchestration across multi-step, multi-specialist task graphs while preserving ACP authority, TaskRegistry authority, server-derived policy, independent verification, bounded execution, Director authorization, and Kyle's final authority.
 
-Examples include:
+Intended capabilities:
 
-* documentation cleanup;
-* formatting;
-* simple transformations;
-* extraction;
-* boilerplate;
-* repetitive maintenance;
-* straightforward data manipulation;
-* other low-complexity utility work.
+* multi-task lineage navigation and cross-task aggregation;
+* read-only parent/child workflow-state and diagnostic aggregation;
+* policy-driven multi-specialist workflow chaining;
+* structured recovery and escalation for failed, blocked, stale, or exhausted work;
+* bounded DeepSeek observation and next-action reasoning across task graphs;
+* mandatory independent verification before consequential progression.
 
-The Utility AI should be described as a ROLE, not tied to a specific model yet.
+Strict boundaries:
 
-Its existence allows Qwen to route simple work away from Gemini when advanced architectural reasoning is unnecessary.
+* DeepSeek remains an untrusted intent source.
+* Capability upgrades and consequential execution require server-side policy and explicit Director authorization.
+* BUILDER and FAILOVER_EXECUTE authority is never model-granted.
+* Write, commit, and push authority remains explicitly authorized.
+* ACP, TaskRegistry, server policy, convergence authority, and the phase-transition mechanism remain authoritative.
+* No second control plane or competing state store may be introduced.
+* Phase 4 documentation does not itself authorize implementation.
 
-Do not give Utility AI architectural authority.
+Open Phase 4 design questions include the exact multi-task aggregation payload shapes and automated failure-recovery routing trees. These remain PROPOSED / TARGET until separately designed, implemented, and independently verified.
 
-Do not give Utility AI unrestricted repository authority.
+12.9 GitHub / CI — Durable repository truth
 
-⸻
+CURRENT / IMPLEMENTED
 
-12.9 Kilo — Execution Agent (available lane)
+GitHub is the durable source of truth for repository state, commits, diffs, and persisted architecture.
 
-CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE
-
-Kilo is an execution agent available for tasks that explicitly target it.
-
-As of the Gemini Builder transition, the Gemini Builder lane is the primary
-Builder / Implementer / Tester (using GEMINI_BUILDER_API_KEY). Kilo remains
-an available execution lane for tasks that explicitly target it.
-
-Kilo is responsible for:
-
-* repository inspection;
-* implementation;
-* testing;
-* verification;
-* reporting execution results.
-
-Kilo must obey:
-
-* AGENTS.md;
-* existing architecture;
-* the authorized ACP command;
-* task constraints.
-
-Kilo must:
-
-* inspect before modifying;
-* make the smallest appropriate change;
-* preserve unrelated functionality;
-* protect credentials and secrets;
-* stay within authorized scope.
-
-Kilo must not independently redefine architecture.
-
-Kilo must not modify AGENTS.md unless explicitly authorized by a future task.
-
-Kilo must not modify protected architectural components without authorization.
-
-Kilo must not modify GitHub Actions merely because an agent task involves execution.
-
-Kilo may commit and push only when the ACP command explicitly authorizes it.
-
-⸻
-
-12.10 GitHub / CI — Source of Truth
-
-PROPOSED / TARGET
-
-GitHub remains the persistent source of truth for repository state.
-
-AI sessions may be temporary, but repository state, commits, diffs, and CI results provide persistent verification.
-
-Document GitHub / CI as the persistence and mechanical verification layer.
-
-⸻
-
-12.11 Execution Report
-
-PROPOSED / TARGET
-
-The normal execution return path is:
-
-Kilo
-↓
-ACP execution report
-↓
-Qwen
-↓
-ChatGPT
-↓
-Kyle
-
-The execution report, rather than an AI's assumption, is the authoritative execution result.
-
-The report must distinguish at minimum:
-
-* success;
-* failure;
-* blocked;
-* changed files;
-* verification results;
-* commit;
-* push;
-* blockers.
+CI and repository verification provide durable evidence of implementation state. Agent sessions do not constitute persistent project state.
 
 ⸻
 
 13. Standard development loop
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED + PROPOSED / TARGET EXTENSION
 
-Normal development follows:
+The current bounded coordination loop is:
 
-Qwen
+Kyle
+↓
+ChatBox
+↓
+DeepSeek Coordinator
+↓
+bounded control_plane
+↓
+server policy / authorization
 ↓
 ACP
 ↓
-Appropriate Specialist
+TaskRegistry / existing dispatcher
 ↓
-Kilo
+targeted specialist lane
 ↓
-GitHub / CI
+execution result + evidence
 ↓
-Verification
+independent verification
 ↓
-Execution Report
+TaskRegistry
+↓
+DeepSeek observation / bounded next action
+↓
+continue / verify / recover / escalate
+↓
+Kyle
 
-Gemini Builder is the primary Builder / Implementer / Tester.
-
-Specialist routing:
-
-* Gemini — Architect / Planner / Reviewer (architecture, planning, review)
-* Security AI — Security Specialist (vulnerability analysis, secrets review, auth review)
-* Utility AI — General Utility Specialist (documentation, formatting, boilerplate, simple transformations)
-
-Qwen routes to the appropriate specialist. For implementation tasks, the flow proceeds through ACP to Kilo.
+Phase 4 may extend this loop across multiple related tasks and specialists, subject to the Phase 4 boundaries in Section 12.8.
 
 ⸻
 
@@ -1012,73 +860,47 @@ Qwen routes to the appropriate specialist. For implementation tasks, the flow pr
 
 PROPOSED / TARGET
 
-The long-term user experience is:
+The target conversational experience is for Kyle to communicate through ChatBox while the DeepSeek Coordinator coordinates authorized multi-step work behind the existing ACP/control-plane boundary.
 
-Kyle should be able to use LINE as the single natural-language control interface for the system.
-
-Examples:
-
-"Give me this week's bookings."
-"Add this feature to the CRM."
-"Here's what I'm thinking for a system to automate lesson planning..."
-
-Kyle should not need to manually move between:
-
-* LINE;
-* ChatGPT — Control / Human-Facing Interface;
-* Qwen — Router;
-* Gemini — Architect / Planner / Reviewer;
-* Security AI — Security Specialist;
-* Utility AI — General Utility Specialist;
-* Kilo — Builder / Implementer / Tester;
-* GitHub / CI — Source of Truth;
-* Render;
-* Google Apps Script;
-* other AI tools.
-
-The underlying agents and services should operate behind the LINE interface.
-
-⸻
+The underlying specialist lanes and production services remain behind explicit policy, authorization, and verification boundaries.
 
 14.2 Target architecture
 
 Kyle
 ↓
-ChatGPT
+ChatBox
 ↓
-Qwen Router
+DeepSeek Coordinator
 ↓
-ACP
+bounded control_plane
 ↓
-Specialist AI Lane
+server-side policy / authorization
 ↓
-Kilo
+existing ACP
 ↓
-GitHub / CI
+TaskRegistry + dispatcher/orchestrator
 ↓
-Verification / Persistence
+Gemini Builder / Gemini Reviewer / Security AI / Utility AI / Kilo
 ↓
-Execution Report
+evidence + independent verification
 ↓
-ChatGPT
+TaskRegistry
+↓
+DeepSeek observation / next authorized action
 ↓
 Kyle
 
-The specialist layer contains three distinct lanes:
+Phase 4 expands cross-task lineage navigation and multi-specialist orchestration without changing the authority model.
 
-* Gemini — Architect / Planner / Reviewer
-* Security AI — Security Specialist
-* Utility AI — General Utility Specialist
-
-Gemini Builder is the primary Builder / Implementer / Tester.
-
-GitHub Actions may serve as an ephemeral AI execution plane within this architecture.
-
-It does not replace Render as the production application server.
+14.3 Production boundary
 
 Render / Node.js remains the production business-logic layer.
+
 Google Apps Script remains the Google-specific adapter.
-Existing workflows → Sheets / Gmail.
+
+AI orchestration may coordinate approved capabilities but does not own production business rules.
+
+OpenClaw remains a replaceable orchestration/mediation component and is not a second control plane.
 
 ⸻
 
@@ -1086,938 +908,158 @@ Existing workflows → Sheets / Gmail.
 
 15.1 Role
 
+CURRENT / IMPLEMENTED
+
+LINE remains an operational communication and notification channel.
+
+The current DeepSeek conversational ingress is ChatBox. LINE is not required to operate the current AI coordination architecture.
+
+15.2 Future LINE integration
+
 PROPOSED / TARGET
 
-LINE is a notification channel.
+Future work may connect LINE to the conversational architecture through an approved transport/integration boundary.
 
-Existing operational notifications may continue.
+Any such integration must preserve:
 
-Future notification types may be added.
+* DeepSeek as untrusted intent;
+* server-derived authorization;
+* ACP as the command boundary;
+* TaskRegistry as task-state authority;
+* Render as production business-logic owner.
 
-LINE is not the primary AI development control channel and is not required for the AI development architecture to operate.
-
-ChatGPT is the primary human-facing development control/interface (see Section 12.3).
+No LINE integration may become a competing control plane.
 
 ⸻
 
-15.2 Synchronous tasks
-
-PROPOSED / TARGET
-
-Simple requests may eventually follow:
-
-ChatGPT
-↓
-Qwen Router
-↓
-ACP
-↓
-Approved read capability
-↓
-Existing production system
-↓
-Result
-↓
-ChatGPT
-↓
-LINE (notification)
-
-Example:
-
-"Give me this week's bookings."
-
-⸻
-
-15.3 Asynchronous tasks
-
-PROPOSED / TARGET
-
-Longer tasks should follow:
-
-ChatGPT
-↓
-Qwen Router
-↓
-ACP
-↓
-Specialist AI Lane
-↓
-Kilo
-↓
-GitHub / CI
-↓
-Verification
-↓
-Execution Report
-↓
-ChatGPT
-↓
-LINE (notification)
-
-The architecture must eventually account for:
-
-* task state;
-* conversation context;
-* correlation IDs;
-* retries;
-* idempotency;
-* timeouts;
-* failures;
-* long-running tasks.
-
-These mechanisms are PROPOSED / TARGET, not claims of current implementation.
-
-⸻16. Agent Command Protocol
+16. Agent Command Protocol
 
 16.1 Role
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED
 
-The Agent Command Protocol (ACP) will provide the structured boundary between AI orchestration and approved system capabilities.
+ACP is the authoritative structured command boundary between server-side coordinator policy and authorized execution lanes.
 
-Conceptually:
+16.2 Authority model
 
-AI orchestration
-      ↓
-Structured Agent Command
-      ↓
-Authentication / Authorization
-      ↓
-Approved Capability
-      ↓
-Existing Application / Service
-      ↓
-Structured Result
-      ↓
-AI orchestration
+The active ACP path establishes explicit authorization context, including as applicable:
 
-The AI layer should not directly manipulate production systems when an approved capability can provide the required operation.
-
-⸻
-
-16.2 ACP responsibilities
-
-The eventual ACP should define:
-
-* command identity;
-* command type;
-* validated parameters;
-* correlation ID;
-* idempotency key where required;
-* authentication context;
-* authorization;
-* structured result;
-* structured error;
-* retry semantics;
-* execution status;
-* logging requirements.
-
-The detailed ACP schema is not yet defined.
-
-It is the next architectural design task after this document is approved.
-
-⸻
-
-16.3 Proposed Agent Command Protocol (ACP)
-
-PROPOSED / TARGET — DOCUMENTARY ONLY
-
-This section is proposed and documentary only. ACP is not currently implemented. No production code, endpoints, workflows, dependencies, or services are introduced by this specification.
-
-* ACP is proposed/documentary only.
-* Render/OpenClaw remains the production orchestration layer.
-* Kilo Cloud Agent remains an external execution lane.
-* ACP does not execute code by itself.
-* ACP does not replace GitHub Actions or Gemini.
-* Credentials, tokens, and secrets must not be included in task content.
-* No production code is changed by this documentation task.
-
-⸻
-
-Purpose
-
-The Agent Command Protocol (ACP) defines a structured envelope for handing an approved task from AI orchestration to an execution lane such as the Kilo Cloud Agent.
-
-The purpose is to make the handoff explicit, auditable, and bounded. ACP carries the intent, repository context, constraints, and verification expectations for a discrete unit of work. It is a description of what should happen, not an executor of it.
-
-The execution lane decides how to perform the task within its own authority and returns a structured execution report.
-
-⸻
-
-Required command fields
-
-A proposed ACP command envelope contains these required fields:
-
-* protocol_version — version of the ACP envelope definition in use.
-* request_id — a unique, client-generated identifier for this command.
-* source — the originating orchestration component (e.g. the AI router or OpenClaw).
-* target — the intended recipient execution lane (e.g. Kilo Cloud Agent).
-* task_type — the category of work being requested (e.g. implementation, remediation, refactoring).
-* repository — the repository the task applies to (e.g. fluentwithkyle/openclaw-webhook).
-* base_branch — the branch the task is based on and intended to integrate with.
-* task — the description of the work to be performed. Must not include credentials, tokens, or secrets.
-* constraints — the operational limits or rules the execution lane must respect, including a permitted_paths allow-list that defines the repository paths the execution lane may operate within.
-* authorization — the authorization context defining the explicit capability set the execution lane is permitted to use for this command. Capabilities are explicit permissions, never implied.
-* verification — the expected verification to be performed and reported (e.g. targeted checks, tests).
-* reporting — how the execution report should be delivered back to the orchestrator.
-
-All field values are proposed placeholders until the ACP is reviewed, approved, and implemented.
-
-⸻
-
-Optional Security Fields
-
-The following optional fields extend the ACP command envelope to support the Security Specialist activation model (Section 12.7). They are not required for all commands but enable risk-based security review routing when present.
-
-* security_review_required (boolean, optional) — When true, explicitly signals that the task requires Mandatory-tier Security Specialist review before implementation may proceed. This field directly maps to the Mandatory activation tier. Default: false / absent. When true, the Orchestrator must enforce the gate: the implementation ACP command must not be issued until a Security Audit Report is produced and available.
-* security_audit_context (object, optional) — Provides structured context to guide Conditional-tier Security Specialist activation. Contains zero or more of the following properties:
-  - touch_points: array of strings identifying architectural surfaces affected (e.g., "webhook-endpoint", "auth-boundary", "data-persistence", "ci-cd-pipeline", "dependency-update", "api-contract").
-  - risk_indicators: array of strings describing specific security concerns (e.g., "credential-handling", "cross-system-trust", "cryptographic-operation", "input-validation", "authorization-logic").
-  - requested_focus: array of strings requesting specific Security Specialist focus areas (e.g., "secrets-exposure", "auth-review", "dependency-audit", "vulnerability-scan").
-  - prior_audit_ref: string referencing a prior Security Audit Report request_id for incremental review.
-
-These fields are optional. Their absence does not imply a security review is unnecessary; the routing layer (Qwen) may still classify a task as Conditional or Advisory based on task_type, target paths, or heuristics. The presence of security_review_required: true creates a hard gate; the presence of security_audit_context creates a Conditional trigger; the absence of both leaves activation to routing-layer discretion (Advisory).
-
-⸻
-
-Authorization capabilities
-
-The authorization field defines an explicit, machine-readable capability set. Each capability grants permission for a specific class of operation. Capabilities are explicit permissions; they are never implied by one another.
-
-Defined capability types:
-
-* read_only — inspect repository contents and run read-only commands (e.g. ls, cat, grep, git diff).
-* modify_files — create, edit, or delete files within the authorized repository and permitted_paths.
-* run_tests — execute the project's defined test, lint, or typecheck commands.
-* commit — create and amend local commits within the authorized base_branch.
-* push — push commits to the authorized remote/repository and branch.
-
-Authorization principle:
-
-* A command authorized for one capability does not automatically authorize any other capability.
-* For example, modify_files does not authorize commit or push; commit does not authorize push; run_tests does not authorize modify_files.
-* Every capability the execution lane may exercise must be explicitly granted.
-* A valid authorization token or capability set never grants unrestricted repository access beyond the explicitly listed capabilities.
-
-Permitted repository scope
-
-The constraints field must include a permitted_paths allow-list that explicitly defines which paths within the repository the execution lane may operate on. This is the permitted repository scope for the command.
-
-Rules:
-
-* The execution lane may operate only within paths present in the permitted_paths allow-list.
-* A valid authorization token/capability does NOT grant unrestricted repository access.
-* Anything outside the authorized paths or the authorized capabilities is out of scope and must be rejected or reported as blocked.
-* Path scoping and capability scoping are independent controls; both must pass.
-
-⸻
-
-Execution boundaries
-
-ACP is a structured contract, not an execution engine.
-
-Specific boundaries:
-
-* ACP does not execute code by itself. An explicitly addressed execution lane performs the work.
-* ACP does not replace GitHub Actions or Gemini. Each remains an independent agent or execution lane within the target architecture.
-* Render/OpenClaw remains the production orchestration layer. The production webhook and business-logic layer is not relocated into an AI lane.
-* Kilo Cloud Agent remains an external execution lane; it is not folded into the production Render application.
-* ACP does not perform authentication itself. Authentication and authorization are enforced by the addressed execution lane and/or the orchestrating layer before a command is honored.
-* Credentials, tokens, and secrets must not be included in task content. They are supplied and rotated outside the ACP envelope, by the execution lane, scoped to the minimum required capabilities.
-* No production code is changed by this documentation task.
-
-⸻
-
-Illustrative example
-
-The following is a minimal, non-executable, placeholder-only ACP command envelope for a Kilo implementation request. Values are illustrative placeholders and must not be used as live configuration.
-
-```json
-{
-  "protocol_version": "0.1",
-  "request_id": "acp-placeholder-request-id-0000000",
-  "source": "OpenClaw-orchestrator-placeholder",
-  "target": "Kilo Cloud Agent-placeholder",
-  "task_type": "implementation-placeholder",
-  "repository": "fluentwithkyle/openclaw-webhook-placeholder",
-  "base_branch": "main-placeholder",
-  "task": "Implement placeholder task description only.",
-  "constraints": {
-    "permitted_paths": [
-      "src/",
-      "tests/"
-    ],
-    "rules": [
-      "smallest-change-placeholder",
-      "no-new-dependencies-placeholder"
-    ]
-  },
-  "authorization": {
-    "capabilities": [
-      "read_only",
-      "modify_files",
-      "run_tests"
-    ]
-  },
-  "verification": "git diff --check and targeted review-placeholder",
-  "reporting": "structured execution report placeholder"
-}
-```
-
-This example is non-executable. It defines shape, not behavior. No service should parse or act on it.
-
-⸻
-
-Execution report
-
-After the addressed execution lane completes a command, it returns an execution report. A proposed report contains these required fields:
-
-* request_id — the request_id of the command being reported on.
-* status — the outcome (e.g. completed, failed, blocked).
-* changed_files — the list of files modified, if any.
-* verification — the verification actually performed and its result.
-* commit — the commit reference produced, if any (null when none is produced).
-* push — whether a commit was pushed (false by default; pushing requires explicit authorization).
-* blockers — any outstanding issues, failures, or reasons the task could not complete.
-
-Commit and push do not happen automatically. Pushing requires explicit authorization outside the envelope and must never be inferred from the task alone.
-
-⸻
-
-16.4 Qwen Router → Kilo Execution Boundary
-
-PROPOSED / TARGET
-
-This section defines the execution boundary between the Qwen Router and Kilo. It is documentary only; no production code, endpoints, workflows, dependencies, or services are introduced by this addition.
-
-The boundary flow:
-
-Qwen Router
-↓
-ACP command
-↓
-Kilo
-↓
-GitHub / CI
-↓
-Verification / Persistence
-↓
-ACP execution report
-↓
-Qwen Router
-↓
-ChatGPT
-↓
-Kyle
-
-Qwen Router
-
-The Qwen Router is the request-routing layer only.
-
-* Routes development requests to the appropriate specialist lane (Gemini, Security AI, Utility AI).
-* For execution work, constructs an ACP command for Kilo.
-* Does not implement repository changes.
-* Does not redefine architecture.
-* Does not bypass ACP.
-* Does not issue unrestricted shell/Git instructions.
-* Does not provide secrets or credentials.
-* Does not claim successful execution without a Kilo execution report.
-
-Kilo
-
-Kilo is the Builder / Implementer / Tester.
-
-* Builder / Implementer / Tester.
-* Receives an authorized ACP command.
-* Inspects, implements, tests, verifies, and reports.
-* Follows AGENTS.md, ARCHITECTURE.md, and ACP constraints.
-
-ACP Boundary
-
-The handoff from Qwen to Kilo is mediated exclusively through the ACP command defined in section 16.3.
-
-* Qwen → ACP command → Kilo.
-* Section 16.3 remains the canonical ACP protocol.
-* Do not create a second protocol.
-* Authorization must establish originator, target, repository, base branch, task, capabilities, permitted_paths, verification, and reporting requirements.
-
-Repository Safety
-
-Kilo must:
-
-* Inspect before modifying.
-* Stay within authorized scope (capabilities and permitted_paths).
-* Make the smallest appropriate change.
-* Preserve unrelated functionality.
-* Never expose secrets.
-* Never modify AGENTS.md unless explicitly authorized.
-* Never modify GitHub Actions merely because Kilo is involved.
-* Never commit or push unless explicitly authorized by ACP.
-
-Execution Report
-
-Kilo returns the execution result through the ACP execution report back to the Qwen Router.
-
-Kilo → ACP execution report → Qwen Router → ChatGPT → Kyle.
-
-The report must distinguish:
-
-* success;
-* failure;
-* blocked;
-* changed files;
-* verification results;
-* commit;
-* push;
-* blockers.
-
-Qwen treats the Kilo execution report as the execution result.
-
-OpenClaw Independence
-
-The Qwen → Kilo boundary does not depend on OpenClaw.
-
-OpenClaw may later provide transport, message routing, event orchestration, LINE integration, or automated invocation, but must not alter the ACP command contract.
-
-Production Boundary
-
-The AI development lane must not move production business logic out of Render or Google-specific operations out of Google Apps Script.
-
-⸻16.5 Kilo Cloud Agent HTTP Trigger & Security Boundary
-
-The Kilo Cloud Agent supports external HTTP webhook triggers as a transport mechanism for task execution.
-
-16.5.1 Kilo Trigger Authentication
-
-The Kilo HTTP trigger authenticates/authorizes the external caller to invoke the configured Cloud Agent trigger. The trigger URL and any optional shared-secret authentication material are credentials.
-
-Therefore:
-* never commit them;
-* never place them in source code;
-* never place them in ARCHITECTURE.md;
-* never expose them in GitHub issues/comments;
-* never include them in ordinary execution reports;
-* store them only in the appropriate secret/configuration mechanism.
-
-16.5.2 ACP Task Authorization
-
-Successful invocation of the Kilo trigger does NOT authorize arbitrary repository activity. The ACP command remains the task-level authorization boundary.
-
-The ACP request must explicitly define:
-* permitted repository paths;
-* permitted capabilities;
-* task scope;
+* originator;
+* intended target;
+* repository;
+* base branch;
+* task mode;
+* capabilities;
+* permitted paths;
+* constraints;
 * verification requirements;
 * reporting requirements.
 
-Capabilities remain independent. For example, read_only does not authorize file modification, and modify_files does not authorize commit. No capability may be inferred from another capability. A valid Kilo trigger credential must never be treated as permission to bypass ACP authorization.
+Capabilities are explicit and independent. A capability does not imply another capability.
 
-16.5.3 Fail-Closed Requirements
+16.3 Server-derived policy boundary
 
-The execution lane must fail closed when:
-* the ACP command is malformed;
-* required ACP fields are missing;
-* the request contains unknown/unauthorized capabilities;
-* requested paths fall outside permitted_paths;
-* authorization is inconsistent with the requested task;
-* the task attempts an operation not covered by the granted capabilities;
-* required authentication material is missing or invalid;
-* the execution boundary cannot independently verify the authorization.
+CURRENT / IMPLEMENTED
 
-16.5.4 POC Security Boundary
+The DeepSeek runtime accepts model intent and applies server-side policy before constructing the ACP command.
 
-The intended first ACP → Kilo POC scope is:
-* read-only only;
-* permitted_paths limited to poc/;
-* no arbitrary shell-command execution supplied by the caller;
-* no file modification, commit, or push;
-* no production-system access;
-* no Qwen dependency;
-* no OpenClaw dependency.
+The model cannot supply or upgrade authority-bearing fields such as capabilities, permitted paths, repository, branch, task mode, commit, push, or target.
 
-The POC exists to validate the execution boundary and structured reporting before introducing write capabilities.
+16.4 Execution boundary
 
-16.5.5 One-Shot Execution / Auditability
+CURRENT / IMPLEMENTED
 
-Each Kilo execution must be self-contained. The authorization required for an execution must be present in that individual ACP command; do not rely on permissions being remembered from a previous agent session. Each execution should be traceable through request_id.
+/poc/coordinator authenticates and validates the ACP request, registers the task through the existing TaskRegistry, and dispatches through the existing dispatcher/orchestrator.
 
-The execution result should provide a structured report containing, at minimum, the request identity, status, task, execution/result information, and any relevant verification outcome. Do not expose secrets in the report.
+Specialist execution remains subordinate to ACP authorization and TaskRegistry lifecycle state.
 
-16.5.6 Architectural Status
+16.5 Kilo execution/failover boundary
 
-The Kilo Cloud Agent HTTP webhook trigger is a confirmed Kilo capability. The specific ACP → Kilo integration in this repository remains PROPOSED / TARGET until implemented and validated.
+PROPOSED / TARGET
 
-⸻
+Kilo remains an explicitly targeted execution/failover lane.
 
-16.6 DeepSeek Coordinator Evolution — Full Conversational Coordination
+Any Kilo invocation must receive an explicitly authorized ACP command with its own permitted paths, capabilities, verification requirements, and reporting requirements.
 
-The existing **DeepSeek Coordinator Project** is the implemented foundation. The
-**DeepSeek Coordinator Evolution — Full Conversational Coordination** project is the
-active HIGH PRIORITY next phase. It expands coordination intelligence, not raw
-authority. Status labels below distinguish repository-verified implementation from a
-future target; historical documents that predate the runtime do not override this
-section.
+A Kilo transport or trigger credential does not itself authorize repository operations.
 
-### Current Coordinator Roadmap Status
+16.6 DeepSeek Coordinator Evolution — Phase 0 through Phase 4
 
-| Stage / Phase | Status | Notes / Repository Evidence |
+The Coordinator roadmap is:
+
+| Phase | Status | Architectural meaning |
 |---|---|---|
-| **Stage 1 — Network Path** | **COMPLETE / VERIFIED** | Direct ChatBox → `/poc/deepseek-runtime` → OpenRouter → DeepSeek → `control_plane` → `/poc/coordinator` → ACP → TaskRegistry → dispatcher. Live Ping/Pong display verified by Director. |
-| **Phase 0 — Coordinator Contract** | **COMPLETE / INDEPENDENTLY VERIFIED** | Core contract established via `request_task` and `get_task` (`ec9c476`); independently verified by TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-VERIFY-RECONCILE-001 (commit `53110da`). Server-derived REVIEW/read_only/poc/ authority, sanitized observation across all eight lifecycle states, evidence semantics, lifecycle/lineage semantics, continuation requirements, and strategic-alignment enforcement confirmed. Phase 0 convergence established; phase transition to Phase 2 is Kyle's decision. |
-| **Phase 1 — Observation** | **COMPLETE / INDEPENDENTLY VERIFIED** | Completed and independently verified by TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001 (PR #225, commit `8c77901`). Covers all eight lifecycle states, lineage, evidence, and diagnostics via the existing `get_task` projection. Phase 2+ capabilities remain GAP / PROPOSED / TARGET. |
-| **Phase 2 — Bounded Coordination** | **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED** | Independently verified under `TASK-GEMINI-DEEPSEEK-PHASE-2-CONVERGENCE-FINAL-VERIFY-RECONCILE-001`. All explicit Phase 2 acceptance criteria are satisfied: bounded lineage, workflow-step policy, Director authorization infrastructure, specialist routing policy, result-driven continuation, and automatic result consumption. Further Phase 2 implementation is unnecessary. |
-| **Phase 3 — Autonomous Coordination Loop** | **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED** | Bounded autonomous coordination loop, server-derived workflow-step sequencing (review → implementation → verification → reconciliation), Director authorization infrastructure, and specialist routing policy. |
-| **Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation** | **PROPOSED / TARGET** | Scaled conversational orchestration across multi-step, multi-specialist task graphs while preserving ACP authority, TaskRegistry authority, server-derived policy, independent verification, bounded execution, Director authorization, and Kyle’s final authority. |
+| Phase 0 — Coordinator Contract | COMPLETE / INDEPENDENTLY VERIFIED | Server-derived coordinator contract, bounded observation, evidence semantics, lifecycle/lineage semantics, and strategic-alignment enforcement. |
+| Phase 1 — Observation | COMPLETE / INDEPENDENTLY VERIFIED | Bounded task observation, lifecycle, lineage, diagnostics, evidence, and verification projection through the existing TaskRegistry. |
+| Phase 2 — Bounded Coordination | COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED | Bounded lineage, workflow-step policy, Director authorization, specialist routing, result-driven continuation, and automatic result consumption. |
+| Phase 3 — Autonomous Coordination Loop | COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED | Durable context, bounded autonomous turns, server-derived workflow sequencing, completion/escalation, and fail-closed continuation. |
+| Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation | PROPOSED / TARGET | Multi-task lineage navigation, cross-task aggregation, multi-specialist chaining, structured recovery/escalation, and bounded cross-task next-action reasoning. |
 
-### Increment 4.1–4.9 Implementation History & Roadmap Mapping
+The authoritative live strategic state remains STATE.md, with docs/ai/strategic-state.json as its machine-readable projection.
 
-Increments 4.1 through 4.9 represent the concrete implementation history on `main` that substantially advanced Phase 1 and established foundational capabilities of Phase 2. Specifically, these increments delivered:
-* task lifecycle/state observation across all eight ACP states;
-* assigned specialist and routing rationale summary;
-* child task lineage and multi-task observation;
-* aggregate child task progress and status summary;
-* structured failure and blocked diagnostic summarization;
-* parent-level workflow completion and final outcome summary;
-* coordinated verification and reconciliation status summary;
-* execution and evidence categorization;
-* next-action information.
+Strategic alignment does not create an execution authority, control plane, TaskRegistry, dispatcher, or competing roadmap.
 
-**Explicit architectural rule**: Increment numbering is implementation history, not the roadmap itself. Future work must be selected from roadmap-phase requirements rather than automatically creating another numbered observation increment.
+Phase transition remains a Kyle-authorized operation enforced by the existing phase-transition gate.
 
-**Next Architectural Checkpoint**: **Phase 2 — Bounded Coordination** is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. The next roadmap target is **Phase 3 — Autonomous Coordination Loop**, which remains a future target awaiting Kyle's explicit transition decision. No Phase 3 work is activated by Phase 2 convergence. Once Kyle authorizes the transition, substantive Phase 3 work must begin with research and design against the then-current repository state.
+16.7 Phase 3 acceptance target
 
-### Strategic Alignment and Convergence Invariant
+Phase 3 acceptance is the verified lifecycle:
 
-For Coordinator evolution work, `STATE.md` is the authoritative live strategic-state
-record and `docs/ai/strategic-state.json` is its machine-readable projection for the
-repository's deterministic alignment evaluator. The projection is policy evidence only:
-it does not create an execution authority, control plane, TaskRegistry, dispatcher, or
-roadmap that competes with this architecture. A mismatch fails closed and requires
-reconciliation of `STATE.md`. `request_task` enforces this evaluation inside
-`services/deepseek-runtime.js` before ACP command construction and coordinator
-submission; a failure cannot create TaskRegistry state or invoke dispatch.
+intent → workflow → dispatch → observe → evidence → next action → verification → completion/escalation
 
-No substantive work is selected merely because it is technically valid, locally useful,
-or ACP-compliant. It must trace to the authoritative current strategic objective, an
-unresolved roadmap requirement (or its documented enabling dependency), proved
-prerequisites, expected advancement, and explicit convergence criterion. The evaluator
-cannot authorize, dispatch, or advance phase state. Missing or contradictory strategic
-truth, a completed requirement, or an unproved dependency yields `BLOCKED` and Kyle
-escalation. Technical completion is distinct from independent desired-outcome
-verification and phase convergence; convergence triggers a Kyle transition decision,
-not automatic generation of another increment.
+The implementation remains bounded by lifecycle state, lineage, evidence, independent verification, authorization, and autonomous-turn limits.
 
-### Implemented and Verified Foundation
+16.8 Phase 4 design boundary
 
-`POST /poc/deepseek-runtime` is an authenticated ChatBox-facing runtime. It calls the
-configured OpenRouter chat-completions endpoint using the configured model and exposes
-exactly one model-facing function tool, `control_plane`. The tool currently permits
-only `request_task` and `get_task`.
+Phase 4 must extend coordination across task graphs without changing the authority model.
 
-* `request_task` accepts only an objective and the `Gemini Builder` target. The server,
-  not the model, constructs the ACP command: repository
-  `fluentwithkyle/openclaw-webhook`, base branch `main`, `REVIEW` mode, `read_only`,
-  and `poc/` permitted paths. It then authenticates to `POST /poc/coordinator` using
-  the server-held coordinator secret.
-* `get_task` accepts only a `deepseek-runtime-` request identifier, reads the existing
-  TaskRegistry, and returns a bounded sanitized projection. Its Phase 1 shape covers
-  task identity, lifecycle (including execution-completed versus verified-outcome),
-  current/next agent, next action, execution/result information, verification
-  requirements and sanitized independent-verification evidence, plus failure/blocked
-  information. Prefix restriction is namespace validation, not session binding; it
-  does not expose arbitrary task lookup, credentials, or authority fields.
-* `/poc/coordinator` remains the trusted ingress: it authenticates the request,
-  validates ACP, registers the task in the existing TaskRegistry, and dispatches via
-  the existing dispatcher/orchestrator lifecycle.
-* The OpenRouter tool loop is deliberately bounded (`MAX_TOOL_ITERATIONS = 2`) and
-  permits one `control_plane` call per model turn. Streaming requests receive
-  OpenAI-compatible SSE assistant content, a `finish_reason: stop`, and `data: [DONE]`;
-  non-streaming requests retain JSON.
-* **VERIFIED live evidence supplied by the Director**: a new ChatBox conversation sent
-  `Ping.` and displayed `Pong! 🏓 I’m here and ready to help. What can I do for you?`.
-  This verifies the post-fix ChatBox display path, not every future coordinator
-  capability.
-
-Current implemented path:
-
-```
-ChatBox → /poc/deepseek-runtime → OpenRouter → DeepSeek
-  → bounded control_plane → authenticated /poc/coordinator → ACP validation
-  → TaskRegistry → existing dispatcher/orchestrator → specialist lane
-```
-
-### Phase 1 Coordinator Observation (IMPLEMENTED / VERIFIED)
-
-`DEEPSEEK_COORDINATOR_POLICY` in the runtime is a structured, test-covered Phase 1
-observation policy, not a new control plane. It formalizes only `request_task` and `get_task`;
-server derives repository, base branch, target, `REVIEW` task mode, `read_only`
-capability, `poc/` paths, originator, coordinator authentication context, and
-verification requirement. Model output is validated as intent only and cannot grant
-capabilities, paths, targets, task modes, commits, pushes, or other authority.
-
-ACP lifecycle semantics remain authoritative: an `AGENT_REPORT` records execution
-information only, while `INDEPENDENT_VERIFICATION` is required by existing ACP state
-transitions before `VERIFIED` and `COMPLETE`. A terminal agent report therefore does
-not itself establish a verified outcome. `get_task` safely observes all eight ACP
-lifecycle states, lineage, agent execution, evidence counts/categories, independent
-verification evidence, verification requirements, and failure/blocked state without
-projecting repository, task-mode, capability, path, authorization, credential, or
-secret fields. The policy’s extension marker permits later Phase 2+ additions only
-through future ACP-backed policy changes; workflow
-decomposition, specialist selection, consequential operations, and a new control
-plane are **GAPS / NOT IMPLEMENTED**.
-
-### Phase 0 Coordinator Contract Reconciliation
-
-The implemented Coordinator Contract is limited to `request_task` and `get_task`.
-Their model-facing input shapes are explicit and reject authority-bearing fields;
-the server derives repository, branch, target, mode, capabilities, paths, originator,
-coordinator authentication, and verification requirements before the existing ACP
-boundary. `AGENT_REPORT` is execution evidence only. `INDEPENDENT_VERIFICATION` is
-required for `VERIFIED` and `COMPLETE` transitions. The eight ACP lifecycle states are
-`PENDING`, `SELECTED`, `PLANNED`, `EXECUTING`, `VERIFIED`, `COMPLETE`, `BLOCKED`, and
-`FAILED`; `CANCELLED` and `SUPERSEDED` remain TaskRegistry lineage/control semantics,
-not lifecycle states. Coordinator continuation additionally requires prior `get_task`
-observation, `COMPLETE`, independent-verification evidence, and valid TaskRegistry
-lineage; `FAILED` and `BLOCKED` cannot serve as successful predecessors. This technical
-implementation does not itself establish Phase 0 convergence or authorize a phase
-transition; independent verification and Kyle's decision remain required.
-
-### Authority Model (Current and Target)
-
-| Component | Role |
-|---|---|
-| Kyle | Director and final authorization authority. |
-| DeepSeek | Conversational reasoning and coordination intelligence; model output is untrusted for authority. |
-| DeepSeek runtime | Bounded model-facing tool interface and server-side policy enforcement. |
-| ACP / `/poc/coordinator` | Authoritative validation, authorization, registration, and dispatch contract. |
-| TaskRegistry | Durable task-state and correlation mechanism. |
-| Existing orchestrator / dispatcher | Execution lifecycle and specialist routing. |
-| Gemini | Architect, reviewer, and research specialist. |
-| Gemini Builder | Primary implementation, execution, and testing specialist. |
-| Kilo | Available explicitly-targeted execution/failover lane. |
-| GitHub | Durable repository and project truth. |
-
-DeepSeek must never receive direct repository authority, GitHub credentials,
-unrestricted filesystem access, arbitrary capabilities, arbitrary paths, or a generic
-HTTP executor. No second control plane, TaskRegistry, orchestrator, or dispatcher may
-be introduced. Authority-bearing ACP fields remain server-derived policy.
-
-### Capability Matrix
-
-| Capability | Status | Current evidence / required gap |
-|---|---|---|
-| Conversational ingress and final response | IMPLEMENTED / VERIFIED for Ping display | Runtime accepts ChatBox-compatible requests and SSE; complete work-outcome reporting is a GAP. |
-| Bounded task request | IMPLEMENTED / VERIFIED | One server-derived, read-only `request_task` policy for Gemini Builder and `poc/`. |
-| Bounded task observation | IMPLEMENTED / VERIFIED | `get_task` is namespace-constrained and safely projects all eight lifecycle states, lineage, execution, evidence categories, verification, and failure/blocked state. |
-| Workflow decomposition, research need, specialist selection | GAP | No policy-controlled multi-step workflow planner or lane-selection contract. |
-| Research, architecture, implementation, security activation | GAP | No expanded coordinator operation set; all consequential work still requires existing ACP authorization. |
-| Result/evidence interpretation and next action | GAP | Observation exists; consuming evidence and determining an authorized continuation do not. |
-| Verification/reconciliation orchestration | GAP | Completion and independently verified desired outcome remain distinct. |
-| State-driven continuation | GAP | Current model tool loop is bounded for one request, not an autonomous coordinator loop. |
-| Failure/blocked recovery and Kyle escalation | PROPOSED / TARGET | Must be explicit policy and human-authorization gates, not model self-authorization. |
-
-### Desired Lifecycle (PROPOSED / TARGET)
-
-Human intent enters through ChatBox. DeepSeek determines the intended outcome and
-whether research/workflow decomposition is needed, then selects only a server-policy
-permitted operation. Existing specialist lanes execute through ACP; TaskRegistry
-tracks the asynchronous lifecycle. DeepSeek observes bounded status, results, and
-verification evidence, determines the next authorized action in a bounded
-state-driven continuation, distinguishes execution completion from independently
-verified outcome, escalates unresolved authorization or architecture decisions to
-Kyle, and reports the verified result through ChatBox.
-
-### Phased Evolution and Acceptance Criteria (PROPOSED / TARGET)
-
-1. **Phase 0 — Coordinator Contract / Capability Architecture:** define strongly typed
-   operations, server policy mapping, evidence contract, state transitions, and Kyle
-   authorization gates before expanding tools.
-2. **Phase 1 — Observation:** extend only bounded status/result/evidence access as
-   justified; build on the current `get_task` foundation.
-3. **Phase 2 — Bounded Coordination:** add policy-controlled workflow operations that
-   map to existing ACP modes, capabilities, paths, targets, verification requirements,
-   and authorization gates.
-4. **Phase 3 — Autonomous Coordination Loop:** implement bounded state-driven
-   intent → workflow → dispatch → observe → evidence → next action → verification →
-   completion/escalation, never an arbitrary large tool loop.
-
-Future acceptance scenarios are: research-only work that consumes and reports a
-verified research result; implementation work that tracks execution and verification
-evidence; failed/blocked work that performs only authorized recovery or escalates;
-human authorization boundaries that stop rather than self-authorize; and
-verification/reconciliation that explicitly distinguishes completed work from a
-verified desired outcome.
-
-### Remaining Unknowns
-
-The precise smallest viable coordinator capability/policy representation, the exact
-result/evidence projection required for each future operation, and the human
-authorization gates for consequential multi-step workflows are **UNKNOWN** pending
-Phase 0. A possible capability registry is policy only—not a second control plane—and
-is not authorized or implemented by this documentation project.
+Its design must establish the exact read-only aggregation shapes, cross-task lineage navigation semantics, policy-driven specialist chaining, recovery/escalation rules, and verification requirements before implementation is authorized.
 
 ⸻
 
 17. AI specialist roles
 
-17.1 Gemini — Architect / Planner / Reviewer
+17.1 Gemini Reviewer — Architect / Planner / Reviewer
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED ROLE
 
-Gemini is the higher-reasoning architectural and planning specialist.
+Gemini Reviewer provides architecture, planning, research, technical reasoning, and independent review. Its normal role is read-only advisory.
 
-Responsibilities include:
+17.2 Gemini Builder — Primary implementation / execution / testing
 
-* architecture;
-* system design;
-* implementation planning;
-* complex technical reasoning;
-* difficult debugging analysis;
-* research;
-* reviewing proposed implementations;
-* technical review.
+CURRENT / IMPLEMENTED ROLE
 
-Gemini provides architectural/technical direction.
+Gemini Builder is the primary repository implementation, execution, and testing specialist.
 
-Gemini does not replace Kilo as the primary repository Builder / Implementer / Tester.
+17.3 Security AI — Security Specialist
 
-Typical delegation:
+PROPOSED / TARGET ROLE
 
-"Analyze this architecture."
-"Research the best approach."
-"Review this implementation."
-"Identify integration risks."
-"Produce an implementation plan."
+Security AI provides risk-tiered security analysis and review according to server-side policy. It does not receive authority merely by being selected as a specialist.
 
-⸻
+17.4 Utility AI — General Utility Specialist
 
-17.2 Security AI — Security Specialist
+PROPOSED / TARGET ROLE
 
-PROPOSED / TARGET
+Utility AI handles appropriately scoped low-complexity work under explicit authorization. It has no architectural authority.
 
-Define an independent Security AI lane.
+17.5 Kilo — Explicit execution / failover lane
 
-Its purpose is dedicated security analysis and security-focused work.
+CURRENT / IMPLEMENTED ROLE
 
-Responsibilities may include:
+Kilo remains available when explicitly targeted. It is not the default Builder/Implementer/Tester while Gemini Builder is the primary Builder lane.
 
-* vulnerability analysis;
-* secrets and credential exposure review;
-* authentication/authorization review;
-* dependency/security review;
-* security-focused implementation;
-* security verification.
+17.6 Specialist routing invariant
 
-The Security AI should remain conceptually independent from the AI that designs the implementation.
-
-Do not invent a specific security product, model, endpoint, integration, or implementation unless one already exists in the repository.
-
-Typical delegation:
-
-"Review this code for vulnerabilities."
-"Analyze secrets exposure risk."
-"Audit authentication implementation."
-"Check dependency security."
-
-Activation Model
-
-The Security Specialist is activated based on risk classification of the task or code change under review. Three risk tiers govern activation (detailed in Section 12.7):
-
-* Mandatory — Security Specialist review required before implementation may proceed. Triggered by security_review_required: true in ACP command, or auth/credential/secrets/trust-boundary/cryptographic changes.
-* Conditional — Security Specialist review triggered when task touches elevated security surface area. Triggered by security_audit_context indicating relevant concerns, or webhook/API/persistence/CI/CD/dependency changes.
-* Advisory — Security Specialist consulted at discretion of routing layer (Qwen) or Architect (Gemini) for general security hygiene.
-
-Authority Model
-
-The Security Specialist operates as an advisory and gatekeeping authority, not an implementation authority.
-
-* Advisory Authority — Produces a Security Audit Report with findings, risk ratings, and recommendations. Informs Architect (Gemini) and Director (Kyle) but does not authorize or block commits directly.
-* Gatekeeping Authority — For Mandatory-tier tasks, the Security Specialist must complete review and produce a Security Audit Report before the implementation ACP command may be issued to Kilo. The Orchestrator enforces this gate.
-* No Implementation Authority — Does not write production code, modify files, or execute implementation tasks. Output is a structured Security Audit Report.
-
-Open Architectural Decisions
-
-Three open decisions remain (detailed in Section 12.7):
-1. Qwen Router Trigger Logic Refinement
-2. Security Audit Report Persistence Mechanism
-3. Security Specialist Callback Mechanism to Orchestrator
+Specialist selection is policy-controlled. Model reasoning may express intent, but the server derives and enforces authority, target, capabilities, permitted paths, and verification requirements.
 
 ⸻
 
-17.3 Utility AI — General Utility Specialist
+18. Failover architecture
 
 PROPOSED / TARGET
 
-Add a General Utility Specialist lane.
-
-Its purpose is to handle low-complexity, repetitive, or routine tasks without unnecessarily consuming the resources of a higher-reasoning model.
-
-Examples include:
-
-* documentation cleanup;
-* formatting;
-* simple transformations;
-* extraction;
-* boilerplate;
-* repetitive maintenance;
-* straightforward data manipulation;
-* other low-complexity utility work.
-
-The Utility AI should be described as a ROLE, not tied to a specific model yet.
-
-Its existence allows Qwen to route simple work away from Gemini when advanced architectural reasoning is unnecessary.
-
-Do not give Utility AI architectural authority.
-
-Do not give Utility AI unrestricted repository authority.
-
-Typical delegation:
-
-"Clean up this documentation."
-"Format these files."
-"Extract data from this file."
-"Generate boilerplate code."
-
-⸻
-
-17.4 Kilo — Builder / Implementer / Tester
-
-CURRENT / IMPLEMENTED AS DEVELOPMENT ROLE + PROPOSED / TARGET EXTENSIONS
-
-Kilo is the primary execution agent.
-
-Kilo is responsible for:
-
-* repository inspection;
-* implementation;
-* testing;
-* verification;
-* reporting execution results.
-
-Kilo must obey:
-
-* AGENTS.md;
-* existing architecture;
-* the authorized ACP command;
-* task constraints.
-
-Kilo must:
-
-* inspect before modifying;
-* make the smallest appropriate change;
-* preserve unrelated functionality;
-* protect credentials and secrets;
-* stay within authorized scope.
-
-Kilo must not independently redefine architecture.
-
-Kilo must not modify AGENTS.md unless explicitly authorized by a future task.
-
-Kilo must not modify protected architectural components without authorization.
-
-Kilo must not modify GitHub Actions merely because an agent task involves execution.
-
-Kilo may commit and push only when the ACP command explicitly authorizes it.
-
-Typical delegation:
-
-"Implement this feature."
-"Fix this bug."
-"Run the tests and resolve the failure."
-"Update the CRM workflow."
-
-⸻
-
-17.5 Qwen — Router
-
-UNDER VALIDATION
-
-Qwen is a candidate low-cost router/task dispatcher.
-
-It must not initially be treated as a fully autonomous reasoning or coding agent.
-
-Qwen's purpose is to classify incoming development requests and determine the appropriate specialist lane.
-
-Qwen may route requests toward:
-
-* Gemini;
-* Security AI;
-* Utility AI.
-
-For execution work, Qwen uses the existing ACP command structure.
-
-Qwen is NOT:
-
-* the primary implementer;
-* the architecture authority;
-* the security authority;
-* a replacement for Gemini;
-* a replacement for Kilo.
-
-Qwen must not bypass ACP or issue unrestricted shell/Git instructions.
-
-The Qwen model-size decision remains:
-
-UNDER VALIDATION
-
-Do not claim that a larger Qwen model has been implemented unless verified.
-
-18. Failover Architecture
-
-PROPOSED / TARGET
-
-Document failover as an explicit architectural concept.
-
-The purpose of failover is to provide a controlled alternative when an authorized specialist or execution component is unavailable.
-
-Failover must preserve the same ACP command contract and authorization boundaries.
-
-NORMAL EXECUTION
-
-Normal development follows:
-
-Qwen
-↓
-ACP
-↓
-Appropriate Specialist
-↓
-Kilo
-↓
-GitHub / CI
-↓
-Verification
-↓
-Execution Report
-
-Gemini Builder is the primary Builder / Implementer / Tester.
-
-SPECIALIST FAILOVER
-
-If a specialist AI is unavailable or fails, another AI must not silently inherit that specialist's authority.
-
-Any replacement specialist must have an explicitly defined role and must receive an appropriately authorized ACP command.
-
-A specialist failure must produce a clear failure or blocked result when an authorized replacement is unavailable.
-
-BUILDER FAILOVER
-
-Gemini Builder is the primary Builder / Implementer / Tester (using GEMINI_BUILDER_API_KEY,
-distinct from the Gemini Reviewer's GEMINI_API_KEY).
-
-If the Gemini Builder is unavailable, fails, or becomes blocked, Kilo Cloud Agent remains
-an available Builder / Implementer / Tester lane for tasks that explicitly target it:
-
-A failed execution must never be represented as successful.
-
-Any future alternate Builder must be explicitly defined and authorized rather than implicitly assumed.
-
-ARCHITECT / PLANNER FAILOVER
-
-Gemini is currently the Architect / Planner / Reviewer.
-
-FAILOVER SAFETY
+Failover provides a controlled alternative when an authorized specialist or execution component is unavailable.
 
 Failover must preserve:
 
@@ -2029,162 +1071,49 @@ Failover must preserve:
 * verification requirements;
 * reporting requirements.
 
-Failover must never:
+A replacement specialist never silently inherits additional authority. The replacement receives its own explicitly authorized ACP command.
 
-* silently expand permissions;
-* bypass ACP;
-* grant architecture authority to a Builder;
-* grant implementation authority to a Router;
-* expose credentials;
-* modify protected architecture without authorization;
-* claim success without a verified execution report.
+For implementation, Gemini Builder is the primary Builder lane. Kilo is the available explicitly targeted execution/failover lane.
 
-NO SILENT FALLBACK
+Failover must never bypass ACP, server-side policy, TaskRegistry lifecycle state, independent verification, or Director authorization.
 
-The system must identify when failover occurred.
-
-The execution report must identify:
-
-* which AI actually executed the task;
-* whether failover occurred;
-* why failover occurred;
-* what changed;
-* verification results;
-* commit/push state;
-* blockers.
-
-HUMAN ESCALATION
-
-If the authorized execution path and defined failover options are unavailable, the result is:
-
-BLOCKED
-
-The system reports the blocker to ChatGPT / Kyle rather than inventing an alternate execution path.
-
-CURRENT STATUS
-
-Clearly distinguish:
-
-* currently implemented failover;
-* proposed failover;
-* unavailable components.
-
-Do not describe proposed failover paths as operational.
-
-Do not modify failover implementation during this task.
+If no authorized execution path is available, the result is BLOCKED and escalates to Kyle.
 
 ⸻
 
-⸻19. OpenClaw's architectural role
+19. OpenClaw's architectural role
 
 19.1 Status
 
 PROPOSED / TARGET
 
-OpenClaw is initially retained as the orchestration/mediation capability.
+OpenClaw is a replaceable orchestration/mediation component.
 
-Its value is not defined merely as "being the server."
+It may eventually provide transport, message routing, event orchestration, LINE integration, or automated invocation.
 
-Its potentially valuable responsibilities include:
+19.2 Authority boundary
 
-* agent handoffs;
-* tool/capability selection;
-* task orchestration;
-* context management;
-* multi-step execution;
-* coordinating specialist agents;
-* consolidating results.
+OpenClaw does not become a control plane.
 
-⸻
+The authority chain remains:
 
-19.2 Replaceability
+DeepSeek Coordinator
+↓
+server-side policy / authorization
+↓
+existing ACP
+↓
+TaskRegistry + dispatcher/orchestrator
 
-OpenClaw should be treated as a replaceable/pluggable orchestration layer.
+OpenClaw may mediate transport or orchestration around this boundary but may not redefine ACP authority, create a competing TaskRegistry, create a competing convergence authority, or own production business rules.
+
+19.3 Replaceability
 
 The production application must not depend on OpenClaw-specific business logic.
 
-The intended separation is:
-
-Production capabilities
-        ↕
-       ACP
-        ↕
-Orchestration layer
-
-OpenClaw can therefore:
-
-* remain central;
-* become narrower;
-* be replaced;
-* or become optional,
-
-without requiring a redesign of the production business system.
+OpenClaw may remain central, become narrower, be replaced, or become optional without moving production business rules out of Render or Google-specific operations out of Apps Script.
 
 ⸻
-
-19.3 Independence from Qwen → ACP → Specialist Boundary
-
-PROPOSED / TARGET
-
-Explicitly state that the Qwen → ACP → specialist execution boundary does NOT depend on OpenClaw.
-
-OpenClaw may eventually provide:
-
-* transport;
-* message routing;
-* event orchestration;
-* LINE integration;
-* automated invocation.
-
-These are transport/orchestration concerns.
-
-OpenClaw must not alter the ACP command contract or become a prerequisite for the Qwen → specialist boundary.
-
-⸻19. GitHub Actions as AI execution plane
-
-19.1 Role
-
-PROPOSED / TARGET
-
-GitHub Actions may provide ephemeral execution for AI tasks.
-
-It can be used for:
-
-* launching AI tasks;
-* running specialist agents;
-* repository analysis;
-* code changes;
-* tests;
-* temporary orchestration jobs;
-* returning task results.
-
-GitHub Actions should not become:
-
-* the production application server;
-* the authoritative CRM;
-* the owner of business rules;
-* the replacement for Render production workflows.
-
-⸻
-
-19.2 Ephemeral execution principle
-
-GitHub Actions jobs are temporary execution environments.
-
-Persistent task state must therefore exist outside an individual job where required.
-
-Long-running orchestration must account for:
-
-* job limits;
-* concurrency;
-* retries;
-* cancellation;
-* result persistence;
-* task correlation;
-* secrets;
-* failure recovery.
-
-These are PROPOSED / TARGET concerns.
 
 20. Production boundaries that do not change
 
@@ -2216,15 +1145,15 @@ Gmail remains the email delivery channel.
 
 LINE
 
-LINE remains the communication channel and notification channel.
+LINE remains the operational communication and notification channel.
 
-LINE is not the primary AI development control channel and is not required for the AI development architecture to operate.
+ChatBox / DeepSeek
 
-ChatGPT is the primary human-facing development control interface (see Section 12.3).
+ChatBox and the DeepSeek Coordinator provide the current conversational coordination interface. They do not own production business rules.
 
 GitHub
 
-GitHub remains the source of truth for code and architecture.
+GitHub remains the durable source of truth for code and architecture.
 
 Production workflows
 
@@ -2232,104 +1161,61 @@ Critical production workflows remain on Render unless a later architectural deci
 
 Business rules must not be duplicated inside:
 
-* Qwen;
+* DeepSeek;
+* OpenClaw;
 * GitHub Actions;
 * specialist prompts;
 * other AI layers.
+
+AI orchestration may request approved capabilities through ACP, but Render remains responsible for production business decisions and Google Apps Script remains responsible for Google-specific execution.
 
 ⸻
 
 21. Security architecture
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED FOUNDATION + PROPOSED / TARGET EXTENSIONS
 
-The AI layer introduces a new trust boundary and must be treated accordingly.
+The AI layer introduces a trust boundary and is governed by explicit server-side authorization.
 
 21.1 Credential principle
 
-AI agents must not receive unrestricted production credentials.
-
-Agents should receive only the credentials and capabilities necessary for the task.
-
-⸻
+AI agents must not receive unrestricted production credentials. Credentials are scoped outside model output and exposed only through explicitly authorized execution mechanisms.
 
 21.2 Capability principle
 
-AI agents should interact with approved capabilities rather than receiving unrestricted direct access to:
-
-* Google Sheets;
-* Gmail;
-* production state;
-* Render internals;
-* other production credentials.
-
-⸻
+AI agents interact with approved capabilities through ACP rather than unrestricted direct access to production systems.
 
 21.3 Cross-system authentication
 
-Cross-system calls should use explicit authentication and authorization.
-
-The exact mechanism is to be determined during ACP design.
-
-HMAC, JWT, or another appropriately scoped mechanism may be evaluated.
-
-⸻
+Cross-system calls require explicit authentication and authorization. The implemented DeepSeek runtime authenticates its coordinator boundary using server-held credentials; future integrations require their own reviewed authentication boundary.
 
 21.4 Write protection
 
-Write-capable commands require:
-
-* structured validation;
-* authorization;
-* idempotency where appropriate;
-* audit logging;
-* explicit error handling.
-
-Read-only capabilities should be implemented first.
+Write-capable operations require structured validation, server-side authorization, appropriate idempotency, auditability, and explicit verification. Model output cannot grant write, commit, or push authority.
 
 ⸻
 
 22. Task state and reliability
 
-PROPOSED / TARGET
+CURRENT / IMPLEMENTED FOUNDATION + PROPOSED / TARGET EXTENSIONS
 
-The future AI control plane should maintain explicit task state.
+Task state is maintained by the existing TaskRegistry and ACP lifecycle.
 
-At minimum, the architecture must support:
+The current coordination architecture supports:
 
-* request ID;
-* correlation ID;
-* task status;
-* originating LINE interaction;
-* selected capability/agent;
-* execution result;
-* error state;
-* retry state;
-* timestamps.
+* request and correlation identity;
+* task lifecycle state;
+* parent/child lineage;
+* current and next agent/action information;
+* execution/result information;
+* verification requirements and independent-verification evidence;
+* failure and blocked diagnostics;
+* bounded continuation state;
+* autonomous-turn accounting.
 
-Potential states include:
+Phase 4 may extend read-only aggregation across related task graphs.
 
-RECEIVED
-   ↓
-ROUTING
-   ↓
-QUEUED
-   ↓
-RUNNING
-   ↓
-COMPLETED
-
-with failure paths such as:
-
-RUNNING
-   ↓
-FAILED
-   ↓
-RETRYING
-   ↓
-COMPLETED / FAILED
-
-The exact state model is part of future ACP/task-system design.
+TaskRegistry remains the authoritative task-state and correlation mechanism. A second task-state store is not permitted.
 
 ⸻
 
@@ -2337,7 +1223,7 @@ The exact state model is part of future ACP/task-system design.
 
 CURRENT / IMPLEMENTED + PROPOSED PRESERVATION
 
-Critical scheduled workflows remain on Render during the AI migration.
+Critical scheduled production workflows remain on Render during AI evolution.
 
 In particular:
 
@@ -2345,141 +1231,58 @@ Render
   ↓
 abandonedBooking.js
 
-must remain operational independently of the AI orchestration layer.
+remains operational independently of the AI coordination layer.
 
-The fact that GitHub Actions becomes an AI execution plane does not justify moving production scheduling into GitHub Actions.
+AI orchestration does not justify moving production scheduling into ChatBox, DeepSeek, OpenClaw, or GitHub Actions.
 
 ⸻
 
 24. Migration roadmap
 
-The migration is incremental and non-destructive.
+The migration remains incremental and non-destructive. The current production system must remain operational throughout AI coordination work.
 
-The current production system must remain operational throughout the migration.
+Phase 0 — Coordinator Contract
 
-⸻
+COMPLETE / INDEPENDENTLY VERIFIED
 
-Phase 1 — Read-only LINE proof of concept
+The DeepSeek Coordinator contract, server-derived authority mapping, bounded observation, evidence semantics, lifecycle/lineage semantics, and strategic-alignment enforcement are established.
 
-PROPOSED / TARGET
+Phase 1 — Observation
 
-Goal:
+COMPLETE / INDEPENDENTLY VERIFIED
 
-Allow Kyle to ask simple questions through LINE and receive information from the existing system.
+Bounded TaskRegistry observation, lifecycle state, lineage, diagnostics, evidence, and verification projection are established.
 
-Example:
+Phase 2 — Bounded Coordination
 
-"Give me this week's bookings."
+COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED
 
-Architecture:
+Bounded coordination, workflow-step policy, Director authorization infrastructure, specialist routing, result-driven continuation, and automatic result consumption are established and independently verified.
 
-LINE
- ↓
-Render
- ↓
-AI/router
- ↓
-Read-only capability
- ↓
-Existing data
- ↓
-Render
- ↓
-LINE
+Phase 3 — Autonomous Coordination Loop
 
-Requirements:
+COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED
 
-* no write operations;
-* use existing production boundaries;
-* accurate responses;
-* task correlation;
-* basic error handling.
+Bounded autonomous coordination, durable context, server-derived workflow sequencing, completion/escalation, and fail-closed continuation are established and independently verified.
 
-⸻
-
-Phase 2 — ACP and controlled commands
+Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation
 
 PROPOSED / TARGET
 
-Define the detailed Agent Command Protocol.
+Phase 4 extends the verified Phase 3 foundation across multi-step, multi-specialist task graphs.
 
-Establish:
+Planned areas:
 
-* command schemas;
-* result schemas;
-* authentication;
-* authorization;
-* validation;
-* correlation IDs;
-* idempotency;
-* logging;
-* retry behavior;
-* failure handling.
+* multi-task lineage navigation and cross-task aggregation;
+* read-only parent/child workflow-state and diagnostic aggregation;
+* policy-driven multi-specialist workflow chaining;
+* structured recovery and escalation;
+* bounded DeepSeek observation and next-action reasoning across task graphs;
+* mandatory independent verification before consequential progression.
 
-Introduce narrowly scoped capabilities.
+Phase 4 does not change the authority model. ACP, TaskRegistry, server-side policy, independent verification, bounded execution, Director authorization, convergence authority, and the phase-transition mechanism remain authoritative.
 
-⸻
-
-Phase 3 — Controlled write operations
-
-PROPOSED / TARGET
-
-Permit selected write operations only after the command boundary has been validated.
-
-Examples may eventually include:
-
-Update CRM status.
-Add CRM information.
-Trigger an approved workflow.
-Send an approved email.
-
-Every write capability must have an explicit contract and validation boundary.
-
-⸻
-
-Phase 4 — Full multi-agent orchestration
-
-PROPOSED / TARGET
-
-Enable complex tasks involving:
-
-* OpenClaw;
-* ChatGPT — Control / Human-Facing Interface;
-* Qwen — Router;
-* Gemini — Architect / Planner / Reviewer;
-* Security AI — Security Specialist;
-* Utility AI — General Utility Specialist;
-* Kilo — Builder / Implementer / Tester;
-* GitHub Actions;
-* approved production capabilities.
-
-Example:
-
-Kyle
-↓
-ChatGPT
-↓
-Qwen Router
-↓
-Gemini (architecture analysis)
-↓
-Kilo (implementation)
-↓
-Tests
-↓
-Gemini (review)
-↓
-Kilo (corrections)
-↓
-Execution Report
-↓
-ChatGPT
-↓
-Kyle
-↓
-LINE (notification)
-
-The exact orchestration implementation should be determined from the validated ACP and proof-of-concept results.
+Phase 4 implementation requires separate authorized design and implementation work. This architecture document does not authorize implementation.
 
 ⸻
 
@@ -2540,37 +1343,25 @@ Each transition requires a concrete requirement and review of the existing workf
 
 27. Next architectural work
 
-After this architecture is approved, the next architectural task is:
+The next architectural work belongs to Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation.
 
-Design the Agent Command Protocol against the actual repository.
+The Phase 4 design must establish, against the actual repository:
 
-The ACP design must identify:
+* multi-task lineage navigation semantics;
+* read-only parent/child aggregation shapes;
+* cross-task diagnostic aggregation;
+* policy-driven specialist chaining;
+* recovery and escalation routing;
+* verification prerequisites for consequential progression;
+* bounded continuation semantics across task graphs;
+* authorization behavior for capability upgrades;
+* persistence and evidence requirements.
 
-* available capabilities;
-* existing Render interfaces;
-* existing Apps Script actions;
-* authentication boundaries;
-* command schemas;
-* result schemas;
-* error schemas;
-* idempotency;
-* correlation IDs;
-* logging;
-* LINE integration points;
-* Kilo integration points;
-* ChatGPT integration points;
-* Qwen Router integration points;
-* Gemini integration points;
-* Security AI integration points;
-* Utility AI integration points;
-* OpenClaw integration points;
-* GitHub Actions execution boundaries.
+The existing ACP, TaskRegistry, dispatcher/orchestrator, convergence authority, and phase-transition mechanism remain the foundation.
 
-The ACP design must be grounded in the actual implementation.
+Do not introduce a second control plane, competing task-state store, generic HTTP executor, or model-controlled authority path.
 
-Do not invent interfaces that do not exist without explicitly labeling them as new requirements.
-
-Do not implement ACP until its design has been reviewed and approved.
+Do not treat Phase 4 documentation as implementation authorization.
 
 ⸻
 
@@ -2598,157 +1389,3 @@ Agents must not treat roadmap items as permission for broad redesign.
 29. Change discipline and verification
 
 For implementation work:
-
-* Treat the current repository implementation as the source of truth.
-* Preserve the Render-owned business-decision boundary.
-* Preserve Apps Script as the Google-specific adapter.
-* Prefer focused tests and targeted checks.
-* Add tests where a change has a clear seam.
-* Check imports and exports.
-* Check asynchronous behavior.
-* Check error handling.
-* Check environment variables.
-* Check external action payloads.
-* Check webhook behavior.
-* Check idempotency where applicable.
-* Verify external integrations after material changes.
-* Update this document only when the architecture or roadmap genuinely changes.
-
-When a requested change conflicts with the documented architecture, identify the conflict before implementation.
-
-⸻
-
-30. Architectural end state
-
-The intended end state is a reliable, incremental automation system in which:
-
-                     KYLE
-                       ↓
-                    ChatBox
-                       ↓
-              DeepSeek Coordinator
-                       ↓
-             bounded control_plane
-                       ↓
-                 server policy
-                       ↓
-                      ACP
-                       ↓
-         ┌─────────────┼─────────────┐
-         ↓             ↓             ↓
-    Gemini Builder  Gemini Reviewer Security AI / Utility
-    / Implementation / Advisory     / Specialist
-         └─────────────┼─────────────┘
-                       ↓
-            TaskRegistry / Dispatch
-                       ↓
-              Approved capabilities
-                       ↓
-          ┌───────────┴───────────┐
-          ↓                       ↓
-       Render              Apps Script
-   Business logic         Google operations
-          ↓                       ↓
-       Workflows            Sheets / Gmail
-          └─────────────┬───────────┘
-                       ↓
-                     LINE
-                       ↓
-                    ChatBox
-                       ↓
-                     KYLE
-
-The key invariant remains:
-
-AI can orchestrate the system, but AI does not become the system's business-logic owner.
-
-Render remains the production business-logic layer.
-
-Google Apps Script remains the Google-specific adapter.
-
-GitHub remains the source of truth.
-
-LINE is a notification channel, not the primary AI development control channel.
-
-ChatBox serves as the primary conversational control and coordination interface.
-
-ACP becomes the controlled interface between AI orchestration and production capabilities.
-
-OpenClaw remains initially available as the orchestration/mediation layer but is deliberately kept replaceable.
-
-Legacy Qwen router references are superseded by the DeepSeek Coordinator architecture.
-
-Security AI and Utility AI operate as independent specialist lanes.
-
-The system evolves incrementally without requiring a wholesale rewrite of the working Fluent with Kyle application.
-
-⸻
-
-## Security & Compliance
-
-The section should establish the architectural security model and provide a living remediation checklist.
-
-### 1. Security Boundary / Trust Model
-Trust boundaries are strictly enforced between external providers (Tally, Cal.com), the Render/Node.js application, the Google Apps Script adapter, Google Sheets/Gmail, the LINE communication channel, AI orchestration components, and GitHub/development tooling. All external inputs, including webhooks, are treated as untrusted until they are authenticated and validated.
-
-### 2. Authentication & Authorization
-Architectural requirements for authentication and authorization include:
-- Apps Script ↔ Render authentication using shared server-side secrets.
-- Tally webhook authentication verification.
-- Cal.com webhook authentication verification.
-- Internal service-to-service authentication.
-- Strict adherence to least-privilege access for all components.
-
-### 3. Secrets & Configuration
-Requirements for secrets and configuration include:
-- All secrets must originate from environment variables or authorized secret stores.
-- Secrets must never be committed to source control.
-- Production configuration must not rely on hard-coded credentials, URLs, IDs, or other environment-specific values.
-- Sensitive credentials must be masked and must never appear in logs.
-
-### 4. Logging & Privacy
-Minimum logging policy requirements include:
-- Never log complete webhook payloads.
-- Never log secrets, authentication material, or sensitive credentials.
-- Minimize unnecessary PII in logs.
-- Utilize minimal structured operational logs for debugging, monitoring, and auditing purposes.
-
-### 5. Input Validation
-All external webhook input must be:
-1. Authenticated where applicable.
-2. Schema-validated to ensure structural integrity.
-3. Constrained to expected fields and data types.
-4. Rejected when required data is missing or malformed.
-
-### 6. Privilege & External Access
-Least privilege must be the foundational architectural principle for:
-- Google Apps Script OAuth scopes.
-- Apps Script deployment and access settings.
-- Gmail sending privileges.
-- Google Sheets access.
-- Render environment configuration.
-- Exposure of external webhooks.
-
-### 7. Repository & Artifact Security
-Requirements for securing the repository and its artifacts include:
-- Securing generated artifacts, logs, and temporary AI-agent output.
-- Ensuring repository history does not contain sensitive information.
-- Mandatory use of secret scanning.
-- Preventing operational or sensitive information from being committed to source control.
-
-### 8. Security Remediation Checklist
-
-1. Google Apps Script Authentication — [x] DONE
-2. Tally Webhook Authentication — [ ] TODO
-3. Cal.com Webhook Authentication — [ ] TODO
-4. Logging Minimization and Privacy — [~] PARTIALLY DONE
-5. Configuration and Secret Hygiene — [~] PARTIALLY DONE
-6. Sensitive Information in Repository Artifacts — [ ] TODO
-7. Full Git History Secret Scan — [ ] TODO
-8. Webhook Input Validation — [?] REVIEW REQUIRED
-9. Apps Script Privilege Review — [?] REVIEW REQUIRED
-10. Deployment and Access Configuration Review — [?] REVIEW REQUIRED
-
-### 9. Security Completion Rule
-
-An item should only move to `[x] DONE` after implementation is complete, relevant tests/verification have passed, and the resulting architecture matches the documented security requirement.
