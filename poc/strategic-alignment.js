@@ -98,7 +98,7 @@ function evaluateConvergence(state, evidence) {
     if (!Array.isArray(state.phase_transition_conditions) || !state.phase_transition_conditions.includes(evidence.convergence_condition)) return blocked('INVALID_CONVERGENCE_CONDITION', 'Convergence condition is not authoritative.');
     if (state.phase_status !== 'CONVERGED') return blocked('CURRENT_PHASE_NOT_CONVERGED', 'Current phase is not authoritatively converged.');
     if (!evidence.independent_verification) return blocked('DESIRED_OUTCOME_UNVERIFIED', 'Independent verification evidence is required for phase transition.');
-    return { status: 'CONVERGED_ESCALATE_TRANSITION', escalation: 'Kyle — Director', authorization: 'NOT_GRANTED', requirement_id: requirement.id };
+    return { status: 'CONVERGED_ESCALATE_TRANSITION', escalation: 'Kyle — Director', authorization: 'NOT_GRANTED', requirement_id: requirement.id, requirement };
   }
   const requirement = state.unresolved_requirements.find((item) => item.id === evidence.requirement_id);
   if (!requirement || !evidence.independent_verification || evidence.acceptance_criteria_id !== requirement.acceptance_criteria?.[0] || evidence.convergence_condition !== requirement.convergence_condition) return blocked('DESIRED_OUTCOME_UNVERIFIED', 'Technical completion does not establish authoritative convergence.');
