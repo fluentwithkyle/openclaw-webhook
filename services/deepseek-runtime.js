@@ -94,7 +94,8 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         requires_parent_observation: true,
         requires_completed_independently_verified_predecessor: true,
         authority: 'TaskRegistry lifecycle, lineage, and ACP metadata are evaluated server-side',
-        authorization: 'Consequential implementation steps require existing Director authorization at /poc/coordinator'
+        authorization: 'Consequential implementation steps require existing Director authorization at /poc/coordinator',
+        autonomous_sequence: 'The next workflow step is server-derived from the current TaskRegistry task; model intent may describe work but cannot select or advance the sequence.'
     }),
     observation: Object.freeze({ max_child_tasks: MAX_CHILD_TASK_OBSERVATIONS }),
     authorization_boundary: Object.freeze({
@@ -317,6 +318,26 @@ function evaluateWorkflowStepPolicy(parentRequestId, workflowStep, newRequestId,
     return { valid: true, authorization_required: policy.authorization_required };
 }
 
+function deriveNextWorkflowStep(task) {
+    const continuation = classifyTaskResultForContinuation(task);
+    if (!continuation.eligible_for_next_decision) {
+        return { valid: false, terminal: false, reason: continuation.reason };
+    }
+    if (task.task_mode === 'REVIEW' && (!task.workflow_stage || task.workflow_stage === 'review')) {
+        return { valid: true, workflow_step: 'implementation' };
+    }
+    if (task.workflow_stage === 'implementation') {
+        return { valid: true, workflow_step: 'verification' };
+    }
+    if (task.workflow_stage === 'verification') {
+        return { valid: true, workflow_step: 'reconciliation' };
+    }
+    if (task.workflow_stage === 'reconciliation') {
+        return { valid: true, terminal: true, workflow_step: null, reason: 'Workflow reconciliation is complete; no further automatic workflow step is authorized' };
+    }
+    return { valid: false, terminal: false, reason: 'Current TaskRegistry workflow state does not authorize an automatic next workflow step' };
+}
+
 function classifyTaskResultForContinuation(task) {
     if (!task || typeof task !== 'object' || typeof task.request_id !== 'string' || typeof task.status !== 'string') {
         return { classification: 'invalid', eligible_for_next_decision: false, reason: 'Task result is invalid; continuation cannot proceed' };
@@ -354,15 +375,16 @@ function resolveCoordinationContext(contextId) {
         throw new RuntimeError(409, 'COORDINATION_TURN_EXHAUSTED', 'Coordination context autonomous-turn limit exhausted');
     }
     const current = taskRegistry.getTask(context.current_request_id);
-    const continuation = classifyTaskResultForContinuation(current);
-    if (!continuation.eligible_for_next_decision) {
+    const nextStep = deriveNextWorkflowStep(current);
+    if (!nextStep.valid) {
         const isEscalation = current && ['FAILED', 'BLOCKED'].includes(current.status);
-        throw new RuntimeError(isEscalation ? 409 : 400, isEscalation ? 'COORDINATION_ESCALATION_REQUIRED' : 'COORDINATION_STATE_REJECTED', continuation.reason,
+        throw new RuntimeError(isEscalation ? 409 : 400, isEscalation ? 'COORDINATION_ESCALATION_REQUIRED' : 'COORDINATION_STATE_REJECTED', nextStep.reason,
             isEscalation ? { escalation: 'HUMAN_REVIEW' } : undefined);
     }
+    if (nextStep.terminal) throw new RuntimeError(409, 'COORDINATION_WORKFLOW_COMPLETE', nextStep.reason);
     const lineage = taskRegistry.validateLineageForCreate(current.request_id, `coordination-probe-${contextId}`);
     if (!lineage.valid) throw new RuntimeError(400, 'COORDINATION_STATE_REJECTED', lineage.error);
-    return context;
+    return { ...context, next_workflow_step: nextStep.workflow_step };
 }
 
 function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults) {
@@ -830,6 +852,9 @@ async function runDeepSeekTurn({ messages, env, httpClient = axios, coordination
             if (coordinationContext && command.parent_request_id !== coordinationContext.current_request_id) {
                 throw new RuntimeError(400, 'CONTINUATION_POLICY_REJECTED', 'Coordination context continuation must use its current TaskRegistry request identifier');
             }
+            if (coordinationContext && command.workflow_step !== coordinationContext.next_workflow_step) {
+                throw new RuntimeError(400, 'CONTINUATION_POLICY_REJECTED', 'Coordination context workflow continuation must use the server-derived next workflow step');
+            }
             if (command.parent_request_id) {
                 const continuationCheck = command.workflow_step
                     ? evaluateWorkflowStepPolicy(command.parent_request_id, command.workflow_step, command.request_id, observedTaskResults)
@@ -886,13 +911,14 @@ function buildAutonomousContinuationMessage(context) {
     const observation = observeTaskForDeepSeek(context.current_request_id, new Set(), new Map());
     return {
         role: 'system',
-        content: `Server-derived coordination observation for bounded autonomous continuation: ${JSON.stringify(observation)}. Continue only through control_plane when the observation and server policy permit; otherwise report completion or escalation.`
+        content: `Server-derived coordination observation for bounded autonomous continuation: ${JSON.stringify(observation)}. The only server-authorized next workflow step is ${context.next_workflow_step}. Continue only through control_plane when the observation and server policy permit; otherwise report completion or escalation.`
     };
 }
 
 function canStartAutonomousContinuation(context) {
     if (!context || context.autonomous_turns >= context.max_autonomous_turns) return false;
-    return classifyTaskResultForContinuation(taskRegistry.getTask(context.current_request_id)).eligible_for_next_decision;
+    const nextStep = deriveNextWorkflowStep(taskRegistry.getTask(context.current_request_id));
+    return nextStep.valid && !nextStep.terminal;
 }
 
 async function runDeepSeekConversation({ messages, env, httpClient = axios, coordinationContextId, autonomousCoordination = false }) {
@@ -993,6 +1019,7 @@ module.exports = {
     validateGetTaskArguments,
     evaluateContinuationPolicy,
     evaluateWorkflowStepPolicy,
+    deriveNextWorkflowStep,
     classifyTaskResultForContinuation,
     resolveCoordinationContext,
     observeTaskForDeepSeek,

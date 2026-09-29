@@ -17,6 +17,7 @@ const {
     buildControlPlaneCommand,
     evaluateContinuationPolicy,
     evaluateWorkflowStepPolicy,
+    deriveNextWorkflowStep,
     classifyTaskResultForContinuation,
     resolveCoordinationContext,
     validateGetTaskArguments,
@@ -429,6 +430,19 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
+    await test('automatic workflow sequencing is derived from authoritative completed workflow state', async () => {
+        taskRegistry.resetRegistry();
+        completeDeepSeekReviewTask('deepseek-runtime-sequence-review');
+        assert.deepEqual(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-review')), { valid: true, workflow_step: 'implementation' });
+        completeWorkflowTask('deepseek-runtime-sequence-implementation', 'implementation', 'BUILDER', 'deepseek-runtime-sequence-review');
+        assert.deepEqual(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-implementation')), { valid: true, workflow_step: 'verification' });
+        completeWorkflowTask('deepseek-runtime-sequence-verification', 'verification', 'VERIFY_RECONCILE', 'deepseek-runtime-sequence-implementation');
+        assert.deepEqual(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-verification')), { valid: true, workflow_step: 'reconciliation' });
+        completeWorkflowTask('deepseek-runtime-sequence-reconciliation', 'reconciliation', 'VERIFY_RECONCILE', 'deepseek-runtime-sequence-verification');
+        assert.equal(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-reconciliation')).terminal, true);
+        taskRegistry.resetRegistry();
+    });
+
     await test('authorized conversations automatically execute bounded state-driven coordination turns', async () => {
         taskRegistry.resetRegistry();
         const submitted = [];
@@ -450,7 +464,8 @@ function rawRequest(port, headers, body) {
             if (modelCalls === 3) {
                 const observation = body.messages.find(message => message.role === 'system' && message.content.includes('Server-derived coordination observation'));
                 assert(observation, 'the next autonomous turn must receive a server-derived observation');
-                return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: submitted[0].request_id, workflow_step: 'review' }) } }] });
+                assert.match(observation.content, /only server-authorized next workflow step is implementation/);
+                return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Implement coordinator workflow sequencing', parent_request_id: submitted[0].request_id, workflow_step: 'implementation' }) } }] });
             }
             if (modelCalls === 4) {
                 const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
@@ -458,7 +473,7 @@ function rawRequest(port, headers, body) {
                 assert.equal(context.current_request_id, submitted[1].request_id);
                 return providerResponse({ role: 'assistant', content: 'First continuation completed.' });
             }
-            if (modelCalls === 5) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'second-follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: submitted[1].request_id, workflow_step: 'review' }) } }] });
+            if (modelCalls === 5) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'second-follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Verify coordinator workflow sequencing', parent_request_id: submitted[1].request_id, workflow_step: 'verification' }) } }] });
             if (modelCalls === 6) {
                 const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
                 assert.equal(context.autonomous_turns, 2);
@@ -476,6 +491,7 @@ function rawRequest(port, headers, body) {
         assert.equal(submitted.length, 3);
         assert.equal(submitted[1].parent_request_id, submitted[0].request_id);
         assert.equal(submitted[2].parent_request_id, submitted[1].request_id);
+        assert.deepEqual(submitted.map(command => command.workflow_step || null), [null, 'implementation', 'verification']);
         const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
         assert.equal(context.context_id, submitted[0].request_id);
         assert.equal(context.root_request_id, submitted[0].request_id);
@@ -484,6 +500,21 @@ function rawRequest(port, headers, body) {
         assert.equal(taskRegistry.getTask(submitted[2].request_id).coordination_context, undefined);
         assert.equal(modelCalls, 6);
         assert.equal(MAX_TOOL_ITERATIONS, 3);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('a model cannot advance autonomous workflow sequencing with a policy-valid but non-derived step', async () => {
+        taskRegistry.resetRegistry();
+        const parentRequestId = 'deepseek-runtime-sequence-authority';
+        completeDeepSeekReviewTask(parentRequestId);
+        assert.equal(taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        const client = { post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'wrong-step', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: parentRequestId, workflow_step: 'review' }) } }] }) };
+        await assert.rejects(
+            runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId }),
+            error => error.code === 'CONTINUATION_POLICY_REJECTED' && /server-derived next workflow step/.test(error.message)
+        );
+        assert.equal(taskRegistry.getTasksByParent(parentRequestId).length, 0);
+        assert.equal(taskRegistry.getTask(parentRequestId).coordination_context.autonomous_turns, 0);
         taskRegistry.resetRegistry();
     });
 
