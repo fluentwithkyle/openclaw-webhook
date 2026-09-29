@@ -2849,3 +2849,25 @@ existing Director authorization.
 **Delivery**: PR #253 merged to main as 7831d21298cae53f63d5688c7ab7afea404e1da2.
 
 **Verification**: Direct GitHub source/diff inspection passed; the gate contains no duplicated prerequisite, acceptance, or convergence evaluation. GitHub exposes no CI status/workflow for the merge commit, and independent Node/npm execution is unavailable in this coordinator environment, so runtime test execution remains BLOCKED / NOT INDEPENDENTLY VERIFIED.
+
+
+## 2026-09-29 | TASK-CODEX-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-LOOP-IMPLEMENT-001
+
+**Task**: Implement the authorized bounded Phase 3 autonomous coordination-loop increment.
+
+**Outcome**: IMPLEMENTED / VERIFIED. The existing DeepSeek runtime can opt an authorized conversation into a server-bounded autonomous continuation driver. It reuses the persisted TaskRegistry coordination context, resolves and re-evaluates the current task before each next turn, supplies a sanitized server-derived observation, and preserves the existing workflow, continuation, ACP, Director authorization, and control-plane gates. Autonomous turns remain capped separately from model tool iterations; ineligible, terminal, stale, or insufficiently verified state stops continuation fail-closed.
+
+**Verification**: Focused DeepSeek runtime tests and the complete `npm test` suite passed; `git diff --check` passed.
+
+**Commit Reference**: `ab795d19a348bd9a21c617ef520b1137f495a31c`.
+
+
+## 2026-09-29 | TASK-CODEX-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-LOOP-CORRECTION-001
+
+**Task**: Correct durable autonomous-turn accounting in the Phase 3 coordination-loop implementation.
+
+**Outcome**: IMPLEMENTED / VERIFIED. Coordination-context resolution now validates persisted root context without consuming a turn. After a policy-approved child dispatch, the runtime calls the existing `advanceCoordinationContext()` operation on that root context, which atomically increments the durable turn count and updates its current request. The runtime continues from the root context only; children do not carry coordination context.
+
+**Verification**: Focused DeepSeek runtime tests and the complete `npm test` suite passed; `git diff --check` passed.
+
+**Commit Reference**: `bcdc1b4e8063a528f71849537f51a6c14461e7aa`.
