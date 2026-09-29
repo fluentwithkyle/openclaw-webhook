@@ -11,60 +11,58 @@ strategic-alignment evaluator; it is not a second roadmap or execution authority
 they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.md`
 §16.6 remains authoritative for intended architecture.
 
-- **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 2 —
-  Bounded Coordination**, **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**.
+- **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 3 —
+  Autonomous Coordination Loop**, **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**.
 - **Completed requirements**: Stage 1 network path; Phase 0 Coordinator Contract;
-  Phase 1 Observation; Phase 2 Bounded Coordination (bounded lineage, workflow-step policy, Director authorization infrastructure, specialist routing policy, result-driven continuation, automatic result consumption).
-- **Unresolved required next work**: `phase-3-autonomous-coordination-loop` (Pending Kyle Transition Decision).
+  Phase 1 Observation; Phase 2 Bounded Coordination; Phase 3 Autonomous Coordination
+  Loop, including durable coordination context, bounded autonomous turns,
+  server-derived workflow sequencing, completion/escalation, and fail-closed
+  continuation.
+- **Unresolved required next work**: `phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation`
+  (PROPOSED / TARGET; requires separate authorized Phase 4 design work before
+  implementation).
 - **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 is COMPLETE /
   INDEPENDENTLY VERIFIED (implementation commit `ec9c476`; independent
   verification/reconciliation commit `53110da`). Phase 1 is COMPLETE / INDEPENDENTLY
   VERIFIED (implementation commit `8c77901`; independent verification/reconciliation
-  commit `8c77901`). Phase 2 is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED (`TASK-GEMINI-DEEPSEEK-PHASE-2-CONVERGENCE-FINAL-VERIFY-RECONCILE-001`, commit `40c2099` / `62ccb6f`). Phase 3 transition requires Kyle's explicit decision.
-- **Phase 2 workflow-step policy implementation & independent verification**: merged implementation commit `cd12ff76e44528be93e1e5dab37b3a78748f9aea` (PR #250, commit `62ccb6f`) is independently verified by `TASK-GEMINI-DEEPSEEK-PHASE-2-VERIFICATION-RECONCILIATION-WORKFLOW-POLICY-FINAL-VERIFY-RECONCILE-001` (2026-09-29). Confirmed: `VALID_WORKFLOW_STAGES` explicitly bounded and validated; `TaskRegistry` persists `workflow_stage` as authoritative state; `WORKFLOW_STEP_POLICY` extended with `verification` (requires `BUILDER` predecessor with `implementation` stage) and `reconciliation` (requires `VERIFY_RECONCILE` predecessor with `verification` stage); predecessor repository and base_branch matching; lineage validation; `COMPLETE` + `INDEPENDENT_VERIFICATION` evidence requirements; fail-closed handling of missing/malformed workflow stages; task text cannot satisfy stage requirements; zero second control plane or model-controlled authority override. All schema, task-registry, and verify-reconcile tests pass successfully. Phase 2 is **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**. The independent convergence verification record confirms all explicit Phase 2 criteria are satisfied; further Phase 2 implementation is unnecessary.
-- **Phase 2 verification/reconciliation workflow policy**: authoritative TaskRegistry entries now persist a validated server-derived workflow stage for runtime-created workflow commands. Verification requires a COMPLETE, independently verified implementation-stage predecessor; reconciliation requires the equivalent verification-stage predecessor. Stage-specific eligibility fails closed for missing or invalid stage identity while existing non-staged entries remain ineligible for these new predecessor requirements. This extends the existing ACP/TaskRegistry boundary without a new control plane, registry, task mode, or evidence store.
-- **Phase 0 independent verification**: `TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-VERIFY-RECONCILE-001`
-  (2026-09-28) independently verified the Phase 0 Coordinator Contract implementation
-  (commit `ec9c476`): confirmed `request_task`/`get_task` contract, server-derived
-  REVIEW/read_only/poc/ authority, sanitized observation across all eight lifecycle
-  states, evidence semantics, lifecycle/lineage semantics, continuation requirements,
-  strategic-alignment enforcement, and regression coverage (500+ tests across 18 test
-  files). Reconciliation commit `53110da` updated CONTROL_CENTER.md and TASK_LOG.md.
-  Phase 0 convergence is established; the phase transition to Phase 2 is Kyle's
-  decision.
-- **Phase 1 independent verification**: `TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001`
-  (2026-09-27) independently verified the Phase 1 Observation implementation (PR #225,
-  commit `8c77901`): confirmed exactly one `control_plane` tool with `request_task`
-  and `get_task`; server-derived `request_task` authority (REVIEW, read_only, poc/);
-  namespace-constrained `get_task` (deepseek-runtime-*); safe observation projection
-  covering all eight ACP lifecycle states (PENDING, SELECTED, PLANNED, EXECUTING,
-  VERIFIED, COMPLETE, FAILED, BLOCKED), lineage, agent execution reports vs
-  independent verification, evidence categories, verification requirements, and
-  failure/blocked information; ACP/TaskRegistry/orchestrator authority preservation; no
-  second control plane or expanded model authority. Phase 2+ capabilities remain
-  GAP / PROPOSED / TARGET.
-- **Production enforcement**: DeepSeek `request_task` evaluates the projection on the
-  server before it constructs an ACP command or calls `/poc/coordinator`; an alignment
-  failure is `STRATEGIC_ALIGNMENT_BLOCKED` and cannot reach TaskRegistry or dispatch.
-  The projection's SHA-256 must match this file.
-- **Transition rule**: Technical implementation and independent verification establish
-  Phase 0, Phase 1, and Phase 2 completion evidence. Phase 2 is COMPLETE / INDEPENDENTLY
-  VERIFIED / CONVERGED. Phase 3 is the next future roadmap target, but transition into
-  Phase 3 requires Kyle's explicit decision and authorization. No model-generated
-  exception or automatic phase transition is accepted.
+  commit `8c77901`). Phase 2 is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED
+  (`TASK-GEMINI-DEEPSEEK-PHASE-2-CONVERGENCE-FINAL-VERIFY-RECONCILE-001`,
+  commit `40c2099` / `62ccb6f`). Phase 3 is COMPLETE / INDEPENDENTLY VERIFIED /
+  CONVERGED (`TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-FINAL-VERIFY-RECONCILE-001`,
+  final reconciliation commit `8c9e005`). Architecture reconciliation subsequently
+  recorded Phase 3 as complete and Phase 4 as the next target (commit `b935f54`).
+- **Phase 3 convergence evidence**: Gemini independently verified the Phase 3
+  acceptance lifecycle `intent → workflow → dispatch → observe → evidence → next
+  action → verification → completion/escalation`, including durable coordination
+  context, authoritative lineage, bounded autonomous turns, server-derived workflow
+  sequencing, terminal completion/escalation, fail-closed terminal/failed/blocked/
+  stale/insufficient-verification/exhausted handling, Director authorization, and
+  preservation of the single control plane, ACP, TaskRegistry, dispatcher/orchestrator,
+  and convergence/transition authorities. The final verification record reports
+  `PHASE_3_CONVERGED: YES`.
+- **Phase 3 transition rule**: Phase 3 is technically complete and independently
+  verified. Phase 4 is the authoritative next roadmap target. Transition to Phase 4
+  requires Kyle's explicit decision and authorization through the existing
+  `poc/phase-transition-gate.js`; no model-generated exception or automatic phase
+  transition is accepted.
+- **Phase 4 design boundary**: Phase 4 must establish exact multi-task lineage
+  navigation semantics, read-only parent/child aggregation shapes, cross-task
+  diagnostic aggregation, policy-driven specialist chaining, recovery/escalation
+  routing, verification prerequisites, bounded cross-task continuation, authorization
+  behavior, and persistence/evidence requirements before implementation is authorized.
 - **Stop/escalation**: No task is selectable merely because it is technically correct,
   locally useful, or ACP-compliant. Missing, stale, contradictory, or unverifiable
   state; a completed requirement; unmet prerequisites; or no required next work is
   `BLOCKED` and escalated to Kyle. Recommendation, authorization, execution,
   independent verification, and strategic convergence are separate states.
 
-**Research reconciliation**: The systemic-failure research record's statement that
-Phase 0–3 was simply complete is historical/advisory and incorrect. Current
-`ARCHITECTURE.md` §16.6 establishes Phase 0, Phase 1, and Phase 2 as complete and
-independently verified, with Phase 2 technically converged. Phase 3 remains a future
-target awaiting Kyle's explicit transition decision. Increments 4.1–4.9 are
-implementation history that substantially advanced Phase 1 and Phase 2 foundations;
-they do not activate Phase 3. No automatic phase transition is accepted.
+**Research reconciliation**: Historical research records and increment histories remain
+preserved as evidence. The current authoritative architecture and final Phase 3
+independent verification establish Phase 3 as COMPLETE / INDEPENDENTLY VERIFIED /
+CONVERGED. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage
+Navigation is the next PROPOSED / TARGET roadmap phase and requires separate
+authorized design work before implementation. No automatic phase transition is
+accepted.
 
 ---
 
