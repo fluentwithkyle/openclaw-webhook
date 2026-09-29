@@ -20,6 +20,7 @@ const {
     deriveNextWorkflowStep,
     classifyTaskResultForContinuation,
     resolveCoordinationContext,
+    evaluateCoordinationTerminalOutcome,
     validateGetTaskArguments,
     projectTaskForDeepSeek,
     projectSpecialistRoutingSummary,
@@ -548,12 +549,38 @@ function rawRequest(port, headers, body) {
         createDeepSeekReviewTask(failedId);
         for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus(failedId, status).success, true);
         assert.equal(taskRegistry.createCoordinationContext(failedId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
-        assert.throws(() => resolveCoordinationContext(failedId), error => error.code === 'COORDINATION_ESCALATION_REQUIRED');
+        assert.deepEqual(resolveCoordinationContext(failedId).terminal_outcome, {
+            terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_ESCALATION_REQUIRED', reason: 'Workflow is failed'
+        });
         const parentId = 'deepseek-runtime-context-lineage';
         completeDeepSeekReviewTask(parentId);
         assert.equal(taskRegistry.createCoordinationContext(parentId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
         assert.equal(taskRegistry.createTask({ request_id: 'deepseek-runtime-context-active-child', source: 'DeepSeek Runtime', target: 'Gemini', task: 'Child', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle', parent_request_id: parentId }).success, true);
         assert.throws(() => resolveCoordinationContext(parentId), /active child task/);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('server recognizes only a fully verified authoritative reconciliation lineage as complete', async () => {
+        taskRegistry.resetRegistry();
+        const reviewId = 'deepseek-runtime-terminal-review';
+        const implementationId = 'deepseek-runtime-terminal-implementation';
+        const verificationId = 'deepseek-runtime-terminal-verification';
+        const reconciliationId = 'deepseek-runtime-terminal-reconciliation';
+        completeDeepSeekReviewTask(reviewId);
+        completeWorkflowTask(implementationId, 'implementation', 'BUILDER', reviewId);
+        completeWorkflowTask(verificationId, 'verification', 'VERIFY_RECONCILE', implementationId);
+        completeWorkflowTask(reconciliationId, 'reconciliation', 'VERIFY_RECONCILE', verificationId);
+        assert.equal(taskRegistry.createCoordinationContext(reviewId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        assert.equal(taskRegistry.setCoordinationContextCurrent(reviewId, reconciliationId).success, true);
+        const context = resolveCoordinationContext(reviewId);
+        assert.equal(context.terminal_outcome.status, 'COMPLETE');
+        const result = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'The model says complete.' }], env: env(), coordinationContextId: reviewId });
+        assert.equal(result.terminal_outcome.code, 'COORDINATION_WORKFLOW_COMPLETE');
+        assert.equal(result.iterations, 0, 'the model cannot declare or drive terminal completion');
+
+        taskRegistry.getTask(reconciliationId).evidence = [];
+        taskRegistry.persistCache();
+        assert.equal(evaluateCoordinationTerminalOutcome(taskRegistry.getTask(reviewId).coordination_context, taskRegistry.getTask(reconciliationId)).status, 'HUMAN_REVIEW');
         taskRegistry.resetRegistry();
     });
 
