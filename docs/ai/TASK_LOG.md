@@ -2873,3 +2873,13 @@ existing Director authorization.
 **Verification**: Focused DeepSeek runtime tests and the complete `npm test` suite passed; `git diff --check` passed.
 
 **Commit Reference**: `bcdc1b4e8063a528f71849537f51a6c14461e7aa`.
+
+## 2026-09-29 | TASK-CODEX-DEEPSEEK-PHASE-3-AUTONOMOUS-WORKFLOW-SEQUENCING-IMPLEMENT-001
+
+**Task**: Implement the next bounded Phase 3 increment: automated workflow-step sequencing over the existing persisted coordination context and autonomous coordination loop.
+
+**Outcome**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION. The runtime now re-evaluates authoritative TaskRegistry lifecycle, evidence, lineage, workflow metadata, and the persisted autonomous-turn context before each continuation and server-derives the only eligible step: REVIEW → implementation, implementation → verification, and verification → reconciliation. Reconciliation terminates automatic sequencing. A model request that is otherwise workflow-policy-valid but selects a different step is rejected before coordinator submission; model output remains untrusted intent. Existing ACP/Director authorization, TaskRegistry, dispatcher/orchestrator, evidence, one-control-plane, and two-turn-boundary mechanisms are reused unchanged.
+
+**Verification**: Focused DeepSeek runtime, TaskRegistry, and phase-transition-gate tests passed; the complete `npm test` suite passed. `git diff --check` passed.
+
+**Commit Reference**: Recorded in this implementation commit.
