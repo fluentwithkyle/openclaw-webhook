@@ -119,11 +119,13 @@ function createDirectorApproval(scope) {
   const issuedAt = new Date().toISOString();
   const expiry = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const approvalId = 'dir-approval-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
-  const record = { ...getDirectorScope(scope), issuer: 'Kyle (Director)', expiry, issued_at: issuedAt, consumed_at: null, status: 'PENDING', approval_id: approvalId, scope_hash: calculateDirectorScopeHash(scope) };
+  const record = { ...getDirectorScope(scope), transition_binding: scope.transition_binding || null, issuer: 'Kyle (Director)', expiry, issued_at: issuedAt, consumed_at: null, status: 'PENDING', approval_id: approvalId, scope_hash: calculateDirectorScopeHash(scope) };
   approvalCache.set(approvalId, record);
   persistCache();
   return { success: true, approval: record };
 }
+
+function consumeDirectorApproval(approvalId) { getCache(); const record = approvalCache.get(approvalId); if (!record) return { success:false, error:'Director approval does not exist' }; if (record.status !== 'PENDING') return { success:false, error:'Director approval is not pending' }; if (Date.parse(record.expiry) <= Date.now()) { record.status='EXPIRED'; approvalCache.set(approvalId, record); persistCache(); return { success:false, error:'Director approval has expired' }; } record.status='CONSUMED'; record.consumed_at=new Date().toISOString(); approvalCache.set(approvalId, record); persistCache(); return { success:true, approval:record }; }
 
 function revokePendingDirectorApprovals(requestId, reason) {
   getCache();
@@ -759,6 +761,7 @@ function rehydrateTask(command) {
 module.exports = {
   createTask,
   createDirectorApproval,
+  consumeDirectorApproval,
   createTaskWithDirectorAuthorization,
   consumeDirectorApprovalAndCreateTask,
   getDirectorApproval,
