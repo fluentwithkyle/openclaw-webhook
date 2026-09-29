@@ -23,9 +23,7 @@ the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
 **Phase 1 — Observation**: **COMPLETE / INDEPENDENTLY VERIFIED** (PR #225, commit `8c77901`, TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001). Extends `get_task` with safe coverage for all eight ACP lifecycle states, lineage, agent execution reports, evidence counts/categories, independent verification, verification requirements, and failure/blocked information. No authority fields or second control plane. Phase 2+ capabilities remain GAP / PROPOSED / TARGET.
 
-**Current roadmap phase**: **Phase 2 — Bounded Coordination** (IN PROGRESS / SUBSTANTIALLY BUILT). Phase 2 requires separate Kyle authorization for consequential work. Phase 3 — Autonomous Coordination Loop — remains a future target.
-
-**Phase 2 workflow-step policy verification**: Implementation commit cd12ff76e44528be93e1e5dab37b3a78748f9aea is present on main. Independent verification is **BLOCKED** because the canonical gemini-acp-report / gemini-acp-report.json artifact for the verification task is unavailable; the repository copy belongs to a different prior task. Static inspection supports the server-authoritative policy design, while runtime execution is unavailable in this coordinator environment. Phase 2 remains IN PROGRESS / SUBSTANTIALLY BUILT.
+**Current roadmap phase**: **Phase 2 — Bounded Coordination** — **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED** (`TASK-GEMINI-DEEPSEEK-PHASE-2-CONVERGENCE-FINAL-VERIFY-RECONCILE-001`, commit `40c2099` / `62ccb6f`). All explicit Phase 2 acceptance criteria (bounded lineage, workflow-step policy, Director authorization infrastructure, specialist routing policy, result-driven continuation, automatic result consumption) are satisfied. Further Phase 2 implementation is unnecessary. Phase 3 — Autonomous Coordination Loop — remains a future target; transition to Phase 3 requires Kyle's explicit decision.
 
 ---
 

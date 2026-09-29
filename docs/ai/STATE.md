@@ -12,19 +12,15 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
 §16.6 remains authoritative for intended architecture.
 
 - **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 2 —
-  Bounded Coordination**, **IN PROGRESS / SUBSTANTIALLY BUILT**.
+  Bounded Coordination**, **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**.
 - **Completed requirements**: Stage 1 network path; Phase 0 Coordinator Contract;
-  Phase 1 Observation.
-- **Unresolved required next work**: `phase-2-bounded-coordination`: implement
-  policy-controlled workflow operations that map to existing ACP modes, capabilities,
-  paths, targets, verification requirements, and authorization gates.
+  Phase 1 Observation; Phase 2 Bounded Coordination (bounded lineage, workflow-step policy, Director authorization infrastructure, specialist routing policy, result-driven continuation, automatic result consumption).
+- **Unresolved required next work**: `phase-3-autonomous-coordination-loop` (Pending Kyle Transition Decision).
 - **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 is COMPLETE /
   INDEPENDENTLY VERIFIED (implementation commit `ec9c476`; independent
   verification/reconciliation commit `53110da`). Phase 1 is COMPLETE / INDEPENDENTLY
   VERIFIED (implementation commit `8c77901`; independent verification/reconciliation
-  commit `8c77901`, TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001).
-  Phase 2 prerequisites: requires Phase 0 contract and Phase 1 observation as
-  established foundations, plus Kyle authorization for consequential work.
+  commit `8c77901`). Phase 2 is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED (`TASK-GEMINI-DEEPSEEK-PHASE-2-CONVERGENCE-FINAL-VERIFY-RECONCILE-001`, commit `40c2099` / `62ccb6f`). Phase 3 transition requires Kyle's explicit decision.
 - **Phase 2 workflow-step policy implementation & independent verification**: merged implementation commit `cd12ff76e44528be93e1e5dab37b3a78748f9aea` (PR #250, commit `62ccb6f`) is independently verified by `TASK-GEMINI-DEEPSEEK-PHASE-2-VERIFICATION-RECONCILIATION-WORKFLOW-POLICY-FINAL-VERIFY-RECONCILE-001` (2026-09-29). Confirmed: `VALID_WORKFLOW_STAGES` explicitly bounded and validated; `TaskRegistry` persists `workflow_stage` as authoritative state; `WORKFLOW_STEP_POLICY` extended with `verification` (requires `BUILDER` predecessor with `implementation` stage) and `reconciliation` (requires `VERIFY_RECONCILE` predecessor with `verification` stage); predecessor repository and base_branch matching; lineage validation; `COMPLETE` + `INDEPENDENT_VERIFICATION` evidence requirements; fail-closed handling of missing/malformed workflow stages; task text cannot satisfy stage requirements; zero second control plane or model-controlled authority override. All schema, task-registry, and verify-reconcile tests pass successfully. Phase 2 remains **IN PROGRESS / SUBSTANTIALLY BUILT** pending completion of all remaining Phase 2 criteria.
 - **Phase 2 verification/reconciliation workflow policy**: authoritative TaskRegistry entries now persist a validated server-derived workflow stage for runtime-created workflow commands. Verification requires a COMPLETE, independently verified implementation-stage predecessor; reconciliation requires the equivalent verification-stage predecessor. Stage-specific eligibility fails closed for missing or invalid stage identity while existing non-staged entries remain ineligible for these new predecessor requirements. This extends the existing ACP/TaskRegistry boundary without a new control plane, registry, task mode, or evidence store.
 - **Phase 0 independent verification**: `TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-VERIFY-RECONCILE-001`
