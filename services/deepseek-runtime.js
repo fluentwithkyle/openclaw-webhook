@@ -5,6 +5,7 @@ const { ACP_LIFECYCLE_STATES, LINEAGE_CONTROL_SEMANTICS } = require('../poc/sche
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
+const MAX_AUTONOMOUS_COORDINATION_TURNS = 2;
 const MAX_CHILD_TASK_OBSERVATIONS = 10;
 const CHILD_TASK_SUMMARY_STATUSES = ACP_LIFECYCLE_STATES;
 const MAX_REPORT_HIGHLIGHTS = 3;
@@ -48,7 +49,7 @@ function routeSpecialistIntent(objective, trustedContext = {}) {
     return { valid: false, outcome: 'HUMAN_REVIEW', reason: 'Specialist routing could not safely classify the intent' };
 }
 const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
-    phase: 'Phase 2 — Bounded Coordination',
+    phase: 'Phase 3 — Autonomous Coordination Loop (first bounded increment)',
     model_operations: Object.freeze(['request_task', 'get_task']),
     request_task: Object.freeze({
         model_fields: Object.freeze(['operation', 'objective', 'parent_request_id', 'workflow_step']),
@@ -82,6 +83,11 @@ const DEEPSEEK_COORDINATOR_POLICY = Object.freeze({
         stop_statuses: Object.freeze(['FAILED', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']),
         max_tool_iterations: MAX_TOOL_ITERATIONS,
         result_classification: 'server-derived from TaskRegistry lifecycle, lineage, and evidence only'
+    }),
+    coordination_context: Object.freeze({
+        authority: 'TaskRegistry-backed correlation metadata only; not task, evidence, or authorization authority',
+        max_autonomous_turns: MAX_AUTONOMOUS_COORDINATION_TURNS,
+        terminal_handling: 'COMPLETE with INDEPENDENT_VERIFICATION may continue; FAILED and BLOCKED escalate; CANCELLED, SUPERSEDED, invalid, stale, and insufficiently verified states stop'
     }),
     workflow_progression: Object.freeze({
         model_steps: Object.freeze(Object.keys(WORKFLOW_STEP_POLICY)),
@@ -331,6 +337,34 @@ function classifyTaskResultForContinuation(task) {
         return { classification: 'insufficiently_verified', eligible_for_next_decision: false, reason: `Continuation requires ${DEEPSEEK_COORDINATOR_POLICY.continuation.required_evidence} evidence` };
     }
     return { classification: 'eligible', eligible_for_next_decision: true, reason: null };
+}
+
+function resolveCoordinationContext(contextId) {
+    if (typeof contextId !== 'string' || contextId.trim() === '' || contextId.length > 100 || contextId !== contextId.trim()) {
+        throw new RuntimeError(400, 'INVALID_COORDINATION_CONTEXT', 'Coordination context is invalid');
+    }
+    const root = taskRegistry.getTask(contextId);
+    const context = root && root.coordination_context;
+    if (!context || context.context_id !== contextId || context.root_request_id !== contextId ||
+        typeof context.current_request_id !== 'string' || !Number.isInteger(context.autonomous_turns) ||
+        context.max_autonomous_turns !== MAX_AUTONOMOUS_COORDINATION_TURNS) {
+        throw new RuntimeError(400, 'INVALID_COORDINATION_CONTEXT', 'Coordination context is missing or invalid');
+    }
+    if (context.autonomous_turns >= context.max_autonomous_turns) {
+        throw new RuntimeError(409, 'COORDINATION_TURN_EXHAUSTED', 'Coordination context autonomous-turn limit exhausted');
+    }
+    const current = taskRegistry.getTask(context.current_request_id);
+    const continuation = classifyTaskResultForContinuation(current);
+    if (!continuation.eligible_for_next_decision) {
+        const isEscalation = current && ['FAILED', 'BLOCKED'].includes(current.status);
+        throw new RuntimeError(isEscalation ? 409 : 400, isEscalation ? 'COORDINATION_ESCALATION_REQUIRED' : 'COORDINATION_STATE_REJECTED', continuation.reason,
+            isEscalation ? { escalation: 'HUMAN_REVIEW' } : undefined);
+    }
+    const lineage = taskRegistry.validateLineageForCreate(current.request_id, `coordination-probe-${contextId}`);
+    if (!lineage.valid) throw new RuntimeError(400, 'COORDINATION_STATE_REJECTED', lineage.error);
+    const advanced = taskRegistry.advanceCoordinationContext(contextId, current.request_id);
+    if (!advanced.success) throw new RuntimeError(409, 'COORDINATION_TURN_EXHAUSTED', advanced.error);
+    return advanced.context;
 }
 
 function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults) {
@@ -746,11 +780,15 @@ function normalizeProviderError(error, operation) {
     return new RuntimeError(502, `${operation}_FAILED`, `${operation} request failed`);
 }
 
-async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
+async function runDeepSeekConversation({ messages, env, httpClient = axios, coordinationContextId }) {
     const conversation = normalizeMessages(messages);
     const config = getRuntimeConfig(env);
     const submittedTaskIds = new Set();
     const observedTaskResults = new Map();
+    const coordinationContext = coordinationContextId === undefined ? null : resolveCoordinationContext(coordinationContextId);
+    if (coordinationContext) {
+        observedTaskResults.set(coordinationContext.current_request_id, classifyTaskResultForContinuation(taskRegistry.getTask(coordinationContext.current_request_id)));
+    }
 
     for (let iteration = 0; iteration <= MAX_TOOL_ITERATIONS; iteration++) {
         let providerResponse;
@@ -790,6 +828,9 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
 
         if (args.operation === 'request_task') {
             const command = buildControlPlaneCommand(args);
+            if (coordinationContext && command.parent_request_id !== coordinationContext.current_request_id) {
+                throw new RuntimeError(400, 'CONTINUATION_POLICY_REJECTED', 'Coordination context continuation must use its current TaskRegistry request identifier');
+            }
             if (command.parent_request_id) {
                 const continuationCheck = command.workflow_step
                     ? evaluateWorkflowStepPolicy(command.parent_request_id, command.workflow_step, command.request_id, observedTaskResults)
@@ -811,9 +852,18 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios }) {
                 throw normalizeProviderError(error, 'COORDINATOR');
             }
             submittedTaskIds.add(command.request_id);
+            let createdContext = null;
+            if (!coordinationContext) {
+                const contextResult = taskRegistry.createCoordinationContext(command.request_id, MAX_AUTONOMOUS_COORDINATION_TURNS);
+                if (contextResult.success) createdContext = contextResult.context;
+            } else {
+                const contextResult = taskRegistry.setCoordinationContextCurrent(coordinationContext.context_id, command.request_id);
+                if (!contextResult.success) throw new RuntimeError(400, 'INVALID_COORDINATION_CONTEXT', contextResult.error);
+            }
             toolResultContent = JSON.stringify({
                 status: 'completed',
                 coordinator: coordinatorResponse.data,
+                coordination_context: createdContext ? { context_id: createdContext.context_id, max_autonomous_turns: createdContext.max_autonomous_turns } : undefined,
                 observation: observeTaskForDeepSeek(command.request_id, submittedTaskIds, observedTaskResults)
             });
         } else if (args.operation === 'get_task') {
@@ -866,7 +916,8 @@ function createDeepSeekRuntimeHandler(options = {}) {
             const result = await runDeepSeekConversation({
                 messages: req.body && req.body.messages,
                 env: options.env || process.env,
-                httpClient: options.httpClient || axios
+                httpClient: options.httpClient || axios,
+                coordinationContextId: req.body && req.body.coordination_context_id
             });
             if (req.body && req.body.stream === true) {
                 return sendStreamingCompletion(res, result.message, req.body.model);
@@ -893,6 +944,7 @@ module.exports = {
     CONTROL_PLANE_TOOL,
     DEEPSEEK_COORDINATOR_POLICY,
     MAX_TOOL_ITERATIONS,
+    MAX_AUTONOMOUS_COORDINATION_TURNS,
     MAX_CHILD_TASK_OBSERVATIONS,
     MAX_REPORT_HIGHLIGHTS,
     MAX_REPORT_HIGHLIGHT_LENGTH,
@@ -907,6 +959,7 @@ module.exports = {
     evaluateContinuationPolicy,
     evaluateWorkflowStepPolicy,
     classifyTaskResultForContinuation,
+    resolveCoordinationContext,
     observeTaskForDeepSeek,
     projectTaskForDeepSeek,
     projectSpecialistRoutingSummary,
