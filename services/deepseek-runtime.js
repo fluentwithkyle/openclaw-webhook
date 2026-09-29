@@ -780,12 +780,13 @@ function normalizeProviderError(error, operation) {
     return new RuntimeError(502, `${operation}_FAILED`, `${operation} request failed`);
 }
 
-async function runDeepSeekConversation({ messages, env, httpClient = axios, coordinationContextId }) {
+async function runDeepSeekTurn({ messages, env, httpClient = axios, coordinationContextId }) {
     const conversation = normalizeMessages(messages);
     const config = getRuntimeConfig(env);
     const submittedTaskIds = new Set();
     const observedTaskResults = new Map();
     const coordinationContext = coordinationContextId === undefined ? null : resolveCoordinationContext(coordinationContextId);
+    let createdCoordinationContext = null;
     if (coordinationContext) {
         observedTaskResults.set(coordinationContext.current_request_id, classifyTaskResultForContinuation(taskRegistry.getTask(coordinationContext.current_request_id)));
     }
@@ -816,7 +817,7 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios, coor
             if (typeof message.content !== 'string') {
                 throw new RuntimeError(502, 'MALFORMED_MODEL_RESPONSE', 'OpenRouter returned a response without assistant content');
             }
-            return { message, iterations: iteration };
+            return { message, iterations: iteration, coordination_context: createdCoordinationContext || coordinationContext || null };
         }
         if (!Array.isArray(toolCalls) || toolCalls.length !== 1 || iteration === MAX_TOOL_ITERATIONS) {
             throw new RuntimeError(400, 'TOOL_LOOP_BLOCKED', 'The model requested an unsupported number of tool calls');
@@ -852,10 +853,9 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios, coor
                 throw normalizeProviderError(error, 'COORDINATOR');
             }
             submittedTaskIds.add(command.request_id);
-            let createdContext = null;
             if (!coordinationContext) {
                 const contextResult = taskRegistry.createCoordinationContext(command.request_id, MAX_AUTONOMOUS_COORDINATION_TURNS);
-                if (contextResult.success) createdContext = contextResult.context;
+                if (contextResult.success) createdCoordinationContext = contextResult.context;
             } else {
                 const contextResult = taskRegistry.setCoordinationContextCurrent(coordinationContext.context_id, command.request_id);
                 if (!contextResult.success) throw new RuntimeError(400, 'INVALID_COORDINATION_CONTEXT', contextResult.error);
@@ -863,7 +863,7 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios, coor
             toolResultContent = JSON.stringify({
                 status: 'completed',
                 coordinator: coordinatorResponse.data,
-                coordination_context: createdContext ? { context_id: createdContext.context_id, max_autonomous_turns: createdContext.max_autonomous_turns } : undefined,
+                coordination_context: createdCoordinationContext ? { context_id: createdCoordinationContext.context_id, max_autonomous_turns: createdCoordinationContext.max_autonomous_turns } : undefined,
                 observation: observeTaskForDeepSeek(command.request_id, submittedTaskIds, observedTaskResults)
             });
         } else if (args.operation === 'get_task') {
@@ -882,6 +882,42 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios, coor
     }
 
     throw new RuntimeError(400, 'TOOL_LOOP_BLOCKED', 'The model exceeded the tool-call limit');
+}
+
+function buildAutonomousContinuationMessage(context) {
+    const observation = observeTaskForDeepSeek(context.current_request_id, new Set(), new Map());
+    return {
+        role: 'system',
+        content: `Server-derived coordination observation for bounded autonomous continuation: ${JSON.stringify(observation)}. Continue only through control_plane when the observation and server policy permit; otherwise report completion or escalation.`
+    };
+}
+
+function canStartAutonomousContinuation(context) {
+    if (!context || context.autonomous_turns >= context.max_autonomous_turns) return false;
+    return classifyTaskResultForContinuation(taskRegistry.getTask(context.current_request_id)).eligible_for_next_decision;
+}
+
+async function runDeepSeekConversation({ messages, env, httpClient = axios, coordinationContextId, autonomousCoordination = false }) {
+    let result = await runDeepSeekTurn({ messages, env, httpClient, coordinationContextId });
+    if (!autonomousCoordination) return result;
+
+    let context = result.coordination_context;
+    while (canStartAutonomousContinuation(context)) {
+        const nextContext = resolveCoordinationContext(context.context_id);
+        const continuationMessages = [
+            ...normalizeMessages(messages),
+            { role: 'assistant', content: result.message.content || '' },
+            buildAutonomousContinuationMessage(nextContext)
+        ];
+        result = await runDeepSeekTurn({
+            messages: continuationMessages,
+            env,
+            httpClient,
+            coordinationContextId: nextContext.context_id
+        });
+        context = taskRegistry.getTask(nextContext.context_id).coordination_context;
+    }
+    return { ...result, coordination_context: context || result.coordination_context };
 }
 
 function sendStreamingCompletion(res, message, model) {
@@ -917,7 +953,8 @@ function createDeepSeekRuntimeHandler(options = {}) {
                 messages: req.body && req.body.messages,
                 env: options.env || process.env,
                 httpClient: options.httpClient || axios,
-                coordinationContextId: req.body && req.body.coordination_context_id
+                coordinationContextId: req.body && req.body.coordination_context_id,
+                autonomousCoordination: req.body && req.body.autonomous_coordination === true
             });
             if (req.body && req.body.stream === true) {
                 return sendStreamingCompletion(res, result.message, req.body.model);

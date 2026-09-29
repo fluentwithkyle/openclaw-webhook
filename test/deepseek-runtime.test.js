@@ -430,6 +430,63 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
     });
 
+    await test('authorized conversations automatically execute bounded state-driven coordination turns', async () => {
+        taskRegistry.resetRegistry();
+        const submitted = [];
+        let modelCalls = 0;
+        const client = { post: async (url, body) => {
+            if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                submitted.push(body);
+                completeWorkflowTask(body.request_id, body.workflow_stage || null, body.task_mode, body.parent_request_id);
+                return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
+            }
+            modelCalls++;
+            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'root', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
+            if (modelCalls === 2) return providerResponse({ role: 'assistant', content: 'Initial review completed.' });
+            if (modelCalls === 3) {
+                const observation = body.messages.find(message => message.role === 'system' && message.content.includes('Server-derived coordination observation'));
+                assert(observation, 'the next autonomous turn must receive a server-derived observation');
+                return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: submitted[0].request_id, workflow_step: 'review' }) } }] });
+            }
+            return providerResponse({ role: 'assistant', content: 'Bounded coordination completed.' });
+        }};
+
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Coordinate the approved review.' }], env: env(), httpClient: client,
+            autonomousCoordination: true
+        });
+        assert.equal(result.message.content, 'Bounded coordination completed.');
+        assert.equal(submitted.length, 2);
+        assert.equal(submitted[1].parent_request_id, submitted[0].request_id);
+        assert.equal(taskRegistry.getTask(submitted[0].request_id).coordination_context.current_request_id, submitted[1].request_id);
+        assert.equal(taskRegistry.getTask(submitted[0].request_id).coordination_context.autonomous_turns, MAX_AUTONOMOUS_COORDINATION_TURNS);
+        assert.equal(MAX_TOOL_ITERATIONS, 3);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('automatic coordination stops before a terminal or insufficiently verified predecessor can continue', async () => {
+        taskRegistry.resetRegistry();
+        let modelCalls = 0;
+        const client = { post: async (url, body) => {
+            if (url === env().DEEPSEEK_COORDINATOR_URL) {
+                assert.equal(taskRegistry.createTask(body).success, true);
+                return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
+            }
+            modelCalls++;
+            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'root', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
+            return providerResponse({ role: 'assistant', content: 'Awaiting independently verified evidence.' });
+        }};
+        const result = await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'Coordinate the approved review.' }], env: env(), httpClient: client,
+            autonomousCoordination: true
+        });
+        assert.equal(result.message.content, 'Awaiting independently verified evidence.');
+        assert.equal(modelCalls, 2, 'no autonomous model turn is allowed without required evidence');
+        const [root] = [...taskRegistry.getAllTasks().values()];
+        assert.equal(root.coordination_context.autonomous_turns, 0);
+        taskRegistry.resetRegistry();
+    });
+
     await test('coordination contexts fail closed for missing, stale, terminal, and mismatched lineage state', async () => {
         taskRegistry.resetRegistry();
         assert.throws(() => resolveCoordinationContext('deepseek-runtime-no-context'), /missing or invalid/);
