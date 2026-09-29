@@ -727,35 +727,9 @@ Do not create that policy file during this task unless it already exists.
 
 12.4 Qwen — Router
 
-PROPOSED / TARGET
+DEPRECATED / HISTORICAL (Superseded by DeepSeek Coordinator)
 
-Qwen is the lightweight Router / task dispatcher.
-
-Qwen's purpose is to classify incoming development requests and determine the appropriate specialist lane.
-
-Qwen may route requests toward:
-
-* Gemini;
-* Security AI;
-* Utility AI.
-
-For execution work, Qwen uses the existing ACP command structure.
-
-Qwen is NOT:
-
-* the primary implementer;
-* the architecture authority;
-* the security authority;
-* a replacement for Gemini;
-* a replacement for Kilo.
-
-Qwen must not bypass ACP or issue unrestricted shell/Git instructions.
-
-The Qwen model-size decision remains:
-
-UNDER VALIDATION
-
-Do not claim that a larger Qwen model has been implemented unless verified.
+Legacy Qwen router references are superseded by the direct ChatBox → DeepSeek Coordinator architecture. They are retained here for historical context only and must not be treated as active architectural components.
 
 ⸻
 
@@ -1592,7 +1566,8 @@ section.
 | **Phase 0 — Coordinator Contract** | **COMPLETE / INDEPENDENTLY VERIFIED** | Core contract established via `request_task` and `get_task` (`ec9c476`); independently verified by TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-VERIFY-RECONCILE-001 (commit `53110da`). Server-derived REVIEW/read_only/poc/ authority, sanitized observation across all eight lifecycle states, evidence semantics, lifecycle/lineage semantics, continuation requirements, and strategic-alignment enforcement confirmed. Phase 0 convergence established; phase transition to Phase 2 is Kyle's decision. |
 | **Phase 1 — Observation** | **COMPLETE / INDEPENDENTLY VERIFIED** | Completed and independently verified by TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001 (PR #225, commit `8c77901`). Covers all eight lifecycle states, lineage, evidence, and diagnostics via the existing `get_task` projection. Phase 2+ capabilities remain GAP / PROPOSED / TARGET. |
 | **Phase 2 — Bounded Coordination** | **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED** | Independently verified under `TASK-GEMINI-DEEPSEEK-PHASE-2-CONVERGENCE-FINAL-VERIFY-RECONCILE-001`. All explicit Phase 2 acceptance criteria are satisfied: bounded lineage, workflow-step policy, Director authorization infrastructure, specialist routing policy, result-driven continuation, and automatic result consumption. Further Phase 2 implementation is unnecessary. |
-| **Phase 3 — Autonomous Coordination Loop** | **NOT YET COMPLETE / FUTURE TARGET** | Full autonomous coordination loop (beyond bounded tool iterations and policy gates) remains a future target. |
+| **Phase 3 — Autonomous Coordination Loop** | **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED** | Bounded autonomous coordination loop, server-derived workflow-step sequencing (review → implementation → verification → reconciliation), Director authorization infrastructure, and specialist routing policy. |
+| **Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation** | **PROPOSED / TARGET** | Scaled conversational orchestration across multi-step, multi-specialist task graphs while preserving ACP authority, TaskRegistry authority, server-derived policy, independent verification, bounded execution, Director authorization, and Kyle’s final authority. |
 
 ### Increment 4.1–4.9 Implementation History & Roadmap Mapping
 
@@ -2649,20 +2624,23 @@ The intended end state is a reliable, incremental automation system in which:
 
                      KYLE
                        ↓
-                     ChatGPT
+                    ChatBox
                        ↓
-                     Qwen Router
+              DeepSeek Coordinator
                        ↓
-                     ACP
+             bounded control_plane
+                       ↓
+                 server policy
+                       ↓
+                      ACP
                        ↓
          ┌─────────────┼─────────────┐
          ↓             ↓             ↓
-       Kilo          Gemini        Utility AI
-       GitHub        Research      Low-cost
-       / Code        / Review      operations
+    Gemini Builder  Gemini Reviewer Security AI / Utility
+    / Implementation / Advisory     / Specialist
          └─────────────┼─────────────┘
                        ↓
-              Verification / Persistence
+            TaskRegistry / Dispatch
                        ↓
               Approved capabilities
                        ↓
@@ -2676,9 +2654,9 @@ The intended end state is a reliable, incremental automation system in which:
                        ↓
                      LINE
                        ↓
-                     ChatGPT
+                    ChatBox
                        ↓
-                      KYLE
+                     KYLE
 
 The key invariant remains:
 
@@ -2692,15 +2670,15 @@ GitHub remains the source of truth.
 
 LINE is a notification channel, not the primary AI development control channel.
 
-ChatGPT is the primary human-facing development control interface.
+ChatBox serves as the primary conversational control and coordination interface.
 
 ACP becomes the controlled interface between AI orchestration and production capabilities.
 
 OpenClaw remains initially available as the orchestration/mediation layer but is deliberately kept replaceable.
 
-Qwen remains under validation until its routing reliability is demonstrated.
+Legacy Qwen router references are superseded by the DeepSeek Coordinator architecture.
 
-Security AI operates as an independent specialist lane.
+Security AI and Utility AI operate as independent specialist lanes.
 
 The system evolves incrementally without requiring a wholesale rewrite of the working Fluent with Kyle application.
 
