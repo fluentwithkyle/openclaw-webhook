@@ -114,6 +114,7 @@ const AGENT_EVIDENCE_TYPE = {
 
 const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE', 'BUILDER', 'RESEARCH_DOCUMENT'];
 const DEFAULT_TASK_MODE = 'REVIEW';
+const VALID_WORKFLOW_STAGES = Object.freeze(['review', 'implementation', 'verification', 'reconciliation']);
 
 const VALID_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push', 'run_tests'];
 
@@ -296,7 +297,17 @@ function isConsequentialCommand(command) {
     (Array.isArray(scope.permitted_paths) && scope.permitted_paths.some(p => !p.startsWith('poc/')));
 }
 
+function validateWorkflowStage(workflowStage) {
+  if (workflowStage === undefined || workflowStage === null) return { valid: true };
+  if (typeof workflowStage !== 'string' || !VALID_WORKFLOW_STAGES.includes(workflowStage)) {
+    return { valid: false, error: `Invalid workflow_stage: ${workflowStage}. Must be one of: ${VALID_WORKFLOW_STAGES.join(', ')}` };
+  }
+  return { valid: true };
+}
+
 function validateAuthorization(command) {
+  const workflowStageValidation = validateWorkflowStage(command.workflow_stage);
+  if (!workflowStageValidation.valid) return workflowStageValidation;
   const rawMode = command.task_mode || DEFAULT_TASK_MODE;
 
   const modeValidation = validateTaskMode(rawMode);
@@ -389,7 +400,7 @@ function validateACPCommand(command) {
     return { valid: false, error: 'authorization.capabilities must be an array' };
   }
 
-  return { valid: true };
+  return validateWorkflowStage(command.workflow_stage);
 }
 
 function validateExecutionReport(report) {
@@ -472,6 +483,11 @@ function validateTaskRegistryEntry(entry) {
     return { valid: false, error: `Invalid current_agent: ${entry.current_agent}` };
   }
 
+  if (Object.prototype.hasOwnProperty.call(entry, 'workflow_stage') && entry.workflow_stage !== null) {
+    const workflowStageValidation = validateWorkflowStage(entry.workflow_stage);
+    if (!workflowStageValidation.valid) return workflowStageValidation;
+  }
+
   if (!VALID_AGENTS.includes(entry.next_agent) && entry.next_agent !== null) {
     return { valid: false, error: `Invalid next_agent: ${entry.next_agent}` };
   }
@@ -504,6 +520,7 @@ function createInitialTaskRegistryEntry(requestId, command) {
      base_branch: command.base_branch,
      task: command.task,
      task_mode: taskMode,
+     workflow_stage: command.workflow_stage || null,
      status: 'PENDING',
      created_at: now,
      updated_at: now,
@@ -844,6 +861,7 @@ module.exports = {
    VALID_TASK_MODES,
    EXECUTION_TASK_MODES,
    DEFAULT_TASK_MODE,
+   VALID_WORKFLOW_STAGES,
   VALID_CAPABILITIES,
   REVIEW_CAPABILITIES,
   VERIFY_RECONCILE_CAPABILITIES,
@@ -857,6 +875,7 @@ module.exports = {
   getAuthorizedPathsForMode,
   getModeCapabilities,
   validateTaskMode,
+  validateWorkflowStage,
   validateCapabilitiesForMode,
   validatePermittedPathsForMode,
   validateAuthorization,

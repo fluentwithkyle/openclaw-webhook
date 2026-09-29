@@ -14,7 +14,9 @@ const {
   BUILDER_CAPABILITIES,
   RESEARCH_DOCUMENT_CAPABILITIES,
   getRequiredCapabilitiesForMode,
-  LIFECYCLE_EVIDENCE_SEMANTICS
+  LIFECYCLE_EVIDENCE_SEMANTICS,
+  VALID_WORKFLOW_STAGES,
+  validateWorkflowStage
 } = require('../poc/schemas/acp-schema');
 
 function runTest(name, fn) {
@@ -230,6 +232,19 @@ test('Invalid registry status fails', () => {
   entry.status = 'INVALID';
   const result = validateTaskRegistryEntry(entry);
   assertEqual(result.valid, false);
+});
+
+test('Workflow stage vocabulary is validated while legacy registry entries remain compatible', () => {
+  const stagedEntry = createInitialTaskRegistryEntry('req-stage', { ...validCommand, workflow_stage: 'implementation' });
+  assertEqual(stagedEntry.workflow_stage, 'implementation');
+  assertEqual(validateTaskRegistryEntry(stagedEntry).valid, true);
+  assertEqual(validateWorkflowStage('verification').valid, true);
+  assertEqual(VALID_WORKFLOW_STAGES.includes('reconciliation'), true);
+  assertEqual(validateWorkflowStage('model-claimed-stage').valid, false);
+  stagedEntry.workflow_stage = 'model-claimed-stage';
+  assertEqual(validateTaskRegistryEntry(stagedEntry).valid, false);
+  delete stagedEntry.workflow_stage;
+  assertEqual(validateTaskRegistryEntry(stagedEntry).valid, true);
 });
 
 test('State transitions - valid', () => {

@@ -92,6 +92,22 @@ test('createTask - Gemini Builder target sets current_agent to Gemini Builder', 
   cleanup();
 });
 
+test('createTask - persists validated workflow stage without inferring it from task text', () => {
+  cleanup();
+  const staged = taskRegistry.createTask({ ...validCommand, request_id: 'workflow-stage-1', task: 'This text claims reconciliation', workflow_stage: 'verification' });
+  assertEqual(staged.success, true);
+  assertEqual(staged.entry.workflow_stage, 'verification');
+  const untrustedText = taskRegistry.createTask({ ...validCommand, request_id: 'workflow-stage-2', task: 'This text claims verification' });
+  assertEqual(untrustedText.success, true);
+  assertEqual(untrustedText.entry.workflow_stage, null);
+  const malformed = taskRegistry.createTask({ ...validCommand, request_id: 'workflow-stage-3', workflow_stage: 'untrusted-stage' });
+  assertEqual(malformed.success, false);
+  assert(malformed.error.includes('Invalid workflow_stage'));
+  taskRegistry.loadFromFile();
+  assertEqual(taskRegistry.getTask('workflow-stage-1').workflow_stage, 'verification');
+  cleanup();
+});
+
 test('createTask - preserves valid lineage and rejects nonexistent or cancelled parents', () => {
   cleanup();
   const parent = { ...validCommand, request_id: 'deepseek-runtime-parent', target: 'Gemini Builder' };

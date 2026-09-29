@@ -4,7 +4,7 @@
   "roadmap_id": "deepseek-coordinator-evolution-16.6",
   "current_phase": "phase-2-bounded-coordination",
   "phase_status": "IN_PROGRESS_SUBSTANTIALLY_BUILT",
-  "current_strategic_objective": "Implement policy-controlled workflow operations for Phase 2 — Bounded Coordination, mapping to existing ACP modes, capabilities, paths, targets, verification requirements, and authorization gates. Requires separate Kyle authorization for consequential work.",
+  "current_strategic_objective": "Implement policy-controlled workflow operations for Phase 2 \u2014 Bounded Coordination, mapping to existing ACP modes, capabilities, paths, targets, verification requirements, and authorization gates. Requires separate Kyle authorization for consequential work.",
   "phase_acceptance_criteria": [
     "Bounded coordination operations map to existing ACP modes (REVIEW/read_only/poc/) and only elevate to BUILDER/FAILOVER_EXECUTE/write/committed/push with a valid Director approval proof.",
     "Server-side specialist routing policy classifies intent to specialist lanes without model authority.",
@@ -71,9 +71,9 @@
     "Phase 0 and Phase 1 are INDEPENDENTLY VERIFIED (implementation commits ec9c476 and 8c77901; verification commits 53110da and 8c77901).",
     "Kyle authorization of any consequential Phase 2 work or implementation transition."
   ],
-  "reconciliation_note": "Phase 0 Coordinator Contract and Phase 1 Observation remain COMPLETE / INDEPENDENTLY VERIFIED. Phase 2 — Bounded Coordination remains IN PROGRESS / SUBSTANTIALLY BUILT. Merged workflow-step policy implementation commit cd12ff76e44528be93e1e5dab37b3a78748f9aea is present on main, but independent verification is BLOCKED because the required canonical gemini-acp-report artifact for this verification task is unavailable and runtime execution is unavailable in this coordinator environment. ARCHITECTURE.md §16.6 remains authoritative.",
+  "reconciliation_note": "Phase 0 Coordinator Contract and Phase 1 Observation remain COMPLETE / INDEPENDENTLY VERIFIED. Phase 2 \u2014 Bounded Coordination remains IN PROGRESS / SUBSTANTIALLY BUILT. The workflow policy now persists authoritative workflow stages in TaskRegistry and fail-closes verification/reconciliation transitions on predecessor stage, lifecycle, evidence, lineage, repository, and branch checks. Independent verification remains required. ARCHITECTURE.md \u00a716.6 remains authoritative.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "2587d547f5d9c8b99295578fad8214b88a58fddd142246030d3c356c0047065a",
+  "state_md_sha256": "68f36929b858914ead64798c4fc8296ef7650cc71dcf8847d0a3867725e0a407",
   "verification_status": {
     "phase_2_workflow_step_policy_implementation_commit": "cd12ff76e44528be93e1e5dab37b3a78748f9aea",
     "status": "BLOCKED",

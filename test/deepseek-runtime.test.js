@@ -70,6 +70,20 @@ function completeDeepSeekReviewTask(requestId) {
     assert.equal(taskRegistry.updateTaskStatus(requestId, 'COMPLETE').success, true);
 }
 
+function completeWorkflowTask(requestId, workflowStage, taskMode, parentRequestId, repository = 'fluentwithkyle/openclaw-webhook', baseBranch = 'main') {
+    assert.equal(taskRegistry.createTask({
+        request_id: requestId, source: 'DeepSeek Runtime', target: taskMode === 'BUILDER' ? 'Gemini Builder' : 'Gemini', task: 'Untrusted task text may claim any workflow stage',
+        repository, base_branch: baseBranch, task_mode: taskMode, workflow_stage: workflowStage,
+        constraints: { permitted_paths: taskMode === 'BUILDER' ? ['poc/'] : ['docs/ai/STATE.md'] },
+        authorization: { capabilities: taskMode === 'BUILDER' ? ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] : ['read_only', 'modify_files', 'commit', 'push'] },
+        verification: 'Review', reporting: 'structured-json', originator: 'Kyle', parent_request_id: parentRequestId
+    }).success, true);
+    for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus(requestId, status).success, true);
+    assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+    assert.equal(taskRegistry.updateTaskStatus(requestId, 'VERIFIED').success, true);
+    assert.equal(taskRegistry.updateTaskStatus(requestId, 'COMPLETE').success, true);
+}
+
 function coordinatorFailureClient(status, data) {
     let callCount = 0;
     return {
@@ -307,6 +321,53 @@ function rawRequest(port, headers, body) {
         assert.equal(WORKFLOW_STEP_POLICY.implementation.task_mode, 'BUILDER');
         assert.deepEqual(WORKFLOW_STEP_POLICY.implementation.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
         assert.throws(() => buildControlPlaneCommand({ operation: 'request_task', objective: 'Review this implementation plan', parent_request_id: parentRequestId, workflow_step: 'implementation', target: 'Kilo' }), /not permitted/);
+        taskRegistry.resetRegistry();
+    });
+
+    await test('verification and reconciliation workflow stages require authoritative staged predecessors', async () => {
+        taskRegistry.resetRegistry();
+        const implementationId = 'deepseek-runtime-authoritative-implementation';
+        completeWorkflowTask(implementationId, 'implementation', 'BUILDER');
+        const implementationObserved = new Map([[implementationId, classifyTaskResultForContinuation(taskRegistry.getTask(implementationId))]]);
+        assert.deepEqual(evaluateWorkflowStepPolicy(implementationId, 'verification', 'deepseek-runtime-verification', implementationObserved), { valid: true, authorization_required: true });
+
+        const verificationId = 'deepseek-runtime-authoritative-verification';
+        completeWorkflowTask(verificationId, 'verification', 'VERIFY_RECONCILE', implementationId);
+        const verificationObserved = new Map([[verificationId, classifyTaskResultForContinuation(taskRegistry.getTask(verificationId))]]);
+        assert.deepEqual(evaluateWorkflowStepPolicy(verificationId, 'reconciliation', 'deepseek-runtime-reconciliation', verificationObserved), { valid: true, authorization_required: true });
+        assert.equal(WORKFLOW_STEP_POLICY.verification.predecessor_workflow_stage, 'implementation');
+        assert.equal(WORKFLOW_STEP_POLICY.reconciliation.predecessor_workflow_stage, 'verification');
+        taskRegistry.resetRegistry();
+    });
+
+    await test('workflow stage identity fails closed for missing, untrusted, unverified, and out-of-scope predecessors', async () => {
+        taskRegistry.resetRegistry();
+        const missingStageId = 'deepseek-runtime-missing-stage';
+        completeWorkflowTask(missingStageId, null, 'BUILDER');
+        const missingObserved = new Map([[missingStageId, classifyTaskResultForContinuation(taskRegistry.getTask(missingStageId))]]);
+        assert.match(evaluateWorkflowStepPolicy(missingStageId, 'verification', 'deepseek-runtime-verification-child', missingObserved).error, /authoritative implementation predecessor workflow stage/);
+
+        const wrongStageId = 'deepseek-runtime-wrong-stage';
+        completeWorkflowTask(wrongStageId, 'verification', 'BUILDER');
+        const wrongObserved = new Map([[wrongStageId, classifyTaskResultForContinuation(taskRegistry.getTask(wrongStageId))]]);
+        assert.match(evaluateWorkflowStepPolicy(wrongStageId, 'verification', 'deepseek-runtime-verification-child-2', wrongObserved).error, /authoritative implementation predecessor workflow stage/);
+
+        const badEvidenceId = 'deepseek-runtime-bad-evidence';
+        assert.equal(taskRegistry.createTask({ request_id: badEvidenceId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Claims implementation in task text', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'BUILDER', workflow_stage: 'implementation', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle' }).success, true);
+        taskRegistry.getTask(badEvidenceId).status = 'COMPLETE';
+        taskRegistry.persistCache();
+        assert.match(evaluateWorkflowStepPolicy(badEvidenceId, 'verification', 'deepseek-runtime-verification-child-3', new Map([[badEvidenceId, { eligible_for_next_decision: true }]])).error, /INDEPENDENT_VERIFICATION/);
+
+        const wrongScopeId = 'deepseek-runtime-wrong-scope';
+        completeWorkflowTask(wrongScopeId, 'implementation', 'BUILDER', undefined, 'other/repository');
+        const wrongScopeObserved = new Map([[wrongScopeId, classifyTaskResultForContinuation(taskRegistry.getTask(wrongScopeId))]]);
+        assert.match(evaluateWorkflowStepPolicy(wrongScopeId, 'verification', 'deepseek-runtime-verification-child-4', wrongScopeObserved).error, /repository scope/);
+
+        const wrongBranchId = 'deepseek-runtime-wrong-branch';
+        completeWorkflowTask(wrongBranchId, 'implementation', 'BUILDER', undefined, 'fluentwithkyle/openclaw-webhook', 'release');
+        const wrongBranchObserved = new Map([[wrongBranchId, classifyTaskResultForContinuation(taskRegistry.getTask(wrongBranchId))]]);
+        assert.match(evaluateWorkflowStepPolicy(wrongBranchId, 'verification', 'deepseek-runtime-verification-child-5', wrongBranchObserved).error, /repository scope/);
+        assert.throws(() => buildControlPlaneCommand({ operation: 'request_task', objective: 'x', parent_request_id: 'deepseek-runtime-stage-override-parent', workflow_step: 'verification', workflow_stage: 'reconciliation' }), /not permitted/);
         taskRegistry.resetRegistry();
     });
 

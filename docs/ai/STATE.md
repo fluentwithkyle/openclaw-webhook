@@ -1,7 +1,7 @@
 ## Current AI Project State
 
-**Last Updated**: 2026-09-28
-**Updated By**: Kilo — TASK-KILO-DEEPSEEK-PHASE-0-AND-1-DURABLE-STATE-RECONCILIATION-001
+**Last Updated**: 2026-09-29
+**Updated By**: Codex — TASK-CODEX-DEEPSEEK-PHASE-2-VERIFICATION-RECONCILIATION-WORKFLOW-POLICY-IMPLEMENT-002
 
 ## Current Strategic State — Authoritative for Alignment
 
@@ -26,6 +26,7 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
   Phase 2 prerequisites: requires Phase 0 contract and Phase 1 observation as
   established foundations, plus Kyle authorization for consequential work.
 - **Phase 2 workflow-step policy implementation**: merged implementation commit cd12ff76e44528be93e1e5dab37b3a78748f9aea is present on main. Independent verification is **BLOCKED** because the canonical gemini-acp-report / gemini-acp-report.json artifact for this verification task is not present; the repository artifact currently belongs to a different prior task. Static source inspection confirms the implementation adds server-authoritative review and implementation workflow-step policy and retains the existing ACP boundary, but runtime test execution is unavailable in this coordinator environment. The Phase 2 roadmap therefore remains IN PROGRESS / SUBSTANTIALLY BUILT.
+- **Phase 2 verification/reconciliation workflow policy**: authoritative TaskRegistry entries now persist a validated server-derived workflow stage for runtime-created workflow commands. Verification requires a COMPLETE, independently verified implementation-stage predecessor; reconciliation requires the equivalent verification-stage predecessor. Stage-specific eligibility fails closed for missing or invalid stage identity while existing non-staged entries remain ineligible for these new predecessor requirements. This extends the existing ACP/TaskRegistry boundary without a new control plane, registry, task mode, or evidence store.
 - **Phase 0 independent verification**: `TASK-CODEX-BUILDER-DEEPSEEK-PHASE-0-COORDINATOR-CONTRACT-VERIFY-RECONCILE-001`
   (2026-09-28) independently verified the Phase 0 Coordinator Contract implementation
   (commit `ec9c476`): confirmed `request_task`/`get_task` contract, server-derived

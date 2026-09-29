@@ -13,7 +13,9 @@ const WORKFLOW_TERMINAL_STATUSES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED
 const WORKFLOW_TERMINAL_OUTCOMES = Object.freeze(['COMPLETE', 'FAILED', 'BLOCKED', 'CANCELLED', 'SUPERSEDED']);
 const WORKFLOW_STEP_POLICY = Object.freeze({
     review: Object.freeze({ target: 'Gemini', task_mode: 'REVIEW', capabilities: Object.freeze(['read_only']), permitted_paths: Object.freeze(['poc/']), predecessor_task_mode: 'REVIEW', authorization_required: false }),
-    implementation: Object.freeze({ target: 'Gemini Builder', task_mode: 'BUILDER', capabilities: Object.freeze(['read_only', 'modify_files', 'run_tests', 'commit', 'push']), permitted_paths: Object.freeze(['poc/']), predecessor_task_mode: 'REVIEW', authorization_required: true })
+    implementation: Object.freeze({ target: 'Gemini Builder', task_mode: 'BUILDER', capabilities: Object.freeze(['read_only', 'modify_files', 'run_tests', 'commit', 'push']), permitted_paths: Object.freeze(['poc/']), predecessor_task_mode: 'REVIEW', authorization_required: true }),
+    verification: Object.freeze({ target: 'Gemini', task_mode: 'VERIFY_RECONCILE', capabilities: Object.freeze(['read_only', 'modify_files', 'commit', 'push']), permitted_paths: Object.freeze(['docs/ai/TASK_LOG.md', 'docs/ai/STATE.md', 'docs/ai/CONTROL_CENTER.md']), predecessor_task_mode: 'BUILDER', predecessor_workflow_stage: 'implementation', authorization_required: true }),
+    reconciliation: Object.freeze({ target: 'Gemini', task_mode: 'VERIFY_RECONCILE', capabilities: Object.freeze(['read_only', 'modify_files', 'commit', 'push']), permitted_paths: Object.freeze(['docs/ai/TASK_LOG.md', 'docs/ai/STATE.md', 'docs/ai/CONTROL_CENTER.md']), predecessor_task_mode: 'VERIFY_RECONCILE', predecessor_workflow_stage: 'verification', authorization_required: true })
 });
 
 const SPECIALIST_ROUTING_POLICY = Object.freeze({
@@ -246,7 +248,10 @@ function buildControlPlaneCommand(args, trustedContext = {}) {
         command.activation_surface = 'workflow_dispatch';
     }
     if (hasParentRequestId) command.parent_request_id = args.parent_request_id;
-    if (hasWorkflowStep) command.workflow_step = args.workflow_step;
+    if (hasWorkflowStep) {
+        command.workflow_step = args.workflow_step;
+        command.workflow_stage = args.workflow_step;
+    }
     return command;
 }
 
@@ -299,6 +304,9 @@ function evaluateWorkflowStepPolicy(parentRequestId, workflowStep, newRequestId,
     }
     if (parent.task_mode !== policy.predecessor_task_mode) {
         return { valid: false, error: `Workflow step ${workflowStep} requires a ${policy.predecessor_task_mode} predecessor task` };
+    }
+    if (policy.predecessor_workflow_stage && parent.workflow_stage !== policy.predecessor_workflow_stage) {
+        return { valid: false, error: `Workflow step ${workflowStep} requires an authoritative ${policy.predecessor_workflow_stage} predecessor workflow stage` };
     }
     return { valid: true, authorization_required: policy.authorization_required };
 }
