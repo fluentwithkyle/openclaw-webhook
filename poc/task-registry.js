@@ -409,6 +409,7 @@ function supersedeTask(requestId, reason) {
     verification: entry.verification,
     reporting: 'json',
     task_mode: entry.task_mode,
+    workflow_stage: entry.workflow_stage,
     originator: entry.originator,
     parent_request_id: requestId
   };

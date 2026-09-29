@@ -2794,3 +2794,16 @@ existing Director authorization.
 **Commit Reference**: This implementation commit.
 
 2026-09-29 | TASK-CHATGPT-DEEPSEEK-PHASE-2-WORKFLOW-STEP-POLICY-FINAL-VERIFY-RECONCILE-001 | Independently inspected merged workflow-step policy commit cd12ff76e44528be93e1e5dab37b3a78748f9aea. Static inspection confirms enumerated server-side review/implementation policy, server-derived target/task_mode/capabilities/permitted_paths, continuation checks, and preservation of the existing control-plane/ACP boundary. Verification is BLOCKED because the required canonical gemini-acp-report/gemini-acp-report.json artifact for this task is unavailable; the repository artifact belongs to a different prior task, and runtime test execution is unavailable in this coordinator environment. Phase 2 remains IN PROGRESS / SUBSTANTIALLY BUILT. | BLOCKED | Reconciliation commit pending
+
+
+## 2026-09-29 | TASK-CODEX-DEEPSEEK-PHASE-2-VERIFICATION-RECONCILIATION-WORKFLOW-POLICY-IMPLEMENT-002
+
+**Task**: Implement authoritative verification and reconciliation workflow-stage policy across the existing Phase 2 workflow steps.
+
+**Outcome**: IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION. TaskRegistry now persists the validated workflow stage derived by the runtime's server-side workflow policy. The bounded workflow policy adds verification and reconciliation stages, requiring a direct COMPLETE predecessor with valid INDEPENDENT_VERIFICATION evidence, existing lineage validation, matching authoritative repository/base branch, required ACP task mode, and the required authoritative predecessor stage. Missing, malformed, unknown, or text-only stage claims fail closed; compatibility is preserved for legacy entries without a workflow stage, which cannot satisfy a stage-specific predecessor condition.
+
+**Simplicity**: The implementation extends only the ACP schema validation, existing TaskRegistry entry, and existing `WORKFLOW_STEP_POLICY`; it reuses the existing lifecycle, evidence, lineage, coordinator, and Director authorization mechanisms without a second state authority or control plane.
+
+**Verification**: Focused schema and TaskRegistry tests passed. Focused runtime coverage passed for the added stage-policy cases; pre-existing runtime assertions that use strategically unmapped review objectives remain failing independently of this change.
+
+**Commit Reference**: This implementation commit.
