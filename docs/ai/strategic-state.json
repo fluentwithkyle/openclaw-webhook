@@ -2,14 +2,12 @@
   "schema_version": 1,
   "authority": "This file is the machine-readable projection of STATE.md's authoritative Current Strategic State section. STATE.md controls any conflict; historical research and dashboards are advisory/derived.",
   "roadmap_id": "deepseek-coordinator-evolution-16.6",
-  "current_phase": "phase-2-bounded-coordination",
+  "current_phase": "phase-3-autonomous-coordination-loop",
   "phase_status": "CONVERGED",
-  "current_strategic_objective": "Phase 2 — Bounded Coordination is technically converged under ARCHITECTURE.md §16.6. Further Phase 2 implementation is unnecessary. Phase 3 transition requires Kyle's decision.",
+  "current_strategic_objective": "Phase 3 — Autonomous Coordination Loop is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation is the next PROPOSED / TARGET roadmap phase.",
   "phase_acceptance_criteria": [
-    "Bounded coordination operations map to existing ACP modes (REVIEW/read_only/poc/) and elevate with a valid Director approval proof.",
-    "Server-side specialist routing policy classifies intent to specialist lanes without model authority.",
-    "State-driven continuation is bounded with MAX_TOOL_ITERATIONS and requires COMPLETE plus INDEPENDENT_VERIFICATION.",
-    "Independent verification confirms Phase 2 implementation, security boundary, workflow-step policy, and convergence."
+    "phase-3-autonomous-coordination-implemented",
+    "Phase 3 is independently verified and technically converged."
   ],
   "completed_requirements": [
     {
@@ -33,28 +31,34 @@
       "status": "COMPLETE_INDEPENDENTLY_VERIFIED_CONVERGED",
       "verification_commit": "40c2099",
       "implementation_commit": "62ccb6f"
+    },
+    {
+      "id": "phase-3-autonomous-coordination-loop",
+      "status": "COMPLETE_INDEPENDENTLY_VERIFIED_CONVERGED",
+      "verification_commit": "8c9e005"
     }
   ],
   "unresolved_requirements": [
     {
-      "id": "phase-3-autonomous-coordination-loop",
+      "id": "phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation",
       "classification": "A",
       "prerequisites": [
-        "phase-2-bounded-coordination"
+        "phase-3-autonomous-coordination-loop"
       ],
-      "enables": "phase-3-autonomous-coordination-loop",
+      "enables": "phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation",
       "objective_terms": [
-        "coordinator"
+        "phase 4",
+        "cross-task"
       ],
       "acceptance_criteria": [
-        "phase-3-autonomous-coordination-implemented"
+        "Phase 4 design establishes multi-task lineage navigation semantics, read-only aggregation shapes, specialist chaining, recovery/escalation rules, verification requirements, bounded cross-task continuation, authorization behavior, and persistence/evidence requirements."
       ],
-      "expected_advancement": "Phase 3 autonomous coordination loop unlocks full autonomous coordination beyond bounded iterations and policy gates upon Kyle's authorization.",
-      "convergence_condition": "phase-3-autonomous-coordination-implemented"
+      "expected_advancement": "Phase 4 design unlocks separately authorized implementation of scaled conversational orchestration and cross-task lineage navigation.",
+      "convergence_condition": "phase-4-design-independently-verified"
     }
   ],
   "required_next_work": [
-    "phase-3-autonomous-coordination-loop"
+    "phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation"
   ],
   "prerequisites": [
     {
@@ -72,19 +76,23 @@
     {
       "id": "phase-2-bounded-coordination",
       "status": "COMPLETE_INDEPENDENTLY_VERIFIED_CONVERGED"
+    },
+    {
+      "id": "phase-3-autonomous-coordination-loop",
+      "status": "COMPLETE_INDEPENDENTLY_VERIFIED_CONVERGED"
     }
   ],
   "phase_transition_conditions": [
-    "Phase 2 is independently verified and technically converged.",
-    "Phase 3 transition requires explicit Kyle decision and authorization."
+    "Phase 3 is independently verified and technically converged.",
+    "Phase 4 transition requires explicit Kyle decision and authorization."
   ],
-  "reconciliation_note": "Phase 2 — Bounded Coordination is technically converged under ARCHITECTURE.md §16.6 and is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Further Phase 2 implementation is unnecessary. Phase 3 remains a future target and transition requires Kyle's explicit decision.",
+  "reconciliation_note": "Phase 3 — Autonomous Coordination Loop is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED, supported by final independent verification/reconciliation commit 8c9e005. Architecture reconciliation commit b935f54 records Phase 4 as the next PROPOSED / TARGET phase. Further Phase 3 implementation is unnecessary; Phase 4 requires separate authorized design work.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "d340049c0bea60dc57cfa46a2280692ff0ea7f61514ec13faae8841292216aa9",
+  "state_md_sha256": "d2c40905b417c23ccf38471273b4a7dc66446de758300d2fc8c3ae226515f1f5",
   "verification_status": {
-    "phase_2_convergence_verification_commit": "7d25b1f44993218ba526f69cfd59d41160928597",
+    "phase_3_convergence_verification_commit": "8c9e005",
     "status": "CONVERGED",
-    "reason": "Phase 2 Bounded Coordination is technically converged under ARCHITECTURE.md §16.6. Further Phase 2 implementation is unnecessary; phase transition to Phase 3 requires Kyle's decision.",
+    "reason": "Phase 3 Autonomous Coordination Loop is independently verified and technically converged; Phase 4 is the next roadmap target.",
     "static_inspection": "COMPLETED",
     "phase_transition": "PENDING_KYLE_DECISION"
   }
