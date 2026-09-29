@@ -88,7 +88,19 @@ function evaluateCoordinatorIntent(objective, options) {
 function evaluateConvergence(state, evidence) {
   const stateResult = validateStrategicState(state);
   if (stateResult.status !== 'VALID') return stateResult;
-  const requirement = state.unresolved_requirements.find((item) => item.id === evidence?.requirement_id);
+  if (!evidence || typeof evidence !== 'object') return blocked('DESIRED_OUTCOME_UNVERIFIED', 'Authoritative convergence evidence is required.');
+  if (evidence.mode === 'phase_transition') {
+    const requirement = state.unresolved_requirements.find((item) => item.id === evidence.requirement_id);
+    if (!requirement || !state.required_next_work.includes(requirement.id)) return blocked('UNRESOLVED_REQUIREMENT_NOT_ESTABLISHED', 'Transition requirement is not authoritative required next work.');
+    const unmet = (requirement.prerequisites || []).find((id) => !state.completed_requirements.some((item) => item.id === id));
+    if (unmet) return blocked('PREREQUISITE_UNPROVEN', `Prerequisite ${unmet} is not completed in authoritative state.`);
+    if (!Array.isArray(state.phase_acceptance_criteria) || !state.phase_acceptance_criteria.includes(evidence.acceptance_criteria_id)) return blocked('ACCEPTANCE_CRITERION_UNPROVEN', 'Acceptance criterion is not satisfied by authoritative current-phase evidence.');
+    if (!Array.isArray(state.phase_transition_conditions) || !state.phase_transition_conditions.includes(evidence.convergence_condition)) return blocked('INVALID_CONVERGENCE_CONDITION', 'Convergence condition is not authoritative.');
+    if (state.phase_status !== 'CONVERGED') return blocked('CURRENT_PHASE_NOT_CONVERGED', 'Current phase is not authoritatively converged.');
+    if (!evidence.independent_verification) return blocked('DESIRED_OUTCOME_UNVERIFIED', 'Independent verification evidence is required for phase transition.');
+    return { status: 'CONVERGED_ESCALATE_TRANSITION', escalation: 'Kyle — Director', authorization: 'NOT_GRANTED', requirement_id: requirement.id, requirement };
+  }
+  const requirement = state.unresolved_requirements.find((item) => item.id === evidence.requirement_id);
   if (!requirement || !evidence.independent_verification || evidence.acceptance_criteria_id !== requirement.acceptance_criteria?.[0] || evidence.convergence_condition !== requirement.convergence_condition) return blocked('DESIRED_OUTCOME_UNVERIFIED', 'Technical completion does not establish authoritative convergence.');
   return { status: 'CONVERGED_ESCALATE_TRANSITION', escalation: 'Kyle — Director', authorization: 'NOT_GRANTED' };
 }
