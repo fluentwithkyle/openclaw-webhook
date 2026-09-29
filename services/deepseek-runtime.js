@@ -371,10 +371,12 @@ function resolveCoordinationContext(contextId) {
         context.max_autonomous_turns !== MAX_AUTONOMOUS_COORDINATION_TURNS) {
         throw new RuntimeError(400, 'INVALID_COORDINATION_CONTEXT', 'Coordination context is missing or invalid');
     }
+    const current = taskRegistry.getTask(context.current_request_id);
+    const terminalOutcome = evaluateCoordinationTerminalOutcome(context, current);
+    if (terminalOutcome.terminal) return { ...context, terminal_outcome: terminalOutcome };
     if (context.autonomous_turns >= context.max_autonomous_turns) {
         throw new RuntimeError(409, 'COORDINATION_TURN_EXHAUSTED', 'Coordination context autonomous-turn limit exhausted');
     }
-    const current = taskRegistry.getTask(context.current_request_id);
     const nextStep = deriveNextWorkflowStep(current);
     if (!nextStep.valid) {
         const isEscalation = current && ['FAILED', 'BLOCKED'].includes(current.status);
@@ -385,6 +387,47 @@ function resolveCoordinationContext(contextId) {
     const lineage = taskRegistry.validateLineageForCreate(current.request_id, `coordination-probe-${contextId}`);
     if (!lineage.valid) throw new RuntimeError(400, 'COORDINATION_STATE_REJECTED', lineage.error);
     return { ...context, next_workflow_step: nextStep.workflow_step };
+}
+
+function evaluateCoordinationTerminalOutcome(context, current) {
+    if (!context || !current) return { terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_STATE_INVALID', reason: 'Coordination context current task is unavailable' };
+    if (current.status === 'FAILED' || current.status === 'BLOCKED') {
+        return { terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_ESCALATION_REQUIRED', reason: `Workflow is ${current.status.toLowerCase()}` };
+    }
+    if (taskRegistry.isCancelled(current.request_id) || taskRegistry.isSuperseded(current.request_id)) {
+        return { terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_LINEAGE_INVALID', reason: 'Workflow is cancelled or superseded' };
+    }
+    const nextStep = deriveNextWorkflowStep(current);
+    if (!nextStep.valid) {
+        const code = classifyTaskResultForContinuation(current).classification === 'insufficiently_verified'
+            ? 'COORDINATION_INSUFFICIENT_VERIFICATION' : 'COORDINATION_STATE_REJECTED';
+        return { terminal: true, status: 'HUMAN_REVIEW', code, reason: nextStep.reason };
+    }
+    if (!nextStep.terminal) return { terminal: false };
+    const stages = [
+        { stage: 'reconciliation', task_mode: 'VERIFY_RECONCILE' },
+        { stage: 'verification', task_mode: 'VERIFY_RECONCILE' },
+        { stage: 'implementation', task_mode: 'BUILDER' },
+        { stage: 'review', task_mode: 'REVIEW' }
+    ];
+    let task = current;
+    for (let index = 0; index < stages.length; index++) {
+        const expected = stages[index];
+        const stageMatches = expected.stage === 'review'
+            ? (!task.workflow_stage || task.workflow_stage === 'review')
+            : task.workflow_stage === expected.stage;
+        if (!stageMatches || task.task_mode !== expected.task_mode || task.repository !== DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.repository || task.base_branch !== DEEPSEEK_COORDINATOR_POLICY.server_derived_authority.base_branch || !classifyTaskResultForContinuation(task).eligible_for_next_decision) {
+            return { terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_COMPLETION_REJECTED', reason: 'Workflow completion requirements are not authoritatively established' };
+        }
+        if (index === stages.length - 1) {
+            if (task.request_id !== context.root_request_id) return { terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_LINEAGE_INVALID', reason: 'Workflow root does not match the coordination context' };
+        } else {
+            if (typeof task.parent_request_id !== 'string') return { terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_LINEAGE_INVALID', reason: 'Workflow lineage is incomplete' };
+            task = taskRegistry.getTask(task.parent_request_id);
+            if (!task) return { terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_LINEAGE_INVALID', reason: 'Workflow lineage is unavailable' };
+        }
+    }
+    return { terminal: true, status: 'COMPLETE', code: 'COORDINATION_WORKFLOW_COMPLETE', reason: 'Authoritative reconciliation is complete and independently verified' };
 }
 
 function observeTaskForDeepSeek(requestId, submittedTaskIds, observedTaskResults) {
@@ -917,11 +960,24 @@ function buildAutonomousContinuationMessage(context) {
 
 function canStartAutonomousContinuation(context) {
     if (!context || context.autonomous_turns >= context.max_autonomous_turns) return false;
+    const terminalOutcome = evaluateCoordinationTerminalOutcome(context, taskRegistry.getTask(context.current_request_id));
+    if (terminalOutcome.terminal) return false;
     const nextStep = deriveNextWorkflowStep(taskRegistry.getTask(context.current_request_id));
     return nextStep.valid && !nextStep.terminal;
 }
 
 async function runDeepSeekConversation({ messages, env, httpClient = axios, coordinationContextId, autonomousCoordination = false }) {
+    if (coordinationContextId !== undefined) {
+        const context = resolveCoordinationContext(coordinationContextId);
+        if (context.terminal_outcome) {
+            return {
+                message: { role: 'assistant', content: JSON.stringify({ coordination_terminal_outcome: context.terminal_outcome }) },
+                iterations: 0,
+                coordination_context: context,
+                terminal_outcome: context.terminal_outcome
+            };
+        }
+    }
     let result = await runDeepSeekTurn({ messages, env, httpClient, coordinationContextId });
     if (!autonomousCoordination) return result;
 
@@ -1022,6 +1078,7 @@ module.exports = {
     deriveNextWorkflowStep,
     classifyTaskResultForContinuation,
     resolveCoordinationContext,
+    evaluateCoordinationTerminalOutcome,
     observeTaskForDeepSeek,
     projectTaskForDeepSeek,
     projectSpecialistRoutingSummary,
