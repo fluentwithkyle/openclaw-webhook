@@ -424,3 +424,13 @@ Machine-to-machine payloads are not the default human presentation.
 The canonical validator is `poc/human-output-contract.js`. Future coordinator
 integrations emitting repository-defined human responses must validate the selected
 mode through that contract before presentation.
+
+
+## Human-Facing Identifier and Path Presentation
+
+Human-facing responses use readable presentation for repository identifiers and paths:
+
+- Commit IDs are shown as the final four characters only. This is the default human-facing form.
+- File names and paths are shown as plain readable text, not inline code formatting.
+- Full commit IDs remain available in the machine/evidence layer and are shown only when Kyle explicitly requests them or when full provenance is required for verification.
+- Human-facing status reports contain only identifiers that materially help the requested answer.
