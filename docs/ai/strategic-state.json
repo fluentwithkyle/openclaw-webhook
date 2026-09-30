@@ -86,7 +86,7 @@
     "Phase 3 is independently verified and technically converged.",
     "A matching durable coordinator transition record must bind Kyle’s conversational decision, convergence evidence, independent verification, and the first Phase 4 research/reconciliation task."
   ],
-  "reconciliation_note": "Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Kyle has received and authorized proceeding to Phase 4 conversationally, but the required durable coordinator transition record, TaskRegistry identity, and canonical transition evidence are not established on main. Phase 4 therefore remains the next PROPOSED / TARGET phase and is not mechanically activated. The first Phase 4 reconciliation record documents this evidence gap and defines the design-contract baseline without implementing runtime capability.",
+  "reconciliation_note": "Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Kyle has authorized proceeding to Phase 4 conversationally. The first authorized Phase 4 research/reconciliation task is responsible for establishing the durable transition record and invoking the existing mechanical gate; missing evidence at task start is an expected pre-reconciliation condition and does not require a separate transition-only task.",
   "authoritative_sources_agree": true,
   "state_md_sha256": "5cd7ca8d052367d12eea3e523a42713a81f0e402a7a4ff5112ccb4d534d6ea87",
   "verification_status": {
