@@ -84,11 +84,11 @@
   ],
   "phase_transition_conditions": [
     "Phase 3 is independently verified and technically converged.",
-    "Phase 4 transition requires explicit Kyle decision and authorization."
+    "A matching durable coordinator transition record must bind Kyle’s conversational decision, convergence evidence, independent verification, and the first Phase 4 research/reconciliation task."
   ],
-  "reconciliation_note": "Phase 3 — Autonomous Coordination Loop is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED, supported by final independent verification/reconciliation commit 8c9e005. Architecture reconciliation commit b935f54 records Phase 4 as the next PROPOSED / TARGET phase. Further Phase 3 implementation is unnecessary; Phase 4 requires separate authorized design work.",
+  "reconciliation_note": "Phase 3 — Autonomous Coordination Loop is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED, supported by final independent verification/reconciliation commit 8c9e005. Architecture reconciliation commit b935f54 records Phase 4 as the next PROPOSED / TARGET phase. Further Phase 3 implementation is unnecessary; the first Phase 4 research/reconciliation task records Kyle’s conversational transition decision and reconciles the transition before consequential Phase 4 work.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "d2c40905b417c23ccf38471273b4a7dc66446de758300d2fc8c3ae226515f1f5",
+  "state_md_sha256": "3105ef0824d2ed301099ccb0e55fa45855338697aecfbf62bfd1e821909cbec2",
   "verification_status": {
     "phase_3_convergence_verification_commit": "8c9e005",
     "status": "CONVERGED",

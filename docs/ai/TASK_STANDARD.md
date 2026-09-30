@@ -132,14 +132,15 @@ projection check or alignment decision must prevent TaskRegistry creation and di
 The JSON projection carries a SHA-256 of canonical `STATE.md`; a mismatch is blocked.
 
 A technical report, passing tests, research recommendation, or ACP-valid task does not
-establish strategic convergence. Convergence requires the authoritative phase
-acceptance criteria and independent desired-outcome verification; once those requirements
-are satisfied, phase transition escalates to Kyle for an explicit decision. Kyle's
-authorization is the authorization to invoke the existing phase-transition gate; a
-separate implementation task is not required merely to record or obtain that
-authorization. The gate remains mandatory and enforces all convergence, verification,
-prerequisite, acceptance, authorization-binding, and state-synchronization conditions
-before the transition succeeds.
+establish strategic convergence. For every Phase N → Phase N+1 transition, convergence
+requires the authoritative phase acceptance criteria and independent desired-outcome
+verification. Kyle’s explicit conversational decision to proceed is roadmap-transition
+authorization; the coordinator records it in the first Phase N+1 research/reconciliation
+record, which supplies durable transition evidence to the mandatory mechanical gate. The
+gate validates convergence, verification, prerequisites, evidence binding, and
+state synchronization; it does not create or consume a TaskRegistry Director approval.
+That distinction does not change ACP/TaskRegistry Director authorization requirements
+for consequential implementation, repository mutation, deployment, or runtime actions.
 
 ### 3.2 Research Record Roadmap Alignment Section
 

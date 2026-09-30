@@ -2902,3 +2902,11 @@ existing Director authorization.
 **Expected next action**: Kyle authorizes the existing Phase 3 → Phase 4 transition through `poc/phase-transition-gate.js`. After successful transition, the first Phase 4 task is the separately authorized design/research increment defined by `ARCHITECTURE.md` §12.8 / §16.8 / §27.
 
 **Commit Reference**: Reconciliation commit created by this task.
+
+## 2026-09-30 | TASK-CODEX-PHASE-TRANSITION-LIFECYCLE-PROCEDURE-RECONCILE-001
+
+**Task**: Reconcile the reusable roadmap phase-transition procedure with Kyle’s conversational authorization lifecycle without changing the current Phase 3 strategic state.
+
+**Outcome**: The mechanical phase-transition gate now validates a durable coordinator transition-evidence record rather than creating or consuming a TaskRegistry Director approval. The record binds the transition identity, current and target phases, prior convergence evidence, independent verification evidence, Kyle’s explicit conversational decision, and first next-phase research/reconciliation task identity. Existing ACP/TaskRegistry authorization for consequential implementation, repository mutation, deployment, and runtime actions remains unchanged. Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED; no Phase 3 → Phase 4 transition was executed.
+
+**Commit Reference**: This reconciliation commit.

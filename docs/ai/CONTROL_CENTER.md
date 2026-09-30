@@ -29,7 +29,7 @@ the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
 ## Strategic Alignment Control
 
-**Current strategic checkpoint:** Phase 3 — Autonomous Coordination Loop is **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**. `STATE.md` is the live authority and `docs/ai/strategic-state.json` is its machine-readable projection; this dashboard is derived only. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — is the next PROPOSED / TARGET phase and requires Kyle's explicit transition decision through the existing phase-transition gate.
+**Current strategic checkpoint:** Phase 3 — Autonomous Coordination Loop is **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**. `STATE.md` is the live authority and `docs/ai/strategic-state.json` is its machine-readable projection; this dashboard is derived only. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — is the next PROPOSED / TARGET phase. Kyle’s explicit conversational decision is recorded in the first Phase 4 research/reconciliation task and then mechanically validated by the phase-transition gate; this is not a TaskRegistry approval transaction.
 
 ---
 
@@ -281,7 +281,7 @@ Final record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTIN
 
 ## Phase-Transition Governance Gate — 2026-09-29
 
-Implemented `poc/phase-transition-gate.js` as governance infrastructure over the existing strategic-alignment evaluator and TaskRegistry Director-authorization lifecycle. It fails closed on stale projections, invalid or skipped roadmap targets, missing prerequisites/evidence, mismatched convergence conditions, and missing/expired/reused/mismatched Director authorization. Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED; Phase 4 is the next PROPOSED / TARGET phase pending Kyle's explicit transition.
+Historical implementation record: the gate was introduced over the strategic-alignment evaluator and then used a TaskRegistry Director-authorization lifecycle. The current reusable lifecycle supersedes that roadmap-specific approval transaction: the gate now fails closed on stale projections, invalid or skipped roadmap targets, missing prerequisites, convergence/verification failures, and missing or mismatched durable coordinator transition evidence. Consequential-action authorization remains unchanged. Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED; Phase 4 is the next PROPOSED / TARGET phase pending the first Phase 4 research/reconciliation record of Kyle’s decision.
 
 ## Phase 3 Autonomous Workflow Sequencing — 2026-09-29
 
