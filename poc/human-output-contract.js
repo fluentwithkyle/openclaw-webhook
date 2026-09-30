@@ -2,11 +2,22 @@
 
 const MODES = Object.freeze({ YES_NO: 'YES_NO', DECISION: 'DECISION', RESEARCH: 'RESEARCH', STATUS: 'STATUS', TASK: 'TASK', VERIFICATION: 'VERIFICATION' });
 const MAX_COMPACT_LINES = 8;
-const MAX_COMPACT_BULLETS = 5;
+const MAX_COMPACT_BULLETS = 3;
+const MAX_COMPACT_HEADINGS = 3;
 
-function linesOf(text) { return String(text).replace(/\r\n/g, '\n').split('\n').map(function(line) { return line.trim(); }).filter(Boolean); }
+function rawLines(text) { return String(text).replace(/\r\n/g, '\n').split('\n'); }
+function linesOf(text) { return rawLines(text).map(function(line) { return line.trim(); }).filter(Boolean); }
 function countBullets(lines) { return lines.filter(function(line) { return /^[-*]\s+/.test(line); }).length; }
-function containsMachineDump(text) { return /```(?:json|yaml|xml)?\s*\n|\{\s*\"(?:task_name|request_id|capabilities|permitted_paths)\"\s*:/.test(text); }
+function countHeadings(lines) { return lines.filter(function(line) { return /^#{1,6}\s+/.test(line); }).length; }
+function containsMachineDump(text) { return /\`\`\`(?:json|yaml|xml)?\s*\n|\{\s*\"(?:task_name|request_id|capabilities|permitted_paths)\"\s*:/.test(text); }
+function containsInlineCode(text) { return /(^|[^\`])\`[^\`\n]+\`/.test(text); }
+function hasSpacedBullets(text) {
+    const lines = rawLines(text);
+    for (let i = 0; i < lines.length; i += 1) {
+        if (/^\s*[-*]\s+/.test(lines[i]) && i + 1 < lines.length && lines[i + 1].trim() !== '') return false;
+    }
+    return true;
+}
 
 function validateHumanOutput(input) {
     const mode = input && input.mode;
@@ -15,6 +26,13 @@ function validateHumanOutput(input) {
     if (typeof text !== 'string' || !text.trim()) return { valid: false, error: 'Human output text is required' };
     const lines = linesOf(text);
     if (containsMachineDump(text) && mode !== MODES.TASK) return { valid: false, error: 'Machine-interface content cannot be emitted in compact human output' };
+
+    if (mode !== MODES.TASK) {
+        if (containsInlineCode(text)) return { valid: false, error: 'Human output cannot use inline code formatting' };
+        if (countHeadings(lines) > MAX_COMPACT_HEADINGS) return { valid: false, error: 'Human output exceeds the heading limit' };
+        if (!hasSpacedBullets(text)) return { valid: false, error: 'Bullets must have a blank line between items' };
+    }
+
     if (mode === MODES.YES_NO) {
         if (!/^(Yes|No)\.$/.test(lines[0])) return { valid: false, error: 'YES_NO output must begin with exactly Yes. or No.' };
         if (lines.length > 3) return { valid: false, error: 'YES_NO output is limited to three non-empty lines' };
@@ -22,8 +40,9 @@ function validateHumanOutput(input) {
     }
     if ([MODES.DECISION, MODES.RESEARCH, MODES.STATUS, MODES.VERIFICATION].indexOf(mode) !== -1) {
         if (lines.length > MAX_COMPACT_LINES) return { valid: false, error: 'Compact human output exceeds the eight-line limit' };
-        if (countBullets(lines) > MAX_COMPACT_BULLETS) return { valid: false, error: 'Compact human output exceeds the five-bullet limit' };
+        if (countBullets(lines) > MAX_COMPACT_BULLETS) return { valid: false, error: 'Compact human output exceeds the three-bullet limit' };
     }
     return { valid: true, mode: mode, text: text };
 }
+
 module.exports = { MODES: MODES, validateHumanOutput: validateHumanOutput };
