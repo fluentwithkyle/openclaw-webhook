@@ -41,10 +41,13 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
   and convergence/transition authorities. The final verification record reports
   `PHASE_3_CONVERGED: YES`.
 - **Phase 3 transition rule**: Phase 3 is technically complete and independently
-  verified. Phase 4 is the authoritative next roadmap target. Transition to Phase 4
-  requires Kyle's explicit decision and authorization through the existing
-  `poc/phase-transition-gate.js`; no model-generated exception or automatic phase
-  transition is accepted.
+  verified. Phase 4 is the authoritative next roadmap target. Kyle’s explicit
+  conversational decision is recorded by the first Phase 4 research/reconciliation
+  task, whose durable evidence binds the transition identity, Phase 3 convergence,
+  independent verification, and the coordinator task identity. That evidence is
+  validated and mechanically applied by `poc/phase-transition-gate.js`; no
+  model-generated exception or automatic phase transition is accepted. Consequential
+  Phase 4 actions retain existing ACP/TaskRegistry authorization requirements.
 - **Phase 4 design boundary**: Phase 4 must establish exact multi-task lineage
   navigation semantics, read-only parent/child aggregation shapes, cross-task
   diagnostic aggregation, policy-driven specialist chaining, recovery/escalation

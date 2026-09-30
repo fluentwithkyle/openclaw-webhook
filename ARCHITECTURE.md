@@ -999,7 +999,7 @@ The authoritative live strategic state remains STATE.md, with docs/ai/strategic-
 
 Strategic alignment does not create an execution authority, control plane, TaskRegistry, dispatcher, or competing roadmap.
 
-Phase transition remains a Kyle-authorized operation enforced by the existing phase-transition gate.
+For every future Phase N → Phase N+1 transition, Kyle’s explicit conversational decision is recorded in the first Phase N+1 research/reconciliation record; the existing phase-transition gate mechanically validates and applies that durable evidence. This roadmap-transition procedure is distinct from existing ACP/TaskRegistry authorization for consequential actions.
 
 16.7 Phase 3 acceptance target
 
