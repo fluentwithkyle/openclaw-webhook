@@ -149,6 +149,7 @@ Substantially complete:
 - Gemini ACP artifact reporting — issue_comment path unified (Issue #174) — **IMPLEMENTED / VERIFIED** (29 workflow-expression tests pass)
   - Git completion-signal emitter (Issue #180, commit `7bec058`) — **IMPLEMENTED / VERIFIED (UNDER VALIDATION)** (41 emitter tests pass; 77 webhook regression tests pass; 410 total tests pass)
   - RESEARCH_DOCUMENT task mode — **IMPLEMENTED / VERIFIED** (483 total tests pass across 18 test files)
+  - OpenRouter Builder future project documentation (TASK-GEMINI-OPENROUTER-BUILDER-FUTURE-PROJECT-DOCUMENTATION-001) — **COMPLETED (RESEARCH / DOCUMENTATION)**; implementation deferred until DeepSeek project completion and Kyle's authorization.
 
 Remaining pending items:
 - Remaining Part 2.1 (authenticated Gemini → Render return path) — PROPOSED / TARGET, not yet implemented (Gemini investigation result)

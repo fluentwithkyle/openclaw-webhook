@@ -27,6 +27,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
+| TASK-GEMINI-OPENROUTER-BUILDER-FUTURE-PROJECT-DOCUMENTATION-001 | 2026-09-30 | Gemini | `docs/ai/research/research-TASK-GEMINI-OPENROUTER-BUILDER-FUTURE-PROJECT-DOCUMENTATION-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-FINAL-VERIFY-RECONCILE-001 | 2026-09-29 | Gemini | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-WORKFLOW-SEQUENCING-FINAL-VERIFY-RECONCILE-001 | 2026-09-29 | Gemini | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-WORKFLOW-SEQUENCING-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-LOOP-FINAL-VERIFY-RECONCILE-001 | 2026-09-29 | Gemini | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-LOOP-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
