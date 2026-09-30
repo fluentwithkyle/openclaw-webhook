@@ -6,8 +6,10 @@ assert.strictEqual(contract.validateHumanOutput({ mode: M.YES_NO, text: 'Yes.' }
 assert.strictEqual(contract.validateHumanOutput({ mode: M.YES_NO, text: 'No.\nReason.' }).valid, true);
 assert.strictEqual(contract.validateHumanOutput({ mode: M.YES_NO, text: 'The answer is Yes.' }).valid, false);
 assert.strictEqual(contract.validateHumanOutput({ mode: M.YES_NO, text: 'Yes.\n1\n2\n3' }).valid, false);
-assert.strictEqual(contract.validateHumanOutput({ mode: M.RESEARCH, text: 'Conclusion\n\n- Finding one\n- Finding two' }).valid, true);
+assert.strictEqual(contract.validateHumanOutput({ mode: M.RESEARCH, text: 'Conclusion\n\n- Finding one\n\n- Finding two' }).valid, true);
+assert.strictEqual(contract.validateHumanOutput({ mode: M.RESEARCH, text: 'Conclusion\n- Finding one\n\n- Finding two' }).valid, false);
 assert.strictEqual(contract.validateHumanOutput({ mode: M.STATUS, text: 'Done.\n```json\n{"request_id":"x"}\n```' }).valid, false);
+assert.strictEqual(contract.validateHumanOutput({ mode: M.STATUS, text: 'Done.\n\nSee `poc/file.js`.' }).valid, false);
 assert.strictEqual(contract.validateHumanOutput({ mode: M.TASK, text: 'Implement the authorized task.\n\n```json\n{"task_name":"x"}\n```' }).valid, true);
 assert.strictEqual(contract.validateHumanOutput({ mode: 'UNKNOWN', text: 'Done.' }).valid, false);
 console.log('human-output-contract tests passed');
