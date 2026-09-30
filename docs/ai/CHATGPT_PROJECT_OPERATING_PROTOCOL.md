@@ -1594,7 +1594,9 @@ For every Phase N → Phase N+1 transition, once the authoritative phase has sat
 
 The transition sequence is:
 
-**Convergence requirements satisfied → independent verification recorded → Kyle/Director explicitly authorizes in the coordinator conversation → first Phase N+1 research/reconciliation record captures the decision and transition evidence → existing phase-transition gate validates and applies the transition → STATE.md and strategic-state.json are synchronized.**
+**Convergence requirements satisfied → independent verification recorded → Kyle/Director explicitly authorizes in the coordinator conversation → the first authorized Phase N+1 research/reconciliation task records the decision and creates the durable transition evidence → the existing phase-transition gate validates and applies the transition → STATE.md and strategic-state.json are synchronized.**
+
+The first authorized Phase N+1 research/reconciliation task is the transition-bootstrap execution context. At the start of that task, the durable transition evidence may not yet exist; that is an expected pre-reconciliation condition when Kyle's roadmap authorization has already been received. The task MUST create and persist the evidence required by the gate before invoking the gate. A missing transition record at task start MUST NOT be interpreted as requiring a separate transition-only task. A separate roadmap-transition task, approval endpoint, TaskRegistry Director-approval artifact, or authorization transaction is prohibited when this bootstrap condition is satisfied.
 
 The gate remains mandatory and fail closed: it validates current and next roadmap phases, convergence, independent verification, prerequisites, durable evidence binding, projection integrity, atomic update, and post-transition validity. A model-generated request cannot supply this evidence or promote a phase.
 
