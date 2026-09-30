@@ -1,5 +1,5 @@
 'use strict';
-const fs=require('fs');const path=require('path');const alignment=require('./strategic-alignment');const registry=require('./task-registry');
+const fs=require('fs');const path=require('path');const alignment=require('./strategic-alignment');const registry=require('./task-registry');const {verifyDirectorTransitionDecision}=require('./transition-decision-provenance');
 const root=path.join(__dirname,'..');
 const D={statePath:path.join(root,'docs/ai/STATE.md'),projectionPath:path.join(root,'docs/ai/strategic-state.json'),architecturePath:path.join(root,'ARCHITECTURE.md'),taskLogPath:path.join(root,'docs/ai/TASK_LOG.md'),researchPath:path.join(root,'docs/ai/research')};
 function block(code,detail){return{status:'BLOCKED',code,detail,escalation:'Kyle — Director',phase_transition_performed:false}}
@@ -20,7 +20,10 @@ function transitionEvidence(r,o){
       if(!coordinatorTask)return block('TRANSITION_COORDINATOR_TASK_NOT_FOUND','Coordinator task identity is not present in the authoritative TaskRegistry.');
       if(coordinatorTask.request_id!==r.coordinator_task_id||coordinatorTask.repository!=='fluentwithkyle/openclaw-webhook'||!['RESEARCH_DOCUMENT','VERIFY_RECONCILE'].includes(coordinatorTask.task_mode)||!['research','reconciliation'].includes(coordinatorTask.workflow_stage))return block('TRANSITION_COORDINATOR_TASK_INVALID','Coordinator task is not an authoritative research/reconciliation task for this transition.');
       if(fields.coordinator_task_origin && fields.coordinator_task_origin!==coordinatorTask.originator)return block('TRANSITION_EVIDENCE_MISMATCH','Coordinator task provenance does not match the authoritative TaskRegistry entry.');
-      if(!fields.prior_phase_convergence_evidence||!/^Kyle\s*(?:—|-)\s*Director\s*:/i.test(fields.director_decision||'')||!/\b(?:move|proceed|advance)\b/i.test(fields.director_decision))return block('TRANSITION_EVIDENCE_INCOMPLETE','Durable transition evidence is missing convergence evidence or Kyle’s explicit decision.');
+      const provenance=coordinatorTask.transition_decision_provenance;
+      const provenanceResult=verifyDirectorTransitionDecision(provenance,{current_phase:r.current_phase,target_phase:r.target_phase,coordinator_task_id:r.coordinator_task_id,transition_id:r.transition_id,transition_evidence_id:r.transition_evidence_id,prior_phase_convergence_evidence:fields.prior_phase_convergence_evidence,independent_verification_id:r.independent_verification_id,decision:fields.director_decision},process.env.DEEPSEEK_COORDINATOR_SECRET);
+      if(!provenanceResult.valid)return block('TRANSITION_DECISION_PROVENANCE_INVALID',provenanceResult.error);
+      if(fields.director_decision_provenance_id!==provenance.decision_id||fields.director_decision_provenance_signature!==provenance.signature)return block('TRANSITION_DECISION_PROVENANCE_MISMATCH','Durable evidence does not reference the authoritative coordinator decision provenance.');
       return{status:'VALID',file,fields,coordinator_task:coordinatorTask};
     }
   }

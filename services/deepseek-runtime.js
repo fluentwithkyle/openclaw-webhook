@@ -1,6 +1,7 @@
 const axios = require('axios');
 const taskRegistry = require('../poc/task-registry');
 const { evaluateCoordinatorIntent } = require('../poc/strategic-alignment');
+const { issueDirectorTransitionDecision } = require('../poc/transition-decision-provenance');
 const { ACP_LIFECYCLE_STATES, LINEAGE_CONTROL_SEMANTICS } = require('../poc/schemas/acp-schema');
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -212,6 +213,24 @@ function normalizeMessages(messages) {
     return messages.map(normalizeMessage);
 }
 
+function extractTrustedDirectorTransitionDecision(messages, trustedIngress, secret, state) {
+    if (trustedIngress !== true || !state || typeof state.current_phase !== 'string') return null;
+    const currentMatch = state.current_phase.match(/^phase-(\\d+)-/i);
+    const targetPhase = Array.isArray(state.required_next_work) ? state.required_next_work[0] : null;
+    const verificationStatus = state.verification_status || {};
+    const independentVerificationId = verificationStatus.phase_3_convergence_verification_commit || verificationStatus.convergence_verification_commit;
+    if (!currentMatch || !targetPhase || !independentVerificationId) return null;
+    const currentNumber = Number(currentMatch[1]);
+    const targetMatch = String(targetPhase).match(/^phase-(\\d+)-/i);
+    if (!targetMatch || Number(targetMatch[1]) !== currentNumber + 1) return null;
+    const priorPhaseConvergenceEvidence = `authoritative-state:${state.current_phase}:${state.phase_status}`;
+    for (const message of messages.filter(item => item.role === 'user')) {
+        const match = message.content.match(/\\b(?:move|proceed|advance)(?:\\s+on)?\\s+(?:to|onto)\\s+phase\\s+(\\d+)\\b/i);
+        if (match && Number(match[1]) === currentNumber + 1) return { decision:message.content,current_phase:state.current_phase,target_phase:targetPhase,prior_phase_convergence_evidence:priorPhaseConvergenceEvidence,independent_verification_id:independentVerificationId,secret };
+    }
+    return null;
+}
+
 function buildControlPlaneCommand(args, trustedContext = {}) {
     if (!args || typeof args !== 'object' || Array.isArray(args)) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments must be an object');
@@ -258,6 +277,20 @@ function buildControlPlaneCommand(args, trustedContext = {}) {
     if (hasWorkflowStep) {
         command.workflow_step = args.workflow_step;
         command.workflow_stage = args.workflow_step;
+    }
+    if (trustedContext.directorTransitionDecision) {
+        const pending = trustedContext.directorTransitionDecision;
+        const provenance = issueDirectorTransitionDecision({
+            decision: pending.decision,
+            currentPhase: pending.current_phase,
+            targetPhase: pending.target_phase,
+            coordinatorTaskId: command.request_id,
+            priorPhaseConvergenceEvidence: pending.prior_phase_convergence_evidence,
+            independentVerificationId: pending.independent_verification_id,
+            secret: trustedContext.coordinatorSecret
+        });
+        if (!provenance.valid) throw new RuntimeError(503, 'TRANSITION_PROVENANCE_UNAVAILABLE', provenance.error);
+        command.director_transition_decision_provenance = provenance.record;
     }
     return command;
 }
@@ -843,9 +876,14 @@ function normalizeProviderError(error, operation) {
     return new RuntimeError(502, `${operation}_FAILED`, `${operation} request failed`);
 }
 
-async function runDeepSeekTurn({ messages, env, httpClient = axios, coordinationContextId }) {
+async function runDeepSeekTurn({ messages, env, httpClient = axios, coordinationContextId, trustedIngress = false }) {
     const conversation = normalizeMessages(messages);
     const config = getRuntimeConfig(env);
+    const strategicAlignment = require('../poc/strategic-alignment');
+    const authoritativeState = strategicAlignment.loadAuthoritativeStrategicState();
+    const directorTransitionDecision = authoritativeState.status === 'VALID'
+        ? extractTrustedDirectorTransitionDecision(conversation, trustedIngress, config.coordinatorSecret, authoritativeState.state)
+        : null;
     const submittedTaskIds = new Set();
     const observedTaskResults = new Map();
     const coordinationContext = coordinationContextId === undefined ? null : resolveCoordinationContext(coordinationContextId);
@@ -891,7 +929,7 @@ async function runDeepSeekTurn({ messages, env, httpClient = axios, coordination
         let toolResultContent;
 
         if (args.operation === 'request_task') {
-            const command = buildControlPlaneCommand(args);
+            const command = buildControlPlaneCommand(args, { directorTransitionDecision, coordinatorSecret: config.coordinatorSecret });
             if (coordinationContext && command.parent_request_id !== coordinationContext.current_request_id) {
                 throw new RuntimeError(400, 'CONTINUATION_POLICY_REJECTED', 'Coordination context continuation must use its current TaskRegistry request identifier');
             }
@@ -966,7 +1004,7 @@ function canStartAutonomousContinuation(context) {
     return nextStep.valid && !nextStep.terminal;
 }
 
-async function runDeepSeekConversation({ messages, env, httpClient = axios, coordinationContextId, autonomousCoordination = false }) {
+async function runDeepSeekConversation({ messages, env, httpClient = axios, coordinationContextId, autonomousCoordination = false, trustedIngress = false }) {
     if (coordinationContextId !== undefined) {
         const context = resolveCoordinationContext(coordinationContextId);
         if (context.terminal_outcome) {
@@ -993,7 +1031,8 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios, coor
             messages: continuationMessages,
             env,
             httpClient,
-            coordinationContextId: nextContext.context_id
+            coordinationContextId: nextContext.context_id,
+            trustedIngress
         });
         context = taskRegistry.getTask(nextContext.context_id).coordination_context;
     }
@@ -1034,7 +1073,8 @@ function createDeepSeekRuntimeHandler(options = {}) {
                 env: options.env || process.env,
                 httpClient: options.httpClient || axios,
                 coordinationContextId: req.body && req.body.coordination_context_id,
-                autonomousCoordination: req.body && req.body.autonomous_coordination === true
+                autonomousCoordination: req.body && req.body.autonomous_coordination === true,
+                trustedIngress: true
             });
             if (req.body && req.body.stream === true) {
                 return sendStreamingCompletion(res, result.message, req.body.model);

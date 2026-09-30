@@ -2910,3 +2910,12 @@ existing Director authorization.
 **Outcome**: The mechanical phase-transition gate now validates a durable coordinator transition-evidence record rather than creating or consuming a TaskRegistry Director approval. The record binds the transition identity, current and target phases, prior convergence evidence, independent verification evidence, Kyle’s explicit conversational decision, and first next-phase research/reconciliation task identity. Existing ACP/TaskRegistry authorization for consequential implementation, repository mutation, deployment, and runtime actions remains unchanged. Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED; no Phase 3 → Phase 4 transition was executed.
 
 **Commit Reference**: This reconciliation commit.
+
+
+## TASK-CHATGPT-PHASE-TRANSITION-DECISION-PROVENANCE-FIX-001
+
+- **status**: IMPLEMENTED / VERIFIED BY FOCUSED TEST EXECUTION PENDING FINAL SUITE RUN
+- **owner**: ChatGPT
+- **authorization**: Kyle — Director
+- **scope**: Phase-transition decision provenance authority boundary.
+- **result**: Roadmap transition evidence is bound to a server-issued provenance identity derived only from an authenticated ChatBox user decision. The existing phase-transition gate validates the signed provenance against the authoritative TaskRegistry coordinator task and durable evidence. No Phase 3 → Phase 4 transition is executed by this task.

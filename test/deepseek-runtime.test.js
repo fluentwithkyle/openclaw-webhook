@@ -132,6 +132,29 @@ function rawRequest(port, headers, body) {
 }
 
 (async () => {
+    await test('authenticated Chatbox Director decision is server-bound into coordinator provenance', async () => {
+        taskRegistry.resetRegistry();
+        const calls = [];
+        const client = { post: async (url, body) => {
+            calls.push({ url, body });
+            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'phase-call', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' }) } }] });
+            if (calls.length === 2) return { data: { status: 'Task registered and dispatched', request_id: body.request_id } };
+            return providerResponse({ role: 'assistant', content: 'Research task requested.' });
+        } };
+        await runDeepSeekConversation({
+            messages: [{ role: 'user', content: 'OK, let\'s move onto Phase 4.' }],
+            env: env(),
+            httpClient: client,
+            trustedIngress: true
+        });
+        const command = calls[1].body;
+        assert.equal(typeof command.director_transition_decision_provenance, 'object');
+        assert.equal(command.director_transition_decision_provenance.current_phase, 'phase-3-autonomous-coordination-loop');
+        assert.equal(command.director_transition_decision_provenance.target_phase, 'phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation');
+        assert.equal(command.director_transition_decision_provenance.coordinator_task_id, command.request_id);
+        assert.match(command.director_transition_decision_provenance.decision, /move onto Phase 4/i);
+    });
+
     await test('normal OpenRouter response is returned without a coordinator call', async () => {
         let calls = 0;
         const result = await runDeepSeekConversation({

@@ -999,7 +999,7 @@ The authoritative live strategic state remains STATE.md, with docs/ai/strategic-
 
 Strategic alignment does not create an execution authority, control plane, TaskRegistry, dispatcher, or competing roadmap.
 
-For every future Phase N → Phase N+1 transition, Kyle’s explicit conversational decision is recorded in the first Phase N+1 research/reconciliation record; the existing phase-transition gate mechanically validates and applies that durable evidence. This roadmap-transition procedure is distinct from existing ACP/TaskRegistry authorization for consequential actions.
+For every future Phase N → Phase N+1 transition, Kyle’s explicit conversational decision is recorded in the first Phase N+1 research/reconciliation record; the existing phase-transition gate mechanically validates and applies that durable evidence. This roadmap-transition procedure is distinct from existing ACP/TaskRegistry authorization for consequential actions. The trusted conversational provenance is established from an authenticated ChatBox user message at the DeepSeek runtime ingress; the server issues a cryptographically bound transition-decision identity and stores it with the authoritative coordinator task. Durable evidence must reference that server-issued identity; model-generated or manually fabricated Director text is insufficient.
 
 16.7 Phase 3 acceptance target
 

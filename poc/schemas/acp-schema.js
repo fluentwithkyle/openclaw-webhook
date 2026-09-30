@@ -553,7 +553,8 @@ function createInitialTaskRegistryEntry(requestId, command) {
        cancelled: false,
        cancelled_at: null
      },
-      config_verification: {}
+      config_verification: {},
+      transition_decision_provenance: command.director_transition_decision_provenance || null
     };
   }
 
