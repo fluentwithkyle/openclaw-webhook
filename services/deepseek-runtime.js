@@ -215,17 +215,17 @@ function normalizeMessages(messages) {
 
 function extractTrustedDirectorTransitionDecision(messages, trustedIngress, secret, state) {
     if (trustedIngress !== true || !state || typeof state.current_phase !== 'string') return null;
-    const currentMatch = state.current_phase.match(/^phase-(\\d+)-/i);
+    const currentMatch = state.current_phase.match(/^phase-(\d+)-/i);
     const targetPhase = Array.isArray(state.required_next_work) ? state.required_next_work[0] : null;
     const verificationStatus = state.verification_status || {};
     const independentVerificationId = verificationStatus.phase_3_convergence_verification_commit || verificationStatus.convergence_verification_commit;
     if (!currentMatch || !targetPhase || !independentVerificationId) return null;
     const currentNumber = Number(currentMatch[1]);
-    const targetMatch = String(targetPhase).match(/^phase-(\\d+)-/i);
+    const targetMatch = String(targetPhase).match(/^phase-(\d+)-/i);
     if (!targetMatch || Number(targetMatch[1]) !== currentNumber + 1) return null;
     const priorPhaseConvergenceEvidence = `authoritative-state:${state.current_phase}:${state.phase_status}`;
     for (const message of messages.filter(item => item.role === 'user')) {
-        const match = message.content.match(/\\b(?:move|proceed|advance)(?:\\s+on)?\\s+(?:to|onto)\\s+phase\\s+(\\d+)\\b/i);
+        const match = message.content.match(/\b(?:move|proceed|advance)(?:\s+on)?\s+(?:to|onto)\s+phase\s+(\d+)\b/i);
         if (match && Number(match[1]) === currentNumber + 1) return { decision:message.content,current_phase:state.current_phase,target_phase:targetPhase,prior_phase_convergence_evidence:priorPhaseConvergenceEvidence,independent_verification_id:independentVerificationId,secret };
     }
     return null;
