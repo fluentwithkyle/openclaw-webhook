@@ -29,7 +29,7 @@ the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
 ## Strategic Alignment Control
 
-**Current strategic checkpoint:** Phase 3 — Autonomous Coordination Loop is **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**. `STATE.md` is the live authority and `docs/ai/strategic-state.json` is its machine-readable projection; this dashboard is derived only. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — is the next PROPOSED / TARGET phase. Kyle’s explicit conversational decision has been received, but the required durable coordinator transition record has not been established. The phase-transition gate therefore has not been successfully applied; this is not a TaskRegistry approval transaction.
+**Current strategic checkpoint:** Phase 3 — Autonomous Coordination Loop is **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**. `STATE.md` is the live authority and `docs/ai/strategic-state.json` is its machine-readable projection; this dashboard is derived only. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — is the next PROPOSED / TARGET phase. Kyle’s explicit conversational decision is already the roadmap-transition authorization. The first authorized Phase 4 research/reconciliation task must establish the durable transition record and then invoke the existing phase-transition gate. Missing evidence at task start is an expected pre-reconciliation condition and does not require a separate transition-only task; the gate remains fail closed until its evidence requirements are satisfied.
 
 ---
 
