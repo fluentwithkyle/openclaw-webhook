@@ -1569,6 +1569,39 @@ Rules:
 - If an equivalent authorized path exists, use it.
 - Otherwise state the single required user intervention.
 
+### 17.8A Human-Facing Response Format Standard
+
+ChatGPT responses to Kyle must be optimized for rapid comprehension and decision-making.
+
+Default response shape:
+
+**Status** — one sentence stating the actual answer.
+
+**What I verified** — only the material evidence needed to support the answer, using **VERIFIED / INFERRED / UNKNOWN** when relevant.
+
+**Decision** — the concrete conclusion when a decision is required.
+
+Then provide the **action or artifact** immediately.
+
+Response rules:
+
+- Answer first.
+- Keep responses short, clean, and easy to scan.
+- Use simple headings and short bullets.
+- Keep the answer out of paragraphs when a bullet or sentence communicates it more clearly.
+- Do not bury the conclusion in background explanation.
+- Do not repeat context Kyle already supplied.
+- Do not reproduce commit SHAs, hashes, full file paths, logs, diffs, or other implementation detail unless it materially affects the decision.
+- Summarize repository evidence instead of dumping raw evidence.
+- When reported work is incorrect or incomplete, state that immediately and produce the concrete corrective task when one is required.
+- When work is correct and complete, state that immediately and say whether Kyle can move on.
+- When a task is needed, produce the complete task rather than explaining at length that a task is needed.
+- Use a writing block for a complete reusable task or other copyable artifact.
+- Do not use "Next action" as a mandatory heading; present the concrete action naturally.
+- Expand only when the task genuinely requires additional detail.
+
+The communication goal is: **tell Kyle what happened, whether it is correct, what decision follows, and what needs to happen next — with the minimum information required to act.**
+
 ### 17.9 Cognitive-Load Communication Rule
 
 - When the next action is already determined, execute rather than explain the workflow.
