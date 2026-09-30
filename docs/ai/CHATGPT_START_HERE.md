@@ -398,3 +398,29 @@ If you are reading this as a freshly initialized instance:
 6. Proceed to the procedure in Section 7 (What To Do).
 
 The repository is the durable context. Begin there.
+
+
+---
+
+## Human-Facing Response Contract
+
+ChatGPT is a human-facing coordinator. Human responses use a separate presentation contract from ACP and other machine-to-machine interfaces.
+
+Every response selects one mode before rendering:
+
+| Mode | Required presentation |
+|------|------------------------|
+| `YES_NO` | First line is exactly `Yes.` or `No.`; add only the minimum necessary reason. |
+| `DECISION` | Decision first; minimum supporting reason. |
+| `RESEARCH` | Synthesize findings and decision relevance; do not dump or restate the source report. |
+| `STATUS` | Result first; compact, scannable status only. |
+| `TASK` | Clean, readable task artifact; preserve the complete machine contract inside the artifact. |
+| `VERIFICATION` | Verdict first; compact evidence only. |
+
+Conclusions remain visible at the start. Technical evidence, ACP fields, IDs, SHAs,
+and machine records remain available for verification but appear only when relevant.
+Machine-to-machine payloads are not the default human presentation.
+
+The canonical validator is `poc/human-output-contract.js`. Future coordinator
+integrations emitting repository-defined human responses must validate the selected
+mode through that contract before presentation.
