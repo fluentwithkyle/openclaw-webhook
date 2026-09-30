@@ -86,14 +86,14 @@
     "Phase 3 is independently verified and technically converged.",
     "A matching durable coordinator transition record must bind Kyle’s conversational decision, convergence evidence, independent verification, and the first Phase 4 research/reconciliation task."
   ],
-  "reconciliation_note": "Phase 3 — Autonomous Coordination Loop is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED, supported by final independent verification/reconciliation commit 8c9e005. Architecture reconciliation commit b935f54 records Phase 4 as the next PROPOSED / TARGET phase. Further Phase 3 implementation is unnecessary; the first Phase 4 research/reconciliation task records Kyle’s conversational transition decision and reconciles the transition before consequential Phase 4 work.",
+  "reconciliation_note": "Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Kyle has received and authorized proceeding to Phase 4 conversationally, but the required durable coordinator transition record, TaskRegistry identity, and canonical transition evidence are not established on main. Phase 4 therefore remains the next PROPOSED / TARGET phase and is not mechanically activated. The first Phase 4 reconciliation record documents this evidence gap and defines the design-contract baseline without implementing runtime capability.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "3105ef0824d2ed301099ccb0e55fa45855338697aecfbf62bfd1e821909cbec2",
+  "state_md_sha256": "8bbdde23bf74bde7724b40c74ca74ce0b43bd4ee2522621a2a71f383e8ad95ef",
   "verification_status": {
     "phase_3_convergence_verification_commit": "8c9e005",
     "status": "CONVERGED",
     "reason": "Phase 3 Autonomous Coordination Loop is independently verified and technically converged; Phase 4 is the next roadmap target.",
     "static_inspection": "COMPLETED",
-    "phase_transition": "PENDING_KYLE_DECISION"
+    "phase_transition": "PENDING_DURABLE_TRANSITION_EVIDENCE"
   }
 }
