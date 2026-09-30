@@ -1,5 +1,5 @@
 'use strict';
-const fs=require('fs');const path=require('path');const alignment=require('./strategic-alignment');
+const fs=require('fs');const path=require('path');const alignment=require('./strategic-alignment');const registry=require('./task-registry');
 const root=path.join(__dirname,'..');
 const D={statePath:path.join(root,'docs/ai/STATE.md'),projectionPath:path.join(root,'docs/ai/strategic-state.json'),architecturePath:path.join(root,'ARCHITECTURE.md'),taskLogPath:path.join(root,'docs/ai/TASK_LOG.md'),researchPath:path.join(root,'docs/ai/research')};
 function block(code,detail){return{status:'BLOCKED',code,detail,escalation:'Kyle — Director',phase_transition_performed:false}}
@@ -16,8 +16,12 @@ function transitionEvidence(r,o){
       for(const line of match[1].split('\n')){const m=line.match(/^\s*([a-z_]+):\s*(.+?)\s*$/);if(m)fields[m[1]]=m[2]}
       if(fields.transition_evidence_id!==r.transition_evidence_id)continue;
       if(fields.transition_id!==r.transition_id||fields.current_phase!==r.current_phase||fields.target_phase!==r.target_phase||fields.independent_verification_evidence!==r.independent_verification_id||fields.coordinator_task_id!==r.coordinator_task_id)return block('TRANSITION_EVIDENCE_MISMATCH','Durable transition evidence does not match the requested transition.');
+      const coordinatorTask=registry.getTask(r.coordinator_task_id);
+      if(!coordinatorTask)return block('TRANSITION_COORDINATOR_TASK_NOT_FOUND','Coordinator task identity is not present in the authoritative TaskRegistry.');
+      if(coordinatorTask.request_id!==r.coordinator_task_id||coordinatorTask.repository!=='fluentwithkyle/openclaw-webhook'||!['RESEARCH_DOCUMENT','VERIFY_RECONCILE'].includes(coordinatorTask.task_mode)||!['research','reconciliation'].includes(coordinatorTask.workflow_stage))return block('TRANSITION_COORDINATOR_TASK_INVALID','Coordinator task is not an authoritative research/reconciliation task for this transition.');
+      if(fields.coordinator_task_origin && fields.coordinator_task_origin!==coordinatorTask.originator)return block('TRANSITION_EVIDENCE_MISMATCH','Coordinator task provenance does not match the authoritative TaskRegistry entry.');
       if(!fields.prior_phase_convergence_evidence||!/^Kyle\s*(?:—|-)\s*Director\s*:/i.test(fields.director_decision||'')||!/\b(?:move|proceed|advance)\b/i.test(fields.director_decision))return block('TRANSITION_EVIDENCE_INCOMPLETE','Durable transition evidence is missing convergence evidence or Kyle’s explicit decision.');
-      return{status:'VALID',file,fields};
+      return{status:'VALID',file,fields,coordinator_task:coordinatorTask};
     }
   }
   return block('TRANSITION_EVIDENCE_NOT_FOUND','A matching durable coordinator transition record is required.');
