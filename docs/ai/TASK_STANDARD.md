@@ -135,9 +135,14 @@ A technical report, passing tests, research recommendation, or ACP-valid task do
 establish strategic convergence. For every Phase N → Phase N+1 transition, convergence
 requires the authoritative phase acceptance criteria and independent desired-outcome
 verification. Kyle’s explicit conversational decision to proceed is roadmap-transition
-authorization; the coordinator records it in the first Phase N+1 research/reconciliation
-record, which supplies durable transition evidence to the mandatory mechanical gate. The
-gate validates convergence, verification, prerequisites, evidence binding, and
+authorization; the coordinator records it in the first authorized Phase N+1
+research/reconciliation record, which creates and supplies the durable transition
+evidence to the mandatory mechanical gate. Missing durable transition evidence at the
+beginning of that first authorized Phase N+1 reconciliation task is an expected
+pre-reconciliation condition, not a prerequisite requiring another task. That task
+establishes the evidence before invoking the gate. A separate roadmap-transition task
+or authorization transaction must not be introduced solely to establish that evidence.
+The gate validates convergence, verification, prerequisites, evidence binding, and
 state synchronization; it does not create or consume a TaskRegistry Director approval.
 That distinction does not change ACP/TaskRegistry Director authorization requirements
 for consequential implementation, repository mutation, deployment, or runtime actions.
