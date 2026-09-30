@@ -84,16 +84,18 @@
   ],
   "phase_transition_conditions": [
     "Phase 3 is independently verified and technically converged.",
-    "A matching durable coordinator transition record must bind Kyle’s conversational decision, convergence evidence, independent verification, and the first Phase 4 research/reconciliation task."
+    "Kyle's explicit conversational roadmap authorization is captured by the first authorized Phase 4 research/reconciliation task.",
+    "That first Phase 4 research/reconciliation task establishes matching durable coordinator transition evidence and coordinator-task identity.",
+    "The existing phase-transition gate validates convergence, independent verification, evidence binding, projection integrity, atomic update, and post-transition validity."
   ],
   "reconciliation_note": "Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Kyle has authorized proceeding to Phase 4 conversationally. The first authorized Phase 4 research/reconciliation task is responsible for establishing the durable transition record and invoking the existing mechanical gate; missing evidence at task start is an expected pre-reconciliation condition and does not require a separate transition-only task.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "5cd7ca8d052367d12eea3e523a42713a81f0e402a7a4ff5112ccb4d534d6ea87",
+  "state_md_sha256": "bf1166c0e152d7afe09abe56a0aa3cd08bfbcaba0c86a1e5fa3ef52c21c5e201",
   "verification_status": {
     "phase_3_convergence_verification_commit": "8c9e005",
     "status": "CONVERGED",
     "reason": "Phase 3 Autonomous Coordination Loop is independently verified and technically converged; Phase 4 is the next roadmap target.",
     "static_inspection": "COMPLETED",
-    "phase_transition": "PENDING_DURABLE_TRANSITION_EVIDENCE"
+    "phase_transition": "PENDING_FIRST_PHASE_4_RECONCILIATION_BOOTSTRAP"
   }
 }
