@@ -705,3 +705,81 @@ projection SHA-256 against `STATE.md`, derives the requirement mapping and its
 advancement/convergence facts from authoritative state, and blocks before TaskRegistry
 or dispatch on any failure. This adds no execution authority: an aligned result remains
 pending existing Director/ACP authorization.
+
+---
+
+## ADR-024: DeepSeek Coordinator Lifecycle-Enforcement Roadmap Integration
+
+**Status**: ACCEPTED — CURRENT / DOCUMENTATION INTEGRATION (Phase 4 implementation increments remain PROPOSED / TARGET)
+
+**Date**: 2026-10-01
+
+**Context**: Two completed Gemini research passes
+(`research-TASK-GEMINI-DEEPSEEK-COORDINATOR-MACHINE-ENFORCEMENT-LIFECYCLE-RESEARCH-001.md`
+and `research-TASK-GEMINI-DEEPSEEK-COORDINATOR-MACHINE-ENFORCEMENT-LIFECYCLE-DEEP-RESEARCH-002.md`)
+established a twelve-stage coordinator lifecycle model with enforcement-status mapping,
+a procedure-to-enforcement matrix, evidence/provenance model, recovery/re-entry mechanics,
+model-vs-machine authority boundary, and a five-increment Phase 4 implementation plan
+(Increments 4.1–4.5). These research records needed to be integrated into the repository's
+authoritative project roadmap, durable state documentation, and architecture decisions
+without authorizing implementation or falsely activating Phase 4.
+
+**Decision**: The lifecycle-enforcement roadmap is documented in
+`docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md` as the authoritative
+sequencing document for Phase 4. The twelve-stage model distinguishes coordinator lifecycle
+state (Stages 1–12: Bootstrap, Protocol Review, Requirements Extraction, State
+Verification, Solution Simplicity, Roadmap Alignment, Action Construction, ACP Compliance,
+Authorization, Authorized Execution, Independent Verification, Reconciliation & Stop) from
+TaskRegistry task lifecycle state (`PENDING → SELECTED → PLANNED → EXECUTING → VERIFIED →
+COMPLETE`; terminal `FAILED`/`BLOCKED`/`CANCELLED`/`SUPERSEDED`). The roadmap defines five
+planned Phase 4 implementation increments:
+
+- **Increment 4.1** — Server-Side Protocol & Roadmap Alignment Ingress Gate: bind
+  coordinator ingress to authoritative protocol SHA-256 and strategic-roadmap state; extend
+  `poc/strategic-alignment.js` integration to `/poc/coordinator` ingress; fail-closed.
+- **Increment 4.2** — Mandatory State Inspection & Requirements Extraction Gating: require
+  prior `get_task` observation or repository inspection evidence before task construction;
+  enforce structured `requirements_reference` for non-trivial tasks; stable request
+  fingerprint idempotency.
+- **Increment 4.3** — Mechanical Verification-to-Completion State Binding: bind execution,
+  `INDEPENDENT_VERIFICATION`, `VERIFIED` transition, and completion eligibility to passing
+  test artifacts and review reports; `AGENT_REPORT` is execution evidence only.
+- **Increment 4.4** — Automated Reconciliation & Closeout Enforcement: task-aware
+  reconciliation contract (not a universal three-file checklist); task cannot reach terminal
+  `COMPLETE` until its reconciliation contract is machine-verified.
+- **Increment 4.5** — Lifecycle Recovery, Replay & Convergence Hardening: deterministic
+  recovery from durable state; fail-closed on duplicate requests, replayed authorizations,
+  stale repository state, invalid transitions; reconstruction from TaskRegistry + `STATE.md`
+  + Git HEAD rather than model memory.
+
+Each increment is atomic, independently verifiable, requires its own ACP authorization,
+must produce a committed/pushed repository deliverable when commit/push are authorized, and
+must be verified before the next increment proceeds. None of these increments is authorized
+by this ADR or by the roadmap document. Phase 4 transition remains gated by
+`poc/phase-transition-gate.js`, which cannot validate until durable transition evidence is
+established. The existing read-only observation Increments 4.1–4.9 (already merged to `main`
+as `IMPLEMENTED / STATICALLY VERIFIED; RUNTIME EXECUTION BLOCKED`) are a separate historical
+sequence and remain documented precedent.
+
+**Rationale**: Both research passes produced detailed architectural evidence but lacked a
+single coherent implementation sequencing document. The roadmap fills that gap while
+preserving all existing authority boundaries: single control plane (TaskRegistry + ACP +
+phase-transition gate + Director authorization + server-derived policy), model-as-untrusted
+intent, no second state store, no runtime code changes in this task. The distinction between
+lifecycle-enforcement Increments 4.1–4.5 and read-only observation Increments 4.1–4.9 is
+explicitly documented to prevent numbering confusion. Phase 3 enforcement primitives
+(schema validation, TaskRegistry transitions, lineage validation, Director authorization,
+phase-transition gating, strategic-alignment evaluation, bounded execution, workflow
+sequencing, evidence types, evidence-gated transitions, server-derived authority) are
+already IMPLEMENTED / VERIFIED and form the foundation for Phase 4.
+
+**Consequences**:
+- This ADR and the roadmap document establish authoritative sequencing and architectural
+  direction; they do not implement runtime changes or authorize Phase 4 implementation.
+- Each lifecycle-enforcement increment requires a separate, explicitly authorized ACP task.
+- `STATE.md`, `CONTROL_CENTER.md`, `TASK_LOG.md`, and `RESEARCH_INDEX.md` are updated to
+  reference the roadmap and the five planned increments.
+- No production code, runtime code, `AGENTS.md`, `GEMINI.md`, `ARCHITECTURE.md`, or
+  `.github/workflows/*.yml` files are modified.
+- Phase 4 transition authority remains exclusively with Kyle via
+  `poc/phase-transition-gate.js`.

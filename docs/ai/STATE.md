@@ -76,6 +76,35 @@ Navigation is the next PROPOSED / TARGET roadmap phase. The Phase 4 baseline rec
 - Canonical Gemini execution artifact retrieval: NOT ESTABLISHED from the durable repository state available to this reconciliation
 - First bounded Phase 4 work: Phase 4 design contract and cross-task lineage semantics research/reconciliation, pending successful transition
 
+### Coordinator Lifecycle-Enforcement Roadmap
+
+The authoritative lifecycle-enforcement roadmap is documented in
+`docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md`. This roadmap
+integrates both completed Gemini research passes
+(RESEARCH-001 and DEEP-RESEARCH-002) into a unified twelve-stage coordinator
+lifecycle model with enforcement-status mapping, a procedure-to-enforcement
+matrix, model-vs-machine authority boundaries, architectural corrections, and a
+sequenced five-increment implementation plan for Phase 4:
+
+| Increment | Title | Status |
+|---|---|---|
+| 4.1 | Server-Side Protocol & Roadmap Alignment Ingress Gate | PLANNED / TARGET (requires ACP authorization) |
+| 4.2 | Mandatory State Inspection & Requirements Extraction Gating | PLANNED / TARGET (requires ACP authorization) |
+| 4.3 | Mechanical Verification-to-Completion State Binding | PLANNED / TARGET (requires ACP authorization) |
+| 4.4 | Automated Reconciliation & Closeout Enforcement | PLANNED / TARGET (requires ACP authorization) |
+| 4.5 | Lifecycle Recovery, Replay & Convergence Hardening | PLANNED / TARGET (requires ACP authorization) |
+
+**Important**: These five increments are the lifecycle-enforcement roadmap's
+planned Phase 4 sequence and are distinct from the read-only observation Increments
+4.1–4.9 already merged to `main` (documented as `IMPLEMENTED / STATICALLY VERIFIED;
+RUNTIME EXECUTION BLOCKED` in the Increment History below). No lifecycle-enforcement
+increment is authorized by this document; each requires its own ACP task
+authorization. Phases 3 enforcement primitives (ACP schema validation, TaskRegistry
+status transitions, lineage validation, Director authorization, phase-transition
+gating, strategic-alignment evaluation, bounded execution, workflow sequencing,
+evidence types, evidence-gated transitions, server-derived authority) are
+**IMPLEMENTED / VERIFIED** and form the existing single control plane.
+
 ## Project Status: ACTIVE (Transitional)
 
 **Repository**: `fluentwithkyle/openclaw-webhook`
@@ -118,6 +147,7 @@ information; it exposes no authority fields. **Director Authorization Architectu
 | Task | Status | Owner | Notes |
 |------|--------|-------|-------|
 | TASK-GEMINI-DEEPSEEK-COORDINATOR-MACHINE-ENFORCEMENT-LIFECYCLE-DEEP-RESEARCH-002 | **COMPLETED (RESEARCH / DOCUMENTATION)** | Gemini | Conducted a second, substantially deeper architectural research pass on the machine-enforcement of the complete DeepSeek Coordinator lifecycle across all 12 operating-procedure stages (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-COORDINATOR-MACHINE-ENFORCEMENT-LIFECYCLE-DEEP-RESEARCH-002.md`). Established procedure-to-enforcement matrix, authoritative state machine semantics, evidence/provenance model, recovery/re-entry mechanics, model-vs-machine authority boundary, human-output contract interaction, and a decomposed 4-increment Phase 4 implementation roadmap. Reconciled RESEARCH_INDEX.md, TASK_LOG.md, STATE.md, and CONTROL_CENTER.md. No application code modified. |
+| TASK-GEMINI-DEEPSEEK-COORDINATOR-LIFECYCLE-ROADMAP-INTEGRATION-001 | **COMPLETED (DOCUMENTATION / STATE INTEGRATION)** | Gemini | Integrated both completed lifecycle research passes (RESEARCH-001 and DEEP-RESEARCH-002) into the repository's authoritative project roadmap, durable state documentation, architecture decisions, and execution sequencing documentation. Created the authoritative `docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md` (17-section document: twelve-stage lifecycle model, existing-enforcement inventory, enforcement-gap analysis, procedure-to-enforcement matrix, distinct system states, Phase 4 transition boundary, five planned implementation increments 4.1–4.5, sequencing rules, solution-simplicity gate, model-vs-machine authority boundary, coordinator lifecycle vs. TaskRegistry task lifecycle, architectural corrections). Updated STATE.md (lifecycle-enforcement roadmap and increment table), CONTROL_CENTER.md (operational view), TASK_LOG.md (task entry), and ARCH_DECISIONS.md (ADR-024). Verified RESEARCH_INDEX.md already indexes both lifecycle research records. No application code, runtime code, or production implementation modified; no Phase 4 transition activated; no implementation increment marked complete. |
 | TASK-GEMINI-DEEPSEEK-COORDINATOR-MACHINE-ENFORCEMENT-LIFECYCLE-RESEARCH-001 | **COMPLETED (RESEARCH / DOCUMENTATION)** | Gemini | Researched and durably documented how the ChatGPT/DeepSeek coordinator operating protocol can be converted into a machine-enforced coordinator lifecycle within the existing DeepSeek Coordinator Evolution architecture (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-COORDINATOR-MACHINE-ENFORCEMENT-LIFECYCLE-RESEARCH-001.md`). Mapped all 12 operating steps across requirements, enforcement status, state, boundaries, failures, and evidence; investigated task-construction failure mode and mechanical prevention; designed target state machine reusing existing primitives (TaskRegistry, ACP validation, Phase transition gates, Director approvals); mapped enforcement boundaries and reuse analysis; proposed Phase 4 roadmap amendment (Increment 4.1). Reconciled RESEARCH_INDEX.md, TASK_LOG.md, STATE.md, and CONTROL_CENTER.md. No application code modified. |
 | TASK-CHATGPT-PHASE-4-RESEARCH-RECONCILIATION-BASELINE-CORRECTION-001 | **COMPLETED / RECONCILED; PHASE 4 TRANSITION BLOCKED** | ChatGPT | Corrected the Phase 4 baseline evidence classifications and durable state to preserve Phase 3 as current because the required transition coordinator record and canonical Gemini execution artifact are not established on main. Created the durable Phase 4 reconciliation record and preserved Render live verification as deferred. |
 | TASK-GEMINI-OPENROUTER-BUILDER-FUTURE-PROJECT-DOCUMENTATION-001 | **COMPLETED (RESEARCH / DOCUMENTATION)** | Gemini | Researched, defined, and durably documented the future "OpenRouter Builder" execution lane as an implementation-ready Phase 4 project definition (`docs/ai/research/research-TASK-GEMINI-OPENROUTER-BUILDER-FUTURE-PROJECT-DOCUMENTATION-001.md`). Reconciled RESEARCH_INDEX.md, STATE.md, CONTROL_CENTER.md, and TASK_LOG.md. Implementation remains explicitly deferred until completion of the DeepSeek Coordinator Evolution project and Kyle's authorization. |
