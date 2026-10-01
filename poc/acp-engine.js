@@ -2,6 +2,7 @@ const { execSync } = require('child_process');
 const path = require('path');
 
 const schema = require('./schemas/acp-schema');
+const activationPolicy = require('./activation-policy');
 
 const ALLOWED_CAPABILITIES = ['read_only'];
 const ALLOWED_BASE_PATH = 'poc/';
@@ -71,10 +72,13 @@ function validateACPCompliance(command) {
 }
 
 function validateActivationSyntax(activationText, expectedTarget) {
-    return schema.validateActivationSyntax(activationText, expectedTarget);
+    return activationPolicy.validateActivationSyntax(activationText, expectedTarget);
 }
 
-function validateActivationSurface(surface, target) {
+function validateActivationSurface(surface, target, taskMode) {
+    if (taskMode) {
+        return activationPolicy.validateActivationSurface(surface, target, taskMode);
+    }
     return schema.validateActivationSurface(surface, target);
 }
 
@@ -116,5 +120,6 @@ module.exports = {
   validateACPCompliance,
   validateActivationSyntax,
   validateActivationSurface,
+  requiresActivation: activationPolicy.requiresActivation,
   getRequiredEvidenceForTransition
 };

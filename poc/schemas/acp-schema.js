@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const activationPolicy = require('../activation-policy');
+
 const ACP_COMMAND_REQUIRED_FIELDS = [
   'protocol_version',
   'request_id',
@@ -93,18 +95,11 @@ const GEMINI_CLI_ACTIVATION_PATTERN = /^@gemini-cli\b/;
 const GEMINI_BARE_PATTERN = /^@Gemini\b/;
 const ARBITRARY_MENTION_PATTERN = /@gemini\b/;
 
-// Task modes that represent externally activated execution artifacts and
-// therefore require activation_syntax + activation_surface at the ACP
-// compliance boundary. REVIEW / VERIFY_RECONCILE / RESEARCH_DOCUMENT are not
-// externally activated execution artifacts and do not require activation
-// metadata.
-const EXECUTION_TASK_MODES = ['FAILOVER_EXECUTE', 'BUILDER'];
-
-const VALID_ACTIVATION_SURFACES = {
-  'Kilo': ['github_issue_comment', 'github_issue_body', 'github_push_event'],
-  'Gemini': ['github_issue_comment', 'workflow_dispatch'],
-  'Gemini Builder': ['github_issue_comment', 'workflow_dispatch']
-};
+// Task modes and activation surfaces are now governed by the server-controlled
+// activation-policy module. These references preserve backward compatibility
+// while delegating to the canonical agent x task-mode x activation-surface policy.
+const EXECUTION_TASK_MODES = activationPolicy.EXECUTION_TASK_MODES;
+const VALID_ACTIVATION_SURFACES = activationPolicy.VALID_ACTIVATION_SURFACES_LEGACY;
 
 const AGENT_EVIDENCE_TYPE = {
   'Kilo': 'AGENT_REPORT',
@@ -686,57 +681,23 @@ function createInitialTaskRegistryEntry(requestId, command) {
    };
  }
 
- function validateActivationSyntax(activationText, expectedTarget) {
-   if (!activationText || typeof activationText !== 'string' || activationText.trim().length === 0) {
-     return { valid: false, error: 'Activation syntax is required' };
-   }
+  function validateActivationSyntax(activationText, expectedTarget) {
+    return activationPolicy.validateActivationSyntax(activationText, expectedTarget);
+  }
 
-   const trimmed = activationText.trim();
-
-   if (expectedTarget === 'Kilo') {
-     if (KILO_ACTIVATION_PATTERN.test(trimmed)) {
-       return { valid: true, activation_surface: 'github_issue_comment' };
-     }
-     return {
-       valid: false,
-       error: 'Kilo execution tasks require @kilo initiation syntax with an authorized issue-based activation surface'
-     };
-   }
-
-   if (expectedTarget === 'Gemini' || expectedTarget === 'Gemini Builder') {
-     if (GEMINI_CLI_ACTIVATION_PATTERN.test(trimmed)) {
-       return { valid: true, activation_surface: 'github_issue_comment' };
-     }
-     if (GEMINI_BARE_PATTERN.test(trimmed)) {
-       return {
-         valid: false,
-         error: 'Invalid activation syntax: @Gemini is not valid. Use @gemini-cli for Gemini execution tasks'
-       };
-     }
-     if (ARBITRARY_MENTION_PATTERN.test(trimmed)) {
-       return {
-         valid: false,
-         error: 'Arbitrary Gemini mentions are not valid activation syntax. Use @gemini-cli for Gemini execution tasks'
-       };
-     }
-     return {
-       valid: false,
-       error: expectedTarget + ' execution tasks require @gemini-cli initiation syntax'
-     };
-   }
-
-   return { valid: false, error: 'Unknown target for activation validation: ' + expectedTarget };
- }
-
-function validateActivationSurface(surface, target) {
-    const allowed = VALID_ACTIVATION_SURFACES[target];
-    if (!allowed) {
-      return { valid: false, error: 'No activation surfaces defined for target: ' + target };
-    }
-    if (!surface || !allowed.includes(surface)) {
-      return { valid: false, error: 'Unauthorized activation surface for ' + target + ': ' + surface + '. Authorized: ' + allowed.join(', ') };
-    }
-    return { valid: true };
+function validateActivationSurface(surface, target, taskMode) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+  if (EXECUTION_TASK_MODES.includes(mode)) {
+    return activationPolicy.validateActivationSurface(surface, target, mode);
+  }
+  const allowed = VALID_ACTIVATION_SURFACES[target];
+  if (!allowed) {
+    return { valid: false, error: 'No activation surfaces defined for target: ' + target };
+  }
+  if (!surface || !allowed.includes(surface)) {
+    return { valid: false, error: 'Unauthorized activation surface for ' + target + ': ' + surface + '. Authorized: ' + allowed.join(', ') };
+  }
+  return { valid: true };
 }
 
 function taskModeRequiresActivation(taskMode) {
@@ -830,8 +791,8 @@ function validateACPCompliance(command) {
       }
     }
 
-    if (command.activation_surface) {
-      const surfaceValidation = validateActivationSurface(command.activation_surface, command.target);
+     if (command.activation_surface) {
+      const surfaceValidation = validateActivationSurface(command.activation_surface, command.target, taskMode);
       if (!surfaceValidation.valid) {
         return surfaceValidation;
       }
@@ -898,9 +859,10 @@ module.exports = {
    createEvidenceRecord,
    validateActivationSyntax,
    validateActivationSurface,
-   taskModeRequiresActivation,
-   validateACPCompliance,
-   createInitialTaskRegistryEntry,
-   verifyConfiguration,
-   isConfigurationAuthoritativelyVerified
+    taskModeRequiresActivation,
+    validateACPCompliance,
+    createInitialTaskRegistryEntry,
+    verifyConfiguration,
+    isConfigurationAuthoritativelyVerified,
+    activationPolicy
 };

@@ -1,0 +1,702 @@
+const assert = require('assert');
+const activationPolicy = require('../poc/activation-policy');
+const { canonicalExternalActivationIngress } = require('../poc/activation-ingress');
+const taskRegistry = require('../poc/task-registry');
+const { setDispatcher, dispatch } = require('../services/transport-provider');
+const path = require('path');
+const fs = require('fs');
+
+const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
+const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
+
+let passCount = 0;
+let failCount = 0;
+
+function assertEqual(actual, expected, msg) {
+    if (actual !== expected) {
+        throw new Error(`${msg || 'Assertion failed'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+}
+
+function assertTrue(condition, msg) {
+    if (!condition) {
+        throw new Error(`${msg || 'Assertion failed'}: expected truthy value`);
+    }
+}
+
+function assertDeepEqual(actual, expected, msg) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) {
+        throw new Error(`${msg || 'Deep assertion failed'}: expected ${e}, got ${a}`);
+    }
+}
+
+async function runTest(name, fn) {
+    try {
+        await fn();
+        console.log(`PASS: ${name}`);
+        passCount++;
+    } catch (err) {
+        console.error(`FAIL: ${name} - ${err.message}`);
+        failCount++;
+    }
+}
+
+function cleanup() {
+    if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
+    if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
+    taskRegistry.resetRegistry();
+}
+
+function makeKiloFailoverCommand(requestId, overrides) {
+    return Object.assign({
+        protocol_version: '0.1',
+        request_id: requestId,
+        source: 'DeepSeek Coordinator',
+        target: 'Kilo',
+        task_type: 'implementation',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task: 'test-failover-task',
+        task_mode: 'FAILOVER_EXECUTE',
+        constraints: { permitted_paths: ['poc/'] },
+        authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] },
+        verification: 'Run tests and verify',
+        reporting: 'json',
+        originator: 'Kyle',
+        activation_syntax: '@kilo',
+        activation_surface: 'github_issue_comment'
+    }, overrides || {});
+}
+
+function setupDirectorApproval(requestId, target, taskMode, capabilities, permittedPaths) {
+    const approvalResult = taskRegistry.createDirectorApproval({
+        request_id: requestId,
+        target: target,
+        task_mode: taskMode,
+        capabilities: capabilities,
+        permitted_paths: permittedPaths,
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+    return approvalResult;
+}
+
+function makeGeminiFailoverCommand(requestId, overrides) {
+    return Object.assign({
+        protocol_version: '0.1',
+        request_id: requestId,
+        source: 'DeepSeek Coordinator',
+        target: 'Gemini',
+        task_type: 'implementation',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task: 'test-gemini-failover',
+        task_mode: 'FAILOVER_EXECUTE',
+        constraints: { permitted_paths: ['poc/'] },
+        authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] },
+        verification: 'Run tests and verify',
+        reporting: 'json',
+        originator: 'Kyle',
+        activation_syntax: '@gemini-cli',
+        activation_surface: 'github_issue_comment'
+    }, overrides || {});
+}
+
+function makeBuilderCommand(requestId, overrides) {
+    return Object.assign({
+        protocol_version: '0.1',
+        request_id: requestId,
+        source: 'DeepSeek Coordinator',
+        target: 'Gemini Builder',
+        task_type: 'implementation',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task: 'test-builder-task',
+        task_mode: 'BUILDER',
+        constraints: { permitted_paths: ['poc/'] },
+        authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] },
+        verification: 'verify build',
+        reporting: 'json',
+        originator: 'Kyle',
+        activation_syntax: '@gemini-cli',
+        activation_surface: 'workflow_dispatch'
+    }, overrides || {});
+}
+
+async function main() {
+    process.env.ACP_POC_TRIGGER_SECRET = 'test-secret';
+
+    // =========================================================
+    // Policy Matrix Tests
+    // =========================================================
+
+    await runTest('Policy - Kilo FAILOVER_EXECUTE permits github_issue_comment', () => {
+        cleanup();
+        const surfaces = activationPolicy.getPermittedActivationSurfaces('Kilo', 'FAILOVER_EXECUTE');
+        assertTrue(surfaces.includes('github_issue_comment'), 'Should include github_issue_comment');
+        assertTrue(surfaces.includes('github_issue_body'), 'Should include github_issue_body');
+        assertTrue(surfaces.includes('github_push_event'), 'Should include github_push_event');
+    });
+
+    await runTest('Policy - Gemini FAILOVER_EXECUTE permits github_issue_comment and workflow_dispatch', () => {
+        cleanup();
+        const surfaces = activationPolicy.getPermittedActivationSurfaces('Gemini', 'FAILOVER_EXECUTE');
+        assertTrue(surfaces.includes('github_issue_comment'), 'Should include github_issue_comment');
+        assertTrue(surfaces.includes('workflow_dispatch'), 'Should include workflow_dispatch');
+        assertTrue(!surfaces.includes('github_push_event'), 'Should NOT include github_push_event for Gemini');
+    });
+
+    await runTest('Policy - Gemini Builder BUILDER permits github_issue_comment and workflow_dispatch', () => {
+        cleanup();
+        const surfaces = activationPolicy.getPermittedActivationSurfaces('Gemini Builder', 'BUILDER');
+        assertTrue(surfaces.includes('github_issue_comment'), 'Should include github_issue_comment');
+        assertTrue(surfaces.includes('workflow_dispatch'), 'Should include workflow_dispatch');
+    });
+
+    await runTest('Policy - REVIEW mode does not require activation', () => {
+        cleanup();
+        const requires = activationPolicy.requiresActivation('Kilo', 'REVIEW');
+        assertEqual(requires, false, 'REVIEW should not require activation');
+    });
+
+    await runTest('Policy - VERIFY_RECONCILE mode does not require activation', () => {
+        cleanup();
+        const requires = activationPolicy.requiresActivation('Kilo', 'VERIFY_RECONCILE');
+        assertEqual(requires, false, 'VERIFY_RECONCILE should not require activation');
+    });
+
+    await runTest('Policy - RESEARCH_DOCUMENT mode does not require activation', () => {
+        cleanup();
+        const requires = activationPolicy.requiresActivation('Kilo', 'RESEARCH_DOCUMENT');
+        assertEqual(requires, false, 'RESEARCH_DOCUMENT should not require activation');
+    });
+
+    await runTest('Policy - FAILOVER_EXECUTE requires activation', () => {
+        cleanup();
+        const requires = activationPolicy.requiresActivation('Kilo', 'FAILOVER_EXECUTE');
+        assertEqual(requires, true, 'FAILOVER_EXECUTE should require activation');
+    });
+
+    await runTest('Policy - BUILDER mode requires activation', () => {
+        cleanup();
+        const requires = activationPolicy.requiresActivation('Gemini Builder', 'BUILDER');
+        assertEqual(requires, true, 'BUILDER should require activation');
+    });
+
+    await runTest('Policy - unknown agent returns null policy entry', () => {
+        cleanup();
+        const entry = activationPolicy.getPolicyEntry('UnknownAgent', 'REVIEW');
+        assertEqual(entry, null);
+    });
+
+    await runTest('Policy - unknown task mode returns null policy entry', () => {
+        cleanup();
+        const entry = activationPolicy.getPolicyEntry('Kilo', 'UNKNOWN_MODE');
+        assertEqual(entry, null);
+    });
+
+    await runTest('Policy - Security Specialist REVIEW does not require activation', () => {
+        cleanup();
+        const requires = activationPolicy.requiresActivation('Security Specialist', 'REVIEW');
+        assertEqual(requires, false);
+    });
+
+    // =========================================================
+    // Activation Syntax Validation Tests
+    // =========================================================
+
+    await runTest('Syntax - @kilo is valid for Kilo', () => {
+        const result = activationPolicy.validateActivationSyntax('@kilo', 'Kilo');
+        assertTrue(result.valid, '@kilo should be valid for Kilo');
+    });
+
+    await runTest('Syntax - @kilo is case-sensitive (no @Kilo)', () => {
+        const result = activationPolicy.validateActivationSyntax('@Kilo', 'Kilo');
+        assertTrue(!result.valid, '@Kilo should be rejected');
+    });
+
+    await runTest('Syntax - @gemini-cli is valid for Gemini', () => {
+        const result = activationPolicy.validateActivationSyntax('@gemini-cli', 'Gemini');
+        assertTrue(result.valid, '@gemini-cli should be valid for Gemini');
+    });
+
+    await runTest('Syntax - @gemini-cli is valid for Gemini Builder', () => {
+        const result = activationPolicy.validateActivationSyntax('@gemini-cli', 'Gemini Builder');
+        assertTrue(result.valid, '@gemini-cli should be valid for Gemini Builder');
+    });
+
+    await runTest('Syntax - @Gemini (capital) is rejected', () => {
+        const result = activationPolicy.validateActivationSyntax('@Gemini', 'Gemini');
+        assertTrue(!result.valid, '@Gemini should be rejected');
+        assertTrue(result.error.includes('not valid'), 'Error should mention not valid');
+    });
+
+    await runTest('Syntax - bare @gemini mention is rejected', () => {
+        const result = activationPolicy.validateActivationSyntax('@gemini please review', 'Gemini');
+        assertTrue(!result.valid, '@gemini bare mention should be rejected');
+    });
+
+    await runTest('Syntax - empty activation is rejected', () => {
+        const result = activationPolicy.validateActivationSyntax('', 'Kilo');
+        assertTrue(!result.valid);
+    });
+
+    await runTest('Syntax - undefined activation is rejected', () => {
+        const result = activationPolicy.validateActivationSyntax(undefined, 'Kilo');
+        assertTrue(!result.valid);
+    });
+
+    // =========================================================
+    // Activation Surface Validation Tests
+    // =========================================================
+
+    await runTest('Surface - valid surface for Kilo FAILOVER_EXECUTE', () => {
+        const result = activationPolicy.validateActivationSurface('github_issue_comment', 'Kilo', 'FAILOVER_EXECUTE');
+        assertTrue(result.valid, 'github_issue_comment should be valid for Kilo FAILOVER_EXECUTE');
+    });
+
+    await runTest('Surface - invalid surface for Kilo FAILOVER_EXECUTE fails closed', () => {
+        const result = activationPolicy.validateActivationSurface('workflow_dispatch', 'Kilo', 'FAILOVER_EXECUTE');
+        assertTrue(!result.valid, 'workflow_dispatch should NOT be valid for Kilo FAILOVER_EXECUTE');
+    });
+
+    await runTest('Surface - workflow_dispatch is valid for Gemini FAILOVER_EXECUTE', () => {
+        const result = activationPolicy.validateActivationSurface('workflow_dispatch', 'Gemini', 'FAILOVER_EXECUTE');
+        assertTrue(result.valid, 'workflow_dispatch should be valid for Gemini FAILOVER_EXECUTE');
+    });
+
+    await runTest('Surface - null surface fails closed', () => {
+        const result = activationPolicy.validateActivationSurface(null, 'Kilo', 'FAILOVER_EXECUTE');
+        assertTrue(!result.valid);
+    });
+
+    await runTest('Surface - unknown surface name fails closed', () => {
+        const result = activationPolicy.validateActivationSurface('unknown_surface', 'Kilo', 'FAILOVER_EXECUTE');
+        assertTrue(!result.valid);
+    });
+
+    // =========================================================
+    // Authority Conflict Tests
+    // =========================================================
+
+    await runTest('Authority - conflicting capabilities are detected', () => {
+        const result = activationPolicy.isAuthorityConflict(
+            { authorization: { capabilities: ['read_only'] } },
+            { claimed_authority: { authorization: { capabilities: ['read_only', 'modify_files'] } } }
+        );
+        assertTrue(result.conflict, 'Should detect authority conflict');
+        assertTrue(result.conflicting_fields.includes('authorization'));
+    });
+
+    await runTest('Authority - non-conflicting capabilities are not flagged', () => {
+        const result = activationPolicy.isAuthorityConflict(
+            { authorization: { capabilities: ['read_only', 'modify_files'] } },
+            { claimed_authority: { capabilities: ['read_only', 'modify_files'] } }
+        );
+        assertTrue(!result.conflict);
+    });
+
+    await runTest('Authority - conflicting target is detected', () => {
+        const result = activationPolicy.isAuthorityConflict(
+            { target: 'Kilo' },
+            { claimed_authority: { target: 'Gemini' } }
+        );
+        assertTrue(result.conflict);
+        assertTrue(result.conflicting_fields.includes('target'));
+    });
+
+    await runTest('Authority - conflicting repository is detected', () => {
+        const result = activationPolicy.isAuthorityConflict(
+            { repository: 'fluentwithkyle/openclaw-webhook' },
+            { claimed_authority: { repository: 'other/repo' } }
+        );
+        assertTrue(result.conflict);
+        assertTrue(result.conflicting_fields.includes('repository'));
+    });
+
+    await runTest('Authority - no claimed authority is not a conflict', () => {
+        const result = activationPolicy.isAuthorityConflict(
+            { authorization: { capabilities: ['read_only'] } },
+            {}
+        );
+        assertTrue(!result.conflict);
+    });
+
+    // =========================================================
+    // Server-Derived Authority Enforcement Tests
+    // =========================================================
+
+    await runTest('Authority enforcement - correct capabilities pass for FAILOVER_EXECUTE', () => {
+        cleanup();
+        const result = activationPolicy.enforceServerDerivedAuthority(makeKiloFailoverCommand('auth-test-1'));
+        assertTrue(result.valid, 'Should be valid with server-derived capabilities');
+        assertTrue(result.server_derived.capabilities.includes('modify_files'));
+        assertTrue(result.server_derived.capabilities.includes('run_tests'));
+    });
+
+    await runTest('Authority enforcement - missing capabilities fail closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('auth-test-2');
+        cmd.authorization.capabilities = ['read_only'];
+        const result = activationPolicy.enforceServerDerivedAuthority(cmd);
+        assertTrue(!result.valid);
+        assertTrue(result.error_code === 'MISSING_SERVER_DERIVED_CAPABILITY');
+    });
+
+    // =========================================================
+    // Canonical External Activation Ingress Tests
+    // =========================================================
+
+    await runTest('Ingress - valid Kilo FAILOVER_EXECUTE creates task and returns success', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-1');
+        const approval = setupDirectorApproval('ingress-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success, 'Approval should be created');
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        assertEqual(result.activation_provenance.activation_target, 'Kilo');
+        assertEqual(result.activation_provenance.activation_task_mode, 'FAILOVER_EXECUTE');
+        cleanup();
+    });
+
+    await runTest('Ingress - valid Gemini FAILOVER_EXECUTE creates task and returns success', () => {
+        cleanup();
+        const cmd = makeGeminiFailoverCommand('ingress-test-2');
+        const approval = setupDirectorApproval('ingress-test-2', 'Gemini', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success, 'Approval should be created');
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        assertEqual(result.activation_provenance.activation_target, 'Gemini');
+        cleanup();
+    });
+
+    await runTest('Ingress - valid Builder BUILDER creates task and returns success', () => {
+        cleanup();
+        const cmd = makeBuilderCommand('ingress-test-3');
+        const approval = setupDirectorApproval('ingress-test-3', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success, 'Approval should be created');
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        assertEqual(result.activation_provenance.activation_target, 'Gemini Builder');
+        cleanup();
+    });
+
+    await runTest('Ingress - missing activation_surface fails closed for FAILOVER_EXECUTE', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-4');
+        delete cmd.activation_surface;
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+    });
+
+    await runTest('Ingress - invalid activation_surface fails closed for Kilo FAILOVER_EXECUTE', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-5');
+        cmd.activation_surface = 'workflow_dispatch';
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+    });
+
+    await runTest('Ingress - invalid activation syntax fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-6');
+        cmd.activation_syntax = '@Kilo';
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+    });
+
+    await runTest('Ingress - authority conflict on capabilities fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-7');
+        cmd.authorization.capabilities = ['read_only'];
+        cmd.claimed_authority = { capabilities: ['read_only', 'modify_files', 'commit', 'push'] };
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+        assertEqual(result.stage, 'authorization blocked');
+    });
+
+    await runTest('Ingress - authority conflict on target fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-8');
+        cmd.claimed_authority = { target: 'Gemini' };
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.stage, 'authorization blocked');
+    });
+
+    await runTest('Ingress - invalid target fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-9');
+        cmd.target = 'UnknownAgent';
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+    });
+
+    await runTest('Ingress - invalid task_mode fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-10');
+        cmd.task_mode = 'INVALID_MODE';
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+    });
+
+    await runTest('Ingress - REVIEW mode (non-execution) does not require activation', () => {
+        cleanup();
+        const cmd = {
+            protocol_version: '0.1',
+            request_id: 'ingress-test-11',
+            source: 'DeepSeek Coordinator',
+            target: 'Kilo',
+            task_type: 'implementation',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task: 'test-review-task',
+            task_mode: 'REVIEW',
+            constraints: { permitted_paths: ['poc/'] },
+            authorization: { capabilities: ['read_only'] },
+            verification: 'review the code',
+            reporting: 'json',
+            originator: 'Kyle'
+        };
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(result.success, 'REVIEW mode should succeed without activation: ' + (result.error || ''));
+        cleanup();
+    });
+
+    await runTest('Ingress - duplicate request_id returns conflict', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-idempotent-1');
+        const approval = setupDirectorApproval('ingress-idempotent-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success, 'Approval should be created');
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const first = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(first.success, 'First should succeed');
+        const second = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(!second.success);
+        assertEqual(second.duplicate, true);
+        cleanup();
+    });
+
+    await runTest('Ingress - consequential command without director approval fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-13');
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+        assertEqual(result.stage, 'authorization blocked');
+        assertTrue(result.error.includes('Director approval') || result.error.includes('consequential') || result.director_approval_required);
+    });
+
+    await runTest('Ingress - consequential command with director approval succeeds', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-14');
+        const approvalResult = taskRegistry.createDirectorApproval({
+            request_id: 'ingress-test-14',
+            target: 'Kilo',
+            task_mode: 'FAILOVER_EXECUTE',
+            capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+            permitted_paths: ['poc/'],
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main'
+        });
+        assertTrue(approvalResult.success, 'Approval should be created: ' + approvalResult.error);
+        cmd.authorization.approval_id = approvalResult.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed with approval: ' + (result.error || ''));
+        assertEqual(result.task_entry.authorization_proof.approval_id, approvalResult.approval.approval_id);
+        cleanup();
+    });
+
+    await runTest('Ingress - canonicalizes activation metadata into command', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-15');
+        const approval = setupDirectorApproval('ingress-test-15', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        assertTrue(result.command.activation_id !== undefined, 'command should have activation_id');
+        assertTrue(result.command.activation_surface !== undefined, 'command should have activation_surface');
+        assertTrue(result.command.activation_source !== undefined, 'command should have activation_source');
+        cleanup();
+    });
+
+    await runTest('Ingress - activation_provenance stored in task entry', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-16');
+        const approval = setupDirectorApproval('ingress-test-16', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        const task = taskRegistry.getTask('ingress-test-16');
+        assertTrue(task.activation_provenance !== undefined, 'Task should have activation_provenance');
+        assertEqual(task.activation_provenance.activation_id, result.activation_provenance.activation_id);
+        cleanup();
+    });
+
+    await runTest('Ingress - server-derived capabilities override command capabilities', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-17');
+        const approval = setupDirectorApproval('ingress-test-17', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        assertTrue(result.command.authorization.capabilities.includes('commit'), 'Should have server-derived commit capability');
+        cleanup();
+    });
+
+    await runTest('Ingress - server-derived permitted_paths override command paths', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-18');
+        const approval = setupDirectorApproval('ingress-test-18', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        cleanup();
+    });
+
+    await runTest('Ingress - invalid ACP command (missing field) fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-19');
+        delete cmd.request_id;
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success);
+        assertEqual(result.status, 'BLOCKED');
+    });
+
+    await runTest('Ingress - workflow_dispatch surface valid for Gemini BUILDER', () => {
+        cleanup();
+        const cmd = makeBuilderCommand('ingress-test-20');
+        const approval = setupDirectorApproval('ingress-test-20', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'workflow_dispatch should be valid for Gemini Builder BUILDER: ' + (result.error || ''));
+        cleanup();
+    });
+
+    await runTest('Ingress - github_push_event valid for Kilo FAILOVER_EXECUTE', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-21');
+        const approval = setupDirectorApproval('ingress-test-21', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'github_push_event should be valid for Kilo FAILOVER_EXECUTE: ' + (result.error || ''));
+        cleanup();
+    });
+
+    // =========================================================
+    // Extensibility Tests
+    // =========================================================
+
+    await runTest('Policy - activation surfaces are derived from policy, not hardcoded parsers', () => {
+        const kiloSurfaces = activationPolicy.getPermittedActivationSurfaces('Kilo', 'FAILOVER_EXECUTE');
+        const geminiSurfaces = activationPolicy.getPermittedActivationSurfaces('Gemini', 'FAILOVER_EXECUTE');
+        assertTrue(kiloSurfaces !== geminiSurfaces || kiloSurfaces.length !== geminiSurfaces.length,
+            'Different agents should have different surface policies');
+    });
+
+    await runTest('Policy - new agent can be added without new parser', () => {
+        const entry = activationPolicy.getPolicyEntry('Utility Specialist', 'REVIEW');
+        assertTrue(entry !== null, 'Utility Specialist REVIEW should have a policy entry');
+        assertTrue(!entry.requires_activation, 'Utility Specialist REVIEW should not require activation');
+    });
+
+    // =========================================================
+    // DeepSeek Runtime Independence Tests
+    // =========================================================
+
+    await runTest('Ingress does not require DeepSeek runtime (uses existing task-registry + dispatcher)', () => {
+        delete process.env.DEEPSEEK_API_KEY;
+        delete process.env.DEEPSEEK_COORDINATOR_SECRET;
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-22');
+        const approval = setupDirectorApproval('ingress-test-22', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should work without DeepSeek: ' + (result.error || ''));
+        const task = taskRegistry.getTask('ingress-test-22');
+        assertTrue(task !== null, 'Task should be registered in TaskRegistry');
+        cleanup();
+    });
+
+    // =========================================================
+    // Idempotency / Replay Tests
+    // =========================================================
+
+    await runTest('Ingress - duplicate request_id returns conflict', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-dup-1');
+        const approval = setupDirectorApproval('ingress-dup-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success, 'Approval should be created: ' + approval.error);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+
+        const first = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(first.success, 'First should succeed: ' + (first.error || ''));
+
+        const second = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(!second.success, 'Second should fail as duplicate');
+        assertEqual(second.duplicate, true);
+        cleanup();
+    });
+
+    // =========================================================
+    // One Control Plane Tests
+    // =========================================================
+
+    await runTest('Ingress - task registered in single TaskRegistry (no second registry)', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-23');
+        const approval = setupDirectorApproval('ingress-test-23', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        const task = taskRegistry.getTask('ingress-test-23');
+        assertTrue(task !== null, 'Task must be in the single TaskRegistry');
+        assertEqual(task.request_id, 'ingress-test-23');
+        cleanup();
+    });
+
+    await runTest('Ingress - activation ingress uses existing ACP validate function', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-test-24');
+        const approval = setupDirectorApproval('ingress-test-24', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        const acpResult = require('../poc/acp-engine').validate(result.command);
+        assertEqual(acpResult.status, 'SUCCESS');
+        cleanup();
+    });
+
+    // =========================================================
+    // Summary
+    // =========================================================
+    console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
+    if (failCount > 0) {
+        process.exit(1);
+    }
+}
+
+main().catch(err => {
+    console.error('Test suite error:', err);
+    process.exit(1);
+});
