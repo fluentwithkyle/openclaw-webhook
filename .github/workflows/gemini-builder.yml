@@ -58,6 +58,7 @@ jobs:
 
       - name: Prepare orchestration context
         id: orchestration_context
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -95,6 +96,39 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      - name: Validate external activation through canonical ingress
+        id: validate_activation
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          TASK: ${{ inputs.task }}
+          REPOSITORY: ${{ inputs.repository }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          TASK_MODE: ${{ inputs.task_mode || 'BUILDER' }}
+          CAPABILITIES: ${{ inputs.capabilities || 'read_only,modify_files,run_tests,commit,push' }}
+          PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CALLBACK_BASE_URL" ]; then
+            echo "::error::RENDER_CALLBACK_BASE_URL is not configured; cannot validate activation through canonical ingress"
+            exit 1
+          fi
+
+          node poc/validate-external-activation.js builder-workflow-dispatch "{
+            \"request_id\": \"$REQUEST_ID\",
+            \"task\": \"$TASK\",
+            \"repository\": \"$REPOSITORY\",
+            \"base_branch\": \"$BASE_BRANCH\",
+            \"task_mode\": \"$TASK_MODE\",
+            \"capabilities\": \"$CAPABILITIES\",
+            \"permitted_paths\": \"$PERMITTED_PATHS\"
+          }"
+
+          echo "activation_validated=true" >> "$GITHUB_OUTPUT"
+
       - name: Configure git identity
         if: always()
         shell: bash
@@ -104,6 +138,7 @@ jobs:
 
       - name: Run Gemini Builder
         id: gemini_builder_run
+        if: steps.validate_activation.outputs.activation_validated == 'true'
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

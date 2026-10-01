@@ -144,9 +144,76 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      - name: Validate external activation through canonical ingress (issue_comment)
+        id: validate_activation
+        if: github.event_name == 'issue_comment'
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CALLBACK_BASE_URL" ]; then
+            echo "::error::RENDER_CALLBACK_BASE_URL is not configured; cannot validate activation through canonical ingress"
+            exit 1
+          fi
+
+          # Build the activation payload and validate through the canonical ingress.
+          # This step ensures the activation is server-validated before the Gemini CLI is invoked,
+          # closing the external-activation producer bypass.
+          node poc/validate-external-activation.js gemini-issue-comment "{
+            \"comment_id\": \"$COMMENT_ID\",
+            \"comment_body\": \"$COMMENT_BODY\",
+            \"repository\": \"$REPOSITORY\",
+            \"base_branch\": \"$BASE_BRANCH\"
+          }"
+
+          echo "activation_validated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate external activation through canonical ingress (workflow_dispatch)
+        id: validate_activation_wfd
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          TASK: ${{ inputs.task }}
+          REPOSITORY: ${{ inputs.repository }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          TASK_MODE: ${{ inputs.task_mode || 'REVIEW' }}
+          CAPABILITIES: ${{ inputs.capabilities || 'read_only' }}
+          PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}
+          VERIFICATION: ${{ inputs.verification || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CALLBACK_BASE_URL" ]; then
+            echo "::error::RENDER_CALLBACK_BASE_URL is not configured; cannot validate activation through canonical ingress"
+            exit 1
+          fi
+
+          node poc/validate-external-activation.js gemini-workflow-dispatch "{
+            \"request_id\": \"$REQUEST_ID\",
+            \"task\": \"$TASK\",
+            \"repository\": \"$REPOSITORY\",
+            \"base_branch\": \"$BASE_BRANCH\",
+            \"task_mode\": \"$TASK_MODE\",
+            \"capabilities\": \"$CAPABILITIES\",
+            \"permitted_paths\": \"$PERMITTED_PATHS\",
+            \"verification\": \"$VERIFICATION\"
+          }"
+
+          echo "activation_validated=true" >> "$GITHUB_OUTPUT"
+
       - name: Prepare orchestration context (issue_comment)
         id: orchestration_context
-        if: github.event_name == 'issue_comment'
+        if: github.event_name == 'issue_comment' && steps.validate_activation.outputs.activation_validated == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -186,6 +253,7 @@ jobs:
 
       - name: Run Gemini in advisory mode
         id: gemini_run
+        if: steps.validate_activation.outputs.activation_validated == 'true' || steps.validate_activation_wfd.outputs.activation_validated == 'true'
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
