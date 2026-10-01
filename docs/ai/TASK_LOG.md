@@ -2957,3 +2957,14 @@ existing Director authorization.
 **Evidence classification**: VERIFIED repository implementation/documentation inspection. Live provider-side Kilo execution and runtime test execution were not independently verified in this coordinator environment.
 
 **Research Record**: `docs/ai/research/research-TASK-CHATGPT-AGENT-INDEPENDENT-EXTERNAL-ACTIVATION-RECOVERY-RESEARCH-001.md`.
+
+
+## 2026-10-01 | TASK-CHATGPT-PHASE-4-TRANSITION-EXTERNAL-ACTIVATION-FOUNDATION-VERIFY-RECONCILE-001
+
+**Task**: Independently verify the Phase 4 transition prerequisites and the external-activation foundation at commit 2136c44, establish durable transition evidence, and reconcile authoritative records.
+
+**Outcome**: **BLOCKED / RECONCILED**. Commit 2136c44 is present on main and the external-activation foundation is independently source-verified. Existing external activation producers remain only partially migrated to the canonical ingress. The phase-transition gate correctly remains fail-closed because the required durable coordinator TaskRegistry identity and signed Director transition-decision provenance are not established in the durable repository state.
+
+**Reconciliation**: Added the durable verification record and research-index entry. Phase 3 remains authoritative COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED; Phase 4 remains pending mechanical activation. No alternate control plane, TaskRegistry, transition authority, or manual phase promotion was introduced.
+
+**Commit References**: dfc17e4d0c5c8f621bc4543456de111d0997c582; 80c3e62670a28a8276c3db4fbcf3d3cff6ab8506.
