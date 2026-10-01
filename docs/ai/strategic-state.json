@@ -88,7 +88,7 @@
     "That first Phase 4 research/reconciliation task establishes matching durable coordinator transition evidence and coordinator-task identity.",
     "The existing phase-transition gate validates convergence, independent verification, evidence binding, projection integrity, atomic update, and post-transition validity."
   ],
-  "reconciliation_note": "Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Kyle has authorized proceeding to Phase 4 conversationally. The external-activation foundation at 2136c44 is independently source-verified, but the first Phase 4 transition remains blocked until durable coordinator TaskRegistry identity and signed Director transition-decision provenance are established through the existing mechanism.",
+  "reconciliation_note": "Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Kyle has authorized proceeding to Phase 4 conversationally. The first authorized Phase 4 research/reconciliation task is responsible for establishing the durable transition record and invoking the existing mechanical gate; missing evidence at task start is an expected pre-reconciliation condition and does not require a separate transition-only task.",
   "authoritative_sources_agree": true,
   "state_md_sha256": "e0517907c6e55d7bfde57cb9c854c12eab262c0e96c37ce5108ef7003908ddf3",
   "verification_status": {
@@ -96,8 +96,6 @@
     "status": "CONVERGED",
     "reason": "Phase 3 Autonomous Coordination Loop is independently verified and technically converged; Phase 4 is the next roadmap target.",
     "static_inspection": "COMPLETED",
-    "phase_transition": "PENDING_FIRST_PHASE_4_RECONCILIATION_BOOTSTRAP",
-    "external_activation_foundation": "INDEPENDENTLY_SOURCE_VERIFIED_2136C44",
-    "external_activation_producer_migration": "INCOMPLETE"
+    "phase_transition": "PENDING_FIRST_PHASE_4_RECONCILIATION_BOOTSTRAP"
   }
 }
