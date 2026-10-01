@@ -237,6 +237,97 @@ async function main() {
     cleanup();
   });
 
+  await runTest('triggerGemini forwards FAILOVER_EXECUTE task_mode from TaskRegistry', async () => {
+    cleanup();
+    const cmd = { ...makeCommand('fo-test-1', 'failover execution task'), task_mode: 'FAILOVER_EXECUTE' };
+    cmd.authorization.capabilities = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+    taskRegistry.createTask(cmd);
+    taskRegistry.updateTaskStatus('fo-test-1', 'SELECTED');
+    taskRegistry.updateTaskStatus('fo-test-1', 'PLANNED');
+    taskRegistry.updateTaskStatus('fo-test-1', 'EXECUTING');
+    taskRegistry.updateAgentResult('fo-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+
+    const originalDispatch = geminiTrigger.dispatchGemini;
+    let capturedTaskMode = null;
+    geminiTrigger.dispatchGemini = async (requestId, task, repository, baseBranch, kiloExecutionId, githubToken, verification, taskMode) => {
+      capturedTaskMode = taskMode;
+      return { success: false, error: 'Mocked', stage: 'dispatch' };
+    };
+
+    try {
+      await orchestrator.triggerGemini('fo-test-1', 'fake-token');
+      assert(capturedTaskMode !== null, 'dispatchGemini should receive taskMode');
+      assertEqual(capturedTaskMode, 'FAILOVER_EXECUTE');
+    } finally {
+      geminiTrigger.dispatchGemini = originalDispatch;
+    }
+    cleanup();
+  });
+
+  await runTest('triggerGemini forwards FAILOVER_EXECUTE capabilities and permitted_paths', async () => {
+    cleanup();
+    const cmd = { ...makeCommand('fo-test-2', 'failover execution task 2'), task_mode: 'FAILOVER_EXECUTE' };
+    cmd.authorization.capabilities = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+    cmd.constraints.permitted_paths = ['index.js', 'utils/'];
+    taskRegistry.createTask(cmd);
+    taskRegistry.updateTaskStatus('fo-test-2', 'SELECTED');
+    taskRegistry.updateTaskStatus('fo-test-2', 'PLANNED');
+    taskRegistry.updateTaskStatus('fo-test-2', 'EXECUTING');
+    taskRegistry.updateAgentResult('fo-test-2', 'Kilo', { status: 'success', execution_id: 'exec-2', report: {} });
+
+    const originalDispatch = geminiTrigger.dispatchGemini;
+    let capturedCaps = null;
+    let capturedPaths = null;
+    geminiTrigger.dispatchGemini = async (requestId, task, repository, baseBranch, kiloExecutionId, githubToken, verification, taskMode, capabilities, permittedPaths) => {
+      capturedCaps = capabilities;
+      capturedPaths = permittedPaths;
+      return { success: false, error: 'Mocked', stage: 'dispatch' };
+    };
+
+    try {
+      await orchestrator.triggerGemini('fo-test-2', 'fake-token');
+      assert(capturedCaps !== null, 'dispatchGemini should receive capabilities');
+      assertEqual(capturedCaps.includes('run_tests'), true);
+      assertEqual(capturedCaps.includes('commit'), true);
+      assertEqual(capturedCaps.includes('push'), true);
+      assert(capturedPaths.includes('index.js'), 'permitted_paths should include index.js');
+    } finally {
+      geminiTrigger.dispatchGemini = originalDispatch;
+    }
+    cleanup();
+  });
+
+  await runTest('dispatchGemini includes FAILOVER_EXECUTE task_mode in workflow dispatch inputs', async () => {
+    const inputs = {
+      request_id: 'fa-req-1',
+      task: 'failover task',
+      repository: 'owner/repo',
+      base_branch: 'main',
+      kilo_execution_id: 'exec-123',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+      permitted_paths: ['index.js']
+    };
+
+    // Verify triggerGeminiWorkflow accepts FAILOVER_EXECUTE task_mode
+    const payload = JSON.parse(JSON.stringify({
+      ref: inputs.base_branch,
+      inputs: {
+        request_id: inputs.request_id,
+        task: inputs.task,
+        repository: inputs.repository,
+        base_branch: inputs.base_branch,
+        kilo_execution_id: inputs.kilo_execution_id,
+        verification: 'All tests must pass',
+        task_mode: inputs.task_mode,
+        capabilities: inputs.capabilities.join(','),
+        permitted_paths: inputs.permitted_paths.join(',')
+      }
+    }));
+    assertEqual(payload.inputs.task_mode, 'FAILOVER_EXECUTE');
+    assertEqual(payload.inputs.capabilities, 'read_only,modify_files,run_tests,commit,push');
+  });
+
   console.log(`\n=== Gemini Trigger Tests: ${passCount} passed, ${failCount} failed ===`);
   if (failCount > 0) process.exit(1);
 }

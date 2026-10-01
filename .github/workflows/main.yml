@@ -81,10 +81,27 @@ jobs:
           REQUEST="${COMMENT_BODY#@gemini-cli}"
           REQUEST="${REQUEST# }"
 
+          # Detect explicit FAILOVER_EXECUTE activation: "@gemini-cli FAILOVER_EXECUTE <task>"
+          # Default to REVIEW for plain @gemini-cli comments.
+          TASK_MODE="REVIEW"
+          CAPABILITIES="read_only"
+          PERMITTED_PATHS="poc/"
+
+          if echo "$REQUEST" | grep -qiE '^FAILOVER_EXECUTE\b'; then
+            TASK_MODE="FAILOVER_EXECUTE"
+            CAPABILITIES="read_only,modify_files,run_tests,commit,push"
+            # Strip the "FAILOVER_EXECUTE" keyword, leaving the task description
+            REQUEST="${REQUEST#FAILOVER_EXECUTE}"
+            REQUEST="${REQUEST# }"
+          fi
+
           {
             echo 'request<<EOF'
             printf '%s\n' "$REQUEST"
             echo 'EOF'
+            echo "task_mode=$TASK_MODE"
+            echo "capabilities=$CAPABILITIES"
+            echo "permitted_paths=$PERMITTED_PATHS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Prepare orchestration context (workflow_dispatch)
@@ -124,6 +141,46 @@ jobs:
             echo 'EOF'
             echo 'permitted_paths<<EOF'
             printf '%s\n' "${{ github.event.inputs.permitted_paths || '' }}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare orchestration context (issue_comment)
+        id: orchestration_context
+        if: github.event_name == 'issue_comment'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo 'request_id<<EOF'
+            printf '%s\n' "${{ github.event.comment.id }}"
+            echo 'EOF'
+            echo 'task<<EOF'
+            printf '%s\n' "${{ steps.request_comment.outputs.request }}"
+            echo 'EOF'
+            echo 'repository<<EOF'
+            printf '%s\n' "${{ github.repository }}"
+            echo 'EOF'
+            echo 'base_branch<<EOF'
+            printf '%s\n' "${{ github.ref_name }}"
+            echo 'EOF'
+            echo 'kilo_execution_id<<EOF'
+            printf '%s\n' ""
+            echo 'EOF'
+            echo 'builder_execution_id<<EOF'
+            printf '%s\n' ""
+            echo 'EOF'
+            echo 'verification<<EOF'
+            printf '%s\n' "${{ steps.request_comment.outputs.task_mode == 'FAILOVER_EXECUTE' && 'All changes must be within permitted_paths. Implement, test, commit, and push within scope. Provide verification evidence.' || 'Review the request and provide analysis, risk assessment, and implementation plans.' }}"
+            echo 'EOF'
+            echo 'task_mode<<EOF'
+            printf '%s\n' "${{ steps.request_comment.outputs.task_mode }}"
+            echo 'EOF'
+            echo 'capabilities<<EOF'
+            printf '%s\n' "${{ steps.request_comment.outputs.capabilities }}"
+            echo 'EOF'
+            echo 'permitted_paths<<EOF'
+            printf '%s\n' "${{ steps.request_comment.outputs.permitted_paths }}"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
