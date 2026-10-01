@@ -370,7 +370,7 @@ canonical Bootstrap Contract above (this document); this procedure applies it.
 | `docs/ai/STATE.md` | Current live project state (active tasks, blockers, project status) |
 | `docs/ai/CONTROL_CENTER.md` | Derived human-facing dashboard |
 | `docs/ai/TASK_LOG.md` | Historical task records |
-| `docs/ai/ARCH_DECISIONS.md` | Architectural decisions (ADR-001 through ADR-017) |
+| `docs/ai/ARCH_DECISIONS.md` | Architectural decisions (ADR-001 through ADR-024) |
 | `docs/ai/RESEARCH_INDEX.md` | Index of durable research records |
 | `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` | ChatGPT Control Gate research |
 | `docs/ai/KILO_INTEGRATION.md` | Kilo external integration contract |

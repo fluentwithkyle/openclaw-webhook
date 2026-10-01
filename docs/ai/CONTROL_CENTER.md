@@ -183,6 +183,32 @@ Layer 1 (Kilo↔Gemini orchestration backbone stabilization/hardening) is the pr
 | **Test Results** | 19/19 coordinator tests pass. 170 total tests pass (20 schema, 17 task-registry, 18 orchestrator, 11 integration, 14 Gemini trigger, 23 Gemini callback, 15 Kilo callback, 10 Kilo polling, 18 Kilo verifier, 5 POC, 19 coordinator). |
 | **Bounded OpenRouter Runtime** | **IMPLEMENTED / VERIFIED FOUNDATION** — exactly one model-facing `control_plane` with server-derived `request_task` and sanitized namespace-constrained `get_task`; bounded loop; SSE for `stream: true`, JSON otherwise. Director VERIFIED fresh ChatBox Ping/Pong display. This is not the full coordinator. |
 
+### Coordinator Lifecycle-Enforcement Roadmap (Operational View)
+
+The authoritative lifecycle-enforcement roadmap is documented in
+`docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md`, integrating both
+completed Gemini research passes (RESEARCH-001 and DEEP-RESEARCH-002).
+
+**Current Phase Status**: Phase 3 — Autonomous Coordination Loop —
+**COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**. Phase 4 — Scaled Conversational
+Orchestration & Cross-Task Lineage Navigation — **PROPOSED / TARGET** (not yet
+transitioned; Phase 4 transition evidence remains BLOCKED/NOT ESTABLISHED).
+
+**Five Planned Phase 4 Implementation Increments** (each requires separate ACP
+authorization; none authorized by the roadmap document):
+
+| Increment | Title | Reuses Existing | New Extension Needed |
+|---|---|---|---|
+| 4.1 | Server-Side Protocol & Roadmap Alignment Ingress Gate | `poc/strategic-alignment.js`, `poc/phase-transition-gate.js` | Extend to `/poc/coordinator` ingress; protocol SHA-256 binding |
+| 4.2 | Mandatory State Inspection & Requirements Extraction Gating | `validateACPCommand`, `get_task` observation, `validateLineageForCreate` | `requirements_reference` schema enforcement; pre-creation inspection evidence check |
+| 4.3 | Mechanical Verification-to-Completion State Binding | Evidence types (`AGENT_REPORT`, `INDEPENDENT_VERIFICATION`), evidence-gated transitions | Mechanically bind `VERIFIED` to passing test artifacts and review reports |
+| 4.4 | Automated Reconciliation & Closeout Enforcement | `determineReconciliationStatus()`, commit verification, phase-transition gate | Task-aware reconciliation contract evaluation |
+| 4.5 | Lifecycle Recovery, Replay & Convergence Hardening | Idempotent `createTask`, single-use `authorization_proof`, SHA-256 projection checks, `rehydrateTask()` | Request idempotency fingerprint; duplicate prevention; durable-state recovery reconstruction |
+
+**Next Authorized Prerequisite**: Completion of Phase 4 transition through
+`poc/phase-transition-gate.js` using durably established transition evidence.
+No lifecycle-enforcement increment may proceed before this boundary is satisfied.
+
 ---
 
 ## Chatbox Gateway Project
