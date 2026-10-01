@@ -73,7 +73,8 @@ Navigation is the next PROPOSED / TARGET roadmap phase. The Phase 4 baseline rec
 - Durable transition evidence: BLOCKED / NOT ESTABLISHED
 - Current authoritative phase: Phase 3 — Autonomous Coordination Loop
 - Phase 4 strategic activation: NOT PERFORMED
-- Canonical Gemini execution artifact retrieval: NOT ESTABLISHED from the durable repository state available to this reconciliation
+- Canonical Gemini execution artifact retrieval: NOT ESTABLISHED for this task; the committed gemini-acp-report.json is for a different historical task
+- Phase 4 external-activation foundation: independently source-verified at commit 2136c44; existing activation-producer migration remains unresolved
 - First bounded Phase 4 work: Phase 4 design contract and cross-task lineage semantics research/reconciliation, pending successful transition
 
 ### Coordinator Lifecycle-Enforcement Roadmap
