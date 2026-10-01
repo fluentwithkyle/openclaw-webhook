@@ -584,6 +584,63 @@ test('F1: Kilo target with Gemini activation (@gemini-cli) rejected', () => {
   assertEqual(result.valid, false);
 });
 
+test('F1: @gemini-cli FAILOVER_EXECUTE with Gemini target accepted', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment'
+  });
+  assertEqual(result.valid, true);
+  assertEqual(result.task_mode, 'FAILOVER_EXECUTE');
+});
+
+test('F1: @gemini-cli FAILOVER_EXECUTE with Gemini target requires all 5 capabilities', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment',
+    authorization: { capabilities: ['read_only', 'modify_files', 'commit', 'push'] }
+  });
+  assertEqual(result.valid, false);
+  assert(result.error.includes('run_tests'));
+});
+
+test('F1: @gemini-cli FAILOVER_EXECUTE requires explicit permitted_paths', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment',
+    constraints: { permitted_paths: [] }
+  });
+  assertEqual(result.valid, false);
+  assert(result.error.includes('permitted_paths'));
+});
+
+test('F1: @gemini-cli FAILOVER_EXECUTE on unauthorized surface rejected for Gemini target', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini', task_mode: 'FAILOVER_EXECUTE',
+    activation_syntax: '@gemini-cli', activation_surface: 'github_push_event'
+  });
+  assertEqual(result.valid, false);
+  assert(result.error.includes('Unauthorized'));
+});
+
+test('F1: @gemini-cli FAILOVER_EXECUTE accepts Gemini Builder target', () => {
+  const result = validateACPCompliance({
+    ...failoverCommand, target: 'Gemini Builder', task_mode: 'BUILDER',
+    activation_syntax: '@gemini-cli', activation_surface: 'workflow_dispatch'
+  });
+  assertEqual(result.valid, true);
+});
+
+test('F1: @kilo FAILOVER_EXECUTE remains accepted (existing behavior preserved)', () => {
+  const result = validateACPCompliance(failoverCommand);
+  assertEqual(result.valid, true);
+  assertEqual(result.task_mode, 'FAILOVER_EXECUTE');
+});
+
+test('F1: @kilo on GitHub issue comment accepted for Kilo FAILOVER_EXECUTE', () => {
+  const result = validateActivationSurface('github_issue_comment', 'Kilo');
+  assertEqual(result.valid, true);
+});
+
 test('F1: REVIEW mode does not require activation metadata', () => {
   const result = validateACPCompliance(validCommand);
   assertEqual(result.valid, true);
