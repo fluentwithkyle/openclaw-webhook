@@ -2942,3 +2942,18 @@ existing Director authorization.
 **Verification**: Direct GitHub source inspection and post-edit readback completed. strategic-state.json SHA-256 projection synchronized to final STATE.md. Runtime test execution and git diff --check were unavailable in the coordinator environment because no local repository checkout/runtime is available; no test-pass claim is made.
 
 **Commit Reference**: Reconciliation commits recorded on main; final commit to be verified after the durable record append.
+
+
+## 2026-10-01 | TASK-CHATGPT-AGENT-INDEPENDENT-EXTERNAL-ACTIVATION-RECOVERY-RESEARCH-001
+
+**Task**: Research whether every currently authorized AI agent, and future authorized agents, can independently receive and execute every authorized task mode through an approved external recovery surface without depending on another AI or bypassing ACP authority.
+
+**Outcome**: RESEARCH COMPLETE / ARCHITECTURAL GAP CONFIRMED. Capability routing is server-controlled and mode capabilities/path scopes remain correctly enforced. External activation is not yet task-mode-complete or agent-independent. The current `EXECUTION_TASK_MODES` concept covers only FAILOVER_EXECUTE and BUILDER; Gemini issue-comment activation is hard-coded to REVIEW plus explicit FAILOVER_EXECUTE; Gemini Builder uses a dedicated workflow_dispatch transport; Kilo uses the existing external execution lane. More importantly, the current Gemini issue-comment and Builder workflow paths can invoke execution directly from external workflow context without first entering the same canonical ACP → Director authorization → TaskRegistry path used by `/poc/coordinator`. This is the primary recovery-architecture gap.
+
+**Target architecture**: Generic agent × task mode × activation surface policy, canonical external activation envelope, server-derived authority, one existing ACP validation/authorization boundary, one TaskRegistry entry with activation provenance/idempotency, existing dispatcher/transport, and existing verification/reconciliation. Preserve plain `@gemini-cli` REVIEW compatibility and current agent roles.
+
+**Recovery finding**: DeepSeek can be bypassed by a properly authenticated external ingress only after the external ingress is normalized into the canonical ACP/TaskRegistry path. Gemini, Kilo, and Gemini Builder cannot currently be described as having complete independent recovery coverage for every mode they are authorized to execute.
+
+**Evidence classification**: VERIFIED repository implementation/documentation inspection. Live provider-side Kilo execution and runtime test execution were not independently verified in this coordinator environment.
+
+**Research Record**: `docs/ai/research/research-TASK-CHATGPT-AGENT-INDEPENDENT-EXTERNAL-ACTIVATION-RECOVERY-RESEARCH-001.md`.
