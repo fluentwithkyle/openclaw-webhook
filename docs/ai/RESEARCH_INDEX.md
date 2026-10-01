@@ -70,6 +70,8 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 | TASK-GEMINI-DEEPSEEK-TASK-MODE-CAPABILITY-ROUTING-RESEARCH-001 | 2026-10-01 | Kilo | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-TASK-MODE-CAPABILITY-ROUTING-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-CHATGPT-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001 | 2026-09-27 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-STRUCTURED-FAILURE-BLOCKED-DIAGNOSTIC-SUMMARIZATION-FINAL-VERIFY-RECONCILE-001.md` | `docs/ai/TASK_LOG.md` — final verification/reconciliation entry |
 
+| TASK-CHATGPT-AGENT-INDEPENDENT-EXTERNAL-ACTIVATION-RECOVERY-RESEARCH-001 | 2026-10-01 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-AGENT-INDEPENDENT-EXTERNAL-ACTIVATION-RECOVERY-RESEARCH-001.md` | Verified current agent/task-mode authorization and external activation matrix; identified agent-specific activation and direct-workflow authority gaps; proposed generic agent × mode × surface activation contract preserving ACP/TaskRegistry authority. |
+
 ## Implementation Status Note
 
 Increment 4.5 from `TASK-GEMINI-DEEPSEEK-NEXT-COORDINATOR-INCREMENT-RESEARCH-005` is **IMPLEMENTED / AGENT-REPORTED VERIFICATION** by `TASK-CODEX-DEEPSEEK-CHILD-TASK-AGGREGATE-PROGRESS-SUMMARY-IMPLEMENT-001`: it adds only read-only aggregate lifecycle counts across authoritative TaskRegistry children while preserving the bounded detailed-child projection and all control-plane and authority invariants.
