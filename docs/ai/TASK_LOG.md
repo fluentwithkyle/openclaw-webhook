@@ -2968,3 +2968,21 @@ existing Director authorization.
 **Reconciliation**: Added the durable verification record and research-index entry. Phase 3 remains authoritative COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED; Phase 4 remains pending mechanical activation. No alternate control plane, TaskRegistry, transition authority, or manual phase promotion was introduced.
 
 **Commit References**: dfc17e4d0c5c8f621bc4543456de111d0997c582; 80c3e62670a28a8276c3db4fbcf3d3cff6ab8506.
+
+---
+
+## 2026-10-01 | TASK-GEMINI-BUILDER-AGENT-INDEPENDENT-EXTERNAL-ACTIVATION-FOUNDATION-001
+
+**Task**: Implement true replay/idempotent recovery in TaskRegistry and canonicalExternalActivationIngress; add tests proving the contract; commit and push to origin/main.
+
+**Outcome**: IMPLEMENTED / VERIFIED. Implemented payload-fingerprint-based replay/idempotent recovery in `poc/task-registry.js` (`computePayloadFingerprint`, `replayTask`) and wired it into `canonicalExternalActivationIngress` (`poc/activation-ingress.js`). Identical replays are now idempotent (return existing task, no duplicate created). Modified payloads fail closed with `REPLAY_PAYLOAD_MISMATCH`. Terminal-state replays return `task_terminated: true`. Consequential commands still require Director approval. Added 18 tests (12 in `test/task-registry.test.js`, 6 in `test/activation-policy.test.js`); updated the existing "duplicate request_id returns conflict" test to expect idempotent replay. All TaskRegistry tests (34/34) and activation-policy tests (62/62) pass. Full `npm test`: 59 passed, 11 failed (all 11 pre-existing DeepSeek runtime failures unrelated to this task).
+
+**Files changed**:
+- `poc/task-registry.js` — added `computePayloadFingerprint`, `replayTask`, `replay_fingerprint` storage in `createTaskUnchecked`, exports updated.
+- `poc/activation-ingress.js` — `canonicalExternalActivationIngress` now calls `taskRegistry.replayTask` before task creation; fixed typo "Reply payload" → "Replay payload".
+- `test/task-registry.test.js` — 12 new replay/idempotency tests.
+- `test/activation-policy.test.js` — 6 new ingress replay tests; updated existing duplicate test to expect idempotent replay.
+- `docs/ai/STATE.md` — added completion record.
+- `docs/ai/TASK_LOG.md` — added this historical record.
+
+**Commit References**: to be established on commit.

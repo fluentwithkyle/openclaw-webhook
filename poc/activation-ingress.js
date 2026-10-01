@@ -159,16 +159,44 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
   }
 
   const isConsequential = isConsequentialCommand(command);
-  const existingTask = taskRegistry.getTask(requestId);
-  if (existingTask) {
+
+  const replayResult = taskRegistry.replayTask(command);
+  if (replayResult.success && replayResult.replay) {
+    if (replayResult.task_terminated) {
+      return {
+        success: true,
+        replay: true,
+        request_id: requestId,
+        task_status: replayResult.entry.status,
+        task_entry: replayResult.entry,
+        command: command,
+        activation_provenance: replayResult.entry.activation_provenance || undefined,
+        is_consequential: isConsequential,
+        message: 'Replay matched existing terminated task; no new execution initiated'
+      };
+    }
+    return {
+      success: true,
+      replay: true,
+      request_id: requestId,
+      task_status: replayResult.entry.status,
+      task_entry: replayResult.entry,
+      command: command,
+      activation_provenance: replayResult.entry.activation_provenance || undefined,
+      is_consequential: isConsequential,
+      message: 'Replay matched existing active task; no duplicate created'
+    };
+  }
+
+  if (replayResult.error_code === 'REPLAY_PAYLOAD_MISMATCH') {
     return {
       success: false,
       status: 'BLOCKED',
       stage: 'conflict',
-      error: 'Duplicate request_id: ' + requestId,
-      error_code: 'DUPLICATE_REQUEST_ID',
-      duplicate: true,
-      entry: existingTask
+      error: 'Replay payload does not match original task payload: ' + replayResult.error,
+      error_code: 'REPLAY_PAYLOAD_MISMATCH',
+      existing_request_id: requestId,
+      task_status: replayResult.task_status
     };
   }
 

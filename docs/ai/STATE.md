@@ -1138,3 +1138,33 @@ Exactly two model-facing control-plane operations (`request_task`, `get_task`) r
 PR-reported 56 focused tests and full `npm test` remain **AGENT-REPORTED VERIFICATION**. GitHub exposes no CI status for the merge commit and independent Node/npm execution is unavailable, so runtime execution remains **BLOCKED**.
 
 Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-SPECIALIST-ROUTING-SUMMARY-FINAL-VERIFY-RECONCILE-001.md`.
+
+---
+
+## Kilo External Activation Recovery — IMPLEMENTED / VERIFIED
+
+**Task**: TASK-GEMINI-BUILDER-AGENT-INDEPENDENT-EXTERNAL-ACTIVATION-FOUNDATION-001
+**Status**: IMPLEMENTED / VERIFIED (active execution by Kilo)
+**Updated By**: Gemini (Architect/Reviewer)
+
+### Completed Work
+
+1. **TaskRegistry `replayTask` + `computePayloadFingerprint`** (`poc/task-registry.js`):
+   - `computePayloadFingerprint(command)` computes a SHA-256 fingerprint over authority-bearing fields: `request_id`, `target`, `task_mode`, `task`, `repository`, `base_branch`, `task_type`, `capabilities`, `permitted_paths`, `activation_target`, `activation_task_mode`, `activation_surface`. Capability and permitted_paths arrays are sorted for order-independence. `activation_id` is excluded because it is auto-generated per ingress call.
+   - `replayTask(command)` provides idempotent replay/idempotent recovery: checks the existing task by `request_id`, compares payload fingerprints, and returns:
+     - `success: true, replay: true` when fingerprints match and the task is active (PENDING/SELECTED/PLANNED/EXECUTING).
+     - `success: true, replay: true, task_terminated: true` when fingerprints match and the task is in a terminal state (COMPLETE/FAILED/BLOCKED).
+     - `success: false, error_code: 'REPLAY_PAYLOAD_MISMATCH'` when fingerprints differ (fails closed).
+     - `success: false, error_code: 'NO_EXISTING_TASK', rehydrate: true` when no existing task exists for the `request_id`.
+     - `success: false, error_code: 'MISSING_REQUEST_ID'` when the command lacks a `request_id`.
+   - `createTaskUnchecked` now stores `replay_fingerprint` on the task entry.
+
+2. **Canonical External Activation Ingress** (`poc/activation-ingress.js`):
+   - `canonicalExternalActivationIngress` now calls `taskRegistry.replayTask(command)` *before* task creation. Identical replays return the existing task without creating a duplicate. Modified payloads fail closed with `REPLAY_PAYLOAD_MISMATCH`. Consequential commands still require Director approval regardless of replay status.
+
+3. **Tests** (`test/task-registry.test.js`, `test/activation-policy.test.js`):
+   - 12 new TaskRegistry replay tests: fingerprint determinism, order-independence, mismatch detection, terminal-state replay, missing task, missing request_id, persistence across reload.
+   - 6 new activation-ingress replay tests: identical replay idempotent, modified payload fails closed, modified task_type fails closed, no duplicate created, activation_provenance preserved, REVIEW mode idempotent replay.
+   - Updated existing "duplicate request_id returns conflict" test → "duplicate request_id with identical payload is idempotent".
+
+4. **Verification**: All 34 TaskRegistry tests pass. All 62 activation-policy tests pass. Full `npm test`: 59 passed, 11 failed (all 11 pre-existing DeepSeek runtime failures unrelated to this task; `deepseek-runtime.test.js` Coordinator intent/strategic-alignment failures).

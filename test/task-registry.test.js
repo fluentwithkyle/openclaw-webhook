@@ -330,5 +330,147 @@ test('Atomic write - backup file used', () => {
   cleanup();
 });
 
+test('computePayloadFingerprint - deterministic for same command', () => {
+  cleanup();
+  const fp1 = taskRegistry.computePayloadFingerprint(validCommand);
+  const fp2 = taskRegistry.computePayloadFingerprint({ ...validCommand });
+  assertEqual(fp1, fp2, 'Fingerprint should be deterministic');
+  cleanup();
+});
+
+test('computePayloadFingerprint - differs for different task', () => {
+  cleanup();
+  const fp1 = taskRegistry.computePayloadFingerprint(validCommand);
+  const fp2 = taskRegistry.computePayloadFingerprint({ ...validCommand, task: 'different-task' });
+  assertNotEqual(fp1, fp2, 'Fingerprint should differ for different task');
+  cleanup();
+});
+
+test('computePayloadFingerprint - capability order does not matter', () => {
+  cleanup();
+  const cmd1 = { ...validCommand, authorization: { capabilities: ['read_only', 'modify_files'] } };
+  const cmd2 = { ...validCommand, authorization: { capabilities: ['modify_files', 'read_only'] } };
+  assertEqual(
+    taskRegistry.computePayloadFingerprint(cmd1),
+    taskRegistry.computePayloadFingerprint(cmd2),
+    'Fingerprint should be order-independent for capabilities'
+  );
+  cleanup();
+});
+
+test('computePayloadFingerprint - permitted_paths order does not matter', () => {
+  cleanup();
+  const cmd1 = { ...validCommand, constraints: { permitted_paths: ['poc/', 'test/'] } };
+  const cmd2 = { ...validCommand, constraints: { permitted_paths: ['test/', 'poc/'] } };
+  assertEqual(
+    taskRegistry.computePayloadFingerprint(cmd1),
+    taskRegistry.computePayloadFingerprint(cmd2),
+    'Fingerprint should be order-independent for permitted_paths'
+  );
+  cleanup();
+});
+
+test('createTask - stores replay_fingerprint on entry', () => {
+  cleanup();
+  const result = taskRegistry.createTask(validCommand);
+  assertEqual(result.success, true);
+  assert(result.entry.replay_fingerprint !== undefined, 'Entry should have replay_fingerprint');
+  assertEqual(
+    result.entry.replay_fingerprint,
+    taskRegistry.computePayloadFingerprint(validCommand),
+    'Stored fingerprint should match computed fingerprint'
+  );
+  cleanup();
+});
+
+test('replayTask - identical payload returns replay success', () => {
+  cleanup();
+  const result = taskRegistry.createTask(validCommand);
+  assertEqual(result.success, true);
+
+  const replay = taskRegistry.replayTask(validCommand);
+  assertEqual(replay.success, true);
+  assertEqual(replay.replay, true);
+  assertEqual(replay.existing, true);
+  assertEqual(replay.entry.request_id, 'test-reg-1');
+  assertEqual(replay.task_terminated, false);
+  cleanup();
+});
+
+test('replayTask - modified payload fails closed with REPLAY_PAYLOAD_MISMATCH', () => {
+  cleanup();
+  taskRegistry.createTask(validCommand);
+
+  const modified = { ...validCommand, task: 'different-task' };
+  const replay = taskRegistry.replayTask(modified);
+  assertEqual(replay.success, false);
+  assertEqual(replay.error_code, 'REPLAY_PAYLOAD_MISMATCH');
+  assertEqual(replay.existing_request_id, 'test-reg-1');
+  cleanup();
+});
+
+test('replayTask - modified capabilities fails closed', () => {
+  cleanup();
+  taskRegistry.createTask(validCommand);
+
+  const modified = { ...validCommand, authorization: { capabilities: ['read_only', 'modify_files'] } };
+  const replay = taskRegistry.replayTask(modified);
+  assertEqual(replay.success, false);
+  assertEqual(replay.error_code, 'REPLAY_PAYLOAD_MISMATCH');
+  cleanup();
+});
+
+test('replayTask - missing task returns rehydrate flag when no existing task', () => {
+  cleanup();
+  const replay = taskRegistry.replayTask(validCommand);
+  assertEqual(replay.success, false);
+  assertEqual(replay.error_code, 'NO_EXISTING_TASK');
+  assertEqual(replay.rehydrate, true);
+  cleanup();
+});
+
+test('replayTask - missing request_id fails closed', () => {
+  cleanup();
+  const replay = taskRegistry.replayTask({ ...validCommand, request_id: undefined });
+  assertEqual(replay.success, false);
+  assertEqual(replay.error_code, 'MISSING_REQUEST_ID');
+  cleanup();
+});
+
+test('replayTask - terminated task returns success with task_terminated flag', () => {
+  cleanup();
+  taskRegistry.createTask(validCommand);
+  taskRegistry.updateTaskStatus('test-reg-1', 'SELECTED');
+  taskRegistry.updateTaskStatus('test-reg-1', 'PLANNED');
+  taskRegistry.updateTaskStatus('test-reg-1', 'EXECUTING');
+  taskRegistry.updateAgentResult('test-reg-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  taskRegistry.addEvidence('test-reg-1', 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' });
+  taskRegistry.updateTaskStatus('test-reg-1', 'VERIFIED');
+  taskRegistry.updateTaskStatus('test-reg-1', 'COMPLETE');
+
+  var replay = taskRegistry.replayTask(validCommand);
+  assertEqual(replay.success, true);
+  assertEqual(replay.replay, true);
+  assertEqual(replay.task_terminated, true);
+  assertEqual(replay.message, 'Replay matched existing terminated task; no new execution initiated');
+  cleanup();
+});
+
+test('replayTask - persists fingerprint across reload', () => {
+  cleanup();
+  taskRegistry.createTask(validCommand);
+  taskRegistry.loadFromFile();
+  var replay = taskRegistry.replayTask(validCommand);
+  assertEqual(replay.success, true);
+  assertEqual(replay.replay, true);
+  cleanup();
+});
+
+function assertNotEqual(actual, expected, msg) {
+  if (actual === expected) {
+    throw new Error(`${msg || 'Assertion failed'}: expected not ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
 console.log(`\n=== TaskRegistry Tests: ${passCount} passed, ${failCount} failed ===`);
 if (failCount > 0) process.exit(1);

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const {
   validateTaskRegistryEntry,
   createInitialTaskRegistryEntry,
@@ -102,6 +103,7 @@ function createTaskUnchecked(command, options) {
   }
 
   const entry = createInitialTaskRegistryEntry(requestId, command);
+  entry.replay_fingerprint = computePayloadFingerprint(command);
   const validation = validateTaskRegistryEntry(entry);
   if (!validation.valid) {
     return { success: false, error: validation.error };
@@ -170,6 +172,71 @@ function consumeDirectorApprovalAndCreateTask(command) {
 function getTask(requestId) {
   const cache = getCache();
   return cache.get(requestId) || null;
+}
+
+function computePayloadFingerprint(command) {
+  var scope = {
+    request_id: command.request_id,
+    target: command.target,
+    task_mode: command.task_mode || 'REVIEW',
+    task: command.task,
+    repository: command.repository,
+    base_branch: command.base_branch,
+    task_type: command.task_type,
+    capabilities: Array.isArray(command.authorization && command.authorization.capabilities) ? command.authorization.capabilities.slice().sort() : [],
+    permitted_paths: Array.isArray(command.constraints && command.constraints.permitted_paths) ? command.constraints.permitted_paths.slice().sort() : [],
+    activation_target: command.activation_target || (command.activation_provenance && command.activation_provenance.activation_target) || null,
+    activation_task_mode: command.activation_task_mode || (command.activation_provenance && command.activation_provenance.activation_task_mode) || null,
+    activation_surface: command.activation_surface || (command.activation_provenance && command.activation_provenance.activation_surface) || null
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(scope)).digest('hex');
+}
+
+function replayTask(command) {
+  var cache = getCache();
+  var requestId = command.request_id;
+  if (!requestId || typeof requestId !== 'string') {
+    return { success: false, error: 'request_id is required for replay', error_code: 'MISSING_REQUEST_ID' };
+  }
+
+  var existing = cache.get(requestId);
+  if (!existing) {
+    return { success: false, error: 'No existing task for replay: ' + requestId, error_code: 'NO_EXISTING_TASK', rehydrate: true };
+  }
+
+  var existingFingerprint = existing.replay_fingerprint || computePayloadFingerprint(existing);
+  var incomingFingerprint = command.replay_fingerprint || computePayloadFingerprint(command);
+
+  if (existingFingerprint !== incomingFingerprint) {
+    return {
+      success: false,
+      error: 'Replay payload does not match original task payload (fingerprint mismatch)',
+      error_code: 'REPLAY_PAYLOAD_MISMATCH',
+      existing_request_id: requestId,
+      task_status: existing.status
+    };
+  }
+
+  var terminalStates = ['COMPLETE', 'FAILED', 'BLOCKED'];
+  if (terminalStates.includes(existing.status)) {
+    return {
+      success: true,
+      replay: true,
+      existing: true,
+      task_terminated: true,
+      entry: existing,
+      message: 'Replay matched existing terminated task; no new execution initiated'
+    };
+  }
+
+  return {
+    success: true,
+    replay: true,
+    existing: true,
+    task_terminated: false,
+    entry: existing,
+    message: 'Replay matched existing active task; no duplicate created'
+  };
 }
 
 function isCancelled(requestId) {
@@ -767,6 +834,8 @@ module.exports = {
   getDirectorApproval,
   revokePendingDirectorApprovals,
   getTask,
+  replayTask,
+  computePayloadFingerprint,
   updateTaskStatus,
   updateAgentResult,
   setNextAction,

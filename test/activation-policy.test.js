@@ -474,7 +474,7 @@ async function main() {
         cleanup();
     });
 
-    await runTest('Ingress - duplicate request_id returns conflict', () => {
+    await runTest('Ingress - duplicate request_id with identical payload is idempotent', () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-idempotent-1');
         const approval = setupDirectorApproval('ingress-idempotent-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
@@ -483,8 +483,8 @@ async function main() {
         const first = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
         assertTrue(first.success, 'First should succeed');
         const second = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
-        assertTrue(!second.success);
-        assertEqual(second.duplicate, true);
+        assertTrue(second.success, 'Second identical replay should succeed (idempotent)');
+        assertEqual(second.replay, true);
         cleanup();
     });
 
@@ -640,7 +640,7 @@ async function main() {
     // Idempotency / Replay Tests
     // =========================================================
 
-    await runTest('Ingress - duplicate request_id returns conflict', () => {
+    await runTest('Ingress - identical replay is idempotent (not a conflict)', () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-dup-1');
         const approval = setupDirectorApproval('ingress-dup-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
@@ -651,8 +651,115 @@ async function main() {
         assertTrue(first.success, 'First should succeed: ' + (first.error || ''));
 
         const second = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
-        assertTrue(!second.success, 'Second should fail as duplicate');
-        assertEqual(second.duplicate, true);
+        assertTrue(second.success, 'Second identical replay should succeed (idempotent)');
+        assertEqual(second.replay, true, 'Second call should be a replay');
+        assertEqual(second.task_status, first.task_status, 'Task status should match');
+        cleanup();
+    });
+
+    await runTest('Ingress - replay with modified payload fails closed (REPLAY_PAYLOAD_MISMATCH)', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-dup-2');
+        const approval = setupDirectorApproval('ingress-dup-2', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+
+        const first = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(first.success, 'First should succeed: ' + (first.error || ''));
+
+        const modified = makeKiloFailoverCommand('ingress-dup-2', { task: 'different task description' });
+        modified.authorization = { ...cmd.authorization };
+        const second = canonicalExternalActivationIngress(modified, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(!second.success, 'Modified replay should fail closed');
+        assertEqual(second.error_code, 'REPLAY_PAYLOAD_MISMATCH');
+        assertEqual(second.status, 'BLOCKED');
+        cleanup();
+    });
+
+    await runTest('Ingress - replay with modified task_type fails closed', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-dup-3');
+        const approval = setupDirectorApproval('ingress-dup-3', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+
+        canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+
+        const modified = makeKiloFailoverCommand('ingress-dup-3', { task_type: 'research' });
+        modified.authorization = { ...cmd.authorization };
+        modified.activation_surface = cmd.activation_surface;
+        const second = canonicalExternalActivationIngress(modified, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(!second.success, 'Modified task_type replay should fail closed');
+        assertEqual(second.error_code, 'REPLAY_PAYLOAD_MISMATCH');
+        cleanup();
+    });
+
+    await runTest('Ingress - replay returns existing task entry without creating duplicate', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-dup-4');
+        const approval = setupDirectorApproval('ingress-dup-4', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+
+        const first = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(first.success, 'First should succeed: ' + (first.error || ''));
+
+        const originalEntry = taskRegistry.getTask('ingress-dup-4');
+        assertTrue(originalEntry !== null, 'Task should exist in registry');
+
+        const second = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(second.success, 'Replay should succeed');
+        assertEqual(second.replay, true);
+
+        const allTasks = taskRegistry.getAllTasks();
+        assertEqual(allTasks.length, 1, 'Should be exactly one task in registry (no duplicate)');
+        cleanup();
+    });
+
+    await runTest('Ingress - replay preserves activation_provenance from original task', () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('ingress-dup-5');
+        const approval = setupDirectorApproval('ingress-dup-5', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+
+        const first = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(first.success, 'First should succeed: ' + (first.error || ''));
+        const originalActivationId = first.activation_provenance.activation_id;
+
+        const second = canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(second.success, 'Replay should succeed');
+        assertTrue(second.activation_provenance, 'Replay should include activation_provenance');
+        if (second.activation_provenance) {
+          assertEqual(second.activation_provenance.activation_id, originalActivationId);
+        }
+        cleanup();
+    });
+
+    await runTest('Ingress - REVIEW mode (non-consequential) replay is idempotent', () => {
+        cleanup();
+        const cmd = {
+            protocol_version: '0.1',
+            request_id: 'ingress-review-replay-1',
+            source: 'DeepSeek Coordinator',
+            target: 'Kilo',
+            task_type: 'implementation',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task: 'test-review-task',
+            task_mode: 'REVIEW',
+            constraints: { permitted_paths: ['poc/'] },
+            authorization: { capabilities: ['read_only'] },
+            verification: 'review the code',
+            reporting: 'json',
+            originator: 'Kyle'
+        };
+        const first = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(first.success, 'First REVIEW should succeed: ' + (first.error || ''));
+
+        const second = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(second.success, 'Second REVIEW replay should succeed: ' + (second.error || ''));
+        assertEqual(second.replay, true);
         cleanup();
     });
 
