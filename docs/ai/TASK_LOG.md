@@ -2999,3 +2999,16 @@ existing Director authorization.
 **Conclusion**: Admission/authorization architecture is resolved. Execution-carrier ownership, concurrency, and crash-window recovery are not yet resolved. No application/runtime code was modified. The next implementation task remains blocked until the execution-claim semantics are explicitly defined against the current TaskRegistry persistence model.
 
 **Research Record**: docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001.md.
+
+
+## 2026-10-02 | TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001
+
+**Task**: Resolve execution-claim, carrier ownership, concurrency, crash-window, replay, and recovery semantics for agent-independent external activation.
+
+**Outcome**: **BLOCKED for implementation.** Direct inspection of current main confirms the TaskRegistry is JSON/file-backed with process-local memoryCache and atomic file replacement, but no cross-process lock, transaction, compare-and-set, or equivalent concurrency primitive. The existing persistence model therefore cannot safely establish a single execution owner across concurrent Render processes/instances. The research also confirms the existing workflow -> activation ingress -> dispatcher -> same-workflow recursion remains invalid, and callback absence cannot prove that an external agent never started.
+
+**Research Record**: docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001.md
+
+**Current HEAD inspected**: c98f466e915d3bf5038f09a1cd965379272861c3
+
+**Exact blocker**: determine and authorize the single authoritative persistence/concurrency mechanism that can safely serialize TaskRegistry create/recover/claim mutations across the actual Render process/instance topology.
