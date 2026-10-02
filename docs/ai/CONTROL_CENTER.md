@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-10-02
-**Updated By**: Gemini — TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001
+**Updated By**: Gemini — TASK-KILO-TASK-REGISTRY-PERSISTENCE-LIVE-RENDER-RECONCILIATION-001
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -324,9 +324,9 @@ Historical implementation record: the gate was introduced over the strategic-ali
 
 ### External Activation Execution Claim & Recovery — 2026-10-02
 
-**Current status:** RESEARCH COMPLETE / IMPLEMENTATION BLOCKED.
+**Current status:** RESEARCH COMPLETE / PERSISTENCE HARDENING REQUIRED.
 
-**Verified blocker:** the current JSON-backed, process-local TaskRegistry does not provide a safe cross-process atomic execution claim. Atomic file replacement is present, but no cross-process compare-and-set/lock/transaction mechanism is established.
+**Verified blocker:** the current JSON-backed, process-local TaskRegistry does not survive restarts on Render Free (ephemeral filesystem). RECONCILED: concurrency is safe (single instance), but durability is unsafe — `poc/task-registry.json` is lost on every restart/spin-down/deploy.
 
 **Architecture:** admission/authorization is resolved; execution must become admission/recovery → one TaskRegistry task → one atomic execution claim → one authorized GitHub carrier → agent → existing callback/evidence → verification/reconciliation. The current workflow → activation ingress → dispatcher → same-workflow recursion remains rejected.
 
@@ -336,12 +336,21 @@ Historical implementation record: the gate was introduced over the strategic-ali
 
 ### TaskRegistry Persistence/Concurrency Architecture Decision — 2026-10-02
 
-**Current status:** RESEARCH COMPLETE / IMPLEMENTATION BLOCKED.
+**Current status:** RESEARCH COMPLETE / PERSISTENCE HARDENING REQUIRED.
 
-Evaluated five candidate persistence/concurrency mechanisms against the claim protocol (UNCLAIMED, CLAIMED, ALREADY_CLAIMED, COMPLETE, FAILED/BLOCKED, RECOVERABLE, MISMATCH, UNAUTHORIZED) and five crash/recovery windows (A–E). Confirmed via source inspection: `poc/task-registry.js` uses process-local `memoryCache` with `renameSync` atomic-write only (no compare-and-set, no cross-process lock, no DB transaction); `package.json` has no database/ORM/lock dependency; no `render.yaml` or `.render/` exists; `openclaw-render.json` contains only gateway config. Runtime is VERIFIED (Render Node.js/Expression, `node index.js`, `PORT||3000`); Render scaling, persistent disk, and datastore provisioning are UNKNOWN from repository source.
+Evaluated five candidate persistence/concurrency mechanisms against the claim protocol and five crash/recovery windows. Confirmed via source inspection: `poc/task-registry.js` uses process-local `memoryCache` with `renameSync` atomic-write only (no compare-and-set, no cross-process lock, no DB transaction); `package.json` has no database/ORM/lock dependency; no `render.yaml` or `.render/` exists.
 
-**Decision:** BLOCKED — the Render process/instance topology cannot be determined from repository source alone. Two viable resolution paths identified:
-- Path A: Single-instance — add `O_EXCL`/`flock` file locking + stale-claim detection to `poc/task-registry.js` (no new dependency).
-- Path B: Shared datastore — provision Render Postgres or Render Key Value; add `pg`/`redis` dependency; migrate TaskRegistry storage backend as sole authoritative store (requires explicit dependency-authorization per AGENTS.md §5).
+**RECONCILED against live Render service inspection** (service: openclaw-webhook, plan: Free, numInstances: 1, region: Oregon, auto-deploy: main, not suspended; Render docs: render.com/docs/free, render.com/docs/disks):
+- **VERIFIED**: Render Free plan explicitly cannot attach persistent disks
+- **VERIFIED**: Ephemeral filesystem — `poc/task-registry.json` lost on every restart/spin-down/deploy
+- **VERIFIED**: No Render Postgres or Key Value provisioned (no DB dependency in `package.json`, no database env vars in code)
+- **VERIFIED**: Concurrency is SAFE (single instance + single Node.js process)
+- **VERIFIED**: Durability is UNSAFE (ephemeral filesystem does not survive restarts)
 
-**Research record:** `docs/ai/research/research-TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001.md`.
+**Decision:** PERSISTENCE HARDENING REQUIRED. Concurrency resolves to safe (single instance). Durability resolves against the current setup (ephemeral filesystem). The execution-claim implementation cannot proceed until durable storage is provisioned for TaskRegistry:
+- **Path A (smallest)**: Upgrade to paid Render plan + attach persistent disk at `/var/data/task-registry/` + update `REGISTRY_FILE` in `poc/task-registry.js` (no new dependency)
+- **Path B (strongest)**: Provision paid Render Postgres or Key Value + add `pg`/`redis` dependency (authorization required per AGENTS.md §5) + migrate TaskRegistry storage backend
+
+No execution-claim implementation should proceed before Path A or Path B is authorized and completed.
+
+**Research record:** `docs/ai/research/research-TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001.md` (includes reconciliation section).

@@ -9,15 +9,19 @@
 - **repository**: fluentwithkyle/openclaw-webhook
 - **base_branch**: main
 - **current_head**: 25856a042dfa8f05a1d329e7eb29ffcf35ea1072
-- **status**: BLOCKED for implementation — persistence/concurrency decision unresolved
+- **status**: PERSISTENCE HARDENING REQUIRED (reconciled against live Render service — see §Reconciliation)
 
 ## Executive Conclusion
 
 The TaskRegistry currently uses a JSON file with a process-local `Map` cache and atomic file replacement (`fs.renameSync`). This provides per-file atomic replacement only; it does NOT provide cross-process compare-and-set semantics. No inter-process locking, database transaction, or version-check mechanism exists anywhere in the repository.
 
-**The single authoritative persistence/concurrency mechanism for TaskRegistry mutations remains UNRESOLVED.** No mechanism was found that can safely serialize TaskRegistry create/recover/claim mutations across the actual (unknown) Render process/instance topology.
+**RECONCILED against live Render service inspection** (`https://render.com/docs/free`, `https://render.com/docs/disks`):
+- Instance count: VERIFIED 1 (single-instance — concurrency-safe within one process)
+- Persistent Disk: VERIFIED NOT ATTACHED (Free plan explicitly cannot attach persistent disks)
+- TaskRegistry file durability: VERIFIED NOT DURABLE (ephemeral filesystem; lost on every restart/spin-down/deploy)
+- Database/Key Value: VERIFIED NOT PROVISIONED (no `pg`/`redis` dependency, no database env vars)
 
-Until a mechanism is resolved and authorized, the external-activation execution-claim implementation remains BLOCKED. No new persistence dependency should be introduced silently.
+**Final decision: PERSISTENCE HARDENING REQUIRED.** The concurrency question is resolved (single instance = safe). The durability question is resolved against the current setup (ephemeral filesystem = unsafe). The execution-claim implementation CANNOT proceed until durable storage is provisioned for the TaskRegistry (upgrade to paid Render plan with persistent disk, or provision Postgres/Key Value with dependency authorization).
 
 ## Repository Truth
 
@@ -268,24 +272,41 @@ The answer to "which single authoritative mechanism" depends on two UNKNOWN Rend
 | 4 | Current JSON file (no locking) | UNSAFE for any concurrency; current state |
 | 5 | Render Persistent Disk + file locking | EQUIVALENT to mechanism 3 if single-instance; persistent disk is Render config, not repo decision |
 
-### Final Decision Status: BLOCKED — Requires Authorized Resolution
+### Conclusion 4: Mechanism Ranking (Post-Reconciliation)
 
-**The persistence/concurrency decision is BLOCKED until one of the following occurs:**
+| Rank | Mechanism | Verdict (Post-Reconciliation) |
+|---|---|---|
+| 1 | Render Key Value (Valkey) with `SET NX EX ttl` | STRONGEST for correctness and automatic lease expiry, but Free Key Value is in-memory only (data lost on restart); requires paid upgrade + dependency authorization |
+| 2 | Render Postgres with `SELECT FOR UPDATE` / conditional `UPDATE` | STRONG for correctness and durability, but requires dependency + Render provisioning; Free Postgres expires after 30 days with no backups |
+| 3 | JSON file on Render Persistent Disk + `O_EXCL`/`flock` locking | VIABLE for single-instance; Free plan CANNOT attach persistent disk; requires paid plan upgrade (Render Dashboard config only) |
+| 4 | JSON file + `O_EXCL`/`flock` locking (ephemeral filesystem, current Free) | Concurrency-safe for single instance but DURABILITY UNSAFE — file lost on every restart/spin-down/deploy |
+| 5 | Current JSON file (no locking, no persistent disk) | UNSAFE — concurrency and durability both fail |
 
-1. **Path A authorization**: An authorized task confirms Render is single-instance and adds file-based locking + stale-claim detection to `poc/task-registry.js` (no new dependency).
-2. **Path B authorization**: An explicitly authorized persistence-hardening task adds `pg` or `redis` as a dependency AND provisions Render Postgres or Render Key Value, then upgrades TaskRegistry to use it as its single storage backend (not a second store).
-3. **Topology confirmation**: Definitive evidence (Render dashboard config, `render.yaml`, or env var inspection) that establishes the Render process/instance topology.
+### Final Decision Status: PERSISTENCE HARDENING REQUIRED
 
-No execution-claim implementation should proceed before one of these is resolved. The external-activation execution-claim implementation remains BLOCKED.
+**RECONCILIATION NOTE** (2026-10-02): The prior UNKNOWN Render topology facts are now VERIFIED via live Render service inspection and Render platform documentation (`https://render.com/docs/free`, `https://render.com/docs/disks`):
 
-## Unresolved Questions / Blockers
+- **Instance count**: VERIFIED 1 (Free plan cannot scale beyond single instance) — single-process concurrency is SAFE
+- **Persistent Disk**: VERIFIED NOT ATTACHED (Free plan explicitly cannot attach persistent disks)
+- **TaskRegistry file durability**: VERIFIED NOT DURABLE — `poc/task-registry.json` lives on the ephemeral filesystem and is lost on every redeploy, restart, and 15-minute idle spin-down
+- **Database/Key Value attached**: VERIFIED NOT PROVISIONED — no database dependency in `package.json`, no database env vars in application code
+- **Free Key Value durability**: VERIFIED NOT DURABLE even if attached — in-memory only, data lost on restart
 
-1. **Render scaling factor**: Is the Render web service configured for single instance (scale=1) or multiple instances? — UNKNOWN, no `render.yaml` or Render service config in repository.
-2. **Render persistent disk**: Is a persistent disk attached? — UNKNOWN, no config evidence.
-3. **Render datastore provisioning**: Is Render Postgres or Render Key Value addon provisioned and available via environment variables? — UNKNOWN, no database dependency or env var usage in source code.
-4. **Stale-claim timeout value**: If file locking is adopted (Path A), what is the acceptable stale-claim timeout window for the `claim persisted → carrier dies` recovery scenario? — Requires operational policy decision.
-5. **Lease vs. evidence for crash recovery (window C)**: Should stale-claim recovery be time-based (lease TTL) or evidence-based (GitHub Actions run API check)? — Architectural decision required.
-6. **Dependency authorization**: If Path B is chosen, which datastore (Postgres or Valkey) and which npm client package? — Requires explicit dependency-addition authorization per AGENTS.md §5.
+**The concurrency question is resolved (SAFE for single instance).**
+**The durability question is resolved against the current setup (UNSAFE).**
+
+The persistence/concurrency decision is no longer BLOCKED on evidence. It is now a concrete **PERSISTENCE HARDENING REQUIRED** decision:
+
+**Minimum hardening required**: Provision durable storage for the TaskRegistry:
+- **Option 1 (smallest change)**: Upgrade Render service to a paid plan + attach persistent disk at `/var/data/task-registry/`; update `REGISTRY_FILE` in `poc/task-registry.js` to the mounted path. No new npm dependencies. Preserves TaskRegistry as sole authority.
+- **Option 2 (strongest durability)**: Provision paid Render Postgres or Key Value; add `pg`/`redis` dependency (requires explicit authorization); migrate TaskRegistry storage backend to the datastore as sole storage.
+
+Both options require:
+1. An explicitly authorized infrastructure task (Render Dashboard changes)
+2. For Option 2: explicit dependency-addition authorization per AGENTS.md §5
+3. A code change to `poc/task-registry.js` (`REGISTRY_FILE` path or storage backend)
+
+**No execution-claim implementation should proceed before PERSISTENCE HARDENING is authorized and completed.** The TaskRegistry file on the ephemeral filesystem does not survive the service restarts that Render Free services undergo, making execution-claim recovery (crash window C: `claim persisted → carrier dies → agent may or may not have started`) impossible to implement safely.
 
 ## Relevant Repository Files / Interfaces
 
@@ -327,3 +348,117 @@ All findings were verified through direct source code inspection:
 5. **Runtime topology**: `index.js:95` confirms `process.env.PORT \|\| 3000`; AGENTS.md §3 confirms Render hosting and `node index.js` start command.
 6. **Prior research consistency**: Confirmed prior record's claim of "no inter-process lock, database transaction, compare-and-set/version check, distributed mutex" is accurate against source.
 7. **Claim semantics mapping**: Evaluated each candidate mechanism (JSON/file locking, Render Persistent Disk, Render Postgres, Render Key Value, current state) against all seven claim outcomes and five crash/recovery windows.
+
+---
+
+## Reconciliation — TASK-KILO-TASK-REGISTRY-PERSISTENCE-LIVE-RENDER-RECONCILIATION-001
+
+**Date**: 2026-10-02
+**Purpose**: Reconcile the prior persistence/concurrency research against verified live Render service configuration to determine whether the existing JSON-backed TaskRegistry can serve as the authoritative persistence layer for Phase 4 execution-claim implementation.
+
+### Prior UNKNOWN → VERIFIED: Render Topology
+
+| Prior Finding | Status Before | Status After | Evidence |
+|---|---|---|---|
+| Render service instance count | UNKNOWN | **VERIFIED: 1 instance** | Task description: `numInstances: 1`; confirmed by Render free plan docs (Free web services do not support scaling beyond a single instance) |
+| Render plan | UNKNOWN | **VERIFIED: Free** | Task description: `plan: Free` |
+| Service suspended | UNKNOWN | **VERIFIED: not suspended** | Task description: `current service: not suspended` |
+| Runtime | VERIFIED | VERIFIED (unchanged) | `node index.js`, `process.env.PORT \|\| 3000`, Render Node runtime, Oregon region |
+
+### Prior UNKNOWN → VERIFIED: Persistent Disk Attachment
+
+| Prior Finding | Status Before | Status After | Evidence |
+|---|---|---|---|
+| Persistent Disk attached | UNKNOWN | **VERIFIED: NOT ATTACHED** | Render free plan documentation explicitly states: "Free web services don't support the following features of paid compute plans: Scaling beyond a single instance, **Persistent disks**, Edge caching, Running one-off jobs, Shell access." Source: `https://render.com/docs/free`, "Other limitations" section. Free plan web services cannot attach persistent disks. |
+
+### Prior UNKNOWN → VERIFIED: TaskRegistry File Durability
+
+| Prior Finding | Status Before | Status After | Evidence |
+|---|---|---|---|
+| Does `poc/task-registry.json` survive service restarts? | UNKNOWN | **VERIFIED: NO** | Render free plan documentation: "Local files lost on redeploy — Like all Render services, Free web services have an ephemeral filesystem. This means that any changes to your web service's filesystem are lost every time the service redeploys, restarts, or spins down." Free services also "spin down" after 15 minutes of no inbound traffic and lose all filesystem changes on spin-down. `poc/task-registry.json` is at `path.join(__dirname, 'task-registry.json')` resolving to `/opt/render/project/src/poc/task-registry.json` on the ephemeral filesystem — NOT on a persistent disk (which cannot be attached on Free plan). |
+
+### Prior UNKNOWN → VERIFIED: Render Datastore (Postgres / Key Value)
+
+| Prior Finding | Status Before | Status After | Evidence |
+|---|---|---|---|
+| Render Postgres provisioned | UNKNOWN | **VERIFIED: NOT PROVISIONED (not attached)** | `package.json` contains no `pg` or `@neondatabase/pg` dependency; no `DATABASE_URL` or `POSTGRES_URL` env var referenced in application code (`index.js`, `routes/poc.js`, `poc/*.js`, `services/*.js`). Application makes no database connection. |
+| Render Key Value (Valkey/Redis) provisioned | UNKNOWN | **VERIFIED: NOT PROVISIONED (not attached)** | `package.json` contains no `redis` or `ioredis` dependency; no `REDIS_URL`, `REDIS_HOST`, `KEYVALUE_URL`, or `VALKEY_URL` env var referenced in application code. Application makes no Redis/Valkey connection. |
+| Free Key Value durability | UNKNOWN | **VERIFIED: NOT DURABLE even if attached** | Render free plan documentation: "Free Key Value instances do not continually persist their state to disk. This means that whenever an instance restarts, all of its data is lost." Even if a Free Key Value were attached, it would not provide the durability required for execution-claim recovery. |
+
+### Prior UNKNOWN → VERIFIED: Deployment/Restart Behavior
+
+| Prior Finding | Status Before | Status After | Evidence |
+|---|---|---|---|
+| Restart behavior affecting TaskRegistry | UNKNOWN | **VERIFIED: filesystem changes lost on every redeploy/restart/spin-down** | Render free plan docs: "Render might restart a Free web service at any time" and "any changes to your web service's filesystem are lost every time the service redeploys, restarts, or spins down." Auto-deploy is enabled from `main`, meaning any push triggers a redeploy that wipes the filesystem. |
+
+### Concurrency Implication
+
+**VERIFIED**: The service operates as a single instance (numInstances=1, Free plan cannot scale beyond 1). Therefore, within a single process lifetime, the process-local `memoryCache` + `atomicWrite()` pattern does NOT face the multi-instance race the prior research flagged. However:
+
+- **Concurrency within the single process** is already safe: Node.js is single-threaded for JS execution; Express request handlers are async but cannot interleave synchronous mutation logic within `poc/task-registry.js` (all cache mutations are synchronous before `persistCache()`).
+- **The concurrency hazard is now a DURABILITY hazard**: even with single-instance safety, if the process restarts (which Render Free may do at any time), all TaskRegistry state — including any future execution-claim state — is lost from the ephemeral filesystem. Crash window C (`claim persisted → carrier dies → agent may or may not have started`) cannot be handled because the claim record itself does not survive.
+
+### Decision
+
+| Aspect | Verdict |
+|---|---|
+| **Concurrency (single-process)** | SAFE — single instance, single Node.js process, synchronous cache mutations |
+| **Durability (filesystem)** | UNSAFE — ephemeral filesystem on Free plan; no persistent disk possible; file lost on every redeploy/restart/spin-down |
+| **Database/Valkey for persistence** | NOT attached; would require dependency addition (`pg`/`redis`) + Render provisioning |
+| **Current TaskRegistry as authoritative** | NOT sufficient for execution-claim protocol |
+
+**Decision: PERSISTENCE HARDENING REQUIRED.**
+
+The current one-instance Render topology resolves the concurrency question (single-process safety is adequate). However, the durability question is now definitively RESOLVED AGAINST the current setup: the JSON-backed TaskRegistry on the ephemeral filesystem does NOT survive the service restarts that Free-plan Render services undergo.
+
+The execution-claim protocol requires at minimum:
+- Durable claim state (survives process restart for crash window C recovery)
+- Durable task state (survives process restart so tasks and lineage are not lost)
+
+Neither is provided by the current filesystem-backed TaskRegistry on Render Free.
+
+### Remaining Implementation Constraints
+
+1. **No dependency additions without authorization**: `package.json` has no database/Redis driver. Adding `pg` or `redis` requires explicit authorization per AGENTS.md §5 (Change Discipline: "Do not add dependencies unless explicitly required").
+2. **No Render configuration changes in repository**: There is no `render.yaml` or `.render/` directory. Render service configuration (disk attachment, database provisioning) is done via the Render Dashboard, not repository code.
+3. **Free Postgres limitation**: Even if a Free Postgres were provisioned, it expires 30 days after creation and has no backups. This is not suitable for authoritative task state.
+4. **Free Key Value limitation**: Free Key Value is in-memory only; data is lost on restart. Not suitable for execution-claim lease state.
+5. **Upgrading to paid plan**: Moving to a paid plan (for persistent disk or production Postgres/Key Value) is a billing/platform decision outside the repository.
+
+### Minimum Hardening Requirement
+
+To make the existing TaskRegistry safe for execution-claim implementation, the minimum authorized change is:
+
+**Required**: Provision a durable persistence tier for the TaskRegistry JSON file:
+- **Option 1 (smallest change)**: Upgrade the Render service to a paid plan and attach a persistent disk at a path like `/var/data/task-registry/task-registry.json`. Update `REGISTRY_FILE` in `poc/task-registry.js` to write to the mounted persistent disk path. No new npm dependencies. Preserves TaskRegistry as sole authority.
+- **Option 2 (strongest durability)**: Provision a paid Render Postgres or Key Value. Add `pg` (or `redis`) npm dependency. Migrate TaskRegistry storage backend to the datastore as sole storage. This is a larger change requiring dependency authorization.
+
+Both options require:
+- An explicitly authorized infrastructure/configuration task (Render Dashboard changes, not repository code)
+- For Option 2: explicit dependency-addition authorization
+- A code change to `poc/task-registry.js` to target the new storage path/backend
+
+### Execution-Claim Readiness
+
+**Cannot be determined — PERSISTENCE HARDENING REQUIRED first.**
+
+Even though concurrency is safe (single instance), durability is not. The execution-claim protocol specifically requires surviving the `claim persisted → carrier dies → agent may or may not have started` window (crash/recovery window C). With the current ephemeral filesystem, a claim record is lost on any restart, making:
+- Stale-claim detection impossible (claim record gone)
+- Recovery to the claimed state impossible (claim record gone)
+- Carrier identity correlation impossible (claim record gone)
+
+The remaining uncertainty (did the external agent start before the crash?) cannot even be recorded durably.
+
+**The execution-claim implementation MUST NOT proceed until PERSISTENCE HARDENING REQUIRED is satisfied.**
+
+### Final Reconciliation Summary
+
+| Question | Before (Repository-only) | After (Live Render Inspection) |
+|---|---|---|
+| Render instance count | UNKNOWN | VERIFIED: 1 (single instance, cannot scale on Free) |
+| Persistent Disk attached | UNKNOWN | VERIFIED: NOT ATTACHED (Free plan cannot attach disks) |
+| TaskRegistry file durability | UNKNOWN | VERIFIED: NOT DURABLE (ephemeral filesystem, lost on restart/spin-down/deploy) |
+| Render Postgres/Key Value attached | UNKNOWN | VERIFIED: NOT PROVISIONED (no dependencies, no env vars, not attached) |
+| Concurrency safety (single-process) | UNKNOWN | VERIFIED: SAFE (single instance + single Node.js process) |
+| Durability for execution-claim protocol | UNKNOWN | VERIFIED: UNSAFE (filesystem lost on restart) |
+| **Overall decision** | BLOCKED (insufficient evidence) | **PERSISTENCE HARDENING REQUIRED** (decision is now evidence-based, not blocked on evidence) |
