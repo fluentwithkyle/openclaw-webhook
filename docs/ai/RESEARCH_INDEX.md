@@ -27,6 +27,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
+| TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001 | 2026-10-02 | Kilo | `docs/ai/research/research-TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001 | 2026-10-02 | Gemini | `docs/ai/research/research-TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001 | 2026-10-02 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001.md` | Execution-claim and carrier-recovery research; current JSON TaskRegistry lacks safe cross-process atomic claim semantics, so implementation remains blocked. |
 | TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001 | 2026-10-02 | ChatGPT Coordinator | `docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001.md` | Independent reconciliation of external-activation architecture; admission is resolved, execution-carrier ownership/recovery remains blocked for implementation. |
