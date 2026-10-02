@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-10-02
-**Updated By**: Kilo — TASK-KILO-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001
+**Updated By**: Gemini — TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -121,6 +121,7 @@ Updated By | ChatGPT — TASK-CHATGPT-DEEPSEEK-PHASE-2-CONVERGENCE-DOCUMENTATION
 2. **Chatbox → Render integration gap (Live)** — Chatbox returned `Network Error: Load failed` when sending through `CHATBOX_GATEWAY` to `/poc/chatbox`. Root cause: **UNKNOWN**. Gateway route implemented (26/26 tests pass); no end-to-end Chatbox → Render request verified as successful. See STATE.md DeepSeek + Chatbox Integration State section for investigation plan.
 3. **OpenRouter DeepSeek V4 Pro token/credit issue (Live)** — 131,072-token requests rejected with HTTP 402 despite 8,000-token display. VERIFIED externally observed; not a repository defect.
 4. **Legacy abandoned-booking code** — `google-apps-script/AbandonedBookings.js` needs deployment verification before retirement.
+5. **TaskRegistry persistence/concurrency for execution claims (BLOCKED)** — The external-activation execution-claim implementation is blocked pending resolution of the single authoritative persistence/concurrency mechanism for TaskRegistry mutations. The current JSON/file-backed TaskRegistry with process-local memoryCache provides no cross-process atomic compare-and-set. Render topology (single vs. multi-instance, persistent disk, datastore provisioning) is UNKNOWN from repository source. Research complete: `docs/ai/research/research-TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001.md`. Resolution requires either Path A (single-instance: file locking + stale-claim detection, no new dependency) or Path B (shared datastore: Render Postgres or Key Value, new pg/redis dependency + explicit authorization).
 
 ---
 
@@ -332,3 +333,15 @@ Historical implementation record: the gate was introduced over the strategic-ali
 **Next concrete action:** resolve and authorize the single persistence/concurrency mechanism that can safely serialize TaskRegistry create/recover/claim mutations across the actual Render process/instance topology. No execution-claim implementation should proceed before that decision.
 
 **Research record:** `docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001.md`.
+
+### TaskRegistry Persistence/Concurrency Architecture Decision — 2026-10-02
+
+**Current status:** RESEARCH COMPLETE / IMPLEMENTATION BLOCKED.
+
+Evaluated five candidate persistence/concurrency mechanisms against the claim protocol (UNCLAIMED, CLAIMED, ALREADY_CLAIMED, COMPLETE, FAILED/BLOCKED, RECOVERABLE, MISMATCH, UNAUTHORIZED) and five crash/recovery windows (A–E). Confirmed via source inspection: `poc/task-registry.js` uses process-local `memoryCache` with `renameSync` atomic-write only (no compare-and-set, no cross-process lock, no DB transaction); `package.json` has no database/ORM/lock dependency; no `render.yaml` or `.render/` exists; `openclaw-render.json` contains only gateway config. Runtime is VERIFIED (Render Node.js/Expression, `node index.js`, `PORT||3000`); Render scaling, persistent disk, and datastore provisioning are UNKNOWN from repository source.
+
+**Decision:** BLOCKED — the Render process/instance topology cannot be determined from repository source alone. Two viable resolution paths identified:
+- Path A: Single-instance — add `O_EXCL`/`flock` file locking + stale-claim detection to `poc/task-registry.js` (no new dependency).
+- Path B: Shared datastore — provision Render Postgres or Render Key Value; add `pg`/`redis` dependency; migrate TaskRegistry storage backend as sole authoritative store (requires explicit dependency-authorization per AGENTS.md §5).
+
+**Research record:** `docs/ai/research/research-TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001.md`.
