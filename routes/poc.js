@@ -583,6 +583,31 @@ router.post('/builder/callback', authenticateBuilderCallback, async (req, res) =
         });
     }
 
+    const executionClaim = taskRegistry.getExecutionClaim(requestId);
+    if (executionClaim) {
+        const callbackClaimId = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.execution_claim_id;
+        if (callbackClaimId && executionClaim.execution_claim_id !== callbackClaimId) {
+            return res.status(403).json({
+                request_id: requestId,
+                status: 'authorization blocked',
+                stage: 'authorization blocked',
+                error: `Execution claim ID mismatch: expected ${executionClaim.execution_claim_id}, got ${callbackClaimId}`,
+                error_code: 'EXECUTION_CLAIM_MISMATCH'
+            });
+        }
+
+        const callbackCarrierIdentity = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.carrier_identity;
+        if (callbackCarrierIdentity && executionClaim.carrier_identity !== callbackCarrierIdentity) {
+            return res.status(403).json({
+                request_id: requestId,
+                status: 'authorization blocked',
+                stage: 'authorization blocked',
+                error: `Carrier identity mismatch: expected ${executionClaim.carrier_identity}, got ${callbackCarrierIdentity}`,
+                error_code: 'CARRIER_IDENTITY_MISMATCH'
+            });
+        }
+    }
+
     const result = orchestrator.handleGeminiBuilderCompletion(requestId, req.body);
 
     if (!result.success) {

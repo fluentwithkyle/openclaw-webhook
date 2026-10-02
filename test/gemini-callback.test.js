@@ -19,6 +19,7 @@ app.use(express.json());
 process.env.ACP_POC_TRIGGER_SECRET = 'test-secret';
 process.env.GEMINI_CALLBACK_SECRET = 'test-gemini-secret';
 process.env.BUILDER_CALLBACK_SECRET = 'test-builder-secret';
+process.env.DIRECTOR_APPROVAL_SECRET = 'test-director-secret';
 
 // Load the routes
 const { router: pocRouter } = require('../routes/poc');
@@ -89,8 +90,8 @@ function makeGeminiReport(requestId, task = 'test-task', status = 'success') {
   };
 }
 
-function makeBuilderReport(requestId, task = 'test-task', status = 'success') {
-  return {
+function makeBuilderReport(requestId, task = 'test-task', status = 'success', executionClaimId = null, carrierIdentity = null) {
+  const report = {
     request_id: requestId,
     agent: 'Gemini Builder',
     status: status,
@@ -102,6 +103,13 @@ function makeBuilderReport(requestId, task = 'test-task', status = 'success') {
     push: true,
     blockers: status === 'blocked' ? ['Needs design decision'] : (status === 'failure' ? ['Build failed'] : [])
   };
+  if (executionClaimId !== null) {
+    report.result.execution_metadata.execution_claim_id = executionClaimId;
+  }
+  if (carrierIdentity !== null) {
+    report.result.execution_metadata.carrier_identity = carrierIdentity;
+  }
+  return report;
 }
 
 function setupTask(requestId, task = 'test-task') {
@@ -494,6 +502,147 @@ async function main() {
     const result = await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'success'), 'wrong-secret');
     assert.strictEqual(result.status, 401);
     assert.strictEqual(result.body.status, 'authentication blocked');
+  });
+
+  // =========================================================
+  // Builder callback correlation tests (execution_claim_id + carrier_identity)
+  // =========================================================
+
+  await runTest('Builder callback: correct execution_claim_id + carrier_identity succeeds', async () => {
+    const requestId = 'builder-corr-ok-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+      carrier_id: 'github-workflow-builder-corr-1',
+      carrier_type: 'github_workflow'
+    });
+    assert.strictEqual(claimResult.success, true);
+
+    const report = makeBuilderReport(
+      requestId, 'builder-task', 'success',
+      claimResult.execution_claim_id,
+      'github-workflow-builder-corr-1'
+    );
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
+  });
+
+  await runTest('Builder callback: wrong execution_claim_id is rejected', async () => {
+    const requestId = 'builder-corr-claim-mismatch-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+      carrier_id: 'github-workflow-builder-corr-2',
+      carrier_type: 'github_workflow'
+    });
+    assert.strictEqual(claimResult.success, true);
+
+    const report = makeBuilderReport(
+      requestId, 'builder-task', 'success',
+      'wrong-claim-id',
+      'github-workflow-builder-corr-2'
+    );
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISMATCH');
+  });
+
+  await runTest('Builder callback: wrong carrier_identity is rejected', async () => {
+    const requestId = 'builder-corr-carrier-mismatch-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+      carrier_id: 'github-workflow-builder-corr-3',
+      carrier_type: 'github_workflow'
+    });
+    assert.strictEqual(claimResult.success, true);
+
+    const report = makeBuilderReport(
+      requestId, 'builder-task', 'success',
+      claimResult.execution_claim_id,
+      'wrong-carrier-identity'
+    );
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.body.error_code, 'CARRIER_IDENTITY_MISMATCH');
+  });
+
+  await runTest('Builder callback: unknown request_id is rejected', async () => {
+    const requestId = 'builder-corr-unknown-' + Date.now();
+    const report = makeBuilderReport(
+      'unknown-builder-request', 'builder-task', 'success',
+      'some-claim-id', 'some-carrier'
+    );
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.body.status, 'validation blocked');
+    assert(res.body.error.includes('Unknown request_id'));
+  });
+
+  await runTest('Builder callback: wrong agent (Gemini Reviewer) is rejected', async () => {
+    const requestId = 'builder-corr-agent-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const report = { ...makeBuilderReport(requestId, 'builder-task', 'success'), agent: 'Gemini' };
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.status, 'validation blocked');
+    assert(res.body.error.includes('Expected Gemini Builder report'));
+  });
+
+  await runTest('Builder callback: repository mismatch remains rejected', async () => {
+    const requestId = 'builder-corr-repo-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const report = { ...makeBuilderReport(requestId, 'builder-task', 'success'), repository: 'evil/repo' };
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 400);
+    assert(res.body.error.includes('Repository mismatch'));
+  });
+
+  await runTest('Builder callback: base_branch mismatch remains rejected', async () => {
+    const requestId = 'builder-corr-branch-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const report = { ...makeBuilderReport(requestId, 'builder-task', 'success'), base_branch: 'develop' };
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 400);
+    assert(res.body.error.includes('Base branch mismatch'));
+  });
+
+  await runTest('Builder callback: duplicate completion remains idempotent', async () => {
+    const requestId = 'builder-corr-dup-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+      carrier_id: 'github-workflow-builder-dup',
+      carrier_type: 'github_workflow'
+    });
+    assert.strictEqual(claimResult.success, true);
+
+    const report = makeBuilderReport(
+      requestId, 'builder-task', 'success',
+      claimResult.execution_claim_id,
+      'github-workflow-builder-dup'
+    );
+    const res1 = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res1.status, 200);
+
+    const res2 = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res2.status, 409);
+    assert.strictEqual(res2.body.status, 'duplicate');
+    assert.strictEqual(res2.body.duplicate, true);
+  });
+
+  await runTest('Builder callback: no execution claim on task - correlation skipped (backward compatible)', async () => {
+    const requestId = 'builder-corr-no-claim-' + Date.now();
+    setupTask(requestId, 'builder-task');
+
+    const report = makeBuilderReport(requestId, 'builder-task', 'success', null, null);
+    const res = await postRequest('/poc/builder/callback', report);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
   });
 
   server.close();
