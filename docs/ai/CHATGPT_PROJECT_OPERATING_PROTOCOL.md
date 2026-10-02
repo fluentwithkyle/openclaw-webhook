@@ -1125,6 +1125,43 @@ Each specialist should retain its defined responsibility, authority, and escalat
 
 The specialist-lane architecture remains subject to the authoritative repository architecture and its documented implementation status.
 
+### 11.1 External-AI Activation Procedure
+
+The canonical procedure for external-AI activation of agent execution through the repository's
+activation infrastructure is documented in `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md`. This
+document defines the durable, reusable, machine-verified activation sequence:
+
+```
+External Producer → poc/validate-external-activation.js (admission shim)
+  → POST /poc/activation/ingress (canonical ingress)
+  → canonicalExternalActivationIngress (poc/activation-ingress.js)
+  → ACP validation + TaskRegistry create/recover + execution claim
+  → server-derived execution descriptor returned to carrier
+  → GitHub Actions workflow consumes descriptor (NOT workflow inputs)
+  → agent execution → callback → orchestrator → TaskRegistry
+```
+
+Key invariants enforced by this procedure and verified by `test/external-activation-bypass.test.js`
+and `test/external-activation-procedure.test.js`:
+
+- The `/poc/activation/ingress` route is **admission-only** — it does NOT call `getDispatcher()`,
+  preventing double-dispatch (ingress → workflow_dispatch → ingress).
+- All authority-bearing fields (`task_mode`, `capabilities`, `permitted_paths`, `target`,
+  `repository`, `base_branch`) are **server-derived** from `ACTIVATION_POLICY` in
+  `poc/activation-policy.js`. Workflow inputs are used only for correlation.
+- Consequential commands (`FAILOVER_EXECUTE`, `BUILDER`) require **Director authorization**
+  via `POST /poc/director/approve`.
+- The server-derived execution descriptor is persisted to `execution-descriptor.json` and
+  consumed by the workflow via `jq` — never reconstructed from workflow input values.
+- Agent execution is **gated** on `activation_validated == 'true' && !replay`.
+- `request_id`, `execution_claim_id`, and `carrier_identity` are preserved through the
+  complete activation → execution → callback chain.
+- Replay/idempotency is enforced at both the ingress layer (`replayTask`) and the workflow
+  layer (`if:` condition on `replay` output).
+
+When coordinating external agent activation, consult `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md`
+before preparing or authorizing any external activation workflow dispatch.
+
 12. Standard Completion Loop
 
 Every implementation task should follow this loop:
