@@ -1,0 +1,125 @@
+name: External Gemini Builder Activation Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  external-builder-activation-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Construct internal correlation identifiers
+        id: correlation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="builder-wfd-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          BUILDER_EXEC_ID="builder-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+
+          {
+            echo "request_id<<EOF"
+            echo "$REQUEST_ID"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "builder_execution_id<<EOF"
+            echo "$BUILDER_EXEC_ID"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::notice::Internal request_id: $REQUEST_ID"
+          echo "::notice::Internal builder_execution_id: $BUILDER_EXEC_ID"
+
+      - name: Write Builder verification task to file
+        id: task_definition
+        env:
+          BUILDER_TASK: |
+            PERFORM A MINIMAL REAL IMPLEMENTATION VERIFICATION WITHIN THE POC/ SCOPE.
+
+            1. Inspect the existing poc/ activation modules (activation-policy.js,
+               activation-ingress.js, task-registry.js, external-activation-validator.js)
+               and the machine-verification tests in test/external-activation-procedure.test.js
+               and test/external-activation-bypass.test.js.
+
+            2. Identify one small, testable gap in the poc/ boundary-layer utilities — for
+               example, a helper function or invariant referenced by the activation path
+               that lacks direct unit-test coverage, OR a small utility function that would
+               make the activation code cleaner and is covered by a new focused test.
+
+            3. Implement the minimal change within poc/ (a single small function or
+               module-level constant — approximately 5-15 lines). Do NOT modify secrets,
+               credentials, production application code (index.js, routes/*, services/*),
+               AGENTS.md, GEMINI.md, ARCHITECTURE.md, or any GitHub Actions workflow files.
+
+            4. Add at least one focused test in test/ that directly covers the new behavior.
+
+            5. Run the relevant subset of npm test (e.g., the external-activation tests
+               and any new test added). Ensure all targeted tests pass.
+
+            6. Run git diff --check to ensure no whitespace errors.
+
+            7. Commit and push the changes to main.
+
+            This is a real implementation task. Produce a concrete, tested, committed
+            change within the authorized poc/ scope.
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          printf '%s' "$BUILDER_TASK" > builder-task.md
+          echo "task_file=builder-task.md" >> "$GITHUB_OUTPUT"
+          echo "::notice::Task written to builder-task.md"
+
+      - name: Dispatch Gemini Builder carrier
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="${{ steps.correlation.outputs.request_id }}"
+          BUILDER_EXEC_ID="${{ steps.correlation.outputs.builder_execution_id }}"
+          REPOSITORY="${{ github.repository }}"
+          BASE_BRANCH="main"
+
+          echo "::notice::Dispatching gemini-builder.yml carrier"
+          echo "::notice::request_id: $REQUEST_ID"
+          echo "::notice::builder_execution_id: $BUILDER_EXEC_ID"
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPOSITORY}/actions/workflows/gemini-builder.yml/dispatches" \
+            -F ref="$BASE_BRANCH" \
+            -F "inputs[request_id]=$REQUEST_ID" \
+            -F "inputs[task]=$(cat builder-task.md)" \
+            -F "inputs[repository]=$REPOSITORY" \
+            -F "inputs[base_branch]=$BASE_BRANCH" \
+            -F "inputs[builder_execution_id]=$BUILDER_EXEC_ID" \
+            -F "inputs[task_mode]=BUILDER" \
+            -F "inputs[capabilities]=read_only,modify_files,run_tests,commit,push" \
+            -F "inputs[permitted_paths]=poc/"
+
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to dispatch gemini-builder.yml carrier workflow"
+            exit 1
+          fi
+
+          echo "::notice::gemini-builder.yml carrier dispatched successfully"
+          echo "carrier_dispatched=true" >> "$GITHUB_OUTPUT"
+
+      - name: Report dispatch status
+        if: always()
+        shell: bash
+        run: |
+          echo "::notice::Builder carrier dispatched. Monitor gemini-builder.yml workflow run for execution results."
