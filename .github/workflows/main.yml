@@ -104,62 +104,6 @@ jobs:
             echo "permitted_paths=$PERMITTED_PATHS"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Prepare orchestration context (workflow_dispatch)
-        id: orchestration_context
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # The orchestration context now consumes the SERVER-DERIVED execution descriptor
-          # returned by the canonical activation ingress, not workflow input values.
-          # The descriptor contains authoritative request_id, task_mode, capabilities,
-          # permitted_paths, task, repository, and base_branch.
-          DESCRIPTOR_FILE="execution-descriptor.json"
-          if [ ! -f "$DESCRIPTOR_FILE" ]; then
-            echo "::error::Execution descriptor file not found; server validation may have produced a replay"
-            exit 1
-          fi
-
-          {
-            echo 'request_id<<EOF'
-            jq -r '.request_id' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'task<<EOF'
-            jq -r '.task' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'repository<<EOF'
-            jq -r '.repository' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'base_branch<<EOF'
-            jq -r '.base_branch' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'kilo_execution_id<<EOF'
-            printf '%s\n' ""
-            echo 'EOF'
-            echo 'builder_execution_id<<EOF'
-            printf '%s\n' ""
-            echo 'EOF'
-            echo 'verification<<EOF'
-            jq -r '.verification' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'task_mode<<EOF'
-            jq -r '.task_mode' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'capabilities<<EOF'
-            jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'permitted_paths<<EOF'
-            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'execution_claim_id<<EOF'
-            jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
-            echo 'EOF'
-            echo 'carrier_identity<<EOF'
-            printf '%s\n' "${{ steps.validate_activation_wfd.outputs.carrier_identity }}"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-
       - name: Validate external activation through canonical ingress (issue_comment)
         id: validate_activation
         if: github.event_name == 'issue_comment'
@@ -228,6 +172,62 @@ jobs:
           }"
 
           echo "activation_validated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare orchestration context (workflow_dispatch)
+        id: orchestration_context
+        if: github.event_name == 'workflow_dispatch' && steps.validate_activation_wfd.outputs.activation_validated == 'true' && !steps.validate_activation_wfd.outputs.replay
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The orchestration context now consumes the SERVER-DERIVED execution descriptor
+          # returned by the canonical activation ingress, not workflow input values.
+          # The descriptor contains authoritative request_id, task_mode, capabilities,
+          # permitted_paths, task, repository, and base_branch.
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ ! -f "$DESCRIPTOR_FILE" ]; then
+            echo "::error::Execution descriptor file not found; server validation may have produced a replay"
+            exit 1
+          fi
+
+          {
+            echo 'request_id<<EOF'
+            jq -r '.request_id' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'task<<EOF'
+            jq -r '.task' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'repository<<EOF'
+            jq -r '.repository' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'base_branch<<EOF'
+            jq -r '.base_branch' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'kilo_execution_id<<EOF'
+            printf '%s\n' ""
+            echo 'EOF'
+            echo 'builder_execution_id<<EOF'
+            printf '%s\n' ""
+            echo 'EOF'
+            echo 'verification<<EOF'
+            jq -r '.verification' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'task_mode<<EOF'
+            jq -r '.task_mode' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'capabilities<<EOF'
+            jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'permitted_paths<<EOF'
+            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'execution_claim_id<<EOF'
+            jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'carrier_identity<<EOF'
+            printf '%s\n' "${{ steps.validate_activation_wfd.outputs.carrier_identity }}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Prepare orchestration context (issue_comment)
         id: orchestration_context

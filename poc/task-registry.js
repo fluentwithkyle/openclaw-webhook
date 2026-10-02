@@ -1061,7 +1061,9 @@ function buildExecutionDescriptor(requestId, taskEntry, executionClaimId) {
     permitted_paths: taskEntry.permitted_paths,
     verification: taskEntry.verification,
     workflow_stage: taskEntry.workflow_stage,
-    target_agent: taskEntry.current_agent
+    target_agent: taskEntry.current_agent,
+    carrier_identity: taskEntry.execution_claim && taskEntry.execution_claim.carrier_identity || null,
+    carrier_type: taskEntry.execution_claim && taskEntry.execution_claim.carrier_type || null
   };
 }
 

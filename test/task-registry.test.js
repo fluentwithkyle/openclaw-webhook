@@ -457,13 +457,67 @@ test('replayTask - terminated task returns success with task_terminated flag', (
 });
 
 test('replayTask - persists fingerprint across reload', () => {
-  cleanup();
-  taskRegistry.createTask(validCommand);
-  taskRegistry.loadFromFile();
-  var replay = taskRegistry.replayTask(validCommand);
-  assertEqual(replay.success, true);
-  assertEqual(replay.replay, true);
-  cleanup();
+    cleanup();
+    taskRegistry.createTask(validCommand);
+    taskRegistry.loadFromFile();
+    var replay = taskRegistry.replayTask(validCommand);
+    assertEqual(replay.success, true);
+    assertEqual(replay.replay, true);
+    cleanup();
+});
+
+test('buildExecutionDescriptor - includes carrier_identity and carrier_type from execution claim', () => {
+    cleanup();
+    const entry = {
+        task: 'test-task',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+        permitted_paths: ['poc/'],
+        verification: 'tests pass',
+        workflow_stage: null,
+        current_agent: 'Gemini Builder',
+        execution_claim: {
+            execution_claim_id: 'claim-1',
+            carrier_identity: 'github-workflow-123-1',
+            carrier_type: 'github_workflow'
+        }
+    };
+    const descriptor = taskRegistry.buildExecutionDescriptor('req-1', entry, 'claim-1');
+    assertEqual(descriptor.request_id, 'req-1');
+    assertEqual(descriptor.execution_claim_id, 'claim-1');
+    assertEqual(descriptor.carrier_identity, 'github-workflow-123-1');
+    assertEqual(descriptor.carrier_type, 'github_workflow');
+    assertEqual(descriptor.task, 'test-task');
+    assertEqual(descriptor.repository, 'fluentwithkyle/openclaw-webhook');
+    assertEqual(descriptor.base_branch, 'main');
+    assertEqual(descriptor.task_mode, 'BUILDER');
+    assertEqual(descriptor.target_agent, 'Gemini Builder');
+    cleanup();
+});
+
+test('buildExecutionDescriptor - returns null when taskEntry is missing', () => {
+    const descriptor = taskRegistry.buildExecutionDescriptor('req-1', null, 'claim-1');
+    assertEqual(descriptor, null);
+});
+
+test('buildExecutionDescriptor - null carrier fields when no execution claim', () => {
+    const entry = {
+        task: 'test-task',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'REVIEW',
+        capabilities: ['read_only'],
+        permitted_paths: ['poc/'],
+        verification: 'review',
+        workflow_stage: null,
+        current_agent: 'Gemini'
+    };
+    const descriptor = taskRegistry.buildExecutionDescriptor('req-1', entry, null);
+    assertEqual(descriptor.carrier_identity, null);
+    assertEqual(descriptor.carrier_type, null);
+    assertEqual(descriptor.execution_claim_id, null);
 });
 
 function assertNotEqual(actual, expected, msg) {

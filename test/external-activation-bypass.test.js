@@ -860,6 +860,274 @@ runTest('Workflow - external-activation-validator.js transmits x-carrier-identit
     assert.ok(validatorRaw.includes('GITHUB_RUN_ID'), 'Should derive carrier identity from GITHUB_RUN_ID');
 });
 
+// =========================================================
+// Phase 4: Workflow ordering and descriptor binding tests
+// =========================================================
+
+runTest('Workflow ordering - main.yml workflow_dispatch: validation step appears before orchestration context step', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const validateIdx = mainRawLocal.indexOf('Validate external activation through canonical ingress (workflow_dispatch)');
+    assert.ok(validateIdx !== -1, 'workflow_dispatch validation step must exist');
+
+    const contextIdx = mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)');
+    assert.ok(contextIdx !== -1, 'workflow_dispatch orchestration context step must exist');
+
+    assert.ok(validateIdx < contextIdx,
+        'validation step must appear BEFORE orchestration context step in main.yml workflow_dispatch path');
+});
+
+runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context is gated on validation output', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const contextSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'));
+    assert.ok(/steps\.validate_activation_wfd\.outputs\.activation_validated\s*==\s*'true'/.test(contextSection),
+        'orchestration context step must be gated on steps.validate_activation_wfd.outputs.activation_validated');
+});
+
+runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context is gated on non-replay', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const contextSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'));
+    assert.ok(/!steps\.validate_activation_wfd\.outputs\.replay/.test(contextSection),
+        'orchestration context step must be gated to skip on replay (workflow_dispatch)');
+});
+
+runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context reads descriptor file', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const contextSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'));
+    assert.ok(contextSection.includes('execution-descriptor.json'), 'orchestration context must reference execution-descriptor.json');
+    assert.ok(contextSection.includes('jq -r \'.request_id\' "$DESCRIPTOR_FILE"'), 'orchestration context must read request_id from descriptor');
+    assert.ok(contextSection.includes('jq -r \'.task_mode\' "$DESCRIPTOR_FILE"'), 'orchestration context must read task_mode from descriptor');
+    assert.ok(contextSection.includes('jq -r \'.capabilities | join(",")\' "$DESCRIPTOR_FILE"'), 'orchestration context must read capabilities from descriptor');
+});
+
+runTest('Workflow ordering - main.yml: Gemini invocation is gated on validation (both paths)', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const geminiSection = mainRawLocal.slice(mainRawLocal.indexOf('Run Gemini in advisory mode'));
+    assert.ok(/steps\.validate_activation\.outputs\.activation_validated\s*==\s*'true'/.test(geminiSection),
+        'Gemini run must be gated on issue_comment validation output');
+    assert.ok(/steps\.validate_activation_wfd\.outputs\.activation_validated\s*==\s*'true'/.test(geminiSection),
+        'Gemini run must be gated on workflow_dispatch validation output');
+    assert.ok(/!steps\.validate_activation\.outputs\.replay/.test(geminiSection),
+        'Gemini run must skip on issue_comment replay');
+    assert.ok(/!steps\.validate_activation_wfd\.outputs\.replay/.test(geminiSection),
+        'Gemini run must skip on workflow_dispatch replay');
+});
+
+runTest('Workflow ordering - main.yml: carrier_identity output is sourced from validation step', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const contextWfSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'), mainRawLocal.indexOf('Prepare orchestration context (issue_comment)'));
+    assert.ok(contextWfSection.includes('steps.validate_activation_wfd.outputs.carrier_identity'),
+        'workflow_dispatch orchestration context must source carrier_identity from validation step output');
+    const contextIcSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (issue_comment)'));
+    assert.ok(contextIcSection.includes('steps.validate_activation.outputs.carrier_identity'),
+        'issue_comment orchestration context must source carrier_identity from validation step output');
+});
+
+runTest('Descriptor binding - buildExecutionDescriptor includes carrier_identity and carrier_type', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'desc-bind-test-1',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('desc-bind-test-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-bind-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success, 'Builder with carrier identity should succeed: ' + (result.error || ''));
+    assert.ok(result.execution_descriptor, 'Should return execution_descriptor');
+    assert.equal(result.execution_descriptor.carrier_identity, 'github-workflow-bind-1',
+        'Descriptor must bind carrier_identity');
+    assert.equal(result.execution_descriptor.carrier_type, 'github_workflow',
+        'Descriptor must bind carrier_type');
+    assert.equal(result.execution_descriptor.execution_claim_id, result.execution_claim_id,
+        'Descriptor must bind execution_claim_id');
+    cleanup();
+});
+
+runTest('Descriptor binding - buildExecutionDescriptor contains all authority-bearing fields', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'desc-bind-test-2',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('desc-bind-test-2', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-bind-2',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success);
+    const descriptor = result.execution_descriptor;
+
+    assert.ok(descriptor.request_id, 'Descriptor must contain request_id');
+    assert.ok(descriptor.execution_claim_id, 'Descriptor must contain execution_claim_id');
+    assert.ok(descriptor.carrier_identity, 'Descriptor must contain carrier_identity');
+    assert.ok(descriptor.carrier_type, 'Descriptor must contain carrier_type');
+    assert.ok(descriptor.task, 'Descriptor must contain task');
+    assert.ok(descriptor.repository, 'Descriptor must contain repository');
+    assert.ok(descriptor.base_branch, 'Descriptor must contain base_branch');
+    assert.ok(descriptor.task_mode, 'Descriptor must contain task_mode');
+    assert.ok(descriptor.capabilities, 'Descriptor must contain capabilities');
+    assert.ok(descriptor.permitted_paths, 'Descriptor must contain permitted_paths');
+    assert.ok(descriptor.target_agent, 'Descriptor must contain target_agent');
+    cleanup();
+});
+
+runTest('Descriptor binding - buildExecutionDescriptor returns null carrier fields when no claim', () => {
+    cleanup();
+    const taskEntry = {
+        task: 'test',
+        repository: 'test/repo',
+        base_branch: 'main',
+        task_mode: 'REVIEW',
+        capabilities: ['read_only'],
+        permitted_paths: ['poc/'],
+        current_agent: 'Gemini'
+    };
+    const descriptor = taskRegistry.buildExecutionDescriptor('test-req', taskEntry, null);
+    assert.equal(descriptor.carrier_identity, null, 'carrier_identity should be null without claim');
+    assert.equal(descriptor.carrier_type, null, 'carrier_type should be null without claim');
+    assert.equal(descriptor.execution_claim_id, null, 'execution_claim_id should be null without claim');
+    cleanup();
+});
+
+runTest('Gemini invocation - consumes descriptor values via orchestration_context outputs', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const geminiSection = mainRawLocal.slice(mainRawLocal.indexOf('Run Gemini in advisory mode'));
+
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.request_id'),
+        'Gemini invocation must consume request_id from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.task'),
+        'Gemini invocation must consume task from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.repository'),
+        'Gemini invocation must consume repository from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.base_branch'),
+        'Gemini invocation must consume base_branch from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.task_mode'),
+        'Gemini invocation must consume task_mode from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.capabilities'),
+        'Gemini invocation must consume capabilities from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.permitted_paths'),
+        'Gemini invocation must consume permitted_paths from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.execution_claim_id'),
+        'Gemini invocation must consume execution_claim_id from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.carrier_identity'),
+        'Gemini invocation must consume carrier_identity from orchestration context (descriptor)');
+});
+
+runTest('Callback - preserves request/claim/carrier correlation in ACP report payload', () => {
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const callbackSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare ACP report payload'));
+
+    assert.ok(callbackSection.includes('steps.orchestration_context.outputs.execution_claim_id'),
+        'Callback payload must include execution_claim_id from orchestration context');
+    assert.ok(callbackSection.includes('steps.orchestration_context.outputs.carrier_identity'),
+        'Callback payload must include carrier_identity from orchestration context');
+    assert.ok(callbackSection.includes('x-gemini-callback-secret'),
+        'Callback must include authentication header');
+    assert.ok(callbackSection.includes('RENDER_GEMINI_CALLBACK_URL'),
+        'Callback must reference Render callback URL');
+});
+
+runTest('Replay safety - matching replay does not produce second execution claim', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'replay-safety-test-1',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('replay-safety-test-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result1 = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-replay-safety-A',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(result1.success, 'First claim should succeed');
+    assert.equal(result1.execution_claimed, true);
+
+    const result2 = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-replay-safety-B',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(result2.success, 'Replay should succeed (idempotent): ' + (result2.error || ''));
+    assert.equal(result2.replay, true, 'Second attempt should be detected as replay');
+    assert.equal(result2.execution_claimed, undefined, 'Replay should not set execution_claimed');
+    cleanup();
+});
+
+runTest('Replay safety - changed payload fails closed (carrier mismatch)', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'replay-safety-test-2',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('replay-safety-test-2', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result1 = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-replay-safety-C',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(result1.success, 'First claim should succeed');
+
+    assert.equal(result1.execution_descriptor.carrier_identity, 'github-workflow-replay-safety-C',
+        'First descriptor must bind the correct carrier');
+
+    const modifiedPayload = { ...payload, task: 'completely different task' };
+    modifiedPayload.authorization = { ...payload.authorization, approval_id: approval.approval.approval_id };
+    const result2 = canonicalExternalActivationIngress(modifiedPayload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-replay-safety-D',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(!result2.success, 'Changed payload should fail closed');
+    assert.ok(
+        result2.error_code === 'REPLAY_PAYLOAD_MISMATCH' ||
+        result2.error_code === 'DUPLICATE_REQUEST_ID' ||
+        result2.stage === 'conflict',
+        'Changed payload should fail with conflict or mismatch error: ' + (result2.error || result2.error_code || '')
+    );
+    cleanup();
+});
+
 runTest('Workflow - routes/poc.js passes carrier_identity from request header', () => {
     const routesRaw = fs.readFileSync(path.join(__dirname, '..', 'routes', 'poc.js'), 'utf8');
     assert.ok(routesRaw.includes('x-carrier-identity'), 'Route should read x-carrier-identity header');
