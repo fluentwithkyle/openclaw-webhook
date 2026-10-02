@@ -362,7 +362,7 @@ jobs:
             REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
             TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
-            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}")"
+            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
             EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
           else
