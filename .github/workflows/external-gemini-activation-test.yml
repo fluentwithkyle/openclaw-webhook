@@ -34,13 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           if [ -z "$CALLBACK_BASE_URL" ]; then
             echo "::error::RENDER_CALLBACK_BASE_URL is not configured"
             exit 1
           fi
 
-          node poc/validate-external-activation.js gemini-workflow-dispatch "$(jq -n             --arg request_id "$REQUEST_ID"             --arg task "$TASK"             --arg repository "$REPOSITORY"             --arg base_branch "$BASE_BRANCH"             --arg task_mode "$TASK_MODE"             --arg capabilities "$CAPABILITIES"             --arg permitted_paths "$PERMITTED_PATHS"             --arg verification "$VERIFICATION"             '{
+          PAYLOAD=$(jq -n             --arg request_id "$REQUEST_ID"             --arg task "$TASK"             --arg repository "$REPOSITORY"             --arg base_branch "$BASE_BRANCH"             --arg task_mode "$TASK_MODE"             --arg capabilities "$CAPABILITIES"             --arg permitted_paths "$PERMITTED_PATHS"             --arg verification "$VERIFICATION"             '{
               request_id: $request_id,
               task: $task,
               repository: $repository,
@@ -49,20 +48,35 @@ jobs:
               capabilities: $capabilities,
               permitted_paths: $permitted_paths,
               verification: $verification
-            }')"
+            }')
 
-      - name: Require execution descriptor
+          node poc/validate-external-activation.js gemini-workflow-dispatch "$PAYLOAD"
+
+      - name: Require and expose execution descriptor
         id: descriptor
         shell: bash
         run: |
           set -euo pipefail
           test -s execution-descriptor.json
-          echo "request_id=$(jq -r '.request_id' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
-          echo "execution_claim_id=$(jq -r '.execution_claim_id' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
-          echo "carrier_identity=$(jq -r '.carrier_identity' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
-          echo "task_mode=$(jq -r '.task_mode' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
-          echo "repository=$(jq -r '.repository' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
-          echo "base_branch=$(jq -r '.base_branch' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
+
+          for field in request_id execution_claim_id carrier_identity task task_mode repository base_branch verification; do
+            value=$(jq -r --arg field "$field" '.[$field] // ""' execution-descriptor.json)
+            {
+              echo "$field<<EOF"
+              printf '%s\n' "$value"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          done
+
+          {
+            echo "capabilities<<EOF"
+            jq -r '.capabilities | join(",")' execution-descriptor.json
+            echo "EOF"
+            echo "permitted_paths<<EOF"
+            jq -r '.permitted_paths | join(",")' execution-descriptor.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
           echo "descriptor:"
           jq '{request_id, execution_claim_id, carrier_identity, carrier_type, target_agent, task_mode, capabilities, permitted_paths, repository, base_branch, workflow_stage}' execution-descriptor.json
 
@@ -73,13 +87,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_CLI_TRUST_WORKSPACE: "true"
           ORCHESTRATION_REQUEST_ID: ${{ steps.descriptor.outputs.request_id }}
-          ORCHESTRATION_TASK: ${{ env.TASK }}
+          ORCHESTRATION_TASK: ${{ steps.descriptor.outputs.task }}
           ORCHESTRATION_REPOSITORY: ${{ steps.descriptor.outputs.repository }}
           ORCHESTRATION_BASE_BRANCH: ${{ steps.descriptor.outputs.base_branch }}
-          ORCHESTRATION_VERIFICATION: ${{ env.VERIFICATION }}
+          ORCHESTRATION_VERIFICATION: ${{ steps.descriptor.outputs.verification }}
           ORCHESTRATION_TASK_MODE: ${{ steps.descriptor.outputs.task_mode }}
-          ORCHESTRATION_CAPABILITIES: ${{ env.CAPABILITIES }}
-          ORCHESTRATION_PERMITTED_PATHS: ${{ env.PERMITTED_PATHS }}
+          ORCHESTRATION_CAPABILITIES: ${{ steps.descriptor.outputs.capabilities }}
+          ORCHESTRATION_PERMITTED_PATHS: ${{ steps.descriptor.outputs.permitted_paths }}
           ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.descriptor.outputs.execution_claim_id }}
           ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.descriptor.outputs.carrier_identity }}
         with:
@@ -101,11 +115,11 @@ jobs:
             - carrier_identity: ${{ steps.descriptor.outputs.carrier_identity }}
 
             --- TASK START ---
-            ${{ env.TASK }}
+            ${{ steps.descriptor.outputs.task }}
             --- TASK END ---
 
             VERIFICATION REQUIREMENTS:
-            ${{ env.VERIFICATION }}
+            ${{ steps.descriptor.outputs.verification }}
 
             Read the repository's authoritative project/architecture documentation and the relevant activation, TaskRegistry, workflow, carrier, callback, and test files. Distinguish VERIFIED, INFERRED, and UNKNOWN. Do not claim live external-activation success merely from source inspection.
 
@@ -113,6 +127,7 @@ jobs:
         if: always()
         env:
           GEMINI_SUMMARY: ${{ steps.gemini_run.outputs.summary }}
+          TASK: ${{ steps.descriptor.outputs.task }}
         shell: bash
         run: |
           set -euo pipefail
