@@ -314,3 +314,8 @@ Historical implementation record: the gate was introduced over the strategic-ali
 ## Phase 3 Autonomous Workflow Sequencing — 2026-09-29
 
 `TASK-CODEX-DEEPSEEK-PHASE-3-AUTONOMOUS-WORKFLOW-SEQUENCING-IMPLEMENT-001` is **IMPLEMENTED / AWAITING INDEPENDENT VERIFICATION**. The existing bounded autonomous coordination loop now derives the only eligible next workflow step from authoritative TaskRegistry state and requires COMPLETE plus `INDEPENDENT_VERIFICATION` evidence before every continuation. It accepts only REVIEW → implementation → verification → reconciliation, stops after reconciliation, and rejects any model-selected step that differs from the server-derived step. The existing two-turn ceiling, one `control_plane`, ACP/Director authorization boundary, TaskRegistry, dispatcher/orchestrator, evidence, and lineage mechanisms remain unchanged.
+
+
+### External Activation Architecture Resolution
+
+**Current status:** RESEARCH COMPLETE / IMPLEMENTATION READINESS BLOCKED. Admission and authorization are resolved. The remaining execution-carrier boundary requires durable TaskRegistry execution ownership/claim and explicit crash/recovery semantics. The current workflow -> activation ingress -> dispatcher -> same workflow recursion is not accepted as the final architecture. See docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001.md.
