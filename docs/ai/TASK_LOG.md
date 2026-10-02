@@ -2988,3 +2988,14 @@ existing Director authorization.
 - `docs/ai/TASK_LOG.md` — added this historical record.
 
 **Commit References**: to be established on commit.
+
+
+## 2026-10-02 | TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001
+
+**Task**: Resolve the canonical architecture for agent-independent external activation, GitHub execution-carrier integration, TaskRegistry creation/recovery, Director authorization, replay/idempotency, and exactly-once consequential agent execution without a second control plane.
+
+**Outcome**: **RESEARCH COMPLETE / IMPLEMENTATION READINESS BLOCKED**. Independent repository inspection confirmed that the external-admission foundation is substantially correct, but the current GitHub integration remains circular: workflow-side validation calls /poc/activation/ingress, the ingress creates/recoveries the TaskRegistry task and invokes the existing dispatcher, the dispatcher launches the same GitHub workflow, and that workflow re-enters the ingress before its CLI execution. The prior Kilo research correctly identified the double-dispatch gap, but its proposed dispatch/suppress approach does not itself establish one agent execution. The remaining architectural requirement is an explicit execution-claim/ownership and recovery boundary in the existing TaskRegistry/control plane.
+
+**Conclusion**: Admission/authorization architecture is resolved. Execution-carrier ownership, concurrency, and crash-window recovery are not yet resolved. No application/runtime code was modified. The next implementation task remains blocked until the execution-claim semantics are explicitly defined against the current TaskRegistry persistence model.
+
+**Research Record**: docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001.md.
