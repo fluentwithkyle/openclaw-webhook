@@ -319,3 +319,16 @@ Historical implementation record: the gate was introduced over the strategic-ali
 ### External Activation Architecture Resolution
 
 **Current status:** RESEARCH COMPLETE / IMPLEMENTATION READINESS BLOCKED. Admission and authorization are resolved. The remaining execution-carrier boundary requires durable TaskRegistry execution ownership/claim and explicit crash/recovery semantics. The current workflow -> activation ingress -> dispatcher -> same workflow recursion is not accepted as the final architecture. See docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001.md.
+
+
+### External Activation Execution Claim & Recovery — 2026-10-02
+
+**Current status:** RESEARCH COMPLETE / IMPLEMENTATION BLOCKED.
+
+**Verified blocker:** the current JSON-backed, process-local TaskRegistry does not provide a safe cross-process atomic execution claim. Atomic file replacement is present, but no cross-process compare-and-set/lock/transaction mechanism is established.
+
+**Architecture:** admission/authorization is resolved; execution must become admission/recovery → one TaskRegistry task → one atomic execution claim → one authorized GitHub carrier → agent → existing callback/evidence → verification/reconciliation. The current workflow → activation ingress → dispatcher → same-workflow recursion remains rejected.
+
+**Next concrete action:** resolve and authorize the single persistence/concurrency mechanism that can safely serialize TaskRegistry create/recover/claim mutations across the actual Render process/instance topology. No execution-claim implementation should proceed before that decision.
+
+**Research record:** `docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001.md`.
