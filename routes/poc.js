@@ -586,7 +586,17 @@ router.post('/builder/callback', authenticateBuilderCallback, async (req, res) =
     const executionClaim = taskRegistry.getExecutionClaim(requestId);
     if (executionClaim) {
         const callbackClaimId = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.execution_claim_id;
-        if (callbackClaimId && executionClaim.execution_claim_id !== callbackClaimId) {
+        if (!callbackClaimId) {
+            return res.status(403).json({
+                request_id: requestId,
+                status: 'authorization blocked',
+                stage: 'authorization blocked',
+                error: `Missing execution_claim_id; authoritative claim ${executionClaim.execution_claim_id} exists for this request_id`,
+                error_code: 'EXECUTION_CLAIM_MISSING'
+            });
+        }
+
+        if (executionClaim.execution_claim_id !== callbackClaimId) {
             return res.status(403).json({
                 request_id: requestId,
                 status: 'authorization blocked',
@@ -597,7 +607,17 @@ router.post('/builder/callback', authenticateBuilderCallback, async (req, res) =
         }
 
         const callbackCarrierIdentity = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.carrier_identity;
-        if (callbackCarrierIdentity && executionClaim.carrier_identity !== callbackCarrierIdentity) {
+        if (!callbackCarrierIdentity) {
+            return res.status(403).json({
+                request_id: requestId,
+                status: 'authorization blocked',
+                stage: 'authorization blocked',
+                error: `Missing carrier_identity; authoritative claim ${executionClaim.execution_claim_id} has carrier_identity ${executionClaim.carrier_identity}`,
+                error_code: 'CARRIER_IDENTITY_MISSING'
+            });
+        }
+
+        if (executionClaim.carrier_identity !== callbackCarrierIdentity) {
             return res.status(403).json({
                 request_id: requestId,
                 status: 'authorization blocked',

@@ -635,17 +635,77 @@ async function main() {
     assert.strictEqual(res2.body.duplicate, true);
   });
 
-  await runTest('Builder callback: no execution claim on task - correlation skipped (backward compatible)', async () => {
-    const requestId = 'builder-corr-no-claim-' + Date.now();
-    setupTask(requestId, 'builder-task');
+   await runTest('Builder callback: no execution claim on task - correlation skipped (backward compatible)', async () => {
+     const requestId = 'builder-corr-no-claim-' + Date.now();
+     setupTask(requestId, 'builder-task');
 
-    const report = makeBuilderReport(requestId, 'builder-task', 'success', null, null);
-    const res = await postRequest('/poc/builder/callback', report);
-    assert.strictEqual(res.status, 200);
-    assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
-  });
+     const report = makeBuilderReport(requestId, 'builder-task', 'success', null, null);
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 200);
+     assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
+   });
 
-  server.close();
+   await runTest('Builder callback: missing execution_claim_id with authoritative claim returns 403', async () => {
+     const requestId = 'builder-missing-claim-' + Date.now();
+     setupTask(requestId, 'builder-task');
+
+     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-missing-claim',
+       carrier_type: 'github_workflow'
+     });
+     assert.strictEqual(claimResult.success, true);
+
+     const report = makeBuilderReport(
+       requestId, 'builder-task', 'success',
+       null,
+       'github-workflow-missing-claim'
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 403);
+     assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISSING');
+   });
+
+   await runTest('Builder callback: missing carrier_identity with authoritative claim returns 403', async () => {
+     const requestId = 'builder-missing-carrier-' + Date.now();
+     setupTask(requestId, 'builder-task');
+
+     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-missing-carrier',
+       carrier_type: 'github_workflow'
+     });
+     assert.strictEqual(claimResult.success, true);
+
+     const report = makeBuilderReport(
+       requestId, 'builder-task', 'success',
+       claimResult.execution_claim_id,
+       null
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 403);
+     assert.strictEqual(res.body.error_code, 'CARRIER_IDENTITY_MISSING');
+   });
+
+   await runTest('Builder callback: missing both execution_claim_id and carrier_identity returns 403 for missing claim first', async () => {
+     const requestId = 'builder-missing-both-' + Date.now();
+     setupTask(requestId, 'builder-task');
+
+     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-missing-both',
+       carrier_type: 'github_workflow'
+     });
+     assert.strictEqual(claimResult.success, true);
+
+     const report = makeBuilderReport(
+       requestId, 'builder-task', 'success',
+       null,
+       null
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 403);
+     assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISSING');
+   });
+
+   server.close();
 
   console.log(`\n=== Gemini Callback Tests: ${passCount} passed, ${failCount} failed ===`);
   if (failCount > 0) process.exit(1);
