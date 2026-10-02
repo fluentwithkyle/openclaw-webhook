@@ -143,7 +143,7 @@ function buildBuilderActivationPayload(inputs) {
     const capabilities = inputs.capabilities || 'read_only,modify_files,run_tests,commit,push';
     const permittedPaths = inputs.permitted_paths || 'poc/';
 
-    return {
+    const payload = {
         protocol_version: '0.1',
         request_id: inputs.request_id,
         source: 'GitHub workflow_dispatch',
@@ -161,6 +161,12 @@ function buildBuilderActivationPayload(inputs) {
         activation_surface: 'workflow_dispatch',
         activation_syntax: '@gemini-cli'
     };
+
+    if (inputs.approval_id) {
+        payload.authorization.approval_id = inputs.approval_id;
+    }
+
+    return payload;
 }
 
 module.exports = {
