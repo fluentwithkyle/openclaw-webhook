@@ -1173,3 +1173,20 @@ Final verification record: `docs/ai/research/research-TASK-CHATGPT-DEEPSEEK-SPEC
 ### External Activation Architecture Resolution — Current Reconciliation
 
 The admission/authorization architecture is resolved, but implementation readiness remains BLOCKED. The current GitHub execution-carrier integration must first establish durable execution ownership/claim and recovery semantics in the existing TaskRegistry; the existing /poc/activation/ingress -> dispatcher -> same workflow recursion is not an acceptable final execution path. This reconciliation supersedes the earlier Kilo conclusion that the double-dispatch boundary alone was sufficient for implementation. See docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001.md.
+
+
+## External Activation Execution Claim & Recovery Research — 2026-10-02
+
+**Task**: TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001
+
+**Status**: RESEARCH COMPLETE / IMPLEMENTATION BLOCKED.
+
+**Verified finding**: current `poc/task-registry.js` is JSON/file-backed with a process-local `memoryCache`. `atomicWrite()` provides atomic file replacement but the logical mutations are read-modify-write operations without a cross-process lock, transaction, compare-and-set, or equivalent concurrency primitive. The current repository therefore does not establish a safe atomic execution claim across concurrent Render processes/instances.
+
+**Architecture finding**: the existing workflow -> `/poc/activation/ingress` -> dispatcher -> same workflow recursion remains invalid. The final design requires admission/recovery, one TaskRegistry task, one atomic execution claim, one authorized carrier invocation, then existing agent/evidence/verification lifecycle.
+
+**Exactly-once finding**: literal exactly-once external side effects are not established. The strongest honest target is deterministic replay suppression plus one authoritative execution owner and no blind duplicate invocation when external invocation status is uncertain.
+
+**Next blocker**: resolve and authorize the single authoritative persistence/concurrency mechanism that can serialize TaskRegistry create/recover/claim mutations across the actual Render process/instance topology. Phase 4 remains PROPOSED / TARGET and its transition gate is unchanged.
+
+**Durable research record**: `docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001.md`.
