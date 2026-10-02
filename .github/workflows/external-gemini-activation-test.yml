@@ -27,7 +27,7 @@ jobs:
           BASE_BRANCH: main
           TASK_MODE: REVIEW
           CAPABILITIES: read_only
-          PERMITTED_PATHS: .
+          PERMITTED_PATHS: poc/
           VERIFICATION: |
             Trace and assess the complete external activation path. Confirm whether one authoritative TaskRegistry task and one execution claim are created, whether the server-derived descriptor is consumed by the Gemini carrier, whether callback correlation includes request_id, execution_claim_id, and carrier identity, and whether replay/second-carrier/recursive-ingress cases are fail-closed. Distinguish VERIFIED, INFERRED, and UNKNOWN. Do not claim live success without execution evidence.
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
