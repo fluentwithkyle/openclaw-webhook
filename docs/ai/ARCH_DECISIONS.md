@@ -780,6 +780,26 @@ already IMPLEMENTED / VERIFIED and form the foundation for Phase 4.
 - `STATE.md`, `CONTROL_CENTER.md`, `TASK_LOG.md`, and `RESEARCH_INDEX.md` are updated to
   reference the roadmap and the five planned increments.
 - No production code, runtime code, `AGENTS.md`, `GEMINI.md`, `ARCHITECTURE.md`, or
-  `.github/workflows/*.yml` files are modified.
+   `.github/workflows/*.yml` files are modified.
 - Phase 4 transition authority remains exclusively with Kyle via
-  `poc/phase-transition-gate.js`.
+   `poc/phase-transition-gate.js`.
+
+---
+
+## ADR-025: Execution-Claim / Carrier Boundary for External Activation
+
+**Status**: ACCEPTED — IMPLEMENTED / VERIFIED
+
+**Context**: The external-activation ingress (`POST /activation/ingress`) creates a TaskRegistry task, but the execution-carrier dispatch boundary was circular — the ingress route dispatched directly to the GitHub workflow, which called back to the same ingress, creating potential recursive re-entry. Research records `TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001` and `TASK-CHATGPT-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001` identified the need for an explicit execution-claim/ownership and recovery contract in TaskRegistry, including atomicity and crash recovery semantics.
+
+**Decision**: Implement Path A (single-instance O_EXCL file locking with stale-claim recovery, no new dependency) from `research-TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001`. Add execution-claim mechanism to `poc/task-registry.js` using O_EXCL lock files in `poc/claims/` directory with 15-minute stale-claim recovery (`CLAIM_STALE_MS`). Add `authenticateCarrier()`, `claimExecutionContext()`, `releaseExecutionClaim()`, `getExecutionClaim()`, `buildExecutionDescriptor()`, and `transitionToExecuting()` functions. The `/activation/ingress` route acquires a claim and returns a server-derived execution descriptor; the carrier (GitHub Actions workflow) is responsible for invoking the agent CLI using that descriptor. The route no longer dispatches directly — no recursive ingress → workflow → ingress cycle.
+
+**Rationale**: Render Free plan has no Persistent Disk or paid services. Path A requires no new dependency and provides atomicity via O_EXCL for the single-instance runtime. The execution descriptor carries only server-derived authority-bearing fields (repository, base_branch, task_mode, capabilities, permitted_paths, verification, workflow_stage, target_agent) — carrier-supplied authority fields are rejected. Concurrency is additionally guarded at the GitHub Actions level with `concurrency:` directives on both workflows.
+
+**Consequences**:
+- `poc/task-registry.js`: added `claimExecutionContext`, `releaseExecutionClaim`, `getExecutionClaim`, `buildExecutionDescriptor`, `transitionToExecuting`, `CLAIMS_DIR`, `CLAIM_STALE_MS`; updated `resetRegistry` to clean claim locks; updated exports.
+- `poc/activation-ingress.js`: added `authenticateCarrier()`; admission path conditionally acquires execution claim when `carrier_identity` provided; returns server-derived execution descriptor; no direct dispatch; added `authenticateCarrier` to exports.
+- `routes/poc.js`: `/activation/ingress` route passes `carrier_identity` from `GITHUB_RUN_ID`/`x-carrier-identity`; separates admission from carrier invocation (no `getDispatcher()` call in ingress route); returns 202 with execution descriptor, 200 on replay.
+- `.github/workflows/main.yml` and `.github/workflows/gemini-builder.yml`: added `concurrency:` safeguard with `cancel-in-progress: false`.
+- `test/execution-claim.test.js`: 22-test suite covering all 17 required test cases plus edge cases (stale claim recovery, terminal task states, claim mismatch release, non-EXECUTING claim, concurrency safeguard).
+- 230+ tests pass across relevant suites (task-registry 34, orchestrator 29, external-activation-bypass 36, execution-claim 22, github-webhook 77, signal-emitter 41, schema 49). Pre-existing failures in strategic-alignment.test.js (1), deepseek-runtime.test.js (11), and specialist-routing.test.js (crash) are unrelated.
