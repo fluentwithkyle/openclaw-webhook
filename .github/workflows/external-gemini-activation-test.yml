@@ -1,0 +1,189 @@
+name: External Gemini Activation Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  external-activation-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate external activation through canonical ingress
+        id: validate_activation
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          REQUEST_ID: external-gemini-activation-test
+          TASK: |
+            Independently inspect the current main branch and assess whether the external-AI activation path is correctly wired end-to-end. Trace workflow_dispatch through canonical activation ingress, ACP validation, TaskRegistry task creation, execution claim, server-derived execution descriptor, GitHub carrier binding, actual Gemini execution, callback/evidence, replay protection, and recursion prevention. Inspect the relevant workflows, activation policy/ingress, validator, TaskRegistry, routes, and tests. Return VERIFIED, INFERRED, UNKNOWN, concrete blockers, and the next action. This is a read-only assessment. Do not modify files, commit, or push.
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: main
+          TASK_MODE: REVIEW
+          CAPABILITIES: read_only
+          PERMITTED_PATHS: .
+          VERIFICATION: |
+            Trace and assess the complete external activation path. Confirm whether one authoritative TaskRegistry task and one execution claim are created, whether the server-derived descriptor is consumed by the Gemini carrier, whether callback correlation includes request_id, execution_claim_id, and carrier identity, and whether replay/second-carrier/recursive-ingress cases are fail-closed. Distinguish VERIFIED, INFERRED, and UNKNOWN. Do not claim live success without execution evidence.
+          EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CALLBACK_BASE_URL" ]; then
+            echo "::error::RENDER_CALLBACK_BASE_URL is not configured"
+            exit 1
+          fi
+
+          node poc/validate-external-activation.js gemini-workflow-dispatch "$(jq -n             --arg request_id "$REQUEST_ID"             --arg task "$TASK"             --arg repository "$REPOSITORY"             --arg base_branch "$BASE_BRANCH"             --arg task_mode "$TASK_MODE"             --arg capabilities "$CAPABILITIES"             --arg permitted_paths "$PERMITTED_PATHS"             --arg verification "$VERIFICATION"             '{
+              request_id: $request_id,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              task_mode: $task_mode,
+              capabilities: $capabilities,
+              permitted_paths: $permitted_paths,
+              verification: $verification
+            }')"
+
+      - name: Require execution descriptor
+        id: descriptor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s execution-descriptor.json
+          echo "request_id=$(jq -r '.request_id' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
+          echo "execution_claim_id=$(jq -r '.execution_claim_id' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
+          echo "carrier_identity=$(jq -r '.carrier_identity' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
+          echo "task_mode=$(jq -r '.task_mode' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
+          echo "repository=$(jq -r '.repository' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
+          echo "base_branch=$(jq -r '.base_branch' execution-descriptor.json)" >> "$GITHUB_OUTPUT"
+          echo "descriptor:"
+          jq '{request_id, execution_claim_id, carrier_identity, carrier_type, target_agent, task_mode, capabilities, permitted_paths, repository, base_branch, workflow_stage}' execution-descriptor.json
+
+      - name: Run Gemini using server-derived execution descriptor
+        id: gemini_run
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+          ORCHESTRATION_REQUEST_ID: ${{ steps.descriptor.outputs.request_id }}
+          ORCHESTRATION_TASK: ${{ env.TASK }}
+          ORCHESTRATION_REPOSITORY: ${{ steps.descriptor.outputs.repository }}
+          ORCHESTRATION_BASE_BRANCH: ${{ steps.descriptor.outputs.base_branch }}
+          ORCHESTRATION_VERIFICATION: ${{ env.VERIFICATION }}
+          ORCHESTRATION_TASK_MODE: ${{ steps.descriptor.outputs.task_mode }}
+          ORCHESTRATION_CAPABILITIES: ${{ env.CAPABILITIES }}
+          ORCHESTRATION_PERMITTED_PATHS: ${{ env.PERMITTED_PATHS }}
+          ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.descriptor.outputs.execution_claim_id }}
+          ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.descriptor.outputs.carrier_identity }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: gemini-3.1-flash-lite
+          prompt: |
+            You are Gemini, the Fluent with Kyle OpenClaw project's Architect, Reviewer, and Research agent.
+
+            OPERATING MODE: REVIEW
+
+            MODE: REVIEW (READ-ONLY ADVISORY). Inspect and analyze the repository. Do not modify files, commit, push, or otherwise change repository state.
+
+            ORCHESTRATION CONTEXT:
+            - request_id: ${{ steps.descriptor.outputs.request_id }}
+            - repository: ${{ steps.descriptor.outputs.repository }}
+            - base_branch: ${{ steps.descriptor.outputs.base_branch }}
+            - task_mode: ${{ steps.descriptor.outputs.task_mode }}
+            - execution_claim_id: ${{ steps.descriptor.outputs.execution_claim_id }}
+            - carrier_identity: ${{ steps.descriptor.outputs.carrier_identity }}
+
+            --- TASK START ---
+            ${{ env.TASK }}
+            --- TASK END ---
+
+            VERIFICATION REQUIREMENTS:
+            ${{ env.VERIFICATION }}
+
+            Read the repository's authoritative project/architecture documentation and the relevant activation, TaskRegistry, workflow, carrier, callback, and test files. Distinguish VERIFIED, INFERRED, and UNKNOWN. Do not claim live external-activation success merely from source inspection.
+
+      - name: Build callback evidence
+        if: always()
+        env:
+          GEMINI_SUMMARY: ${{ steps.gemini_run.outputs.summary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="failure"
+          if [ "${{ steps.gemini_run.outcome }}" = "success" ]; then STATUS="success"; fi
+
+          jq -n             --arg request_id "${{ steps.descriptor.outputs.request_id }}"             --arg agent "Gemini"             --arg status "$STATUS"             --arg task "$TASK"             --arg repository "${{ steps.descriptor.outputs.repository }}"             --arg base_branch "${{ steps.descriptor.outputs.base_branch }}"             --arg output "$GEMINI_SUMMARY"             --arg invocation_id "gemini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"             --arg run_id "${GITHUB_RUN_ID}"             --arg execution_claim_id "${{ steps.descriptor.outputs.execution_claim_id }}"             --arg carrier_identity "${{ steps.descriptor.outputs.carrier_identity }}"             '{
+              request_id: $request_id,
+              agent: $agent,
+              status: $status,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              current_head_sha: env.GITHUB_SHA,
+              changed_files: [],
+              verification: ["external activation test execution completed"],
+              result: {
+                execution_metadata: {
+                  invocation_id: $invocation_id,
+                  run_id: $run_id,
+                  carrier_identity: $carrier_identity,
+                  execution_claim_id: $execution_claim_id
+                },
+                gemini_output: $output
+              },
+              commit: null,
+              push: false,
+              blockers: [],
+              reconciliation: {
+                status: "SKIPPED",
+                changed_files: [],
+                commit_sha: null
+              }
+            }' > callback_payload.json
+
+          cp callback_payload.json gemini-acp-report.json
+          cat callback_payload.json
+
+      - name: Send callback to Render
+        if: always()
+        env:
+          CALLBACK_URL: ${{ secrets.RENDER_GEMINI_CALLBACK_URL }}
+          CALLBACK_SECRET: ${{ secrets.GEMINI_CALLBACK_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$CALLBACK_URL" ] || [ -z "$CALLBACK_SECRET" ]; then
+            echo "::warning::Gemini callback configuration is unavailable; execution evidence remains in the workflow artifact"
+            exit 0
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL"             -H "Content-Type: application/json"             -H "x-gemini-callback-secret: $CALLBACK_SECRET"             -d @callback_payload.json)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Callback response: $HTTP_CODE"
+          echo "Callback body: $BODY"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Gemini callback failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Upload execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-gemini-activation-test-${{ github.run_id }}
+          path: |
+            execution-descriptor.json
+            callback_payload.json
+            gemini-acp-report.json
+          retention-days: 7
+          if-no-files-found: warn
