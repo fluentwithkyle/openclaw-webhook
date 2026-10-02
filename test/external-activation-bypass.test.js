@@ -89,7 +89,7 @@ runTest('main.yml: Run Gemini step is gated on activation validation output', ()
     assert.ok(geminiIdx !== -1);
 
     const geminiSection = mainRaw.slice(geminiIdx);
-    assert.ok(/if:\s*steps\.validate_activation\.outputs\.activation_validated\s*==\s*'true'/.test(geminiSection),
+    assert.ok(/if:\s*\(?\s*steps\.validate_activation\.outputs\.activation_validated\s*==\s*'true'/.test(geminiSection),
         'Run Gemini step should be gated on activation validation');
 
     assert.ok(!/if:\s*.*\bgithub\.event_name\s*==\s*'issue_comment'\b/.test(geminiSection),
