@@ -323,3 +323,22 @@ The canonical activation procedure is machine-verified by:
 - Dispatch the agent from the ingress (the carrier is responsible)
 - Bypass the canonical ingress for any external activation
 - Claim external activation is "live verified" without execution evidence
+
+## 13. One-Click Workflow Coordinator Contract
+
+When Kyle instructs **"Make this a one-click workflow,"** the coordinator must
+interpret this as a request for a zero-input `workflow_dispatch` activation surface
+that reuses this canonical external-activation architecture. The authoritative
+contract is documented in `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md`.
+
+A one-click workflow must satisfy all canonical external-activation requirements
+(Admission, Server-Derived Authority, Execution Descriptor Consumption, Replay
+Idempotency, Director Authorization for Consequential Commands, Callback/Evidence
+Path) **plus** the zero-input constraint: the `workflow_dispatch` trigger must have
+no required inputs. Agent and task mode are determined from instruction context
+via the activation policy (`poc/activation-policy.js`), not from workflow input
+entry.
+
+This procedure (Section 3, Canonical Activation Sequence) is the canonical
+activation path that a one-click workflow must route through. No second activation,
+control, TaskRegistry, execution-claim, or authorization mechanism is introduced.

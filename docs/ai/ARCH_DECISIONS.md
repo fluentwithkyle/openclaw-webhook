@@ -783,3 +783,78 @@ already IMPLEMENTED / VERIFIED and form the foundation for Phase 4.
   `.github/workflows/*.yml` files are modified.
 - Phase 4 transition authority remains exclusively with Kyle via
   `poc/phase-transition-gate.js`.
+
+---
+
+## ADR-025: One-Click Workflow Coordinator Contract
+
+**Status**: ACCEPTED — CURRENT / IMPLEMENTED
+
+**Date**: 2026-10-02
+
+**Context**: Kyle's instruction "Make this a one-click workflow" is an implicit,
+natural-language coordinator command. Without a durable contract, each coordinator
+(ChatGPT, DeepSeek, etc.) must independently infer what the instruction means,
+leading to inconsistent interpretations — some might treat any `workflow_dispatch`
+workflow as satisfying the request, others might construct a workflow with
+required inputs, and some might introduce a second activation or control mechanism.
+The repository already has a canonical external-activation architecture
+(`docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md`, `poc/activation-ingress.js`,
+`poc/task-registry.js`, `poc/acp-engine.js`) that enforces server-derived
+authority, single TaskRegistry, execution-claim, execution descriptor, and
+callback/evidence/reconciliation. However, there was no explicit contract that
+binds "one-click" to the zero-input variant of that architecture. Existing
+workflows (`main.yml`, `gemini-builder.yml`) both use `workflow_dispatch` with
+**required** inputs (`request_id`, `task`, `repository`, `base_branch`), which do
+not satisfy a zero-input one-click requirement.
+
+**Decision**: A new durable contract is created at
+`docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` that makes "Make this a one-click workflow"
+a recognized project-level coordinator command. The contract defines:
+
+1. **One-click = zero-input `workflow_dispatch`** through the canonical
+   external-activation architecture.
+2. **Zero-input requirement**: The `workflow_dispatch` trigger must have no
+   required inputs. All authority-bearing fields are server-derived from the
+   activation policy (`poc/activation-policy.js`).
+3. **Agent/task-mode variants**: "Make this a one-click Gemini Builder workflow."
+   and similar variants are covered by the same contract with the target agent and
+   task mode determined from instruction context.
+4. **Distinction from existing workflows**: Existing `workflow_dispatch` workflows
+   with required inputs (`main.yml`, `gemini-builder.yml`) do **NOT** satisfy the
+   one-click requirement.
+5. **Reuse, not replacement**: The contract reuses the existing canonical
+   external-activation procedure, TaskRegistry, execution-claim, execution
+   descriptor, ACP validation, and callback/evidence/reconciliation path. No
+   second control plane, TaskRegistry, authorization, or activation mechanism is
+   introduced.
+6. **Cold-start discoverability**: The contract is referenced from
+   `docs/ai/CHATGPT_START_HERE.md` (Bootstrap Completion Check + Quick Reference),
+   `docs/ai/README.md` (File Contents + Source-of-Truth hierarchy), and
+   `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 11.2).
+
+**Rationale**: Establishing a durable contract ensures that any fresh coordinator,
+after normal bootstrap, interprets the one-click command consistently without
+Kyle needing to restate the procedure. The zero-input constraint is the defining
+property of "one-click" — without it, the command is just "use an existing
+workflow_dispatch workflow with manual inputs." Reusing the existing architecture
+preserves the single-control-plane invariant already enforced by
+`EXTERNAL_ACTIVATION_PROCEDURE.md`.
+
+**Consequences**:
+- `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` is created as a normative coordinator
+  operating document.
+- `docs/ai/CHATGPT_START_HERE.md`, `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`,
+  and `docs/ai/README.md` are updated to reference the contract in the bootstrap
+  and activation paths.
+- `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md` is updated with a Section 13
+  cross-reference.
+- Machine-verifiable tests are added in `test/one-click-workflow-contract.test.js`.
+- No production code, runtime code, `AGENTS.md`, `GEMINI.md`, or
+  `ARCHITECTURE.md` files are modified.
+- Existing workflows (`.github/workflows/main.yml`, `.github/workflows/gemini-builder.yml`)
+  are NOT modified — they are identified as non-compliant with the zero-input
+  one-click requirement, preserving the distinction without changing their
+  behavior.
+- No new activation route, control plane, TaskRegistry, or authorization
+  mechanism is introduced.

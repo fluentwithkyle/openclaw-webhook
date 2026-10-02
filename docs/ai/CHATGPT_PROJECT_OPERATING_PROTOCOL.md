@@ -1162,6 +1162,26 @@ and `test/external-activation-procedure.test.js`:
 When coordinating external agent activation, consult `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md`
 before preparing or authorizing any external activation workflow dispatch.
 
+### 11.2 One-Click Workflow Coordinator Contract
+
+When Kyle instructs "Make this a one-click workflow," the coordinator must interpret
+this as a request for a zero-input `workflow_dispatch` activation surface using the
+canonical external-activation architecture. The canonical contract is documented in
+`docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md`. This contract defines:
+
+- The canonical phrase and its durable project-command status.
+- The zero-input `workflow_dispatch` requirement (no required workflow inputs).
+- Agent/task-mode variants (e.g., "Make this a one-click Gemini Builder workflow").
+- The prohibition on treating existing `workflow_dispatch` workflows with required
+  inputs as satisfying the one-click requirement.
+- The requirement to reuse the existing canonical external-activation architecture
+  (no second control plane, TaskRegistry, or authorization mechanism).
+- Cold-start discoverability from the documented bootstrap path.
+
+A fresh coordinator following the cold-start path will encounter
+`docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` via `docs/ai/CHATGPT_START_HERE.md` before
+making any activation or workflow-construction decision.
+
 12. Standard Completion Loop
 
 Every implementation task should follow this loop:

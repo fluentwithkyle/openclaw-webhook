@@ -205,7 +205,11 @@ defined in the next subsection.
 - [ ] **Authoritative project-control documents located** — Located: `AGENTS.md`,
   `ARCHITECTURE.md`, `GEMINI.md`, this document, `CHATGPT_PROJECT_OPERATING_PROTOCOL.md`,
   `TASK_STANDARD.md`, `STATE.md`, `ARCH_DECISIONS.md`, `CONTROL_CENTER.md`,
-  `TASK_LOG.md`, `README.md`.
+  `TASK_LOG.md`, `README.md`, `ONE_CLICK_WORKFLOW_CONTRACT.md`, `EXTERNAL_ACTIVATION_PROCEDURE.md`.
+- [ ] **One-click workflow contract located** — `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` is
+  located and recognized as the canonical interpreter for the "Make this a one-click workflow"
+  command. The incoming request is checked against this contract before any activation or
+  workflow-construction decision.
 - [ ] **Durable project state inspected** — `STATE.md`, `TASK_LOG.md`,
   `ARCH_DECISIONS.md`, and `CONTROL_CENTER.md` inspected for current status, active
   tasks, blockers, and existing projects — before concluding that any project or
@@ -370,11 +374,13 @@ canonical Bootstrap Contract above (this document); this procedure applies it.
 | `docs/ai/STATE.md` | Current live project state (active tasks, blockers, project status) |
 | `docs/ai/CONTROL_CENTER.md` | Derived human-facing dashboard |
 | `docs/ai/TASK_LOG.md` | Historical task records |
-| `docs/ai/ARCH_DECISIONS.md` | Architectural decisions (ADR-001 through ADR-024) |
+| `docs/ai/ARCH_DECISIONS.md` | Architectural decisions (ADR-001 through ADR-025) |
 | `docs/ai/RESEARCH_INDEX.md` | Index of durable research records |
 | `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md` | ChatGPT Control Gate research |
 | `docs/ai/KILO_INTEGRATION.md` | Kilo external integration contract |
 | `docs/ai/KILO_GEMINI_ORCHESTRATION_PLAN.md` | Kilo↔Gemini orchestration backbone |
+| `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` | One-click workflow coordinator contract (canonical interpreter for "Make this a one-click workflow") |
+| `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md` | Canonical external-AI activation procedure |
 
 ---
 

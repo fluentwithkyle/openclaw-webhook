@@ -163,6 +163,13 @@ The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai
 - Each RESEARCH_DOCUMENT task produces one Markdown research record; the index and TASK_LOG reference it.
 - Research records are durable research artifacts, not current-state files.
 
+### `ONE_CLICK_WORKFLOW_CONTRACT.md` — One-Click Workflow Coordinator Contract
+- Canonical contract making "Make this a one-click workflow" a durable project command.
+- Defines zero-input `workflow_dispatch` requirement, agent/task-mode variants, and the
+  prohibition on treating existing workflows with required inputs as one-click.
+- References the canonical external-activation architecture (`EXTERNAL_ACTIVATION_PROCEDURE.md`).
+- Machine-verifiable via `test/one-click-workflow-contract.test.js`.
+
 ## Update Rules
 
 | File | When to Update | Who Updates |
