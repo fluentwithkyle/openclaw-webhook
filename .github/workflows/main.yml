@@ -60,6 +60,9 @@ jobs:
         contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
       )
     runs-on: ubuntu-latest
+    concurrency:
+      group: gemini-${{ github.event.inputs.request_id || github.event.comment.id || github.event.workflow_ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
       issues: write

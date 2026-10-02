@@ -980,15 +980,26 @@ router.post('/github/webhook', async (req, res) => {
 // Canonical External Activation Ingress
 // Single authorized entry point for externally activated execution.
 // Routes through the canonical activation ingress which enters the existing
-// ACP + TaskRegistry authority boundary before dispatch. Fails closed on any
-// authority conflict — externally supplied authority-bearing fields are rejected.
+// ACP + TaskRegistry authority boundary, acquires an atomic execution claim,
+// and returns a server-derived execution descriptor to the carrier.
+// Fails closed on any authority conflict — externally supplied authority-bearing
+// fields are rejected. The carrier (GitHub Actions workflow) is responsible for
+// invoking the agent CLI using the server-derived descriptor; this route does NOT
+// dispatch the agent directly, preventing recursive ingress -> workflow -> ingress.
 router.post('/activation/ingress', authenticatePoc, async (req, res) => {
+    const carrierIdentity = process.env.GITHUB_RUN_ID
+        ? 'github-workflow-' + process.env.GITHUB_RUN_ID + '-' + (process.env.GITHUB_RUN_ATTEMPT || 1)
+        : req.headers['x-carrier-identity'] || null;
+
     const ingressResult = canonicalExternalActivationIngress(req.body, {
-        director_approval_id: req.body && req.body.authorization && req.body.authorization.approval_id
+        director_approval_id: req.body && req.body.authorization && req.body.authorization.approval_id,
+        carrier_identity: carrierIdentity,
+        carrier_type: process.env.GITHUB_RUN_ID ? 'github_workflow' : 'external'
     });
 
     if (!ingressResult.success) {
-        const statusCode = ingressResult.stage === 'conflict' ? 409 : 403;
+        const statusCode = (ingressResult.error_code === 'DUPLICATE_REQUEST_ID' || ingressResult.error_code === 'REPLAY_PAYLOAD_MISMATCH') ? 409
+            : (ingressResult.stage === 'conflict' ? 409 : 403);
         return res.status(statusCode).json({
             request_id: ingressResult.request_id || 'unknown',
             status: ingressResult.status,
@@ -997,80 +1008,44 @@ router.post('/activation/ingress', authenticatePoc, async (req, res) => {
             error_code: ingressResult.error_code,
             ...(ingressResult.duplicate !== undefined ? { duplicate: ingressResult.duplicate } : {}),
             ...(ingressResult.server_derived !== undefined ? { server_derived: ingressResult.server_derived } : {}),
-            ...(ingressResult.conflicting_fields !== undefined ? { conflicting_fields: ingressResult.conflicting_fields } : {})
+            ...(ingressResult.conflicting_fields !== undefined ? { conflicting_fields: ingressResult.conflicting_fields } : {}),
+            ...(ingressResult.claim_result !== undefined ? { claim_result: ingressResult.claim_result } : {})
         });
     }
 
     const taskEntry = ingressResult.task_entry;
 
-    let dispatchResult;
-    try {
-        dispatchResult = await getDispatcher()(ingressResult.command);
-    } catch (dispatchError) {
-        console.error('Dispatch error in /poc/activation/ingress: unexpected_dispatch_failure');
-        return res.status(500).json({
+    if (ingressResult.replay) {
+        return res.status(200).json({
             request_id: ingressResult.request_id,
-            status: 'Registration succeeded, dispatch failed',
-            stage: 'failed',
+            status: 'Task already registered (replay)',
+            stage: 'replay',
             execution_initiated: false,
             task_status: taskEntry.status,
             current_agent: taskEntry.current_agent,
             next_agent: taskEntry.next_agent,
-            error: sanitizeDispatchError(dispatchError),
-            diagnostics: { stage: 'dispatch', category: 'unexpected_dispatch_failure' }
+            replay: true,
+            task_terminated: ingressResult.task_terminated || false,
+            activation_provenance: ingressResult.activation_provenance,
+            message: ingressResult.message
         });
     }
 
-    if (dispatchResult.provider_session_id || dispatchResult.provider_message_id || dispatchResult.provider_invocation_id) {
-        const task = taskRegistry.getTask(ingressResult.request_id);
-        if (task && task.kilo) {
-            task.kilo.provider_session_id = dispatchResult.provider_session_id;
-            task.kilo.provider_message_id = dispatchResult.provider_message_id;
-            task.kilo.provider_invocation_id = dispatchResult.provider_invocation_id;
-            task.updated_at = new Date().toISOString();
-            taskRegistry.persistCache();
-        }
-    }
-
-    if (dispatchResult.status === 'SUCCESS') {
-        const transitionResult = transitionToExecuting(ingressResult.request_id);
-        if (!transitionResult.success) {
-            console.error('Failed to transition task to EXECUTING:', transitionResult.error);
-        }
-        return res.status(202).json({
-            request_id: ingressResult.request_id,
-            status: 'Task registered and dispatched via activation ingress',
-            stage: 'dispatched',
-            execution_initiated: true,
-            task_status: taskEntry.status,
-            current_agent: taskEntry.current_agent,
-            next_agent: taskEntry.next_agent,
-            activation_provenance: ingressResult.activation_provenance
-        });
-    } else if (dispatchResult.status === 'BLOCKED') {
-        return res.status(403).json({
-            request_id: ingressResult.request_id,
-            status: 'ACP validation blocked',
-            stage: 'blocked',
-            execution_initiated: false,
-            task_status: taskEntry.status,
-            current_agent: taskEntry.current_agent,
-            next_agent: taskEntry.next_agent,
-            error: dispatchResult.error
-        });
-    } else {
-        return res.status(500).json({
-            request_id: ingressResult.request_id,
-            status: 'dispatch failed',
-            stage: 'failed',
-            execution_initiated: false,
-            task_status: taskEntry.status,
-            current_agent: taskEntry.current_agent,
-            next_agent: taskEntry.next_agent,
-            error: dispatchResult.error,
-            diagnostics: dispatchResult.diagnostics
-        });
-    }
+    return res.status(202).json({
+        request_id: ingressResult.request_id,
+        status: 'Task admitted and execution claim acquired',
+        stage: 'claimed',
+        execution_initiated: true,
+        task_status: taskEntry.status,
+        current_agent: taskEntry.current_agent,
+        next_agent: taskEntry.next_agent,
+        activation_provenance: ingressResult.activation_provenance,
+        execution_claim_id: ingressResult.execution_claim_id,
+        execution_descriptor: ingressResult.execution_descriptor,
+        carrier_identity: ingressResult.carrier_identity,
+        is_consequential: ingressResult.is_consequential,
+        message: ingressResult.message
+    });
 });
 
 module.exports = { router };

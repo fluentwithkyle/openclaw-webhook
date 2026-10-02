@@ -24,6 +24,7 @@ const {
 
 const REGISTRY_FILE = path.join(__dirname, 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, 'task-registry.json.bak');
+const CLAIMS_DIR = path.join(__dirname, 'claims');
 
 let memoryCache = new Map();
 let approvalCache = new Map();
@@ -32,6 +33,12 @@ let initialized = false;
 function ensureRegistryFile() {
   if (!fs.existsSync(REGISTRY_FILE)) {
     fs.writeFileSync(REGISTRY_FILE, '{}', 'utf8');
+  }
+}
+
+function ensureClaimsDir() {
+  if (!fs.existsSync(CLAIMS_DIR)) {
+    fs.mkdirSync(CLAIMS_DIR, { recursive: true });
   }
 }
 
@@ -709,6 +716,12 @@ function deleteTask(requestId) {
 function resetRegistry() {
   memoryCache = new Map();
   approvalCache = new Map();
+  if (fs.existsSync(CLAIMS_DIR)) {
+    const files = fs.readdirSync(CLAIMS_DIR);
+    for (const file of files) {
+      try { fs.unlinkSync(path.join(CLAIMS_DIR, file)); } catch (err) {}
+    }
+  }
   atomicWrite({ __director_approvals__: {} });
   return { success: true };
 }
@@ -825,6 +838,245 @@ function rehydrateTask(command) {
   return { success: true, entry: getTask(requestId), rehydrated: true, action: 'kilo_execution' };
 }
 
+const CLAIM_STALE_MS = 15 * 60 * 1000;
+
+function claimLockPath(requestId) {
+  ensureClaimsDir();
+  const safeId = String(requestId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(CLAIMS_DIR, safeId + '.claim.lock');
+}
+
+function readClaimLock(lockPath) {
+  try {
+    const raw = fs.readFileSync(lockPath, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    return null;
+  }
+}
+
+function clearClaimLock(lockPath) {
+  try {
+    fs.unlinkSync(lockPath);
+  } catch (err) {
+    // ignore — already absent
+  }
+}
+
+function isTerminalStatus(status) {
+  return ['COMPLETE', 'FAILED', 'BLOCKED'].includes(status);
+}
+
+function claimExecutionContext(requestId, claimIdentity) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+
+  if (!entry) {
+    return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_NOT_FOUND', error: 'Task not found in registry' };
+  }
+
+  if (isCancelled(requestId)) {
+    return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_CANCELLED', error: 'Task is cancelled, cannot claim execution' };
+  }
+
+  if (isSuperseded(requestId)) {
+    return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_SUPERSEDED', error: 'Task is superseded, cannot claim execution' };
+  }
+
+  if (isTerminalStatus(entry.status)) {
+    return { success: false, status: 'COMPLETE', error_code: 'TASK_TERMINAL', error: 'Task is in terminal state ' + entry.status + ', no re-execution' };
+  }
+
+  if (entry.status !== 'EXECUTING') {
+    return { success: false, status: 'BLOCKED', error_code: 'TASK_NOT_EXECUTING', error: 'Task is not in EXECUTING state (status: ' + entry.status + ')' };
+  }
+
+  const lockPath = claimLockPath(requestId);
+
+  try {
+    const fd = fs.openSync(lockPath, 'wx');
+    const claimRecord = {
+      request_id: requestId,
+      execution_claim_id: 'claim-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+      carrier_identity: claimIdentity && claimIdentity.carrier_id ? claimIdentity.carrier_id : null,
+      carrier_type: claimIdentity && claimIdentity.carrier_type ? claimIdentity.carrier_type : null,
+      claimed_at: new Date().toISOString(),
+      claim_epoch: Date.now()
+    };
+    fs.writeFileSync(fd, JSON.stringify(claimRecord), 'utf8');
+    fs.closeSync(fd);
+
+    entry.execution_claim = {
+      execution_claim_id: claimRecord.execution_claim_id,
+      carrier_identity: claimRecord.carrier_identity,
+      carrier_type: claimRecord.carrier_type,
+      claimed_at: claimRecord.claimed_at,
+      claim_epoch: claimRecord.claim_epoch
+    };
+    entry.updated_at = claimRecord.claimed_at;
+    cache.set(requestId, entry);
+    persistCache();
+
+    return {
+      success: true,
+      status: 'CLAIMED',
+      error_code: 'CLAIMED',
+      execution_claim_id: claimRecord.execution_claim_id,
+      carrier_identity: claimRecord.carrier_identity,
+      task: entry
+    };
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      const existingClaim = readClaimLock(lockPath);
+
+      if (existingClaim && existingClaim.request_id !== requestId) {
+        return { success: false, status: 'UNAUTHORIZED', error_code: 'MISMATCH', error: 'Claim lock exists for a different request_id', existing_claim: existingClaim };
+      }
+
+      if (existingClaim) {
+        const age = Date.now() - (existingClaim.claim_epoch || 0);
+        if (age > CLAIM_STALE_MS) {
+          clearClaimLock(lockPath);
+          try {
+            const fd = fs.openSync(lockPath, 'wx');
+            const claimRecord = {
+              request_id: requestId,
+              execution_claim_id: 'claim-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+              carrier_identity: claimIdentity && claimIdentity.carrier_id ? claimIdentity.carrier_id : null,
+              carrier_type: claimIdentity && claimIdentity.carrier_type ? claimIdentity.carrier_type : null,
+              claimed_at: new Date().toISOString(),
+              claim_epoch: Date.now()
+            };
+            fs.writeFileSync(fd, JSON.stringify(claimRecord), 'utf8');
+            fs.closeSync(fd);
+
+            entry.execution_claim = {
+              execution_claim_id: claimRecord.execution_claim_id,
+              carrier_identity: claimRecord.carrier_identity,
+              carrier_type: claimRecord.carrier_type,
+              claimed_at: claimRecord.claimed_at,
+              claim_epoch: claimRecord.claim_epoch
+            };
+            entry.updated_at = claimRecord.claimed_at;
+            cache.set(requestId, entry);
+            persistCache();
+
+            return {
+              success: true,
+              status: 'CLAIMED',
+              error_code: 'CLAIMED',
+              execution_claim_id: claimRecord.execution_claim_id,
+              carrier_identity: claimRecord.carrier_identity,
+              task: entry
+            };
+          } catch (retryErr) {
+            if (retryErr.code === 'EEXIST') {
+              return { success: false, status: 'ALREADY_CLAIMED', error_code: 'ALREADY_CLAIMED', error: 'Another carrier claimed this task while recovering stale lock' };
+            }
+            return { success: false, status: 'FAILED', error_code: 'CLAIM_FAILED', error: retryErr.message };
+          }
+        }
+
+        return {
+          success: false,
+          status: 'ALREADY_CLAIMED',
+          error_code: 'ALREADY_CLAIMED',
+          error: 'Task already has an active execution claim',
+          existing_claim: existingClaim
+        };
+      }
+
+      return { success: false, status: 'ALREADY_CLAIMED', error_code: 'ALREADY_CLAIMED', error: 'Task already has an active execution claim' };
+    }
+    return { success: false, status: 'FAILED', error_code: 'CLAIM_FAILED', error: err.message };
+  }
+}
+
+function releaseExecutionClaim(requestId, executionClaimId) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+
+  if (!entry) {
+    return { success: false, error_code: 'TASK_NOT_FOUND', error: 'Task not found in registry' };
+  }
+
+  const lockPath = claimLockPath(requestId);
+
+  if (executionClaimId) {
+    const existingClaim = readClaimLock(lockPath);
+    if (existingClaim && existingClaim.execution_claim_id !== executionClaimId) {
+      return { success: false, error_code: 'CLAIM_MISMATCH', error: 'Execution claim ID does not match current claim', existing_claim: existingClaim };
+    }
+  }
+
+  clearClaimLock(lockPath);
+
+  if (entry.execution_claim) {
+    delete entry.execution_claim;
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    persistCache();
+  }
+
+  return { success: true, status: 'RELEASED', error_code: 'RELEASED', error: null };
+}
+
+function getExecutionClaim(requestId) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.execution_claim) {
+    return entry.execution_claim;
+  }
+
+  const lockPath = claimLockPath(requestId);
+  const lockClaim = readClaimLock(lockPath);
+  if (lockClaim && lockClaim.request_id === requestId) {
+    return lockClaim;
+  }
+
+  return null;
+}
+
+function buildExecutionDescriptor(requestId, taskEntry, executionClaimId) {
+  if (!taskEntry) {
+    return null;
+  }
+
+  return {
+    request_id: requestId,
+    execution_claim_id: executionClaimId,
+    activation_id: taskEntry.activation_provenance && taskEntry.activation_provenance.activation_id,
+    activation_target: taskEntry.activation_provenance && taskEntry.activation_provenance.activation_target,
+    activation_task_mode: taskEntry.activation_provenance && taskEntry.activation_provenance.activation_task_mode,
+    activation_surface: taskEntry.activation_provenance && taskEntry.activation_provenance.activation_surface,
+    task: taskEntry.task,
+    repository: taskEntry.repository,
+    base_branch: taskEntry.base_branch,
+    task_mode: taskEntry.task_mode,
+    capabilities: taskEntry.capabilities,
+    permitted_paths: taskEntry.permitted_paths,
+    verification: taskEntry.verification,
+    workflow_stage: taskEntry.workflow_stage,
+    target_agent: taskEntry.current_agent
+  };
+}
+
+function transitionToExecuting(requestId) {
+  const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
+  for (const status of transitions) {
+    const r = updateTaskStatus(requestId, status);
+    if (!r.success) {
+      return { success: false, error: r.error };
+    }
+  }
+  return { success: true };
+}
+
 module.exports = {
   createTask,
   createDirectorApproval,
@@ -864,5 +1116,12 @@ module.exports = {
    recordConfigVerification,
    getConfigVerificationState,
    requireConfigVerified,
-   verifyConfig
+   verifyConfig,
+   claimExecutionContext,
+   releaseExecutionClaim,
+   getExecutionClaim,
+   buildExecutionDescriptor,
+   transitionToExecuting,
+   CLAIMS_DIR,
+   CLAIM_STALE_MS
 };

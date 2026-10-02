@@ -50,6 +50,9 @@ jobs:
   builder:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    concurrency:
+      group: gemini-builder-${{ github.event.inputs.request_id || github.event.workflow_ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
