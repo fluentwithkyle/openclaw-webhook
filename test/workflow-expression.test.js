@@ -294,13 +294,11 @@ runTest('Send callback to Render remains workflow_dispatch-only', () => {
 });
 
 runTest('callback payload handles issue_comment with GITHUB_EVENT_NAME conditional', () => {
-  const payloadIdx = raw.indexOf('Prepare ACP report payload');
-  const sendIdx = raw.indexOf('Send callback to Render');
-  const payloadSection = raw.slice(payloadIdx, sendIdx);
-  assert.ok(payloadSection.includes('"$GITHUB_EVENT_NAME" = "issue_comment"'), 'payload step should check GITHUB_EVENT_NAME for issue_comment');
-  assert.ok(payloadSection.includes('steps.request_comment.outputs.request'), 'payload step should use request_comment output for issue_comment task');
-  assert.ok(payloadSection.includes('github.repository'), 'payload step should use github.repository for issue_comment repository');
-  assert.ok(payloadSection.includes('github.ref_name'), 'payload step should use github.ref_name for issue_comment base_branch');
+    const payloadIdx = raw.indexOf('Prepare ACP report payload');
+    const sendIdx = raw.indexOf('Send callback to Render');
+    const payloadSection = raw.slice(payloadIdx, sendIdx);
+    assert.ok(payloadSection.includes('execution-descriptor.json'), 'payload step should reference descriptor file');
+    assert.ok(payloadSection.includes('IS_REPLAY'), 'payload step should use IS_REPLAY for issue_comment/fallback handling');
 });
 
 runTest('callback payload derives STATUS from gemini_result step', () => {

@@ -21,6 +21,13 @@ function validateExternalActivation(params, callbackUrl, callbackSecret) {
         options.headers['x-poc-trigger-secret'] = callbackSecret;
     }
 
+    const carrierIdentity = process.env.GITHUB_RUN_ID
+        ? 'github-workflow-' + process.env.GITHUB_RUN_ID + '-' + (process.env.GITHUB_RUN_ATTEMPT || 1)
+        : null;
+    if (carrierIdentity) {
+        options.headers['x-carrier-identity'] = carrierIdentity;
+    }
+
     return new Promise((resolve) => {
         const req = https.request(options, (res) => {
             let data = '';

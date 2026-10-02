@@ -12,6 +12,14 @@ const {
   calculateDirectorScopeHash
 } = require('./schemas/acp-schema');
 
+function authenticateCarrier(dispatchContext) {
+  const carrier = dispatchContext && dispatchContext.carrier_identity;
+  if (!carrier || typeof carrier !== 'string' || carrier.trim() === '') {
+    return { valid: false, error: 'Missing carrier identity', error_code: 'CARRIER_IDENTITY_REQUIRED' };
+  }
+  return { valid: true };
+}
+
 function canonicalExternalActivationIngress(request, dispatchContext) {
   const errors = [];
   const warnings = [];
@@ -262,6 +270,86 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
 
   taskRegistry.persistCache();
 
+  const carrierIdentity = dispatchContext && dispatchContext.carrier_identity;
+  const carrierType = dispatchContext && dispatchContext.carrier_type;
+
+  if (carrierIdentity) {
+    const carrierAuth = authenticateCarrier(dispatchContext);
+    if (!carrierAuth.valid) {
+      return {
+        success: false,
+        status: 'BLOCKED',
+        stage: 'carrier authentication blocked',
+        error: carrierAuth.error,
+        error_code: carrierAuth.error_code,
+        request_id: requestId,
+        command: command,
+        activation_provenance: taskEntry.activation_provenance,
+        is_consequential: isConsequential,
+        task_entry: taskEntry
+      };
+    }
+
+    const transitionResult = taskRegistry.transitionToExecuting(requestId);
+    if (!transitionResult.success) {
+      return {
+        success: false,
+        status: 'BLOCKED',
+        stage: 'state transition failed',
+        error: transitionResult.error,
+        error_code: 'STATE_TRANSITION_FAILED',
+        request_id: requestId,
+        command: command,
+        activation_provenance: taskEntry.activation_provenance,
+        is_consequential: isConsequential,
+        task_entry: taskRegistry.getTask(requestId)
+      };
+    }
+
+    const claimIdentity = {
+      carrier_id: carrierIdentity,
+      carrier_type: carrierType || 'github_workflow'
+    };
+
+    const claimResult = taskRegistry.claimExecutionContext(requestId, claimIdentity);
+
+    if (!claimResult.success) {
+      return {
+        success: false,
+        status: claimResult.status,
+        stage: 'execution claim',
+        error: claimResult.error,
+        error_code: claimResult.error_code,
+        request_id: requestId,
+        command: command,
+        activation_provenance: taskEntry.activation_provenance,
+        is_consequential: isConsequential,
+        claim_result: claimResult.status === 'ALREADY_CLAIMED' ? { existing_claim: claimResult.existing_claim } : undefined
+      };
+    }
+
+    const executionDescriptor = taskRegistry.buildExecutionDescriptor(
+      requestId,
+      taskRegistry.getTask(requestId),
+      claimResult.execution_claim_id
+    );
+
+    return {
+      success: true,
+      request_id: requestId,
+      task_status: 'EXECUTING',
+      task_entry: taskRegistry.getTask(requestId),
+      command: command,
+      activation_provenance: taskEntry.activation_provenance,
+      is_consequential: isConsequential,
+      execution_claimed: true,
+      execution_claim_id: claimResult.execution_claim_id,
+      execution_descriptor: executionDescriptor,
+      carrier_identity: claimResult.carrier_identity,
+      message: 'Task admitted and execution claim acquired; carrier may invoke agent with server-derived descriptor'
+    };
+  }
+
   return {
     success: true,
     request_id: requestId,
@@ -269,10 +357,13 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
     task_entry: taskEntry,
     command: command,
     activation_provenance: taskEntry.activation_provenance,
-    is_consequential: isConsequential
+    is_consequential: isConsequential,
+    execution_claimed: false,
+    message: 'Task admitted; no carrier identity provided, execution claim pending'
   };
 }
 
 module.exports = {
-  canonicalExternalActivationIngress
+  canonicalExternalActivationIngress,
+  authenticateCarrier
 };

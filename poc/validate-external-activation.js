@@ -1,9 +1,16 @@
+const fs = require('fs');
 const {
     validateExternalActivation,
     buildActivationPayloadForIssueComment,
     buildActivationPayloadForWorkflowDispatch,
     buildBuilderActivationPayload
 } = require('./external-activation-validator');
+
+const DESCRIPTOR_OUTPUT_FILE = process.env.EXECUTION_DESCRIPTOR_FILE || 'execution-descriptor.json';
+
+function writeOutput(name, value) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT || '/dev/null', `${name}=${value}\n`, 'utf8');
+}
 
 async function main() {
     const command = process.argv[2];
@@ -50,6 +57,14 @@ async function main() {
 
     if (result.activation.replay && result.activation.replay === true) {
         console.log(`::notice::Activation matched existing task (replay/idempotent). Request ID: ${result.request_id}`);
+        fs.writeFileSync(DESCRIPTOR_OUTPUT_FILE, JSON.stringify(result.activation, null, 2), 'utf8');
+        console.log(`::notice::Replay response written to ${DESCRIPTOR_OUTPUT_FILE}`);
+        if (process.env.GITHUB_OUTPUT) {
+            writeOutput('replay', 'true');
+            writeOutput('request_id', result.request_id);
+            writeOutput('execution_claim_id', result.activation.execution_claim_id || '');
+            writeOutput('carrier_identity', result.activation.carrier_identity || '');
+        }
         process.exit(0);
     }
 
@@ -60,6 +75,25 @@ async function main() {
 
     console.log(`::notice::Activation accepted by canonical ingress. Request ID: ${result.request_id}`);
     console.log(`::notice::Task status: ${result.activation.task_status}`);
+
+    const descriptor = result.activation.execution_descriptor;
+    if (descriptor) {
+        fs.writeFileSync(DESCRIPTOR_OUTPUT_FILE, JSON.stringify(descriptor, null, 2), 'utf8');
+        console.log(`::notice::Execution descriptor written to ${DESCRIPTOR_OUTPUT_FILE}`);
+        if (process.env.GITHUB_OUTPUT) {
+            writeOutput('request_id', descriptor.request_id);
+            writeOutput('execution_claim_id', descriptor.execution_claim_id || '');
+            writeOutput('carrier_identity', result.activation.carrier_identity || '');
+            writeOutput('target_agent', descriptor.target_agent || '');
+            writeOutput('task_mode', descriptor.task_mode || '');
+            writeOutput('repository', descriptor.repository || '');
+            writeOutput('base_branch', descriptor.base_branch || '');
+        }
+    } else {
+        if (process.env.GITHUB_OUTPUT) {
+            writeOutput('request_id', result.activation.request_id || result.request_id || '');
+        }
+    }
     process.exit(0);
 }
 

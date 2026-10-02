@@ -89,7 +89,7 @@ runTest('main.yml: Run Gemini step is gated on activation validation output', ()
     assert.ok(geminiIdx !== -1);
 
     const geminiSection = mainRaw.slice(geminiIdx);
-    assert.ok(/if:\s*steps\.validate_activation\.outputs\.activation_validated\s*==\s*'true'/.test(geminiSection),
+    assert.ok(/if:\s*\(.*\)?\s*steps\.validate_activation.*activation_validated\s*==\s*'true'/.test(geminiSection),
         'Run Gemini step should be gated on activation validation');
 
     assert.ok(!/if:\s*.*\bgithub\.event_name\s*==\s*'issue_comment'\b/.test(geminiSection),
@@ -570,6 +570,335 @@ runTest('Bypass prevention - external activation validator module exists and is 
         'main.yml must reference the validation script');
     assert.ok(builderRaw.includes('poc/validate-external-activation.js'),
         'gemini-builder.yml must reference the validation script');
+});
+
+// =========================================================
+// Phase 4: Execution-claim mechanism tests
+// =========================================================
+
+runTest('Ingress - BUILDER with carrier identity returns execution_descriptor', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'claim-test-1',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('claim-test-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-test-123',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success, 'BUILDER with carrier identity should succeed: ' + (result.error || ''));
+    assert.ok(result.execution_descriptor, 'Should return execution_descriptor');
+    assert.equal(result.execution_descriptor.request_id, 'claim-test-1');
+    assert.equal(result.execution_descriptor.target_agent, 'Gemini Builder');
+    assert.equal(result.execution_descriptor.task_mode, 'BUILDER');
+    assert.equal(result.execution_descriptor.repository, 'fluentwithkyle/openclaw-webhook');
+    assert.equal(result.execution_descriptor.base_branch, 'main');
+    assert.ok(result.execution_claim_id, 'Should return execution_claim_id');
+    assert.equal(result.carrier_identity, 'github-workflow-test-123');
+    cleanup();
+});
+
+runTest('Ingress - without carrier identity, task admitted but not execution-claimed', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'claim-test-2',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('claim-test-2', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: null,
+        carrier_type: 'external'
+    });
+
+    assert.ok(result.success, 'Task should be admitted without carrier identity');
+    assert.equal(result.execution_claimed, false, 'Should not claim execution without carrier identity');
+    assert.ok(!result.execution_descriptor, 'Should not return execution_descriptor without carrier identity');
+    assert.ok(!result.execution_claim_id, 'Should not have execution_claim_id without carrier identity');
+    cleanup();
+});
+
+runTest('Execution claim - exactly one authoritative claim per task (concurrent claims blocked)', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'claim-test-3',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('claim-test-3', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result1 = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-carrier-A',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result1.success, 'First claim should succeed: ' + (result1.error || ''));
+    assert.ok(result1.execution_claim_id, 'First claim should return execution_claim_id');
+
+    const result2 = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-carrier-B',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(!result2.execution_claimed, 'Second attempt should not create new execution claim');
+    assert.ok(result2.replay === true || result2.error_code === 'ALREADY_CLAIMED',
+        'Second attempt should be replay or already-claimed: ' + (result2.error || result2.error_code || ''));
+    cleanup();
+});
+
+runTest('Execution claim - getExecutionClaim returns the active claim', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'claim-test-4',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('claim-test-4', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-carrier-C',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success);
+
+    const claim = taskRegistry.getExecutionClaim('claim-test-4');
+    assert.ok(claim, 'Should retrieve execution claim');
+    assert.equal(claim.execution_claim_id, result.execution_claim_id);
+    assert.equal(claim.carrier_identity, 'github-workflow-carrier-C');
+    cleanup();
+});
+
+runTest('Execution claim - releaseExecutionClaim clears the claim', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'claim-test-5',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('claim-test-5', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-carrier-D',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success);
+
+    const releaseResult = taskRegistry.releaseExecutionClaim('claim-test-5', result.execution_claim_id);
+    assert.ok(releaseResult.success, 'Should release claim: ' + (releaseResult.error || ''));
+    assert.equal(releaseResult.error_code, 'RELEASED');
+
+    const claim = taskRegistry.getExecutionClaim('claim-test-5');
+    assert.ok(!claim, 'Claim should be cleared after release');
+    cleanup();
+});
+
+runTest('Descriptor - buildExecutionDescriptor binds authority-bearing fields from task entry', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'desc-test-1',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('desc-test-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-desc-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success);
+    const descriptor = result.execution_descriptor;
+
+    assert.equal(descriptor.task_mode, 'BUILDER');
+    assert.deepStrictEqual(descriptor.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+    assert.deepStrictEqual(descriptor.permitted_paths, ['poc/']);
+    assert.equal(descriptor.target_agent, 'Gemini Builder');
+    assert.equal(descriptor.repository, 'fluentwithkyle/openclaw-webhook');
+    assert.equal(descriptor.base_branch, 'main');
+    assert.equal(descriptor.execution_claim_id, result.execution_claim_id);
+    cleanup();
+});
+
+runTest('Ingress - no recursive re-entry: ingress returns descriptor, does not dispatch agent', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'norecurse-test-1',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('norecurse-test-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-norecurse-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success);
+    assert.ok(result.execution_descriptor, 'Should return descriptor for carrier to use');
+    assert.equal(result.execution_claimed, true, 'Should mark execution as claimed');
+    assert.ok(result.execution_claim_id, 'Should have execution_claim_id');
+    assert.ok(result.carrier_identity, 'Should include carrier_identity in response');
+    assert.equal(result.task_status, 'EXECUTING');
+    cleanup();
+});
+
+runTest('Workflow - main.yml uses $GITHUB_OUTPUT instead of deprecated ::set-output', () => {
+    assert.ok(!mainRaw.includes('::set-output'), 'main.yml should not use deprecated ::set-output');
+    assert.ok(mainRaw.includes('$GITHUB_OUTPUT'), 'main.yml should use $GITHUB_OUTPUT');
+});
+
+runTest('Workflow - gemini-builder.yml uses $GITHUB_OUTPUT instead of deprecated ::set-output', () => {
+    assert.ok(!builderRaw.includes('::set-output'), 'gemini-builder.yml should not use deprecated ::set-output');
+    assert.ok(builderRaw.includes('$GITHUB_OUTPUT'), 'gemini-builder.yml should use $GITHUB_OUTPUT');
+});
+
+runTest('Workflow - validate-external-activation.js persists execution descriptor file', () => {
+    const scriptRaw = fs.readFileSync(path.join(__dirname, '..', 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(scriptRaw.includes('EXECUTION_DESCRIPTOR_FILE'), 'Should reference EXECUTION_DESCRIPTOR_FILE env var');
+    assert.ok(scriptRaw.includes('execution-descriptor.json'), 'Should default to execution-descriptor.json');
+    assert.ok(scriptRaw.includes('writeFileSync'), 'Should persist descriptor via fs.writeFileSync');
+});
+
+runTest('Workflow - main.yml orchestration context consumes execution descriptor (not workflow inputs)', () => {
+    assert.ok(mainRaw.includes('execution-descriptor.json'), 'main.yml should reference execution-descriptor.json');
+    assert.ok(mainRaw.includes('jq -r \'.request_id\' "$DESCRIPTOR_FILE"'), 'main.yml should read request_id from descriptor');
+    assert.ok(mainRaw.includes('jq -r \'.task_mode\' "$DESCRIPTOR_FILE"'), 'main.yml should read task_mode from descriptor');
+    assert.ok(mainRaw.includes('jq -r \'.capabilities | join(",")\' "$DESCRIPTOR_FILE"'), 'main.yml should read capabilities from descriptor');
+});
+
+runTest('Workflow - gemini-builder.yml orchestration context consumes execution descriptor (not workflow inputs)', () => {
+    assert.ok(builderRaw.includes('execution-descriptor.json'), 'gemini-builder.yml should reference execution-descriptor.json');
+    assert.ok(builderRaw.includes('jq -r \'.task_mode\' "$DESCRIPTOR_FILE"'), 'gemini-builder.yml should read task_mode from descriptor');
+    assert.ok(builderRaw.includes('jq -r \'.capabilities | join(",")\' "$DESCRIPTOR_FILE"'), 'gemini-builder.yml should read capabilities from descriptor');
+});
+
+runTest('Workflow - main.yml Run Gemini step gated on replay (non-replay only)', () => {
+    const geminiIdx = mainRaw.indexOf('Run Gemini in advisory mode');
+    assert.ok(geminiIdx !== -1);
+    const geminiSection = mainRaw.slice(geminiIdx);
+    assert.ok(/!steps\.validate_activation\.outputs\.replay/.test(geminiSection),
+        'Run Gemini step should be gated to skip on replay');
+    assert.ok(/!steps\.validate_activation_wfd\.outputs\.replay/.test(geminiSection),
+        'Run Gemini workflow_dispatch path should be gated to skip on replay');
+});
+
+runTest('Workflow - gemini-builder.yml Run Gemini Builder gated on replay', () => {
+    const builderIdx = builderRaw.indexOf('Run Gemini Builder');
+    assert.ok(builderIdx !== -1);
+    const builderSection = builderRaw.slice(builderIdx, builderRaw.indexOf('Commit and push'));
+    assert.ok(/!steps\.validate_activation\.outputs\.replay/.test(builderSection),
+        'Run Gemini Builder should be gated to skip on replay');
+});
+
+runTest('Workflow - external-activation-validator.js transmits x-carrier-identity header', () => {
+    const validatorRaw = fs.readFileSync(path.join(__dirname, '..', 'poc', 'external-activation-validator.js'), 'utf8');
+    assert.ok(validatorRaw.includes('x-carrier-identity'), 'Should transmit x-carrier-identity header');
+    assert.ok(validatorRaw.includes('GITHUB_RUN_ID'), 'Should derive carrier identity from GITHUB_RUN_ID');
+});
+
+runTest('Workflow - routes/poc.js passes carrier_identity from request header', () => {
+    const routesRaw = fs.readFileSync(path.join(__dirname, '..', 'routes', 'poc.js'), 'utf8');
+    assert.ok(routesRaw.includes('x-carrier-identity'), 'Route should read x-carrier-identity header');
+    assert.ok(routesRaw.includes('carrier_identity: carrierIdentity'), 'Route should pass carrier_identity to dispatchContext');
+});
+
+runTest('Ingress - replay does not set execution_claimed', () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'replay-claim-test-1',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = setupDirectorApproval('replay-claim-test-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result1 = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-replay-1',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(result1.success);
+    assert.equal(result1.execution_claimed, true);
+
+    const result2 = canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-replay-2',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(result2.success, 'Replay should succeed: ' + (result2.error || ''));
+    assert.equal(result2.replay, true);
+    assert.equal(result2.execution_claimed, undefined, 'Replay should not set execution_claimed');
+    cleanup();
 });
 
 // =========================================================

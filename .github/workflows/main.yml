@@ -111,36 +111,52 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The orchestration context now consumes the SERVER-DERIVED execution descriptor
+          # returned by the canonical activation ingress, not workflow input values.
+          # The descriptor contains authoritative request_id, task_mode, capabilities,
+          # permitted_paths, task, repository, and base_branch.
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ ! -f "$DESCRIPTOR_FILE" ]; then
+            echo "::error::Execution descriptor file not found; server validation may have produced a replay"
+            exit 1
+          fi
+
           {
             echo 'request_id<<EOF'
-            printf '%s\n' "${{ github.event.inputs.request_id }}"
+            jq -r '.request_id' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'task<<EOF'
-            printf '%s\n' "${{ github.event.inputs.task }}"
+            jq -r '.task' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'repository<<EOF'
-            printf '%s\n' "${{ github.event.inputs.repository }}"
+            jq -r '.repository' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'base_branch<<EOF'
-            printf '%s\n' "${{ github.event.inputs.base_branch }}"
+            jq -r '.base_branch' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'kilo_execution_id<<EOF'
-            printf '%s\n' "${{ github.event.inputs.kilo_execution_id || '' }}"
+            printf '%s\n' ""
             echo 'EOF'
             echo 'builder_execution_id<<EOF'
-            printf '%s\n' "${{ github.event.inputs.builder_execution_id || '' }}"
+            printf '%s\n' ""
             echo 'EOF'
             echo 'verification<<EOF'
-            printf '%s\n' "${{ github.event.inputs.verification }}"
+            jq -r '.verification' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'task_mode<<EOF'
-            printf '%s\n' "${{ github.event.inputs.task_mode || 'REVIEW' }}"
+            jq -r '.task_mode' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'capabilities<<EOF'
-            printf '%s\n' "${{ github.event.inputs.capabilities || 'read_only' }}"
+            jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'permitted_paths<<EOF'
-            printf '%s\n' "${{ github.event.inputs.permitted_paths || '' }}"
+            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'execution_claim_id<<EOF'
+            jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'carrier_identity<<EOF'
+            printf '%s\n' "${{ steps.validate_activation_wfd.outputs.carrier_identity }}"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
@@ -154,6 +170,7 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
           REPOSITORY: ${{ github.repository }}
           BASE_BRANCH: ${{ github.ref_name }}
+          EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
         run: |
           set -euo pipefail
@@ -189,6 +206,7 @@ jobs:
           CAPABILITIES: ${{ inputs.capabilities || 'read_only' }}
           PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}
           VERIFICATION: ${{ inputs.verification || '' }}
+          EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
         run: |
           set -euo pipefail
@@ -213,23 +231,31 @@ jobs:
 
       - name: Prepare orchestration context (issue_comment)
         id: orchestration_context
-        if: github.event_name == 'issue_comment' && steps.validate_activation.outputs.activation_validated == 'true'
+        if: github.event_name == 'issue_comment' && steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
         shell: bash
         run: |
           set -euo pipefail
 
+          # The orchestration context now consumes the SERVER-DERIVED execution descriptor
+          # returned by the canonical activation ingress, not workflow input values.
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ ! -f "$DESCRIPTOR_FILE" ]; then
+            echo "::error::Execution descriptor file not found; server validation may have produced a replay"
+            exit 1
+          fi
+
           {
             echo 'request_id<<EOF'
-            printf '%s\n' "${{ github.event.comment.id }}"
+            jq -r '.request_id' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'task<<EOF'
-            printf '%s\n' "${{ steps.request_comment.outputs.request }}"
+            jq -r '.task' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'repository<<EOF'
-            printf '%s\n' "${{ github.repository }}"
+            jq -r '.repository' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'base_branch<<EOF'
-            printf '%s\n' "${{ github.ref_name }}"
+            jq -r '.base_branch' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'kilo_execution_id<<EOF'
             printf '%s\n' ""
@@ -238,22 +264,28 @@ jobs:
             printf '%s\n' ""
             echo 'EOF'
             echo 'verification<<EOF'
-            printf '%s\n' "${{ steps.request_comment.outputs.task_mode == 'FAILOVER_EXECUTE' && 'All changes must be within permitted_paths. Implement, test, commit, and push within scope. Provide verification evidence.' || 'Review the request and provide analysis, risk assessment, and implementation plans.' }}"
+            jq -r '.verification' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'task_mode<<EOF'
-            printf '%s\n' "${{ steps.request_comment.outputs.task_mode }}"
+            jq -r '.task_mode' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'capabilities<<EOF'
-            printf '%s\n' "${{ steps.request_comment.outputs.capabilities }}"
+            jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'permitted_paths<<EOF'
-            printf '%s\n' "${{ steps.request_comment.outputs.permitted_paths }}"
+            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'execution_claim_id<<EOF'
+            jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'carrier_identity<<EOF'
+            printf '%s\n' "${{ steps.validate_activation.outputs.carrier_identity }}"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
       - name: Run Gemini in advisory mode
         id: gemini_run
-        if: steps.validate_activation.outputs.activation_validated == 'true' || steps.validate_activation_wfd.outputs.activation_validated == 'true'
+        if: (steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay) || (steps.validate_activation_wfd.outputs.activation_validated == 'true' && !steps.validate_activation_wfd.outputs.replay)
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -268,6 +300,8 @@ jobs:
           ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
           ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}
           ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
+          ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
+          ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite
@@ -314,12 +348,21 @@ jobs:
       - name: Determine Gemini execution result
         id: gemini_result
         if: always()
+        env:
+          TASK_MODE_INPUT: ${{ steps.orchestration_context.outputs.task_mode || '' }}
         shell: bash
         run: |
           set -uo pipefail
 
+          # Determine task mode from server-derived descriptor if available
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ -f "$DESCRIPTOR_FILE" ] && [ -n "$TASK_MODE_INPUT" ]; then
+            TASK_MODE="$TASK_MODE_INPUT"
+          else
+            TASK_MODE="REVIEW"
+          fi
+
           GEMINI_OUTCOME="${{ steps.gemini_run.outcome }}"
-          TASK_MODE="${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}"
 
           # Determine Gemini execution status from the actual step outcome.
           # Distinguish: dispatch accepted -> Gemini CLI executed -> succeeded/failed.
@@ -364,27 +407,35 @@ jobs:
         if: always()
         env:
           GEMINI_SUMMARY: ${{ steps.gemini_run.outputs.summary }}
-          REQUEST_TASK: ${{ steps.request_comment.outputs.request }}
+          EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
+          CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+          IS_REPLAY: ${{ steps.validate_activation.outputs.replay == 'true' || steps.validate_activation_wfd.outputs.replay == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
 
-          # Derive ACP envelope fields based on trigger path.
-          # workflow_dispatch: all fields from orchestration_context.
-          # issue_comment: request_id is derived from the GitHub-native
-          # comment ID (a stable, traceable execution identifier available
-          # in the issue_comment event context). task, repository, and
-          # base_branch are derived from the comment body and execution context.
-          if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
-            REQUEST_ID="${{ github.event.comment.id }}"
-            TASK="$REQUEST_TASK"
+          # Derive ACP envelope fields from the SERVER-DERIVED execution descriptor.
+          # The descriptor was returned by the canonical activation ingress and
+          # persisted by poc/validate-external-activation.js. The request_id,
+          # task, repository, base_branch, task_mode, capabilities, and
+          # permitted_paths must all come from the descriptor — not from
+          # workflow inputs — to preserve server-derived authority.
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ "$IS_REPLAY" = "true" ] && [ ! -f "$DESCRIPTOR_FILE" ]; then
+            echo "::warning::Replay without descriptor file; using fallback values"
+            REQUEST_ID=""
+            TASK=""
             REPOSITORY="${{ github.repository }}"
             BASE_BRANCH="${{ github.ref_name }}"
+            TASK_MODE="REVIEW"
+          elif [ -f "$DESCRIPTOR_FILE" ]; then
+            REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
+            TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
+            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
           else
-            REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
-            TASK="${{ steps.orchestration_context.outputs.task }}"
-            REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
-            BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+            echo "::error::Execution descriptor file not found for ACP report payload"
+            exit 1
           fi
 
           CURRENT_HEAD_SHA="${GITHUB_SHA}"
@@ -436,6 +487,8 @@ jobs:
             --arg recon_status "$RECON_STATUS" \
             --argjson recon_changed_files "$RECON_CHANGED_FILES" \
             --arg recon_commit_sha "$RECON_COMMIT_SHA" \
+            --arg execution_claim_id "$EXECUTION_CLAIM_ID" \
+            --arg carrier_identity "$CARRIER_IDENTITY" \
             '{
               request_id: (if $request_id == "" then null else $request_id end),
               agent: $agent,
@@ -446,7 +499,7 @@ jobs:
               current_head_sha: $current_head_sha,
               changed_files: [],
               verification: ["advisory review completed"],
-              result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id }, gemini_output: $gemini_output },
+              result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id, carrier_identity: (if $carrier_identity == "" then null else $carrier_identity end), execution_claim_id: (if $execution_claim_id == "" then null else $execution_claim_id end) }, gemini_output: $gemini_output },
               commit: null,
               push: false,
               blockers: $blockers,
