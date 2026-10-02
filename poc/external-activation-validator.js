@@ -5,7 +5,7 @@ const ACTIVATION_INGRESS_PATH = '/poc/activation/ingress';
 function validateExternalActivation(params, callbackUrl, callbackSecret) {
     const payload = JSON.stringify(params);
 
-    const parsedUrl = new URL(callbackUrl + ACTIVATION_INGRESS_PATH);
+    const parsedUrl = new URL(callbackUrl.replace(/\/+$/, '') + ACTIVATION_INGRESS_PATH);
     const options = {
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || 443,
