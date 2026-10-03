@@ -568,17 +568,128 @@ async function main() {
     assert.strictEqual(res.body.error_code, 'CARRIER_IDENTITY_MISMATCH');
   });
 
-  await runTest('Builder callback: unknown request_id is rejected', async () => {
-    const requestId = 'builder-corr-unknown-' + Date.now();
-    const report = makeBuilderReport(
-      'unknown-builder-request', 'builder-task', 'success',
-      'some-claim-id', 'some-carrier'
-    );
-    const res = await postRequest('/poc/builder/callback', report);
-    assert.strictEqual(res.status, 404);
-    assert.strictEqual(res.body.status, 'validation blocked');
-    assert(res.body.error.includes('Unknown request_id'));
-  });
+   await runTest('Builder callback: unknown request_id with no claim on disk is rejected', async () => {
+     const requestId = 'builder-corr-unknown-' + Date.now();
+     const report = makeBuilderReport(
+       'unknown-builder-request', 'builder-task', 'success',
+       'some-claim-id', 'some-carrier'
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 404);
+     assert.strictEqual(res.body.status, 'validation blocked');
+     assert(res.body.error.includes('Unknown request_id') || res.body.error.includes('no execution claim lock'));
+   });
+
+   await runTest('Builder callback: rehydrates task from claim lock + callback payload when task missing', async () => {
+     const requestId = 'builder-rehydrate-' + Date.now();
+     cleanup();
+     taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
+     taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+     taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+     taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+
+     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-rehydrate-1',
+       carrier_type: 'github_workflow'
+     });
+     assert.strictEqual(claimResult.success, true);
+
+     // Simulate server restart: wipe in-memory cache AND registry file, but preserve claim lock on disk
+     taskRegistry.resetMemoryCache();
+     if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
+     if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
+
+     assert.strictEqual(taskRegistry.getTask(requestId), null);
+
+     const report = makeBuilderReport(
+       requestId, 'builder-task', 'success',
+       claimResult.execution_claim_id,
+       'github-workflow-rehydrate-1'
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 200);
+     assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
+     assert.strictEqual(res.body.builder_status, 'success');
+
+     const task = taskRegistry.getTask(requestId);
+     assert.strictEqual(task.builder.status, 'success');
+     assert.strictEqual(task.status, 'EXECUTING');
+   });
+
+   await runTest('Builder callback: rejects callback when claim lock missing but callback has claim_id', async () => {
+     const requestId = 'builder-rehydrate-no-claim-' + Date.now();
+     cleanup();
+
+     const report = makeBuilderReport(
+       requestId, 'builder-task', 'success',
+       'some-claim-id', 'some-carrier'
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 404);
+     assert(res.body.error.includes('no execution claim lock'));
+   });
+
+   await runTest('Builder callback: rejects rehydration when execution_claim_id mismatches', async () => {
+     const requestId = 'builder-rehydrate-claim-mismatch-' + Date.now();
+     cleanup();
+     taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
+     taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+     taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+     taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+
+     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-rehydrate-2',
+       carrier_type: 'github_workflow'
+     });
+     assert.strictEqual(claimResult.success, true);
+
+     // Simulate server restart: wipe in-memory cache AND registry file, but preserve claim lock on disk
+     taskRegistry.resetMemoryCache();
+     if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
+     if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
+
+     assert.strictEqual(taskRegistry.getTask(requestId), null);
+
+     const report = makeBuilderReport(
+       requestId, 'builder-task', 'success',
+       'wrong-claim-id',
+       'github-workflow-rehydrate-2'
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 403);
+     assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISMATCH');
+   });
+
+   await runTest('Builder callback: rejects rehydration when carrier_identity mismatches', async () => {
+     const requestId = 'builder-rehydrate-carrier-mismatch-' + Date.now();
+     cleanup();
+     taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
+     taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+     taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+     taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+
+     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-correct-carrier',
+       carrier_type: 'github_workflow'
+     });
+     assert.strictEqual(claimResult.success, true);
+
+     // Simulate server restart: wipe in-memory cache AND registry file, but preserve claim lock on disk
+     taskRegistry.resetMemoryCache();
+     if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
+     if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
+
+     assert.strictEqual(taskRegistry.getTask(requestId), null);
+
+     const report = makeBuilderReport(
+       requestId, 'builder-task', 'success',
+       claimResult.execution_claim_id,
+       'github-workflow-wrong-carrier'
+     );
+     const res = await postRequest('/poc/builder/callback', report);
+     assert.strictEqual(res.status, 403);
+     assert.strictEqual(res.body.error_code, 'CARRIER_IDENTITY_MISMATCH');
+   });
 
   await runTest('Builder callback: wrong agent (Gemini Reviewer) is rejected', async () => {
     const requestId = 'builder-corr-agent-' + Date.now();

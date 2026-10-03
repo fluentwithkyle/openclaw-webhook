@@ -556,30 +556,53 @@ router.post('/builder/callback', authenticateBuilderCallback, async (req, res) =
     }
 
     const task = taskRegistry.getTask(requestId);
+    let rehydrated = false;
+
     if (!task) {
-        return res.status(404).json({
-            request_id: requestId,
-            status: 'validation blocked',
-            stage: 'validation blocked',
-            error: 'Unknown request_id'
-        });
+        const callbackClaimId = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.execution_claim_id;
+        const callbackCarrierIdentity = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.carrier_identity;
+
+        if (!callbackClaimId || !callbackCarrierIdentity) {
+            return res.status(404).json({
+                request_id: requestId,
+                status: 'validation blocked',
+                stage: 'validation blocked',
+                error: 'Unknown request_id'
+            });
+        }
+
+        const rehydrateResult = taskRegistry.rehydrateTaskFromCallback(requestId, req.body);
+        if (!rehydrateResult.success) {
+            const isAuthError = rehydrateResult.error_code === 'EXECUTION_CLAIM_MISMATCH' || rehydrateResult.error_code === 'CARRIER_IDENTITY_MISMATCH';
+            return res.status(isAuthError ? 403 : 404).json({
+                request_id: requestId,
+                status: isAuthError ? 'authorization blocked' : 'validation blocked',
+                stage: isAuthError ? 'authorization blocked' : 'validation blocked',
+                error: rehydrateResult.error,
+                error_code: rehydrateResult.error_code
+            });
+        }
+
+        rehydrated = true;
     }
 
-    if (req.body.repository && req.body.repository !== task.repository) {
+    const resolvedTask = rehydrated ? taskRegistry.getTask(requestId) : task;
+
+    if (req.body.repository && req.body.repository !== resolvedTask.repository) {
         return res.status(400).json({
             request_id: requestId,
             status: 'validation blocked',
             stage: 'validation blocked',
-            error: `Repository mismatch: expected ${task.repository}, got ${req.body.repository}`
+            error: `Repository mismatch: expected ${resolvedTask.repository}, got ${req.body.repository}`
         });
     }
 
-    if (req.body.base_branch && req.body.base_branch !== task.base_branch) {
+    if (req.body.base_branch && req.body.base_branch !== resolvedTask.base_branch) {
         return res.status(400).json({
             request_id: requestId,
             status: 'validation blocked',
             stage: 'validation blocked',
-            error: `Base branch mismatch: expected ${task.base_branch}, got ${req.body.base_branch}`
+            error: `Base branch mismatch: expected ${resolvedTask.base_branch}, got ${req.body.base_branch}`
         });
     }
 
