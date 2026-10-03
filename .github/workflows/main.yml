@@ -160,15 +160,15 @@ jobs:
             exit 1
           fi
 
-          ACTIVATION_JSON=$(jq -n \\
-            --arg request_id "$REQUEST_ID" \\
-            --arg task "$TASK" \\
-            --arg repository "$REPOSITORY" \\
-            --arg base_branch "$BASE_BRANCH" \\
-            --arg task_mode "$TASK_MODE" \\
-            --arg capabilities "$CAPABILITIES" \\
-            --arg permitted_paths "$PERMITTED_PATHS" \\
-            --arg verification "$VERIFICATION" \\
+          ACTIVATION_JSON=$(jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg task "$TASK" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            --arg task_mode "$TASK_MODE" \
+            --arg capabilities "$CAPABILITIES" \
+            --arg permitted_paths "$PERMITTED_PATHS" \
+            --arg verification "$VERIFICATION" \
             '{
               request_id: $request_id,
               task: $task,
