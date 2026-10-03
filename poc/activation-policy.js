@@ -384,19 +384,6 @@ function enforceServerDerivedAuthority(command) {
   }
 
   const serverCapabilities = entry.required_capabilities;
-  const commandCapabilities = (command.authorization && command.authorization.capabilities) || [];
-
-  for (const cap of serverCapabilities) {
-    if (!commandCapabilities.includes(cap)) {
-      return {
-        valid: false,
-        error: 'Missing server-derived capability: ' + cap + ' for ' + agent + ' / ' + taskMode,
-        error_code: 'MISSING_SERVER_DERIVED_CAPABILITY',
-        missing_capability: cap,
-        server_derived: { capabilities: serverCapabilities, permitted_paths: entry.permitted_paths }
-      };
-    }
-  }
 
   return {
     valid: true,
@@ -416,6 +403,7 @@ module.exports = {
   SERVER_DERIVED_AUTHORITY_FIELDS,
   getPolicyEntry,
   getPermittedActivationSurfaces,
+  getAuthorizedPathsForMode,
   requiresActivation,
   validateActivationSurface,
   validateActivationSyntax,

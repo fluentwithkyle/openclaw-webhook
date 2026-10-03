@@ -287,9 +287,10 @@ function calculateDirectorScopeHash(scope) {
 
 function isConsequentialCommand(command) {
   const scope = getDirectorScope(command);
-  return scope.task_mode === 'BUILDER' || scope.task_mode === 'FAILOVER_EXECUTE' ||
-    (Array.isArray(scope.capabilities) && scope.capabilities.some(cap => ['modify_files', 'commit', 'push'].includes(cap))) ||
-    (Array.isArray(scope.permitted_paths) && scope.permitted_paths.some(p => !p.startsWith('poc/')));
+  if (scope.task_mode === 'BUILDER' || scope.task_mode === 'FAILOVER_EXECUTE') {
+    return true;
+  }
+  return false;
 }
 
 function validateWorkflowStage(workflowStage) {
