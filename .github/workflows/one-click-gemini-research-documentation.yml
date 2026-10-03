@@ -141,18 +141,40 @@ jobs:
           REQUEST_ID="${{ steps.task.outputs.request_id }}"
           TASK_FILE="${{ steps.task.outputs.task_file }}"
 
+          # Build the dispatch payload as a properly-escaped JSON file.
+          # Using -f "inputs[task]=$(cat "${TASK_FILE}")" with gh api fails because
+          # the raw multiline content (newlines and control characters) is not
+          # JSON-escaped by gh when it constructs the request body. Using jq -Rs
+          # reads the file content as a single JSON string with all control
+          # characters properly escaped, then passing via --input ensures valid JSON.
+          jq -n \
+            --arg ref "main" \
+            --arg request_id "$REQUEST_ID" \
+            --rawfile task "$TASK_FILE" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "main" \
+            --arg task_mode "RESEARCH_DOCUMENT" \
+            --arg capabilities "inspect,inspect_repository,inspect_github_actions,research,analyze_workflow_validation,analyze_machine_enforcement,modify_files,commit,push" \
+            --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md" \
+            --arg verification "Inspect current workflow validation and one-click contract; produce durable research record; update required research index and task log; distinguish VERIFIED/INFERRED/UNKNOWN; identify smallest machine-enforcement increment; commit and push; report commit SHA" \
+            '{
+              ref: $ref,
+              inputs: {
+                request_id: $request_id,
+                task: ($task | rtrimstr("\n")),
+                repository: $repository,
+                base_branch: $base_branch,
+                task_mode: $task_mode,
+                capabilities: $capabilities,
+                permitted_paths: $permitted_paths,
+                verification: $verification
+              }
+            }' > dispatch-payload.json
+
           gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
             "/repos/${REPOSITORY}/actions/workflows/main.yml/dispatches" \
-            -F ref="main" \
-            -F "inputs[request_id]=${REQUEST_ID}" \
-            -f "inputs[task]=$(cat "${TASK_FILE}")" \
-            -F "inputs[repository]=${REPOSITORY}" \
-            -F "inputs[base_branch]=main" \
-            -F "inputs[task_mode]=RESEARCH_DOCUMENT" \
-            -F "inputs[capabilities]=inspect,inspect_repository,inspect_github_actions,research,analyze_workflow_validation,analyze_machine_enforcement,modify_files,commit,push" \
-            -F "inputs[permitted_paths]=docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md" \
-            -F "inputs[verification]=Inspect current workflow validation and one-click contract; produce durable research record; update required research index and task log; distinguish VERIFIED/INFERRED/UNKNOWN; identify smallest machine-enforcement increment; commit and push; report commit SHA"
+            --input dispatch-payload.json
 
           echo "::notice::Canonical Gemini RESEARCH_DOCUMENT carrier dispatched for ${REQUEST_ID}."
