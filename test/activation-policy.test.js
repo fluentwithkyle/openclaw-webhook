@@ -336,13 +336,79 @@ async function main() {
         assertTrue(result.server_derived.capabilities.includes('run_tests'));
     });
 
-    await runTest('Authority enforcement - missing capabilities fail closed', () => {
+    await runTest('Authority enforcement - derives server capabilities regardless of incoming capabilities', () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('auth-test-2');
         cmd.authorization.capabilities = ['read_only'];
         const result = activationPolicy.enforceServerDerivedAuthority(cmd);
-        assertTrue(!result.valid);
-        assertTrue(result.error_code === 'MISSING_SERVER_DERIVED_CAPABILITY');
+        assertTrue(result.valid, 'Should be valid — server derives capabilities, does not validate incoming');
+        assertTrue(result.server_derived.capabilities.includes('read_only'));
+        assertTrue(result.server_derived.capabilities.includes('modify_files'));
+        assertTrue(result.server_derived.capabilities.includes('run_tests'));
+        assertTrue(result.server_derived.capabilities.includes('commit'));
+        assertTrue(result.server_derived.capabilities.includes('push'));
+    });
+
+    // =========================================================
+    // RESEARCH_DOCUMENT Server-Derived Capability Tests
+    // =========================================================
+
+    await runTest('Authority enforcement - RESEARCH_DOCUMENT derives read_only from policy', () => {
+        cleanup();
+        const cmd = {
+            protocol_version: '0.1',
+            request_id: 'research-auth-test-1',
+            source: 'GitHub workflow_dispatch',
+            target: 'Gemini',
+            task_type: 'github_external_activation',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task: 'research task',
+            task_mode: 'RESEARCH_DOCUMENT',
+            constraints: { permitted_paths: ['docs/ai/research/'] },
+            authorization: { capabilities: ['inspect', 'inspect_repository', 'inspect_github_actions', 'modify_files', 'commit', 'push'] },
+            verification: 'research and persist findings',
+            reporting: 'json',
+            originator: 'Kyle',
+            activation_surface: 'workflow_dispatch'
+        };
+        const result = activationPolicy.enforceServerDerivedAuthority(cmd);
+        assertTrue(result.valid, 'Should succeed: ' + (result.error || ''));
+        assertTrue(result.server_derived.capabilities.includes('read_only'), 'Must derive read_only');
+        assertTrue(result.server_derived.capabilities.includes('modify_files'));
+        assertTrue(result.server_derived.capabilities.includes('commit'));
+        assertTrue(result.server_derived.capabilities.includes('push'));
+        assertEqual(result.server_derived.capabilities.length, 4);
+        assertEqual(result.server_derived.permitted_paths, activationPolicy.getAuthorizedPathsForMode('RESEARCH_DOCUMENT'));
+    });
+
+    await runTest('Ingress - RESEARCH_DOCUMENT with non-standard capabilities derives server set', () => {
+        cleanup();
+        const cmd = {
+            protocol_version: '0.1',
+            request_id: 'research-ingress-test-1',
+            source: 'GitHub workflow_dispatch',
+            target: 'Gemini',
+            task_type: 'github_external_activation',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task: 'research task',
+            task_mode: 'RESEARCH_DOCUMENT',
+            constraints: { permitted_paths: ['docs/ai/research/', 'docs/ai/RESEARCH_INDEX.md'] },
+            authorization: { capabilities: ['inspect', 'inspect_repository', 'inspect_github_actions', 'modify_files', 'commit', 'push'] },
+            verification: 'research and persist findings',
+            reporting: 'json',
+            originator: 'Kyle',
+            activation_surface: 'workflow_dispatch'
+        };
+        const result = canonicalExternalActivationIngress(cmd, {});
+        assertTrue(result.success, 'RESEARCH_DOCUMENT should succeed with server-derived capabilities: ' + (result.error || ''));
+        assertTrue(result.command.authorization.capabilities.includes('read_only'), 'Final command must have server-derived read_only');
+        assertTrue(result.command.authorization.capabilities.includes('modify_files'));
+        assertTrue(result.command.authorization.capabilities.includes('commit'));
+        assertTrue(result.command.authorization.capabilities.includes('push'));
+        assertEqual(result.command.authorization.capabilities.length, 4);
+        cleanup();
     });
 
     // =========================================================
