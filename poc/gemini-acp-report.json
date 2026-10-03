@@ -14,9 +14,22 @@
     "Committed and pushed smoke report to main."
   ],
   "result": {
+    "execution_metadata": {
+      "invocation_id": "gemini-builder-37078697559-1",
+      "run_id": "37078697559",
+      "carrier_identity": "github-workflow-37078697559-1",
+      "execution_claim_id": null
+    },
+    "builder_output": "Inspect the current repository HEAD commit SHA and report it as a minimal Gemini Builder execution smoke test.",
     "verification_verdict": "IMPLEMENTED",
     "smoke_test": "PASSED"
   },
   "commit": "346bd07",
-  "push": true
+  "push": true,
+  "blockers": [],
+  "reconciliation": {
+    "status": "SKIPPED",
+    "changed_files": [],
+    "commit_sha": "346bd07"
+  }
 }
