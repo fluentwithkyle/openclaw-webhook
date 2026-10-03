@@ -174,7 +174,7 @@ jobs:
           echo "activation_validated=true" >> "$GITHUB_OUTPUT"
 
       - name: Prepare orchestration context (workflow_dispatch)
-        id: orchestration_context
+        id: orchestration_context_wfd
         if: github.event_name == 'workflow_dispatch' && steps.validate_activation_wfd.outputs.activation_validated == 'true' && !steps.validate_activation_wfd.outputs.replay
         shell: bash
         run: |
@@ -230,7 +230,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Prepare orchestration context (issue_comment)
-        id: orchestration_context
+        id: orchestration_context_ic
         if: github.event_name == 'issue_comment' && steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
         shell: bash
         run: |
@@ -290,18 +290,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_CLI_TRUST_WORKSPACE: "true"
-          ORCHESTRATION_REQUEST_ID: ${{ steps.orchestration_context.outputs.request_id }}
-          ORCHESTRATION_TASK: ${{ steps.orchestration_context.outputs.task }}
-          ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context.outputs.repository }}
-          ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
-          ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context.outputs.kilo_execution_id }}
-          ORCHESTRATION_BUILDER_EXECUTION_ID: ${{ steps.orchestration_context.outputs.builder_execution_id }}
-          ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context.outputs.verification }}
-          ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
-          ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}
-          ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
-          ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
-          ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+          ORCHESTRATION_REQUEST_ID: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id }}
+          ORCHESTRATION_TASK: ${{ steps.orchestration_context_wfd.outputs.task || steps.orchestration_context_ic.outputs.task }}
+          ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context_wfd.outputs.repository || steps.orchestration_context_ic.outputs.repository }}
+          ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch }}
+          ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context_wfd.outputs.kilo_execution_id || steps.orchestration_context_ic.outputs.kilo_execution_id }}
+          ORCHESTRATION_BUILDER_EXECUTION_ID: ${{ steps.orchestration_context_wfd.outputs.builder_execution_id || steps.orchestration_context_ic.outputs.builder_execution_id }}
+          ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context_wfd.outputs.verification || steps.orchestration_context_ic.outputs.verification }}
+          ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode }}
+          ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context_wfd.outputs.capabilities || steps.orchestration_context_ic.outputs.capabilities }}
+          ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths }}
+          ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.orchestration_context_wfd.outputs.execution_claim_id || steps.orchestration_context_ic.outputs.execution_claim_id }}
+          ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context_wfd.outputs.carrier_identity || steps.orchestration_context_ic.outputs.carrier_identity }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite
@@ -311,33 +311,33 @@ jobs:
             You are Gemini, the Fluent with Kyle OpenClaw project's
             Architect, Reviewer, and Research agent.
 
-            OPERATING MODE: ${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}
+            OPERATING MODE: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW' }}
 
-            ${{ (steps.orchestration_context.outputs.task_mode || 'REVIEW') == 'REVIEW' && 'MODE: REVIEW (READ-ONLY ADVISORY). You may inspect and analyze the repository but MUST NOT modify any files, commit, push, or otherwise change repository state. Your role is advisory: provide analysis, risk assessment, implementation plans, and acceptance criteria.' || ((steps.orchestration_context.outputs.task_mode || 'REVIEW') == 'VERIFY_RECONCILE' && format('MODE: VERIFY_RECONCILE (BOUNDED RECONCILIATION). You are authorized to inspect verification of Kilo execution, update ONLY the following documentation files: {0}, and commit + push changes to those specific files. You MUST NOT modify any source code, production code, or files outside the permitted_paths list. Authorized capabilities: {1}. You MUST validate all changes against the verification requirements before committing.', steps.orchestration_context.outputs.permitted_paths, steps.orchestration_context.outputs.capabilities) || ((steps.orchestration_context.outputs.task_mode || 'REVIEW') == 'RESEARCH_DOCUMENT' && format('MODE: RESEARCH_DOCUMENT (RESEARCH + DURABLE PERSISTENCE). Inspect the architecture and relevant files to analyze problems or gather information, and persist findings to the durable research/documentation surface. Authorized paths: {0}. Authorized capabilities: {1}. Research documentation is an intrinsic completion requirement: you MUST persist the research record, research index entry, and TASK_LOG reference (committed and pushed) before completion. You MUST NOT modify source code, production code, or files outside permitted_paths. run_tests is not an authorized RESEARCH_DOCUMENT capability.', steps.orchestration_context.outputs.permitted_paths, steps.orchestration_context.outputs.capabilities) || format('MODE: FAILOVER_EXECUTE (FULL EXECUTION). You are authorized to implement, test, commit, and push within the permitted_paths scope. Authorized capabilities: {0}. Use git tools (commit, push) as needed but stay within scope.', steps.orchestration_context.outputs.capabilities))) }}
+            ${{ (steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW') == 'REVIEW' && 'MODE: REVIEW (READ-ONLY ADVISORY). You may inspect and analyze the repository but MUST NOT modify any files, commit, push, or otherwise change repository state. Your role is advisory: provide analysis, risk assessment, implementation plans, and acceptance criteria.' || ((steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW') == 'VERIFY_RECONCILE' && format('MODE: VERIFY_RECONCILE (BOUNDED RECONCILIATION). You are authorized to inspect verification of Kilo execution, update ONLY the following documentation files: {0}, and commit + push changes to those specific files. You MUST NOT modify any source code, production code, or files outside the permitted_paths list. Authorized capabilities: {1}. You MUST validate all changes against the verification requirements before committing.', steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths, steps.orchestration_context_wfd.outputs.capabilities || steps.orchestration_context_ic.outputs.capabilities) || ((steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW') == 'RESEARCH_DOCUMENT' && format('MODE: RESEARCH_DOCUMENT (RESEARCH + DURABLE PERSISTENCE). Inspect the architecture and relevant files to analyze problems or gather information, and persist findings to the durable research/documentation surface. Authorized paths: {0}. Authorized capabilities: {1}. Research documentation is an intrinsic completion requirement: you MUST persist the research record, research index entry, and TASK_LOG reference (committed and pushed) before completion. You MUST NOT modify source code, production code, or files outside permitted_paths. run_tests is not an authorized RESEARCH_DOCUMENT capability.', steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths, steps.orchestration_context_wfd.outputs.capabilities || steps.orchestration_context_ic.outputs.capabilities) || format('MODE: FAILOVER_EXECUTE (FULL EXECUTION). You are authorized to implement, test, commit, and push within the permitted_paths scope. Authorized capabilities: {0}. Use git tools (commit, push) as needed but stay within scope.', steps.orchestration_context_wfd.outputs.capabilities || steps.orchestration_context_ic.outputs.capabilities))) }}
 
             If operating in REVIEW mode, your response is advisory only — no repository mutations.
             If operating in VERIFY_RECONCILE mode, you may only touch files in permitted_paths (docs/ai/*), commit, and push.
             If operating in FAILOVER_EXECUTE mode, you may implement and push within permitted_paths.
 
             ORCHESTRATION CONTEXT:
-            - request_id: ${{ steps.orchestration_context.outputs.request_id || 'manual' }}
-            - repository: ${{ steps.orchestration_context.outputs.repository || github.repository }}
-            - base_branch: ${{ steps.orchestration_context.outputs.base_branch || github.ref_name }}
-            - task: ${{ steps.orchestration_context.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
-            - kilo_execution_id: ${{ steps.orchestration_context.outputs.kilo_execution_id || '' }}
-            - verification_requirements: ${{ steps.orchestration_context.outputs.verification || 'Not specified' }}
-            - task_mode: ${{ steps.orchestration_context.outputs.task_mode || 'REVIEW' }}
-            - capabilities: ${{ steps.orchestration_context.outputs.capabilities || 'read_only' }}
-            - permitted_paths: ${{ steps.orchestration_context.outputs.permitted_paths || '(none)' }}
+            - request_id: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id || 'manual' }}
+            - repository: ${{ steps.orchestration_context_wfd.outputs.repository || steps.orchestration_context_ic.outputs.repository || github.repository }}
+            - base_branch: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch || github.ref_name }}
+            - task: ${{ steps.orchestration_context_wfd.outputs.task || steps.orchestration_context_ic.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
+            - kilo_execution_id: ${{ steps.orchestration_context_wfd.outputs.kilo_execution_id || steps.orchestration_context_ic.outputs.kilo_execution_id || '' }}
+            - verification_requirements: ${{ steps.orchestration_context_wfd.outputs.verification || steps.orchestration_context_ic.outputs.verification || 'Not specified' }}
+            - task_mode: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW' }}
+            - capabilities: ${{ steps.orchestration_context_wfd.outputs.capabilities || steps.orchestration_context_ic.outputs.capabilities || 'read_only' }}
+            - permitted_paths: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths || '(none)' }}
 
-            ${{ steps.orchestration_context.outputs.request_id != '' && 'This task was dispatched from the Kilo orchestration layer. The request_id correlates this Gemini execution with the originating Kilo completion.' || 'The request below was explicitly submitted by a trusted repository collaborator through the @gemini-cli interface. Treat that request as the actual task.' }}
+            ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id != '' && 'This task was dispatched from the Kilo orchestration layer. The request_id correlates this Gemini execution with the originating Kilo completion.' || 'The request below was explicitly submitted by a trusted repository collaborator through the @gemini-cli interface. Treat that request as the actual task.' }}
 
             --- TASK START ---
-            ${{ steps.orchestration_context.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
+            ${{ steps.orchestration_context_wfd.outputs.task || steps.orchestration_context_ic.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
             --- TASK END ---
 
             VERIFICATION REQUIREMENTS (from original ACP task):
-            ${{ steps.orchestration_context.outputs.verification || 'No specific verification requirements provided. Evaluate based on standard architectural review criteria.' }}
+            ${{ steps.orchestration_context_wfd.outputs.verification || steps.orchestration_context_ic.outputs.verification || 'No specific verification requirements provided. Evaluate based on standard architectural review criteria.' }}
 
             IMPORTANT: When reviewing Kilo's work, you MUST explicitly evaluate against the VERIFICATION REQUIREMENTS listed above. Your review must address each requirement and state whether it is satisfied, partially satisfied, or not satisfied. If verification requirements are not met, clearly identify what is missing.
 
@@ -349,7 +349,7 @@ jobs:
         id: gemini_result
         if: always()
         env:
-          TASK_MODE_INPUT: ${{ steps.orchestration_context.outputs.task_mode || '' }}
+          TASK_MODE_INPUT: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || '' }}
         shell: bash
         run: |
           set -uo pipefail
@@ -407,8 +407,8 @@ jobs:
         if: always()
         env:
           GEMINI_SUMMARY: ${{ steps.gemini_run.outputs.summary }}
-          EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
-          CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+          EXECUTION_CLAIM_ID: ${{ steps.orchestration_context_wfd.outputs.execution_claim_id || steps.orchestration_context_ic.outputs.execution_claim_id }}
+          CARRIER_IDENTITY: ${{ steps.orchestration_context_wfd.outputs.carrier_identity || steps.orchestration_context_ic.outputs.carrier_identity }}
           IS_REPLAY: ${{ steps.validate_activation.outputs.replay == 'true' || steps.validate_activation_wfd.outputs.replay == 'true' }}
         shell: bash
         run: |
