@@ -3024,3 +3024,26 @@ existing Director authorization.
 **Current HEAD inspected**: c98f466e915d3bf5038f09a1cd965379272861c3
 
 **Exact blocker**: determine and authorize the single authoritative persistence/concurrency mechanism that can safely serialize TaskRegistry create/recover/claim mutations across the actual Render process/instance topology.
+
+---
+
+## 2026-10-03 | TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-END-TO-END-CARRIER-REPAIR-004
+
+**Task**: Repair the Gemini Research one-click workflow end-to-end by fixing the broken jq shell continuation in `.github/workflows/main.yml` `validate_activation_wfd` step.
+
+**Analysis**: The `validate_activation_wfd` step in `main.yml` used doubled backslashes (`\\`) at end-of-line for shell continuation of the `jq -n` command (lines 163-171). In a GitHub Actions `bash` shell `run:` block, `\\` produces a literal backslash character rather than a shell line continuation, causing the jq command to be syntactically broken. The canonical working pattern in `gemini-builder.yml` (lines 143-161) uses single `\` for shell continuation. Additionally, the `gemini-builder.yml` jq command includes an `--arg approval_id` field not present in the original `main.yml` construction; this was not relevant to the repair scope (main.yml has no Director approval step).
+
+**Fix applied**: Corrected all 9 doubled backslashes (`\\` → `\`) in the `ACTIVATION_JSON=$(jq -n ...)` construction block of the `validate_activation_wfd` step in `.github/workflows/main.yml`, matching the canonical working pattern in `gemini-builder.yml`.
+
+**Verification**:
+- Local jq execution test: constructed the exact jq command with multiline task text, quotes, backslashes, and control characters — resulting JSON accepted by `JSON.parse()` (verified via `jq . > /dev/null`); all eight activation fields (request_id, task, repository, base_branch, task_mode, capabilities, permitted_paths, verification) survive encoding unchanged.
+- Test suite: `test/workflow-expression.test.js` (46 tests, 0 failures), `test/external-activation-procedure.test.js` (66+30 tests combined, 0 failures), `test/external-activation-bypass.test.js` (66 tests, 0 failures), `test/one-click-workflow-contract.test.js` (31 tests, 0 failures) — all pass.
+- `git diff --check`: no whitespace errors.
+- YAML validity: no tab characters; structure intact.
+- No unrelated files changed: only `.github/workflows/main.yml` modified.
+- Callback secret naming: `RENDER_GEMINI_CALLBACK_URL` / `GEMINI_CALLBACK_SECRET` confirmed as the established canonical secrets (matching `routes/poc.js` `authenticateGeminiCallback` middleware and `docs/ai/STATE.md` line 226); the callback warning is an environment configuration issue (secrets not configured in GitHub Actions), not a code/config naming defect.
+
+**Commit**: `d675cdd` — "FIX: Correct jq shell continuation in validate_activation_wfd step"
+**Push**: Pushed to `origin/main`, verified via re-fetch of `main` from GitHub.
+
+**outcome**: SUCCESS
