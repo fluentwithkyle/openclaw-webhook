@@ -728,6 +728,13 @@ function resetRegistry() {
   return { success: true };
 }
 
+function resetMemoryCache() {
+  memoryCache = new Map();
+  approvalCache = new Map();
+  initialized = false;
+  return { success: true };
+}
+
 function rehydrateTask(command) {
   const requestId = command.request_id;
 
@@ -1041,6 +1048,122 @@ function getExecutionClaim(requestId) {
   return null;
 }
 
+function getExecutionClaimFromDisk(requestId) {
+  const lockPath = claimLockPath(requestId);
+  return readClaimLock(lockPath);
+}
+
+function rehydrateTaskFromCallback(requestId, callbackReport) {
+  const callbackClaimId = callbackReport &&
+    callbackReport.result &&
+    callbackReport.result.execution_metadata &&
+    callbackReport.result.execution_metadata.execution_claim_id;
+
+  const callbackCarrierIdentity = callbackReport &&
+    callbackReport.result &&
+    callbackReport.result.execution_metadata &&
+    callbackReport.result.execution_metadata.carrier_identity;
+
+  const diskClaim = getExecutionClaimFromDisk(requestId);
+
+  if (!diskClaim) {
+    return {
+      success: false,
+      error_code: 'NO_CLAIM_ON_DISK',
+      error: 'Task not in registry and no execution claim lock found on disk'
+    };
+  }
+
+  if (diskClaim.execution_claim_id !== callbackClaimId) {
+    return {
+      success: false,
+      error_code: 'EXECUTION_CLAIM_MISMATCH',
+      error: `Execution claim ID mismatch: expected ${diskClaim.execution_claim_id}, got ${callbackClaimId}`
+    };
+  }
+
+  if (diskClaim.carrier_identity !== callbackCarrierIdentity) {
+    return {
+      success: false,
+      error_code: 'CARRIER_IDENTITY_MISMATCH',
+      error: `Carrier identity mismatch: expected ${diskClaim.carrier_identity}, got ${callbackCarrierIdentity}`
+    };
+  }
+
+  const cache = getCache();
+  if (cache.has(requestId)) {
+    return {
+      success: false,
+      error_code: 'TASK_EXISTS',
+      error: 'Task already exists in registry'
+    };
+  }
+
+  const now = new Date().toISOString();
+  const entry = {
+    request_id: requestId,
+    parent_request_id: null,
+    originator: callbackReport.originator || 'Kyle',
+    current_agent: 'Gemini',
+    next_agent: 'Gemini',
+    repository: callbackReport.repository || 'fluentwithkyle/openclaw-webhook',
+    base_branch: callbackReport.base_branch || 'main',
+    task: callbackReport.task || '',
+    task_mode: 'BUILDER',
+    workflow_stage: null,
+    status: 'EXECUTING',
+    created_at: now,
+    updated_at: now,
+    kilo: {
+      status: 'success',
+      execution_id: null,
+      report: null,
+      provider_session_id: null,
+      provider_message_id: null,
+      provider_invocation_id: null
+    },
+    gemini: {
+      status: 'pending',
+      execution_id: null,
+      report: null
+    },
+    builder: {
+      status: 'pending',
+      execution_id: null,
+      report: null
+    },
+    next_action: 'trigger_gemini',
+    verification: callbackReport.verification || null,
+    capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+    permitted_paths: ['poc/'],
+    evidence: [],
+    lineage: {
+      superseded_by: null,
+      superseded_at: null,
+      cancelled: false,
+      cancelled_at: null
+    },
+    config_verification: {},
+    transition_decision_provenance: null,
+    execution_claim: {
+      execution_claim_id: diskClaim.execution_claim_id,
+      carrier_identity: diskClaim.carrier_identity,
+      carrier_type: diskClaim.carrier_type || 'github_workflow',
+      claimed_at: diskClaim.claimed_at,
+      claim_epoch: diskClaim.claim_epoch
+    }
+  };
+
+  cache.set(requestId, entry);
+  persistCache();
+
+  return {
+    success: true,
+    entry: entry,
+    rehydrated: true
+  };
+}
+
 function buildExecutionDescriptor(requestId, taskEntry, executionClaimId) {
   if (!taskEntry) {
     return null;
@@ -1098,8 +1221,9 @@ module.exports = {
   getAllTasks,
   getTasksByStatus,
   deleteTask,
-  resetRegistry,
-  rehydrateTask,
+   resetRegistry,
+   resetMemoryCache,
+   rehydrateTask,
   loadFromFile,
   persistCache,
   REGISTRY_FILE,
@@ -1120,8 +1244,9 @@ module.exports = {
    verifyConfig,
    claimExecutionContext,
    releaseExecutionClaim,
-   getExecutionClaim,
-   buildExecutionDescriptor,
+    getExecutionClaim,
+    rehydrateTaskFromCallback,
+    buildExecutionDescriptor,
    transitionToExecuting,
    CLAIMS_DIR,
    CLAIM_STALE_MS
