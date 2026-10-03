@@ -133,13 +133,13 @@ runTest('no + string-concatenation operators inside ANY GitHub Actions expressio
 
 runTest('empty task_mode defaults to REVIEW before comparison', () => {
   assert.ok(modeExpr, 'mode expression missing');
-  const re = /\(steps\.orchestration_context\.outputs\.task_mode \|\| 'REVIEW'\) == 'REVIEW'/;
+  const re = /\(steps\.orchestration_context_wfd\.outputs\.task_mode \|\| steps\.orchestration_context_ic\.outputs\.task_mode \|\| 'REVIEW'\) == 'REVIEW'/;
   assert.ok(re.test(modeExpr), "expected (task_mode || 'REVIEW') == 'REVIEW' in the mode expression");
 });
 
 runTest('VERIFY_RECONCILE comparison also defaults empty task_mode to REVIEW', () => {
   assert.ok(modeExpr, 'mode expression missing');
-  const re = /\(steps\.orchestration_context\.outputs\.task_mode \|\| 'REVIEW'\) == 'VERIFY_RECONCILE'/;
+  const re = /\(steps\.orchestration_context_wfd\.outputs\.task_mode \|\| steps\.orchestration_context_ic\.outputs\.task_mode \|\| 'REVIEW'\) == 'VERIFY_RECONCILE'/;
   assert.ok(re.test(modeExpr), "expected (task_mode || 'REVIEW') == 'VERIFY_RECONCILE'");
 });
 

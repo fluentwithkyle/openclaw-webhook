@@ -1016,33 +1016,61 @@ runTest('Gemini invocation - consumes descriptor values via orchestration_contex
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const geminiSection = mainRawLocal.slice(mainRawLocal.indexOf('Run Gemini in advisory mode'));
 
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.request_id'),
-        'Gemini invocation must consume request_id from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.task'),
-        'Gemini invocation must consume task from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.repository'),
-        'Gemini invocation must consume repository from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.base_branch'),
-        'Gemini invocation must consume base_branch from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.task_mode'),
-        'Gemini invocation must consume task_mode from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.capabilities'),
-        'Gemini invocation must consume capabilities from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.permitted_paths'),
-        'Gemini invocation must consume permitted_paths from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.execution_claim_id'),
-        'Gemini invocation must consume execution_claim_id from orchestration context (descriptor)');
-    assert.ok(geminiSection.includes('steps.orchestration_context.outputs.carrier_identity'),
-        'Gemini invocation must consume carrier_identity from orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.request_id'),
+        'Gemini invocation must consume request_id from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.request_id'),
+        'Gemini invocation must also consume request_id from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.task'),
+        'Gemini invocation must consume task from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.task'),
+        'Gemini invocation must also consume task from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.repository'),
+        'Gemini invocation must consume repository from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.repository'),
+        'Gemini invocation must also consume repository from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.base_branch'),
+        'Gemini invocation must consume base_branch from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.base_branch'),
+        'Gemini invocation must also consume base_branch from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.task_mode'),
+        'Gemini invocation must consume task_mode from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.task_mode'),
+        'Gemini invocation must also consume task_mode from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.capabilities'),
+        'Gemini invocation must consume capabilities from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.capabilities'),
+        'Gemini invocation must also consume capabilities from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.permitted_paths'),
+        'Gemini invocation must consume permitted_paths from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.permitted_paths'),
+        'Gemini invocation must also consume permitted_paths from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.execution_claim_id'),
+        'Gemini invocation must consume execution_claim_id from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.execution_claim_id'),
+        'Gemini invocation must also consume execution_claim_id from issue_comment orchestration context (descriptor)');
+
+    assert.ok(geminiSection.includes('steps.orchestration_context_wfd.outputs.carrier_identity'),
+        'Gemini invocation must consume carrier_identity from workflow_dispatch orchestration context (descriptor)');
+    assert.ok(geminiSection.includes('steps.orchestration_context_ic.outputs.carrier_identity'),
+        'Gemini invocation must also consume carrier_identity from issue_comment orchestration context (descriptor)');
 });
 
 runTest('Callback - preserves request/claim/carrier correlation in ACP report payload', () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const callbackSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare ACP report payload'));
 
-    assert.ok(callbackSection.includes('steps.orchestration_context.outputs.execution_claim_id'),
+    assert.ok(callbackSection.includes('steps.orchestration_context_wfd.outputs.execution_claim_id') ||
+               callbackSection.includes('steps.orchestration_context_ic.outputs.execution_claim_id'),
         'Callback payload must include execution_claim_id from orchestration context');
-    assert.ok(callbackSection.includes('steps.orchestration_context.outputs.carrier_identity'),
+    assert.ok(callbackSection.includes('steps.orchestration_context_wfd.outputs.carrier_identity') ||
+               callbackSection.includes('steps.orchestration_context_ic.outputs.carrier_identity'),
         'Callback payload must include carrier_identity from orchestration context');
     assert.ok(callbackSection.includes('x-gemini-callback-secret'),
         'Callback must include authentication header');

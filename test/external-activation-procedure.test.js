@@ -155,14 +155,30 @@ runTest('Procedure - gemini-builder.yml orchestration context consumes execution
 });
 
 runTest('Procedure - Gemini invocation consumes descriptor values via orchestration_context outputs', () => {
-    const geminiSection = mainRaw.slice(mainRaw.indexOf('Run Gemini in advisory mode'));
-    assertTrue(geminiSection.includes('steps.orchestration_context.outputs.request_id'), 'Gemini must consume request_id from orchestration_context');
-    assertTrue(geminiSection.includes('steps.orchestration_context.outputs.task'), 'Gemini must consume task from orchestration_context');
-    assertTrue(geminiSection.includes('steps.orchestration_context.outputs.repository'), 'Gemini must consume repository from orchestration_context');
-    assertTrue(geminiSection.includes('steps.orchestration_context.outputs.base_branch'), 'Gemini must consume base_branch from orchestration_context');
-    assertTrue(geminiSection.includes('steps.orchestration_context.outputs.task_mode'), 'Gemini must consume task_mode from orchestration_context');
-    assertTrue(geminiSection.includes('steps.orchestration_context.outputs.capabilities'), 'Gemini must consume capabilities from orchestration_context');
-    assertTrue(geminiSection.includes('steps.orchestration_context.outputs.permitted_paths'), 'Gemini must consume permitted_paths from orchestration_context');
+    const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
+    const geminiSection = mainRawLocal.slice(mainRawLocal.indexOf('Run Gemini in advisory mode'));
+
+    assertTrue(geminiSection.includes('steps.orchestration_context_wfd.outputs.request_id') ||
+               geminiSection.includes('steps.orchestration_context_ic.outputs.request_id'),
+        'Gemini must consume request_id from orchestration context (descriptor)');
+    assertTrue(geminiSection.includes('steps.orchestration_context_wfd.outputs.task') ||
+               geminiSection.includes('steps.orchestration_context_ic.outputs.task'),
+        'Gemini must consume task from orchestration context (descriptor)');
+    assertTrue(geminiSection.includes('steps.orchestration_context_wfd.outputs.repository') ||
+               geminiSection.includes('steps.orchestration_context_ic.outputs.repository'),
+        'Gemini must consume repository from orchestration context (descriptor)');
+    assertTrue(geminiSection.includes('steps.orchestration_context_wfd.outputs.base_branch') ||
+               geminiSection.includes('steps.orchestration_context_ic.outputs.base_branch'),
+        'Gemini must consume base_branch from orchestration context (descriptor)');
+    assertTrue(geminiSection.includes('steps.orchestration_context_wfd.outputs.task_mode') ||
+               geminiSection.includes('steps.orchestration_context_ic.outputs.task_mode'),
+        'Gemini must consume task_mode from orchestration context (descriptor)');
+    assertTrue(geminiSection.includes('steps.orchestration_context_wfd.outputs.capabilities') ||
+               geminiSection.includes('steps.orchestration_context_ic.outputs.capabilities'),
+        'Gemini must consume capabilities from orchestration context (descriptor)');
+    assertTrue(geminiSection.includes('steps.orchestration_context_wfd.outputs.permitted_paths') ||
+               geminiSection.includes('steps.orchestration_context_ic.outputs.permitted_paths'),
+        'Gemini must consume permitted_paths from orchestration context (descriptor)');
 });
 
 runTest('Procedure - Gemini Builder invocation consumes descriptor values via orchestration_context outputs', () => {
@@ -309,12 +325,11 @@ runTest('Procedure - callback payload preserves request/claim/carrier correlatio
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const callbackSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare ACP report payload'));
 
-    assertTrue(callbackSection.includes('steps.orchestration_context.outputs.execution_claim_id') ||
-               callbackSection.includes("jq -r '.request_id' \"$DESCRIPTOR_FILE\"'"),
-        'Callback payload must include request_id (from descriptor or orchestration_context)');
-    assertTrue(callbackSection.includes('steps.orchestration_context.outputs.execution_claim_id'),
+    assertTrue(callbackSection.includes('steps.orchestration_context_wfd.outputs.execution_claim_id') ||
+               callbackSection.includes('steps.orchestration_context_ic.outputs.execution_claim_id'),
         'Callback payload must include execution_claim_id from orchestration context');
-    assertTrue(callbackSection.includes('steps.orchestration_context.outputs.carrier_identity'),
+    assertTrue(callbackSection.includes('steps.orchestration_context_wfd.outputs.carrier_identity') ||
+               callbackSection.includes('steps.orchestration_context_ic.outputs.carrier_identity'),
         'Callback payload must include carrier_identity from orchestration context');
     assertTrue(callbackSection.includes('x-gemini-callback-secret'),
         'Callback must include authentication header');
@@ -368,11 +383,11 @@ runTest('Procedure - server-derived authority overrides externally claimed capab
 });
 
 runTest('Procedure - workflow does not reconstruct authority from workflow inputs', () => {
-    assertTrue(mainRaw.includes('ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}'),
+    assertTrue(mainRaw.includes('ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode }}'),
         'main.yml must source task_mode from orchestration_context (descriptor), not inputs');
-    assertTrue(mainRaw.includes('ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}'),
+    assertTrue(mainRaw.includes('ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context_wfd.outputs.capabilities || steps.orchestration_context_ic.outputs.capabilities }}'),
         'main.yml must source capabilities from orchestration_context (descriptor), not inputs');
-    assertTrue(mainRaw.includes('ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}'),
+    assertTrue(mainRaw.includes('ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths }}'),
         'main.yml must source permitted_paths from orchestration_context (descriptor), not inputs');
 
     assertTrue(builderRaw.includes('ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}'),
