@@ -160,16 +160,27 @@ jobs:
             exit 1
           fi
 
-          node poc/validate-external-activation.js gemini-workflow-dispatch "{
-            \"request_id\": \"$REQUEST_ID\",
-            \"task\": \"$TASK\",
-            \"repository\": \"$REPOSITORY\",
-            \"base_branch\": \"$BASE_BRANCH\",
-            \"task_mode\": \"$TASK_MODE\",
-            \"capabilities\": \"$CAPABILITIES\",
-            \"permitted_paths\": \"$PERMITTED_PATHS\",
-            \"verification\": \"$VERIFICATION\"
-          }"
+          ACTIVATION_JSON=$(jq -n \\
+            --arg request_id "$REQUEST_ID" \\
+            --arg task "$TASK" \\
+            --arg repository "$REPOSITORY" \\
+            --arg base_branch "$BASE_BRANCH" \\
+            --arg task_mode "$TASK_MODE" \\
+            --arg capabilities "$CAPABILITIES" \\
+            --arg permitted_paths "$PERMITTED_PATHS" \\
+            --arg verification "$VERIFICATION" \\
+            '{
+              request_id: $request_id,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              task_mode: $task_mode,
+              capabilities: $capabilities,
+              permitted_paths: $permitted_paths,
+              verification: $verification
+            }')
+
+          node poc/validate-external-activation.js gemini-workflow-dispatch "$ACTIVATION_JSON"
 
           echo "activation_validated=true" >> "$GITHUB_OUTPUT"
 
