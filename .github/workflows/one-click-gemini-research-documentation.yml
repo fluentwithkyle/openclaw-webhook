@@ -146,7 +146,7 @@ jobs:
             "/repos/${REPOSITORY}/actions/workflows/main.yml/dispatches" \
             -F ref="main" \
             -F "inputs[request_id]=${REQUEST_ID}" \
-            -F "inputs[task]=$(cat "${TASK_FILE}")" \
+            -f "inputs[task]=$(cat "${TASK_FILE}")" \
             -F "inputs[repository]=${REPOSITORY}" \
             -F "inputs[base_branch]=main" \
             -F "inputs[task_mode]=RESEARCH_DOCUMENT" \
