@@ -34,90 +34,87 @@ jobs:
           - run_tests
           - commit
           - push
+
           objective: >
-            Exercise the callback-correlation correction end-to-end through the
-            canonical Gemini Builder external-activation path so that the
-            execution_claim_id and carrier_identity are correctly correlated in
-            TaskRegistry and the Builder callback report.
+            Diagnose and fix the Gemini Builder external-activation callback
+            correlation failure. The Builder execution reaches the Gemini CLI
+            successfully, but the final callback currently returns HTTP 404
+            "Unknown request_id". Trace the canonical request correlation path
+            from external activation ingress through TaskRegistry and the Builder
+            execution descriptor to the callback receiver. Identify the actual
+            repository-level source of the failure and implement the smallest
+            repository-native correction that restores correct callback
+            correlation while preserving server-derived authority, execution-claim
+            correlation, and carrier identity.
+
           scope:
             permitted_paths:
-            - .github/workflows/one-click-gemini-builder-callback-correlation.yml
+            - .github/workflows/gemini-builder.yml
+            - poc/**
+            - services/**
+            - tests/**
             - docs/ai/**
           architectural_boundary:
-            one-click Gemini Builder activation
-            canonical external activation ingress
-            server-derived execution descriptor
-            Gemini Builder execution carrier
-            Builder ACP callback
+            external activation
+            canonical activation ingress
+            TaskRegistry correlation
+            Builder execution descriptor
+            Builder callback receiver
           out_of_scope:
-            modification of .github/workflows/one-click-gemini-builder-smoke.yml
-            modification of .github/workflows/gemini-builder.yml
-            modification of poc/**
-            modification of services/**
-            modification of tests/**
-            modification of callback implementation
-            modification of TaskRegistry
             new control plane
-            new callback mechanism
+            new callback architecture
+            replacement canonical activation
+            unrelated workflow changes
+            research/documentation workflows
+
           verification:
             required:
-              - Inspect the current repository implementation before changing anything.
-              - Read GEMINI.md, ARCHITECTURE.md, docs/ai/TASK_STANDARD.md, docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md,
-                and the existing one-click Gemini Builder workflow before implementation.
-              - Confirm the existing one-click workflow architecture and canonical external-activation path.
-              - Create exactly one new zero-input workflow at:
-                .github/workflows/one-click-gemini-builder-callback-correlation.yml
-              - The new workflow must use workflow_dispatch with zero required manual inputs.
-              - The workflow must reuse the canonical external-activation ingress and existing
-                Gemini Builder carrier architecture.
-              - The workflow must construct and submit the complete ACP task:
-                TASK-GEMINI-BUILDER-CALLBACK-CORRELATION-FIX-001
-              - Preserve the complete task envelope, including its objective, permitted paths,
-                verification requirements, constraints, and completion report requirements.
-              - The workflow must obtain authority-bearing execution fields from the
-                server-derived execution descriptor rather than treating workflow-local
-                values as authority.
-              - Preserve execution_claim_id and carrier_identity correlation.
-              - Preserve the existing Builder callback/evidence path.
-              - Do not introduce a second TaskRegistry, control plane, callback endpoint,
-                authorization mechanism, or correlation mechanism.
-              - Validate the resulting YAML syntax and GitHub Actions structure before
-                committing.
-              - Run applicable repository validation/tests for the workflow if available.
-              - Inspect git diff and confirm only authorized files changed.
-              - Commit the workflow with a descriptive commit message.
-              - Push the commit to main.
-              - Report the final commit SHA.
-              - Report the exact workflow path and GitHub Actions workflow name.
-              - Do not claim the end-to-end Builder execution succeeded merely because the
-                workflow was created or YAML validation passed. Live execution will be
-                performed separately after Render deployment is confirmed.
+            - Inspect repository instructions and architecture before implementation.
+            - Trace the exact request_id from canonical external activation through Builder execution and callback.
+            - Identify the actual repository-level source of the Unknown request_id failure.
+            - Preserve server-derived authority fields.
+            - Preserve execution_claim_id correlation.
+            - Preserve carrier_identity correlation.
+            - Implement the smallest repository-native correction.
+            - Add or update focused tests covering the corrected correlation path.
+            - Run the focused tests and report exact results.
+            - Run applicable broader repository tests and report exact results.
+            - Inspect git diff and confirm the correction is limited to the authorized scope.
+            - Commit and push the implementation.
+            - Run the existing one-click Gemini Builder workflow or repository-native equivalent when the required runtime is available.
+            - Verify the callback reaches the correct original request_id without HTTP 404 "Unknown request_id".
+            - Report any live-environment blocker separately from repository verification.
+
           constraints:
-            smallest-change: true
-            preserve-existing-architecture: true
-            zero-input-workflow-dispatch: true
-            preserve-canonical-ingress: true
-            preserve-server-derived-authority: true
-            preserve-existing-execution-claim: true
-            preserve-carrier-identity-correlation: true
-            preserve-existing-builder-callback: true
-            no-second-control-plane: true
-            no-second-task-registry: true
-            no-new-callback-mechanism: true
-            no-modification-of-existing-smoke-workflow: true
-            no-modification-of-gemini-builder-carrier: true
-            no-runtime-source-changes: true
-            no-secrets-in-task-or-commits: true
-            persistence_expectation: same_execution
-            deliverable_commit: true
-            deliverable_push: true
-            verification_requires_commit_sha: true
-          conflict_handling: >
-            Repository instructions and the canonical one-click/external-activation
-            architecture take precedence. If the existing architecture cannot support
-            the requested dedicated workflow within the declared scope, report BLOCKED
-            with the exact repository evidence and the smallest additional scope
-            required. Do not create a workaround or alternate activation path.'
+          - smallest-change
+          - preserve-existing-architecture
+          - preserve-canonical-ingress
+          - preserve-server-derived-authority
+          - preserve-execution-claim-correlation
+          - preserve-carrier-identity-correlation
+          - no-new-control-plane
+          - no-new-callback-mechanism
+          - no-unrelated-refactoring
+          - no-secrets
+          - persistence_expectation: same_execution
+          - deliverable_commit: true
+          - deliverable_push: true
+          - verification_requires_commit_sha: true
+
+          completion_report:
+            status: SUCCESS | BLOCKED
+            task_name: TASK-GEMINI-BUILDER-CALLBACK-CORRELATION-FIX-001
+            root_cause: ""
+            correction: ""
+            changed_files: []
+            focused_tests: []
+            broader_tests: []
+            live_workflow_verification: {}
+            callback_request_id: ""
+            callback_status: ""
+            commit_sha: ""
+            pushed_to: main
+            remaining_blockers: []'
 
           {
             echo 'request_id<<EOF'
