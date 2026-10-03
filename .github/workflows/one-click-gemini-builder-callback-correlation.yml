@@ -161,8 +161,8 @@ jobs:
               request_id: $request_id,
               target: $target,
               task_mode: $task_mode,
-              capabilities: ["read_only", "modify_files", "run_tests", "commit", "push"],
-              permitted_paths: ["poc/"],
+              capabilities: ["inspect", "modify_files", "run_tests", "commit", "push"],
+              permitted_paths: [".github/workflows/gemini-builder.yml", "poc/**", "services/**", "tests/**", "docs/ai/**"],
               repository: $repository,
               base_branch: $base_branch
             }')
@@ -199,8 +199,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           BASE_BRANCH: main
           TASK_MODE: BUILDER
-          CAPABILITIES: read_only,modify_files,run_tests,commit,push
-          PERMITTED_PATHS: poc/
+          CAPABILITIES: inspect,modify_files,run_tests,commit,push
+          PERMITTED_PATHS: .github/workflows/gemini-builder.yml,poc/**,services/**,tests/**,docs/ai/**
           APPROVAL_ID: ${{ steps.director_approval.outputs.approval_id }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
@@ -284,7 +284,7 @@ jobs:
             jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'carrier_identity<<EOF'
-            printf '%s\n' "${{ steps.validate_activation.outputs.carrier_identity }}"
+            jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
