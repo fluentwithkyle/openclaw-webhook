@@ -9,6 +9,9 @@
 ---
 
 ---
+2026-10-05 | TASK-GEMINI-MACHINE-ENFORCEMENT-PROCEDURAL-FAILURE-EXPANSION-RESEARCH-001 | Expanded the machine-enforcement research from TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001 to incorporate ten concrete failure classes caused by procedural compliance being relied upon instead of deterministic machine enforcement. Determined the broader repository-native enforcement boundary without implementing production code. Created durable research record docs/ai/research/research-TASK-GEMINI-MACHINE-ENFORCEMENT-PROCEDURAL-FAILURE-EXPANSION-RESEARCH-001.md with VERIFIED/INFERRED/UNKNOWN classifications, failure class analysis, solution simplicity evaluation, and mandatory Roadmap Alignment section. Updated RESEARCH_INDEX.md. Research-only; no source code, workflows, or runtime components modified. | SUCCESS | docs/ai/research/research-TASK-GEMINI-MACHINE-ENFORCEMENT-PROCEDURAL-FAILURE-EXPANSION-RESEARCH-001.md, docs/ai/RESEARCH_INDEX.md
+
+---
 2026-10-05 | TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001 | Determined the repository-native, ACP-compliant mechanism for durably projecting canonical Gemini ACP execution reports onto readable repository evidence without concurrent main-branch push races, resolving remaining questions from TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001. Created durable research record docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001.md with VERIFIED/INFERRED/UNKNOWN classifications, git rebase/retry branch concurrency resolution, and Roadmap Alignment section. Updated RESEARCH_INDEX.md. Research-only; no source code, workflows, or runtime components modified. | SUCCESS | docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001.md, docs/ai/RESEARCH_INDEX.md
 
 ---
