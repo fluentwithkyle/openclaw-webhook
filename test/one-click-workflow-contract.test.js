@@ -26,6 +26,11 @@ const ARCH_DECISIONS_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'ARCH_DECISIONS.md
 const MAIN_WF_PATH = path.join(ROOT_DIR, '.github', 'workflows', 'main.yml');
 const BUILDER_WF_PATH = path.join(ROOT_DIR, '.github', 'workflows', 'gemini-builder.yml');
 const TASK_LOG_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'TASK_LOG.md');
+const ONE_CLICK_DIR = path.join(ROOT_DIR, '.github', 'workflows');
+const ONE_CLICK_VERIFY_WF = path.join(ONE_CLICK_DIR, 'one-click-gemini-activation-verify-reconcile.yml');
+const ONE_CLICK_BUILDER_SMOKE_WF = path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-smoke.yml');
+const ACTIVATION_POLICY_PATH = path.join(ROOT_DIR, 'poc', 'activation-policy.js');
+const ACP_SCHEMA_PATH = path.join(ROOT_DIR, 'poc', 'schemas', 'acp-schema.js');
 
 const contractRaw = fs.readFileSync(CONTRACT_DOC_PATH, 'utf8');
 const startHereRaw = fs.readFileSync(CHATGPT_START_HERE_PATH, 'utf8');
@@ -36,6 +41,16 @@ const archDecisionsRaw = fs.readFileSync(ARCH_DECISIONS_PATH, 'utf8');
 const mainWfRaw = fs.readFileSync(MAIN_WF_PATH, 'utf8');
 const builderWfRaw = fs.readFileSync(BUILDER_WF_PATH, 'utf8');
 const taskLogRaw = fs.readFileSync(TASK_LOG_PATH, 'utf8');
+const oneClickVerifyWfRaw = fs.readFileSync(ONE_CLICK_VERIFY_WF, 'utf8');
+const oneClickBuilderSmokeWfRaw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+const activationPolicyRaw = fs.readFileSync(ACTIVATION_POLICY_PATH, 'utf8');
+const acpSchemaRaw = fs.readFileSync(ACP_SCHEMA_PATH, 'utf8');
+
+function listOneClickWorkflows() {
+    return fs.readdirSync(ONE_CLICK_DIR)
+        .filter(f => /^one-click-.*\.yml$/i.test(f))
+        .sort();
+}
 
 // =========================================================
 // Canonical phrase definition tests
@@ -277,6 +292,362 @@ runTest('Contract - includes summary of invariants', () => {
         'Invariants section must include TaskRegistry reuse');
     assert.ok(/control plane/i.test(invariantsSection),
         'Invariants section must include no-second-control-plane');
+});
+
+// =========================================================
+// Task-to-workflow binding tests
+// =========================================================
+
+runTest('Contract - explicitly establishes task-to-workflow binding requirement', () => {
+    assert.ok(/task-to-workflow.*binding/i.test(contractRaw) || /task-to-workflow binding/i.test(contractRaw),
+        'Contract must contain task-to-workflow binding requirement section');
+});
+
+runTest('Contract - defines embedded canonical ACP task carrier concept', () => {
+    assert.ok(/embedded.*carrier/i.test(contractRaw) || /embedded.*task.*carrier/i.test(contractRaw),
+        'Contract must define embedded task carrier concept');
+    assert.ok(/task_name/i.test(contractRaw),
+        'Contract must reference task_name in binding context');
+});
+
+runTest('Contract - states the exact canonical ACP task must be bound to the embedded carrier', () => {
+    assert.ok(/exact canonical ACP task/i.test(contractRaw),
+        'Contract must reference exact canonical ACP task binding');
+    assert.ok(/embedded carrier/i.test(contractRaw),
+        'Contract must reference embedded carrier');
+});
+
+runTest('Contract - prohibits linking older workflow with different task', () => {
+    assert.ok(/Link an older one-click workflow.*different task/i.test(contractRaw) || /older.*one-click.*different.*task/i.test(contractRaw),
+        'Contract must prohibit linking older workflow with different task');
+});
+
+runTest('Contract - prohibits providing generic workflow page as one-click', () => {
+    assert.ok(/generic workflow page/i.test(contractRaw),
+        'Contract must prohibit generic workflow page as one-click');
+});
+
+runTest('Contract - prohibits run link for workflow whose embedded task differs from requested', () => {
+    assert.ok(/Run workflow link.*embedded task.*different.*requested task/i.test(contractRaw) || /embedded task is different from the requested task/i.test(contractRaw),
+        'Contract must prohibit run link for workflow with different embedded task');
+});
+
+runTest('Contract - prohibits constructing separate ACP task while leaving carrier unchanged', () => {
+    assert.ok(/separate ACP task.*leaving.*carrier unchanged/i.test(contractRaw) || /separate.*ACP task.*carrier.*unchanged/i.test(contractRaw),
+        'Contract must prohibit separate ACP task with unchanged carrier');
+});
+
+runTest('Contract - prohibits claiming readiness based on agent/task-mode alone without matching task', () => {
+    assert.ok(/claim.*ready.*correct agent.*task mode.*different.*task/i.test(contractRaw) || /claim.*ready merely.*correct.*agent.*task mode.*different task/i.test(contractRaw),
+        'Contract must prohibit claiming readiness based on agent/task-mode alone');
+});
+
+// =========================================================
+// Exact-task inspection tests
+// =========================================================
+
+runTest('Contract - requires inspecting the actual workflow file before presenting Run link', () => {
+    assert.ok(/inspect.*actual workflow file/i.test(contractRaw) || /inspect.*actual workflow.*before.*Run link/i.test(contractRaw),
+        'Contract must require inspecting the actual workflow file');
+});
+
+runTest('Contract - requires verifying zero-input in actual workflow inspection', () => {
+    assert.ok(/inspect.*actual workflow file and verify/i.test(contractRaw),
+        'Contract must require verification during inspection');
+    const inspectionSection = contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'));
+    assert.ok(/zero-input/i.test(inspectionSection),
+        'Inspection section must require zero-input check');
+});
+
+runTest('Contract - requires verifying embedded carrier exists in workflow file', () => {
+    const inspectionSection = contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'));
+    assert.ok(/embedded carrier exists/i.test(inspectionSection),
+        'Inspection must verify embedded carrier existence');
+});
+
+runTest('Contract - requires verifying target_agent matches requested agent', () => {
+    const inspectionSection = contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'));
+    assert.ok(/target_agent.*matches.*requested agent/i.test(inspectionSection),
+        'Inspection must verify target_agent match');
+});
+
+runTest('Contract - requires verifying task_name matches requested task', () => {
+    const inspectionSection = contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'));
+    assert.ok(/task_name.*matches.*requested task/i.test(inspectionSection),
+        'Inspection must verify task_name match');
+});
+
+runTest('Contract - requires verifying task_mode matches requested task mode', () => {
+    const inspectionSection = contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'));
+    assert.ok(/task_mode.*matches.*requested task mode/i.test(inspectionSection),
+        'Inspection must verify task_mode match');
+});
+
+runTest('Contract - requires verifying objective/scope correspondence', () => {
+    const inspectionSection = contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'));
+    assert.ok(/objective.*scope.*correspond/i.test(inspectionSection) || /objective\/scope.*correspond/i.test(inspectionSection),
+        'Inspection must verify objective/scope correspondence');
+});
+
+runTest('Contract - requires verifying authority fields remain server-derived', () => {
+    const inspectionSection = contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'));
+    assert.ok(/authority-bearing fields.*server-side activation policy/i.test(inspectionSection),
+        'Inspection must verify server-derived authority preservation');
+});
+
+// =========================================================
+// Dedicated workflow tests
+// =========================================================
+
+runTest('Contract - requires dedicated workflow when existing workflow has different task', () => {
+    assert.ok(/Dedicated Workflow When Necessary/i.test(contractRaw),
+        'Contract must have dedicated workflow section');
+    const section = contractRaw.slice(contractRaw.indexOf('Dedicated Workflow'));
+    assert.ok(/create.*update.*workflow.*different task/i.test(section),
+        'Contract must require creating/updating workflow when task differs');
+    assert.ok(/must not silently reuse/i.test(section),
+        'Contract must prohibit silently reusing old workflow');
+});
+
+// =========================================================
+// Run-link validity tests
+// =========================================================
+
+runTest('Contract - requires independent verification before Run link presentation', () => {
+    assert.ok(/Run-Link Validity/i.test(contractRaw),
+        'Contract must have run-link validity section');
+    const section = contractRaw.slice(contractRaw.indexOf('Run-Link Validity'));
+    assert.ok(/independently inspected.*confirmed.*exact task/i.test(section),
+        'Contract must require independent verification of workflow before Run link');
+});
+
+// =========================================================
+// Task-mode variants tests
+// =========================================================
+
+runTest('Contract - task-to-workflow binding applies to all task modes', () => {
+    assert.ok(/Task-Mode Variants/i.test(contractRaw),
+        'Contract must have task-mode variants subsection');
+    const section = contractRaw.slice(contractRaw.indexOf('## 4.7 Task-Mode Variants'));
+    assert.ok(/RESEARCH_DOCUMENT.*VERIFY_RECONCILE.*REVIEW.*BUILDER.*FAILOVER_EXECUTE/i.test(section),
+        'Contract must list all policy-supported task modes');
+});
+
+// =========================================================
+// Verification vs workflow construction tests
+// =========================================================
+
+runTest('Contract - distinguishes workflow construction from execution verification', () => {
+    assert.ok(/Verification vs.*Workflow Construction/i.test(contractRaw) || /Verification vs. Workflow Construction/i.test(contractRaw),
+        'Contract must have verification vs construction distinction section');
+    const section = contractRaw.slice(contractRaw.indexOf('Verification vs. Workflow Construction'));
+    assert.ok(/Constructing.*preparing.*one-click workflow/i.test(section),
+        'Contract must distinguish workflow construction');
+    assert.ok(/Director.*clicking Run workflow/i.test(section),
+        'Contract must distinguish Director Run click');
+    assert.ok(/Verifying.*resulting execution/i.test(section),
+        'Contract must distinguish execution verification');
+    assert.ok(/must not confuse.*workflow artifact.*proof.*executed/i.test(section),
+        'Contract must prohibit confusing artifact with execution proof');
+});
+
+// =========================================================
+// Coordinator decision rule tests
+// =========================================================
+
+runTest('Contract - includes explicit coordinator decision rule', () => {
+    assert.ok(/Coordinator Decision Rule/i.test(contractRaw),
+        'Contract must have coordinator decision rule section');
+    const section = contractRaw.slice(contractRaw.indexOf('Coordinator Decision Rule'));
+    assert.ok(/workflow is the executable carrier of the requested one-click task/i.test(section),
+        'Decision rule must state workflow is the executable carrier');
+    assert.ok(/must verify.*embedded task.*before.*presenting.*Run/i.test(section),
+        'Decision rule must require verification before Run link');
+});
+
+runTest('Contract - decision rule specifies operational sequence', () => {
+    const section = contractRaw.slice(contractRaw.indexOf('Coordinator Decision Rule'));
+    assert.ok(/Inspect requested task.*inspect candidate workflow.*verify exact embedded task binding.*create\/update workflow.*verify.*present Run link.*Director executes.*inspect resulting/i.test(section),
+        'Decision rule must specify operational sequence');
+});
+
+// =========================================================
+// Protocol correction tests
+// =========================================================
+
+runTest('Protocol - Section 11.2 includes task-to-workflow binding in coordinator procedure', () => {
+    assert.ok(protocolRaw.includes('task-to-workflow binding') || /task-to-workflow.*binding/i.test(protocolRaw.slice(protocolRaw.indexOf('### 11.2'))),
+        'Protocol Section 11.2 must reference task-to-workflow binding');
+});
+
+runTest('Protocol - Section 11.2 includes no-task-substitution prohibition', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/no-task-substitution|task substitution/i.test(section),
+        'Protocol Section 11.2 must reference no-task-substitution');
+});
+
+runTest('Protocol - Section 11.2 includes coordinator decision rule', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/coordinator decision rule|executable carrier.*embedded task/i.test(section),
+        'Protocol Section 11.2 must reference coordinator decision rule');
+});
+
+runTest('Protocol - Section 11.2 includes protocol correction for operational sequence', () => {
+    assert.ok(/Protocol correction/i.test(protocolRaw) || /operational sequence.*inspect.*verify.*create\/update.*verify.*present.*Director.*click.*inspect/i.test(protocolRaw),
+        'Protocol must include the corrected operational sequence');
+});
+
+// =========================================================
+// One-click workflow file structure tests
+// =========================================================
+
+runTest('One-click workflows - have zero-input workflow_dispatch (no required inputs)', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    assert.ok(oneClickWorkflows.length > 0, 'There must be at least one one-click workflow file');
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/on:\s*\n\s*workflow_dispatch:/.test(wfRaw) || /on:\s*$/.test(wfRaw) || /workflow_dispatch/.test(wfRaw),
+            `${wf} must use workflow_dispatch trigger`);
+        assert.ok(!/required:\s*true/.test(wfRaw), `${wf} must not have any required inputs`);
+    }
+});
+
+runTest('One-click workflows - embed a canonical ACP task carrier with task_name', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/task_name:/i.test(wfRaw),
+            `${wf} must embed a task_name field in its carrier`);
+    }
+});
+
+runTest('One-click workflows - embed target_agent field in carrier', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/target_agent:/i.test(wfRaw),
+            `${wf} must embed a target_agent field in its carrier`);
+    }
+});
+
+runTest('One-click workflows - embed task_mode field in carrier', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/task_mode:/i.test(wfRaw),
+            `${wf} must embed a task_mode field in its carrier`);
+    }
+});
+
+runTest('One-click workflows - embed objective field in carrier', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/objective:/i.test(wfRaw),
+            `${wf} must embed an objective field in its carrier`);
+    }
+});
+
+runTest('One-click workflows - embed verification field in carrier', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/verification:/i.test(wfRaw),
+            `${wf} must embed a verification field in its carrier`);
+    }
+});
+
+runTest('One-click workflows - embed capabilities field in carrier', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/capabilities:/i.test(wfRaw),
+            `${wf} must embed a capabilities field in its carrier`);
+    }
+});
+
+runTest('One-click workflows - embed constraints field in carrier', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    let allHaveConstraints = true;
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        if (!/constraints:/i.test(wfRaw)) {
+            allHaveConstraints = false;
+        }
+    }
+    assert.ok(allHaveConstraints, 'All one-click workflows must embed a constraints field in carrier');
+});
+
+runTest('One-click workflows - route through canonical external-activation ingress (direct or via dispatch to main.yml)', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        const routesViaIngress = /validate-external-activation\.js/i.test(wfRaw) ||
+            /actions\/workflows\/main\.yml\/dispatches/i.test(wfRaw);
+        assert.ok(routesViaIngress,
+            `${wf} must either call poc/validate-external-activation.js or dispatch to main.yml (canonical carrier)`);
+    }
+});
+
+runTest('One-click workflows - consume server-derived descriptor via jq (direct) or dispatch with server-derived inputs (via main.yml)', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        const consumesDescriptor = /jq.*execution-descriptor\.json|execution-descriptor\.json.*jq/i.test(wfRaw) ||
+            /DESCRIPTOR_FILE.*execution-descriptor\.json/i.test(wfRaw) ||
+            /actions\/workflows\/main\.yml\/dispatches/i.test(wfRaw);
+        assert.ok(consumesDescriptor,
+            `${wf} must consume execution-descriptor.json via jq or dispatch to main.yml carrier`);
+    }
+});
+
+// =========================================================
+// Contract vs architecture consistency tests
+// =========================================================
+
+runTest('Contract - does not create second control plane, TaskRegistry, or activation mechanism', () => {
+    const prohibitedSection = contractRaw.slice(contractRaw.indexOf('## 6. Prohibited Patterns'));
+    assert.ok(/second control plane/i.test(prohibitedSection),
+        'Prohibited Patterns must list second control plane');
+    assert.ok(/second TaskRegistry/i.test(prohibitedSection),
+        'Prohibited Patterns must list second TaskRegistry');
+    assert.ok(/alternate authorization/i.test(prohibitedSection),
+        'Prohibited Patterns must list alternate authorization');
+    assert.ok(/alternate activation/i.test(prohibitedSection),
+        'Prohibited Patterns must list alternate activation');
+});
+
+runTest('Contract - Section 11.2 operational sequence includes all required steps', () => {
+    assert.ok(/Inspect requested task/i.test(protocolRaw),
+        'Protocol must include "Inspect requested task" in operational sequence');
+    assert.ok(/inspect candidate workflow/i.test(protocolRaw),
+        'Protocol must include "inspect candidate workflow" in operational sequence');
+    assert.ok(/verify exact[\s\S]*?task[\s\S]*?binding/i.test(protocolRaw),
+        'Protocol must include "verify exact task binding" in operational sequence');
+    assert.ok(/create\/update workflow if binding/i.test(protocolRaw),
+        'Protocol must include "create/update workflow if binding" in operational sequence');
+    assert.ok(/verify workflow/i.test(protocolRaw),
+        'Protocol must include "verify workflow" in operational sequence');
+    assert.ok(/present Run link/i.test(protocolRaw),
+        'Protocol must include "present Run link" in operational sequence');
+    assert.ok(/Director executes click/i.test(protocolRaw),
+        'Protocol must include "Director executes click" in operational sequence');
+    assert.ok(/inspect resulting[\s\S]*?execution/i.test(protocolRaw),
+        'Protocol must include "inspect resulting execution" in operational sequence');
+});
+
+runTest('Contract - does not modify external-activation procedure (Section 13 reference remains intact)', () => {
+    assert.ok(externalActRaw.includes('ONE_CLICK_WORKFLOW_CONTRACT'),
+        'EXTERNAL_ACTIVATION_PROCEDURE.md must still reference the contract');
+    assert.ok(externalActRaw.includes('## 13. One-Click Workflow'),
+        'EXTERNAL_ACTIVATION_PROCEDURE.md must still have Section 13 for one-click workflow');
+});
+
+runTest('Contract - ACP schema and activation policy referenced for task-mode and capability constraints', () => {
+    assert.ok(/VALID_TASK_MODES/i.test(acpSchemaRaw),
+        'ACP schema must define valid task modes');
+    assert.ok(/FAILOVER_EXECUTE|BUILDER|VERIFY_RECONCILE|RESEARCH_DOCUMENT/i.test(activationPolicyRaw),
+        'Activation policy must define all task modes');
 });
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
