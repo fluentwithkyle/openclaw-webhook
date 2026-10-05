@@ -285,7 +285,7 @@ runTest('Contract - includes invariants summary table', () => {
 });
 
 runTest('Contract - includes summary of invariants', () => {
-    const invariantsSection = contractRaw.slice(contractRaw.indexOf('## 10. Summary'));
+    const invariantsSection = contractRaw.slice(contractRaw.indexOf('## 11. Summary'));
     assert.ok(/zero/i.test(invariantsSection) && /input/i.test(invariantsSection),
         'Invariants section must include zero-input constraint');
     assert.ok(invariantsSection.includes('TaskRegistry'),
@@ -598,6 +598,183 @@ runTest('One-click workflows - consume server-derived descriptor via jq (direct)
             /actions\/workflows\/main\.yml\/dispatches/i.test(wfRaw);
         assert.ok(consumesDescriptor,
             `${wf} must consume execution-descriptor.json via jq or dispatch to main.yml carrier`);
+    }
+});
+
+// =========================================================
+// Workflow registration / runnability gate tests
+// =========================================================
+
+const INCIDENT_DOC_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'GEMINI_WORKFLOW_REGISTRATION_INCIDENT_2026-09-16.md');
+const incidentRaw = fs.readFileSync(INCIDENT_DOC_PATH, 'utf8');
+
+runTest('Contract - Section 9 establishes the workflow registration & runnability gate', () => {
+    assert.ok(/## 9\. Workflow Registration & Runnability Gate|## 9\. Registration & Runnability/i.test(contractRaw),
+        'Contract must have a Section 9 for the registration/runnability gate');
+    const section = contractRaw.slice(contractRaw.indexOf('## 9'));
+    const sectionEnd = contractRaw.indexOf('## 10', contractRaw.indexOf('## 9'));
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), sectionEnd);
+    assert.ok(/registration/i.test(gateSection),
+        'Section 9 must reference workflow registration');
+    assert.ok(/runnability/i.test(gateSection),
+        'Section 9 must reference workflow runnability');
+});
+
+runTest('Contract - registration gate rejects "file exists + workflow_dispatch" as proof of GitHub recognition', () => {
+    assert.ok(/workflow file.{0,40}existing on the repository default branch.{0,200}does.{0,30}NOT.{0,200}registered/i.test(contractRaw) ||
+        /does.{0,30}NOT.{0,200}establish.{0,200}GitHub Actions has registered/i.test(contractRaw),
+        'Contract must state that file existence does not establish GitHub registration');
+});
+
+runTest('Contract - references the 2026-09-16 workflow registration incident', () => {
+    assert.ok(/GEMINI_WORKFLOW_REGISTRATION_INCIDENT_2026-09-16/i.test(contractRaw),
+        'Contract must reference the registration incident document');
+    assert.ok(/2026-09-16/i.test(contractRaw),
+        'Contract must reference the incident date');
+});
+
+runTest('Contract - registration gate cites HTTP 422 workflow_dispatch registration failure', () => {
+    assert.ok(/422/i.test(contractRaw),
+        'Contract must reference the HTTP 422 registration failure');
+});
+
+runTest('Contract - registration gate requires independent GitHub-hosted signal for registration/runnability', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/authoritative GitHub-hosted signal|authoritative GitHub signal|GitHub-hosted registration signal/i.test(gateSection),
+        'Gate must require an authoritative GitHub-hosted registration signal');
+});
+
+runTest('Contract - registration gate documents GitHub API workflows endpoint as authoritative signal', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/actions\/workflows[\s\S]*workflow|GET.*workflows/i.test(gateSection),
+        'Gate must reference the GitHub workflows API as an authoritative signal');
+});
+
+runTest('Contract - registration gate documents workflow state: active as the recognized signal', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/state:\s*active|state.*active/i.test(gateSection),
+        'Gate must reference state: active as the recognized signal');
+});
+
+runTest('Contract - registration gate documents "Run workflow" dropdown as an authoritative signal', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/Run workflow.*dropdown|Run workflow dropdown/i.test(gateSection),
+        'Gate must reference the Run workflow dropdown as an authoritative signal');
+});
+
+runTest('Contract - registration gate requires a dispatchable run as authoritative evidence', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/dispatchable|workflow_dispatch.*run.*transition|actual.*workflow_dispatch.*run/i.test(gateSection),
+        'Gate must reference an actual dispatchable run as authoritative evidence');
+});
+
+runTest('Contract - registration gate is fail-closed (BLOCKED / NOT READY when signal unavailable)', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/BLOCKED.*NOT READY|fail.*closed/i.test(gateSection),
+        'Gate must specify BLOCKED/NOT READY when registration cannot be established');
+});
+
+runTest('Contract - registration gate does not permit Run link on YAML inspection alone', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/YAML inspection.*alone|YAML inspection alone/i.test(gateSection) ||
+        /YAML.*insufficient|insufficient.*YAML/i.test(gateSection),
+        'Gate must prohibit presenting a Run link based on YAML inspection alone');
+});
+
+runTest('Contract - registration gate decision procedure checks GitHub signal before presenting Run link', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/present.*Run link|Run link.*present/i.test(gateSection) || /not.*present.*Run link/i.test(gateSection),
+        'Gate decision procedure must reference presenting (or withholding) the Run link');
+});
+
+runTest('Contract - registration gate includes VERIFIED / INFERRED / UNKNOWN evidence classification', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/VERIFIED/i.test(gateSection) && /INFERRED/i.test(gateSection) && /UNKNOWN/i.test(gateSection),
+        'Gate must define VERIFIED, INFERRED, and UNKNOWN evidence classifications');
+});
+
+runTest('Contract - registration gate classifies YAML-based inference as INFERRED (not VERIFIED)', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/probably registered.*not.*sufficient|infer.*YAML.*not.*VERIFIED/i.test(gateSection) ||
+        /YAML.*existence.*≠.*registration|file-existence.*not.*registration/i.test(gateSection),
+        'Gate must classify YAML-based registration inference as INFERRED/insufficient');
+});
+
+runTest('Contract - registration gate classifies GitHub API absent/422 as BLOCKED', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/absent.*API|HTTP 422.*BLOCKED|registration failure.*BLOCKED|absent.*dropdown.*BLOCKED/i.test(gateSection) ||
+        /BLOCKED/i.test(gateSection),
+        'Gate must classify GitHub registration failure as BLOCKED');
+});
+
+runTest('Contract - registration gate lists what repo-local tests can prove vs cannot prove', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/Repository-local.*can.*prove|cannot.*prove/i.test(gateSection),
+        'Gate must list what repository-local tests can and cannot prove');
+    assert.ok(/cannot/i.test(gateSection) && /GitHub/i.test(gateSection),
+        'Gate must state GitHub registration is not provable from repo-local code alone');
+});
+
+runTest('Contract - registration gate does not invent a repo-local proxy for GitHub registration', () => {
+    const gateSection = contractRaw.slice(contractRaw.indexOf('## 9'), contractRaw.indexOf('## 10'));
+    assert.ok(/not.*invent.*local proxy|cannot.*prove.*registration|without.*invention/i.test(gateSection) ||
+        /do not invent/i.test(gateSection) || /repository-local.*cannot.*prove/i.test(gateSection),
+        'Gate must prohibit inventing a repository-local proxy for GitHub registration');
+});
+
+runTest('Contract - registration gate preserves existing one-click invariants (no weakening)', () => {
+    assert.ok(/Do not weaken existing one-click requirements|does not weaken/i.test(contractRaw),
+        'Gate must state existing one-click requirements are not weakened');
+});
+
+runTest('Contract - registration gate requires coordinator to record evidence classification per gate', () => {
+    assert.ok(/evidence classification|record.*evidence classification|classification for each gate/i.test(contractRaw),
+        'Gate must require the coordinator to record evidence classification per gate');
+});
+
+runTest('Contract - invariants summary table includes the registration/runnability gate', () => {
+    const invariantsSection = contractRaw.slice(contractRaw.indexOf('## 11. Summary'));
+    assert.ok(/registration|runnability/i.test(invariantsSection),
+        'Invariants summary must include the registration/runnability gate');
+    assert.ok(/BLOCKED.*NOT READY/i.test(invariantsSection),
+        'Invariants summary must include BLOCKED/NOT READY fail-closed');
+});
+
+runTest('Contract - invariants summary includes VERIFIED/INFERRED/UNKNOWN enforcement', () => {
+    const invariantsSection = contractRaw.slice(contractRaw.indexOf('## 11. Summary'));
+    assert.ok(/VERIFIED.*INFERRED.*UNKNOWN/i.test(invariantsSection),
+        'Invariants summary must include VERIFIED/INFERRED/UNKNOWN classification');
+});
+
+// =========================================================
+// Machine-verifiable one-click workflow YAML validity tests
+// (registration gate: a workflow that GitHub cannot parse fails the gate)
+// =========================================================
+
+runTest('One-click workflows - YAML parses as valid YAML (structural registration prerequisite)', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        // A structural parse check: the file must begin with a top-level mapping
+        // that contains 'name' and 'on' as top-level keys (the minimal keys GitHub
+        // requires to register a workflow). Tabs are forbidden in YAML indentation.
+        assert.ok(!/\t/.test(wfRaw), `${wf} must not contain tab characters (YAML/GitHub parse failure)`);
+        assert.ok(/^\s*name:\s*\S/m.test(wfRaw), `${wf} must define a top-level 'name' key`);
+        assert.ok(/^\s*on:\s*$/m.test(wfRaw) || /^\s*on:/.test(wfRaw), `${wf} must define a top-level 'on' key`);
+    }
+});
+
+runTest('One-click workflows - workflow_dispatch trigger is present and at top level', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        // workflow_dispatch must appear under the top-level 'on:' key, not nested
+        // inside a job. This is the GitHub registration requirement.
+        const onIdx = wfRaw.indexOf('\non:');
+        const wfdIdx = wfRaw.indexOf('workflow_dispatch');
+        assert.ok(onIdx !== -1, `${wf} must have a top-level 'on:' key`);
+        assert.ok(wfdIdx !== -1, `${wf} must contain workflow_dispatch`);
+        assert.ok(wfdIdx > onIdx, `${wf} workflow_dispatch must appear after 'on:' (top-level trigger)`);
     }
 });
 

@@ -288,10 +288,110 @@ These tests verify:
 10. **Exact-task inspection** — The contract requires inspection of the actual workflow file to verify zero-input, embedded carrier, target_agent, task_name, task_mode, and objective/scope match.
 11. **Run-link validity** — The contract requires independent verification of the workflow before presenting a Run link.
 12. **Verification vs. construction distinction** — The contract distinguishes workflow construction, Director Run click, and execution verification.
+13. **Workflow registration/runnability gate** — Section 9 establishes that GitHub workflow registration/runnability must be independently established via an authoritative GitHub-hosted signal before a Run link is presented, and that repository-local YAML inspection alone is insufficient (the 2026-09-16 registration incident is referenced).
+14. **Fail-closed registration** — The contract requires BLOCKED/NOT READY when GitHub registration/runnability cannot be established, and prohibits treating YAML existence as proof of GitHub recognition.
+15. **VERIFIED / INFERRED / UNKNOWN classification** — Section 9.8 defines the evidence-classification terms and requires the coordinator to distinguish direct evidence from inference.
 
 ---
 
-## 9. Relationship to External Activation Procedure
+## 9. Workflow Registration & Runnability Gate
+
+### 9.1 The Registration Failure Class
+
+A workflow file **existing on the repository default branch** with a `workflow_dispatch` trigger and zero required inputs does **NOT** establish that GitHub Actions has registered, parsed, or recognized the workflow as runnable. The Gemini workflow registration incident of 2026-09-16 (`docs/ai/GEMINI_WORKFLOW_REGISTRATION_INCIDENT_2026-09-16.md`) confirmed that GitHub can fail to register a workflow — including `workflow_dispatch` not being recognized as a valid trigger (HTTP 422 "workflow did not have the workflow_dispatch trigger") — when the workflow YAML contains a construct GitHub Actions cannot successfully parse.
+
+This is the recurring coordinator failure the one-click gate closes: **workflow file exists on main + `workflow_dispatch` exists** was incorrectly treated as proof that **GitHub has registered the workflow + the workflow is actually runnable via the Run workflow UI**.
+
+### 9.2 Registration & Runnability Requirement
+
+Before a coordinator may present a "Run workflow" link for a one-click workflow, the coordinator must independently establish **GitHub workflow registration/runnability**. Specifically, all of the following must hold:
+
+1. **Workflow file exists on the repository default branch** — repository-local evidence only (file presence on the default branch).
+2. **`workflow_dispatch` trigger** — repository-local evidence (YAML parse of the trigger).
+3. **Zero required `workflow_dispatch` inputs** — repository-local evidence (YAML parse of inputs).
+4. **Exact requested task bound to the embedded canonical ACP carrier** — repository-local evidence (embedded task_name, target_agent, task_mode match).
+5. **Target agent and task mode match the requested task** — repository-local evidence.
+6. **GitHub Actions has recognized the workflow as a valid workflow rather than merely existing as repository YAML** — this requires an **authoritative GitHub-hosted signal** (see §9.4).
+7. **Manual dispatch is independently established as runnable** — the workflow must be selectable in the GitHub UI "Run workflow" dropdown and dispatchable without GitHub returning a registration error — requires an **authoritative GitHub-hosted signal** (see §9.4).
+8. **Any registration/availability failure is classified as BLOCKED / NOT READY** rather than inferred away.
+9. **The coordinator does not provide a Run link until all required gates pass.**
+
+### 9.3 Repository-Local Evidence vs. Authoritative GitHub Signals
+
+The coordinator must distinguish what repository-local state can establish from what requires an authoritative GitHub Actions signal:
+
+| Requirement | Evidence Source | Verifiable In-Repo? | Classification |
+|---|---|---|---|
+| Workflow file exists on default branch | Repository file tree | **VERIFIED** (repo-local) | Repository-local |
+| `workflow_dispatch` trigger present | YAML parse | **VERIFIED** (repo-local) | Repository-local |
+| Zero required inputs | YAML parse | **VERIFIED** (repo-local) | Repository-local |
+| Embedded ACP carrier present and bound | YAML text search | **VERIFIED** (repo-local) | Repository-local |
+| target_agent / task_name / task_mode match | Embedded carrier inspection | **VERIFIED** (repo-local) | Repository-local |
+| GitHub has registered the workflow | GitHub API (`workflow_id`), Actions UI, or workflow run history | **NOT VERIFIABLE** (repo-local) | Authoritative GitHub signal |
+| Workflow is selectable in "Run workflow" dropdown | GitHub UI / API `workflow` object `state` | **NOT VERIFIABLE** (repo-local) | Authoritative GitHub signal |
+| Workflow is dispatchable (manual run succeeds) | Actual `workflow_dispatch` run with `completed` or `action_required` status | **NOT VERIFIABLE** (repo-local) | Authoritative GitHub signal |
+
+### 9.4 Authoritative GitHub Registration Signal
+
+Registration/runnability **cannot** be proven from repository-local YAML inspection alone. The authoritative signals that GitHub recognizes a workflow as registered and runnable are:
+
+- **GitHub REST API `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}`** returning a `workflow` object with a non-null `workflow_id` and `state` field (e.g., `state: active`). A workflow that GitHub cannot parse will **not** appear in this API response or will be absent from the workflows list.
+- **The workflow appearing in the GitHub UI "Set up a workflow" / "Run workflow" dropdown** as a selectable, non-disabled entry.
+- **A `workflow_dispatch` run transitioning out of `waiting` to `in_progress` or a terminal state** (`completed`, `failure`, `cancelled`), proving the workflow was dispatchable.
+
+Repository-local tests **cannot** query these GitHub-hosted signals. The coordinator must either:
+
+(a) consult an **authoritative GitHub API / UI check** performed by the Director or an authorized verification agent (e.g., a `VERIFY_RECONCILE` task that queries `GET /repos/{owner}/{repo}/actions/workflows` and confirms the workflow `state: active`), or
+(b) **fail closed** — classify the workflow as `BLOCKED / NOT READY` and **not** present a Run link until a verifiable GitHub-hosted registration signal is provided.
+
+### 9.5 Fail-Closed Registration Gate
+
+The coordinator's decision procedure for presenting a one-click "Run workflow" link is:
+
+```
+1. Inspect the workflow file on the default branch (repository-local).
+2. Verify zero-input workflow_dispatch (repository-local).
+3. Verify the embedded ACP carrier matches the requested task (repository-local).
+4. Attempt to establish GitHub registration/runnability:
+   a. If an authoritative GitHub signal confirms state: active and dispatchable → VERIFIED → present Run link.
+   b. If no authoritative GitHub signal is available → INFERRED/UNKNOWN → BLOCKED/NOT READY → do NOT present Run link.
+   c. If an authoritative GitHub signal reports registration failure (workflow absent from API, HTTP 422, or dropdown missing) → BLOCKED/NOT READY → do NOT present Run link.
+5. The coordinator must NOT treat (1)-(3) alone as sufficient for presenting a Run link.
+```
+
+### 9.6 What Repository-Local Tests Can and Cannot Prove
+
+Repository-local machine tests can prove:
+
+- The workflow file exists at the expected path on the default branch.
+- The workflow YAML parses successfully (structural validity).
+- The `workflow_dispatch` trigger is present with zero required inputs.
+- The embedded ACP carrier fields (task_name, target_agent, task_mode) are present and match expected values.
+- The workflow references the canonical ingress, consume the execution descriptor, and route through the canonical activation architecture.
+
+Repository-local machine tests **cannot** prove:
+
+- That GitHub Actions has parsed/registered the workflow (the 2026-09-16 incident is direct evidence that YAML existence ≠ GitHub registration).
+- That the workflow is selectable in the "Run workflow" dropdown.
+- That a `workflow_dispatch` invocation will succeed rather than return a registration error.
+
+When GitHub registration/runnability cannot be established, the coordinator must report `BLOCKED / NOT READY` with the concrete missing evidence (an authoritative GitHub-hosted signal) rather than inferring readiness from YAML inspection alone.
+
+### 9.7 Regression Protection
+
+The existing one-click workflows that are already registered and runnable remain subject to this gate. A future workflow-change that introduces a GitHub-unparseable construct must **fail this gate** (BLOCKED/NOT READY) even if the file still exists on `main` with `workflow_dispatch`. The contract does not weaken existing one-click requirements to accommodate the new gate.
+
+### 9.8 Evidence Classification
+
+| Term | Meaning |
+|---|---|
+| **VERIFIED** | Directly established by authoritative evidence or tooling (e.g., repository file-tree check, YAML parse, GitHub API returning `state: active`). |
+| **INFERRED** | Logically likely but not directly established by an authoritative signal (e.g., "a YAML file with `workflow_dispatch` probably registered" — this is explicitly rejected as insufficient). |
+| **UNKNOWN** | Cannot be established from available evidence (e.g., GitHub registration state queried only from repository-local code without the GitHub API). |
+
+The coordinator must record the evidence classification for each gate. GitHub workflow registration/runnability is UNKNOWN until an authoritative GitHub-hosted signal is consulted, and the coordinator must fail closed in that state.
+
+## 10. Relationship to External Activation Procedure
 
 This contract builds on the canonical external-activation procedure documented in `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md`. That procedure defines:
 
@@ -303,11 +403,35 @@ This contract builds on the canonical external-activation procedure documented i
 - Replay/idempotency
 - Director authorization for consequential commands
 
-This one-click contract defines the **additional** requirement that a one-click workflow must have **zero required workflow_dispatch inputs** and must derive all parameters from the activation context via the canonical external-activation procedure. It does not redefine or replace the external-activation procedure; it specifies the zero-input constraint on top of it.
+This one-click contract defines the **additional** requirement that a one-click workflow must have **zero required workflow_dispatch inputs** and must derive all parameters from the activation context via the canonical external-activation procedure. **Section 9 (Workflow Registration & Runnability Gate)** adds the requirement that GitHub registration/runnability must be independently established before a Run link is presented, and that repository-local YAML inspection alone is insufficient. This section does not redefine or replace the external-activation procedure; it specifies the zero-input and registration constraints on top of it.
 
 ---
 
-## 10. Summary of Invariants
+## 11. Summary of Invariants
+
+| Invariant | Status |
+|---|---|
+| "Make this a one-click workflow" is a durable project command | **ENFORCED** |
+| A one-click workflow requires zero `workflow_dispatch` inputs | **ENFORCED** |
+| A one-click workflow uses `workflow_dispatch` trigger | **ENFORCED** |
+| Agent/task mode is determined from instruction context, not inputs | **ENFORCED** |
+| Canonical external-activation admission is required | **ENFORCED** |
+| Server-derived authority is required (no input authority) | **ENFORCED** |
+| Existing TaskRegistry is reused (no second registry) | **ENFORCED** |
+| Existing execution-claim mechanism is reused | **ENFORCED** |
+| Existing execution descriptor is consumed via `jq` | **ENFORCED** |
+| Existing callback/evidence/reconciliation path is reused | **ENFORCED** |
+| No second control plane, authorization, or activation mechanism | **ENFORCED** |
+| A specific-task one-click request must bind the exact canonical ACP task to the embedded carrier | **ENFORCED** |
+| No task substitution — no linking older/different-task workflows, no generic pages, no separate ACP task with unchanged carrier | **ENFORCED** |
+| Exact-task inspection required before presenting a Run link (zero-input, embedded carrier, target_agent, task_name, task_mode, objective/scope) | **ENFORCED** |
+| A Run workflow link is valid only after the referenced workflow is independently inspected and confirmed to contain the exact task | **ENFORCED** |
+| Dedicated workflow created/updated when an existing one-click workflow contains a different task | **ENFORCED** |
+| Verification vs. workflow construction distinction enforced | **ENFORCED** |
+| Discoverable from the documented cold-start path | **ENFORCED** |
+| GitHub workflow registration/runnability must be independently established before presenting a Run link; repository-local YAML inspection alone is insufficient | **ENFORCED** |
+| Registration/availability failure is classified BLOCKED/NOT READY, not inferred away | **ENFORCED** |
+| VERIFIED / INFERRED / UNKNOWN evidence classification applied to registration gate | **ENFORCED** |
 
 | Invariant | Status |
 |---|---|
