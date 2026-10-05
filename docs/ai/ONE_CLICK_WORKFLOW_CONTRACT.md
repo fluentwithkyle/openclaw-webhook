@@ -59,6 +59,8 @@ A **one-click workflow** is a GitHub Actions workflow that satisfies **all** of 
 
 10. **Existing callback/evidence/reconciliation path** — After execution, the workflow reports completion via the existing callback to Render (`POST /gemini/callback` or `POST /builder/callback`), which updates TaskRegistry state and triggers verification/reconciliation through the existing orchestrator (`poc/orchestrator.js`).
 
+11. **Embedded canonical ACP task carrier** — The workflow embeds the exact canonical ACP task intended to execute as a task description string within the workflow file (the "embedded carrier"). The `request_id` of the embedded carrier must match the requested task's `task_name`. The coordinator must verify the embedded carrier matches the requested task before presenting a Run link.
+
 ---
 
 ## 3. Zero-Input Requirement
@@ -87,24 +89,92 @@ Specifically, these are **NOT** one-click workflows:
 |---|---|---|---|
 | `.github/workflows/main.yml` | `issue_comment` + `workflow_dispatch` | `request_id`, `task`, `repository`, `base_branch` (all required) | **NO** |
 | `.github/workflows/gemini-builder.yml` | `workflow_dispatch` | `request_id`, `task`, `repository`, `base_branch`, `builder_execution_id` (all required) | **NO** |
+| `.github/workflows/one-click-gemini-activation-verify-reconcile.yml` | `workflow_dispatch` | (none) | **YES** |
+| `.github/workflows/one-click-gemini-builder-smoke.yml` | `workflow_dispatch` | (none) | **YES** |
+| `.github/workflows/one-click-gemini-builder-callback-correlation.yml` | `workflow_dispatch` | (none) | **YES** |
+| `.github/workflows/one-click-gemini-research-documentation.yml` | `workflow_dispatch` | (none) | **YES** |
 
-The current workflows require manual input of `request_id`, `task`, `repository`, and `base_branch`. They therefore **do not satisfy** the one-click workflow requirement. A one-click workflow variant must be constructed that has zero required inputs and derives all parameters from the activation context.
+The one-click workflow variants listed above satisfy the zero-input requirement: their `workflow_dispatch` trigger defines no required inputs, and all authority-bearing fields are server-derived from the activation policy via the canonical ingress. Existing workflows with required inputs (`main.yml`, `gemini-builder.yml`) do NOT satisfy one-click and are not modified.
 
 ---
 
-## 4. One-Click Workflow Construction Procedure
+## 4. Task-to-Workflow Binding
+
+### 4.1 Canonical Task Carrier
+
+A one-click workflow embeds the canonical ACP task intended to execute as an **embedded task carrier** — a task description string within the workflow file that contains the complete ACP task envelope (`task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`). The `request_id` of the embedded carrier must correspond exactly to the requested task's `task_name`.
+
+### 4.2 Required Binding
+
+When Kyle requests a one-click workflow for a **specific task**, the exact canonical ACP task intended to execute must be bound to the one-click workflow's embedded carrier. The coordinator must not present a Run link unless the embedded carrier contains the exact requested task.
+
+### 4.3 No Task Substitution
+
+A coordinator must not:
+
+- Link an older one-click workflow whose embedded task is different from the requested task.
+- Provide a generic workflow page whose embedded task differs from the requested task.
+- Provide a Run workflow link for a workflow whose embedded task is different from the requested task.
+- Construct a separate ACP task while leaving the workflow's embedded carrier unchanged.
+- Claim the requested task is ready merely because an existing workflow has the correct agent or task mode but a different embedded task.
+
+### 4.4 Exact-Task Inspection
+
+Before presenting the Run workflow link, the coordinator must inspect the actual workflow file and verify:
+
+- `workflow_dispatch` is zero-input (no required inputs).
+- The embedded carrier exists in the workflow file.
+- `target_agent` in the embedded carrier matches the requested agent.
+- `task_name` in the embedded carrier matches the requested task.
+- `task_mode` in the embedded carrier matches the requested task mode.
+- The carrier's `objective`/`scope` correspond to the requested task.
+- Authority-bearing fields remain subject to server-side activation policy rather than becoming workflow-input authority.
+
+### 4.5 Dedicated Workflow When Necessary
+
+If an existing one-click workflow contains a different task in its embedded carrier, the coordinator must create or update the appropriate one-click workflow before presenting a Run link. It must not silently reuse the old workflow.
+
+### 4.6 Run-Link Validity
+
+A Run workflow link is valid only after the referenced workflow has been independently inspected and confirmed to contain the exact task that the link is intended to execute. The coordinator must not treat an existing workflow artifact as proof that the requested task has executed.
+
+### 4.7 Task-Mode Variants
+
+The task-to-workflow binding rule applies equally to RESEARCH_DOCUMENT, VERIFY_RECONCILE, REVIEW, BUILDER, FAILOVER_EXECUTE, and any other policy-supported task mode.
+
+### 4.8 Verification vs. Workflow Construction
+
+The coordinator must distinguish:
+
+- **Constructing/preparing the one-click workflow** — embedding the exact task and verifying zero-input + binding.
+- **The Director clicking Run workflow** — external activation that triggers the workflow.
+- **Verifying the resulting execution** — inspecting the executed result against the original objective.
+
+The coordinator must not confuse an existing workflow artifact (or a completed previous execution) with proof that the requested task has executed. The existence of a workflow file with a matching task_name does not establish that the task was executed or verified.
+
+### 4.9 Coordinator Decision Rule
+
+> "The workflow is the executable carrier of the requested one-click task. The coordinator must verify the embedded task before presenting the Run workflow link."
+
+This rule is the governing decision rule for all one-click workflow coordination. The coordinator must:
+
+1. Inspect requested task → 2. Inspect candidate workflow → 3. Verify exact embedded task binding → 4. Create/update workflow if binding is absent or incorrect → 5. Independently verify workflow → 6. Present Run link → 7. Director executes click → 8. Inspect resulting execution.
+
+---
+
+## 5. One-Click Workflow Construction Procedure
 
 When Kyle instructs "Make this a one-click workflow," the coordinator must follow this procedure:
 
-### 4.1 Inspect Existing State
+### 5.1 Inspect Existing State
 
 1. Inspect the existing workflows in `.github/workflows/`.
-2. Determine if any existing workflow already satisfies the one-click definition (Section 2).
+2. Determine if any existing one-click workflow already satisfies the one-click definition (Section 2) **and** has an embedded carrier whose `task_name` matches the requested task.
 3. If a matching one-click workflow already exists, use it — do not create a duplicate.
 
-### 4.2 Construct If Missing
+### 5.2 Construct If Missing
 
-If no one-click workflow exists:
+If no matching one-click workflow exists:
 
 1. **Determine the agent and task mode** from the instruction context via the activation policy (`poc/activation-policy.js`).
 2. **Create a new `workflow_dispatch` workflow** (or add a one-click job to an existing workflow file) with:
@@ -113,9 +183,10 @@ If no one-click workflow exists:
    - **Server-derived orchestration context** — Consumes `execution-descriptor.json` via `jq` (NOT workflow inputs).
    - **Agent execution gated** on `activation_validated == 'true' && !replay`.
    - **Callback/evidence/reconciliation** path via the existing callback mechanism.
-3. **Determine the ACP task** — The task description, task_mode, capabilities, and permitted_paths are determined by the coordinator from the instruction context, then validated server-side by the canonical ingress. The coordinator must **not** allow workflow inputs to override authority-bearing fields.
+3. **Embed the exact ACP task** — The exact canonical ACP task intended to execute must be bound to the workflow's embedded carrier. The `request_id` of the embedded carrier must correspond exactly to the requested task's `task_name`.
+4. **Determine the ACP task** — The task description, task_mode, capabilities, and permitted_paths are determined by the coordinator from the instruction context, then validated server-side by the canonical ingress. The coordinator must **not** allow workflow inputs to override authority-bearing fields.
 
-### 4.3 Reuse Existing Architecture
+### 5.3 Reuse Existing Architecture
 
 A one-click workflow **MUST** reuse the following existing components and architecture:
 
@@ -133,7 +204,7 @@ A one-click workflow **MUST** reuse the following existing components and archit
 
 ---
 
-## 5. Prohibited Patterns
+## 6. Prohibited Patterns
 
 A one-click workflow **MUST NOT**:
 
@@ -148,18 +219,19 @@ A one-click workflow **MUST NOT**:
 
 ---
 
-## 6. Coordinator Interpretation Procedure
+## 7. Coordinator Interpretation Procedure
 
 When Kyle says **"Make this a one-click workflow."**, the coordinator must:
 
 1. **Classify the request** — Recognize this as a one-click workflow request per this contract.
-2. **Inspect the repository** — Check `.github/workflows/` for an existing workflow that satisfies the zero-input `workflow_dispatch` + canonical external-activation contract.
+2. **Inspect the repository** — Check `.github/workflows/` for an existing one-click workflow that satisfies the zero-input `workflow_dispatch` + canonical external-activation contract **and** whose embedded carrier matches the requested task.
 3. **Determine the result**:
-   - If a matching one-click workflow exists → use it. No new workflow is needed.
-   - If no matching one-click workflow exists → construct one following Section 4.
+   - If a matching one-click workflow exists → verify the embedded task binding (Section 4) and use it. No new workflow is needed.
+   - If no matching one-click workflow exists → construct one following Section 5.
 4. **Determine agent/task mode** — For the plain phrase, default to the standard coordinator activation (REVIEW read-only). If Kyle names an agent (e.g., "Gemini Builder workflow"), apply the matching target and task mode from the activation policy.
 5. **Determine ACP task** — Construct the ACP task envelope per `docs/ai/TASK_STANDARD.md`, setting the task_mode, capabilities, and permitted_paths that the activation policy requires for the target agent.
-6. **Preserve all invariants** — Reuse the existing TaskRegistry, execution-claim mechanism, execution descriptor, ACP validation, callback/evidence/reconciliation path. Do not introduce duplicates or alternate mechanisms.
+6. **Verify task-to-workflow binding** — Verify the embedded carrier matches the requested task per Section 4.3–4.6.
+7. **Preserve all invariants** — Reuse the existing TaskRegistry, execution-claim mechanism, execution descriptor, ACP validation, callback/evidence/reconciliation path. Do not introduce duplicates or alternate mechanisms.
 
 ### 6.1 Example: "Make this a one-click Gemini Builder workflow."
 
@@ -211,6 +283,11 @@ These tests verify:
 5. **Cold-start discoverability** — The contract is referenced from the documented cold-start path (`CHATGPT_START_HERE.md`, `README.md`, `CHATGPT_PROJECT_OPERATING_PROTOCOL.md`).
 6. **Architecture reuse** — The contract explicitly requires reuse of the canonical external-activation architecture and prohibits second control planes / TaskRegistries.
 7. **Implementation file references** — The contract references real implementation files (`poc/activation-ingress.js`, `poc/activation-policy.js`, `poc/task-registry.js`, `poc/schemas/acp-schema.js`, `poc/acp-engine.js`, `poc/validate-external-activation.js`, `poc/external-activation-validator.js`).
+8. **Task-to-workflow binding** — The contract requires the embedded carrier in a one-click workflow to contain the exact requested task, and prohibits task substitution.
+9. **No task substitution** — The contract prohibits linking an older workflow, providing a generic page, or claiming readiness when the embedded task differs from the requested task.
+10. **Exact-task inspection** — The contract requires inspection of the actual workflow file to verify zero-input, embedded carrier, target_agent, task_name, task_mode, and objective/scope match.
+11. **Run-link validity** — The contract requires independent verification of the workflow before presenting a Run link.
+12. **Verification vs. construction distinction** — The contract distinguishes workflow construction, Director Run click, and execution verification.
 
 ---
 
@@ -245,4 +322,10 @@ This one-click contract defines the **additional** requirement that a one-click 
 | Existing execution descriptor is consumed via `jq` | **ENFORCED** |
 | Existing callback/evidence/reconciliation path is reused | **ENFORCED** |
 | No second control plane, authorization, or activation mechanism | **ENFORCED** |
+| A specific-task one-click request must bind the exact canonical ACP task to the embedded carrier | **ENFORCED** |
+| No task substitution — no linking older/different-task workflows, no generic pages, no separate ACP task with unchanged carrier | **ENFORCED** |
+| Exact-task inspection required before presenting a Run link (zero-input, embedded carrier, target_agent, task_name, task_mode, objective/scope) | **ENFORCED** |
+| A Run workflow link is valid only after the referenced workflow is independently inspected and confirmed to contain the exact task | **ENFORCED** |
+| Dedicated workflow created/updated when an existing one-click workflow contains a different task | **ENFORCED** |
+| Verification vs. workflow construction distinction enforced | **ENFORCED** |
 | Discoverable from the documented cold-start path | **ENFORCED** |

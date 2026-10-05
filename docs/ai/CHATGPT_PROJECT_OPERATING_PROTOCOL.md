@@ -1174,6 +1174,25 @@ canonical external-activation architecture. The canonical contract is documented
 - Agent/task-mode variants (e.g., "Make this a one-click Gemini Builder workflow").
 - The prohibition on treating existing `workflow_dispatch` workflows with required
   inputs as satisfying the one-click requirement.
+- The **task-to-workflow binding** requirement: when Kyle requests a one-click workflow
+  for a specific task, the exact canonical ACP task must be embedded in the
+  workflow's embedded carrier, and the coordinator must verify this binding before
+  presenting a Run link.
+- The **no-task-substitution** prohibition: the coordinator must not link an older
+  one-click workflow containing a different task, provide a generic workflow page,
+  provide a Run link for a workflow whose embedded task differs from the requested
+  task, or claim the requested task is ready merely because an existing workflow has
+  the correct agent or task mode.
+- The **exact-task inspection** requirement: before presenting a Run link, the
+  coordinator must inspect the actual workflow file and verify zero-input, embedded
+  carrier existence, target_agent, task_name, task_mode, and objective/scope
+  correspondence.
+- The **coordinator decision rule**: "The workflow is the executable carrier of the
+  requested one-click task. The coordinator must verify the embedded task before
+  presenting the Run workflow link."
+- The **verification vs. workflow construction** distinction: constructing/preparing
+  the workflow, the Director clicking Run, and verifying the resulting execution are
+  distinct steps that must not be confused.
 - The requirement to reuse the existing canonical external-activation architecture
   (no second control plane, TaskRegistry, or authorization mechanism).
 - Cold-start discoverability from the documented bootstrap path.
@@ -1181,6 +1200,15 @@ canonical external-activation architecture. The canonical contract is documented
 A fresh coordinator following the cold-start path will encounter
 `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` via `docs/ai/CHATGPT_START_HERE.md` before
 making any activation or workflow-construction decision.
+
+**Protocol correction**: The operational sequence for a one-click request explicitly
+includes: Inspect requested task → inspect candidate workflow → verify exact embedded
+task binding → create/update workflow if binding is absent or incorrect → independently
+verify workflow → present Run link → Director executes click → inspect resulting
+execution. This procedure does not weaken the existing authorization boundary.
+Creating/updating a workflow remains a consequential repository mutation requiring
+explicit ACP capabilities (including `modify_files`, `commit`, `push` where
+applicable); the Director's Run click remains the activation action.
 
 12. Standard Completion Loop
 
