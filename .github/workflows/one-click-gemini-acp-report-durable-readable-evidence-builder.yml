@@ -27,125 +27,125 @@ jobs:
           BUILDER_EXEC_ID="gemini-builder-durable-readable-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
           TASK=$(cat <<'TASK_EOF'
-{
-  "request_id": "TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION-001",
-  "protocol_version": "0.1",
-  "source": "Kyle",
-  "originator": "Kyle — Director",
-  "target": "Gemini",
-  "target_agent": "Gemini",
-  "task_type": "implementation",
-  "repository": "fluentwithkyle/openclaw-webhook",
-  "base_branch": "main",
-  "task_mode": "BUILDER",
-  "task": "Implement the repository-native durable readable evidence path for Gemini ACP execution reports so the completed report is directly readable in the repository without requiring download of the ephemeral gemini-acp-report artifact.",
-  "objective": "Implement the smallest architecture-consistent solution established by the completed durable-evidence, concurrency, and branch-concurrency research. Preserve the canonical ACP execution report as the source of truth while creating a durable, human-readable repository projection that can be independently inspected and verified.",
-  "constraints": {
-    "permitted_paths": [
-      "docs/ai/research/",
-      "docs/ai/RESEARCH_INDEX.md",
-      "docs/ai/TASK_LOG.md",
-      ".github/workflows/one-click-gemini-acp-report-durable-evidence-research.yml",
-      ".github/workflows/one-click-gemini-acp-report-durable-evidence-concurrency-research.yml",
-      ".github/workflows/one-click-gemini-acp-report-durable-evidence-branch-concurrency-research.yml",
-      ".github/workflows/main.yml"
-    ],
-    "forbidden_paths": [
-      "poc/activation-policy.js",
-      "poc/activation-ingress.js",
-      "poc/schemas/acp-schema.js",
-      "poc/activation-engine.js",
-      "poc/task-registry.js"
-    ],
-    "scope": [
-      "Implementation only.",
-      "Do not redesign the one-click activation architecture.",
-      "Do not create a second control plane.",
-      "Do not create a second TaskRegistry.",
-      "Do not create a second canonical execution state store.",
-      "Do not create a new activation or authorization mechanism.",
-      "Do not bypass ACP validation or canonical activation ingress.",
-      "Do not replace the canonical ACP report with a separately invented report.",
-      "Do not make the ephemeral GitHub Actions artifact the durable source of truth.",
-      "Do not introduce a database, external storage service, or new callback system.",
-      "Do not change repository settings, secrets, dependencies, or unrelated runtime behavior."
-    ]
-  },
-  "authorization": {
-    "capabilities": [
-      "read_only",
-      "modify_files",
-      "commit",
-      "push"
-    ],
-    "director_authorization": true
-  },
-  "implementation_requirements": [
-    "Read the existing durable-evidence, concurrency, and branch-concurrency research records before modifying code.",
-    "Inspect the current main.yml completion/report-generation path rather than reconstructing it from assumptions.",
-    "Reuse the existing canonical ACP report payload already produced by the workflow.",
-    "Create a durable repository-readable projection using the smallest repository-native mechanism supported by the research.",
-    "Use a unique execution-correlated destination so concurrent executions cannot overwrite one another.",
-    "Preserve the canonical request/task correlation fields already present in the execution report.",
-    "Do not invent activation_id or other correlation fields that are not actually present in the canonical report.",
-    "Keep the durable projection clearly distinguishable from the canonical execution payload while preserving sufficient content for independent verification.",
-    "Ensure the implementation does not create an unsafe concurrent main-branch push race.",
-    "Reuse existing repository-native serialization, reconciliation, or retry behavior where available.",
-    "Keep authorization limited to the existing permitted paths and existing Builder authority model.",
-    "Retain the existing ephemeral artifact if it is already part of the workflow; this task is adding durable readable evidence, not replacing unrelated behavior.",
-    "Do not broaden the implementation beyond the durable-readable-evidence objective."
-  ],
-  "verification": {
-    "required": true,
-    "requirements": [
-      "Validate the modified workflow/configuration syntax.",
-      "Run all directly relevant existing tests.",
-      "Inspect the final diff for scope compliance.",
-      "Verify the durable report path is unique per execution.",
-      "Verify the durable report is derived from the canonical ACP report rather than independently fabricated.",
-      "Verify the implementation does not introduce a second control plane, state store, registry, activation path, or authority source.",
-      "Verify concurrent executions cannot silently overwrite the same durable evidence file.",
-      "Verify the resulting repository evidence is directly readable through GitHub without artifact download.",
-      "Record VERIFIED, INFERRED, and UNKNOWN findings separately.",
-      "Report the exact changed files.",
-      "Commit the implementation and push it to main.",
-      "Return the resulting commit SHA and push status."
-    ]
-  },
-  "deliverables": [
-    "Implemented durable readable Gemini ACP report projection.",
-    "Any required documentation update explaining the durable evidence location and canonical/projection relationship.",
-    "Tests or validation appropriate to the changed implementation.",
-    "Commit pushed to main.",
-    "Structured ACP execution report."
-  ],
-  "success_criteria": [
-    "A completed Gemini ACP execution produces durable repository evidence that can be read directly from GitHub.",
-    "No artifact download is required to inspect the durable report.",
-    "Each execution has independently identifiable durable evidence.",
-    "Concurrent executions cannot overwrite one another's durable report.",
-    "The canonical ACP execution report remains authoritative.",
-    "The durable repository file is explicitly a projection/evidence record, not a new control plane or source of truth.",
-    "Existing ACP authorization and activation architecture remains intact.",
-    "No unrelated architecture or runtime behavior is changed.",
-    "Changes are committed and pushed to main."
-  ],
-  "reporting": {
-    "required_fields": [
-      "request_id",
-      "agent",
-      "status",
-      "task",
-      "changed_files",
-      "verification",
-      "commit",
-      "push",
-      "blockers",
-      "result.execution_metadata.invocation_id"
-    ]
-  }
-}
-TASK_EOF
+          {
+            "request_id": "TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION-001",
+            "protocol_version": "0.1",
+            "source": "Kyle",
+            "originator": "Kyle — Director",
+            "target": "Gemini",
+            "target_agent": "Gemini",
+            "task_type": "implementation",
+            "repository": "fluentwithkyle/openclaw-webhook",
+            "base_branch": "main",
+            "task_mode": "BUILDER",
+            "task": "Implement the repository-native durable readable evidence path for Gemini ACP execution reports so the completed report is directly readable in the repository without requiring download of the ephemeral gemini-acp-report artifact.",
+            "objective": "Implement the smallest architecture-consistent solution established by the completed durable-evidence, concurrency, and branch-concurrency research. Preserve the canonical ACP execution report as the source of truth while creating a durable, human-readable repository projection that can be independently inspected and verified.",
+            "constraints": {
+              "permitted_paths": [
+                "docs/ai/research/",
+                "docs/ai/RESEARCH_INDEX.md",
+                "docs/ai/TASK_LOG.md",
+                ".github/workflows/one-click-gemini-acp-report-durable-evidence-research.yml",
+                ".github/workflows/one-click-gemini-acp-report-durable-evidence-concurrency-research.yml",
+                ".github/workflows/one-click-gemini-acp-report-durable-evidence-branch-concurrency-research.yml",
+                ".github/workflows/main.yml"
+              ],
+              "forbidden_paths": [
+                "poc/activation-policy.js",
+                "poc/activation-ingress.js",
+                "poc/schemas/acp-schema.js",
+                "poc/activation-engine.js",
+                "poc/task-registry.js"
+              ],
+              "scope": [
+                "Implementation only.",
+                "Do not redesign the one-click activation architecture.",
+                "Do not create a second control plane.",
+                "Do not create a second TaskRegistry.",
+                "Do not create a second canonical execution state store.",
+                "Do not create a new activation or authorization mechanism.",
+                "Do not bypass ACP validation or canonical activation ingress.",
+                "Do not replace the canonical ACP report with a separately invented report.",
+                "Do not make the ephemeral GitHub Actions artifact the durable source of truth.",
+                "Do not introduce a database, external storage service, or new callback system.",
+                "Do not change repository settings, secrets, dependencies, or unrelated runtime behavior."
+              ]
+            },
+            "authorization": {
+              "capabilities": [
+                "read_only",
+                "modify_files",
+                "commit",
+                "push"
+              ],
+              "director_authorization": true
+            },
+            "implementation_requirements": [
+              "Read the existing durable-evidence, concurrency, and branch-concurrency research records before modifying code.",
+              "Inspect the current main.yml completion/report-generation path rather than reconstructing it from assumptions.",
+              "Reuse the existing canonical ACP report payload already produced by the workflow.",
+              "Create a durable repository-readable projection using the smallest repository-native mechanism supported by the research.",
+              "Use a unique execution-correlated destination so concurrent executions cannot overwrite one another.",
+              "Preserve the canonical request/task correlation fields already present in the execution report.",
+              "Do not invent activation_id or other correlation fields that are not actually present in the canonical report.",
+              "Keep the durable projection clearly distinguishable from the canonical execution payload while preserving sufficient content for independent verification.",
+              "Ensure the implementation does not create an unsafe concurrent main-branch push race.",
+              "Reuse existing repository-native serialization, reconciliation, or retry behavior where available.",
+              "Keep authorization limited to the existing permitted paths and existing Builder authority model.",
+              "Retain the existing ephemeral artifact if it is already part of the workflow; this task is adding durable readable evidence, not replacing unrelated behavior.",
+              "Do not broaden the implementation beyond the durable-readable-evidence objective."
+            ],
+            "verification": {
+              "required": true,
+              "requirements": [
+                "Validate the modified workflow/configuration syntax.",
+                "Run all directly relevant existing tests.",
+                "Inspect the final diff for scope compliance.",
+                "Verify the durable report path is unique per execution.",
+                "Verify the durable report is derived from the canonical ACP report rather than independently fabricated.",
+                "Verify the implementation does not introduce a second control plane, state store, registry, activation path, or authority source.",
+                "Verify concurrent executions cannot silently overwrite the same durable evidence file.",
+                "Verify the resulting repository evidence is directly readable through GitHub without artifact download.",
+                "Record VERIFIED, INFERRED, and UNKNOWN findings separately.",
+                "Report the exact changed files.",
+                "Commit the implementation and push it to main.",
+                "Return the resulting commit SHA and push status."
+              ]
+            },
+            "deliverables": [
+              "Implemented durable readable Gemini ACP report projection.",
+              "Any required documentation update explaining the durable evidence location and canonical/projection relationship.",
+              "Tests or validation appropriate to the changed implementation.",
+              "Commit pushed to main.",
+              "Structured ACP execution report."
+            ],
+            "success_criteria": [
+              "A completed Gemini ACP execution produces durable repository evidence that can be read directly from GitHub.",
+              "No artifact download is required to inspect the durable report.",
+              "Each execution has independently identifiable durable evidence.",
+              "Concurrent executions cannot overwrite one another's durable report.",
+              "The canonical ACP execution report remains authoritative.",
+              "The durable repository file is explicitly a projection/evidence record, not a new control plane or source of truth.",
+              "Existing ACP authorization and activation architecture remains intact.",
+              "No unrelated architecture or runtime behavior is changed.",
+              "Changes are committed and pushed to main."
+            ],
+            "reporting": {
+              "required_fields": [
+                "request_id",
+                "agent",
+                "status",
+                "task",
+                "changed_files",
+                "verification",
+                "commit",
+                "push",
+                "blockers",
+                "result.execution_metadata.invocation_id"
+              ]
+            }
+          }
+          TASK_EOF
 )
 
           {
