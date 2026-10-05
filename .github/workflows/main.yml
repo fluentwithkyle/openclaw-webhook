@@ -525,6 +525,67 @@ jobs:
 
           cat callback_payload.json
 
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Persist durable readable evidence projection
+        if: always() && steps.callback_payload.outputs.request_id != ''
+        env:
+          REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          if [ -z "$REQUEST_ID" ]; then
+            echo "::warning::REQUEST_ID is empty; skipping durable evidence projection"
+            exit 0
+          fi
+
+          mkdir -p docs/ai/reports
+
+          REPORT_PATH="docs/ai/reports/gemini-acp-report-${REQUEST_ID}.json"
+
+          cp callback_payload.json "$REPORT_PATH"
+
+          git config user.name "Gemini"
+          git config user.email "gemini@users.noreply.github.com"
+          git config --global --add safe.directory '*'
+
+          git add "$REPORT_PATH"
+
+          if git diff --cached --quiet "$REPORT_PATH"; then
+            echo "No changes to stage for $REPORT_PATH"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "docs(evidence): persist durable Gemini ACP report projection for ${REQUEST_ID}" || {
+            echo "::warning::Could not commit durable evidence projection (possibly already committed or up to date)"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+          for i in 1 2 3; do
+            git pull --rebase origin "${BASE_BRANCH}" && git push origin "${BASE_BRANCH}" && {
+              echo "Pushed durable evidence projection: $COMMIT_SHA (attempt $i)"
+              exit 0
+            } || {
+              echo "Push failed due to concurrent update, retrying ($i/3)..."
+              git fetch origin "${BASE_BRANCH}"
+              git rebase "origin/${BASE_BRANCH}" || {
+                echo "::warning::Rebase failed during durable evidence push; evidence file remains created but not pushed"
+                exit 0
+              }
+            }
+          done
+
+          echo "::warning::Durable evidence projection push did not succeed after 3 attempts"
+          exit 0
+
       - name: Send callback to Render (workflow_dispatch only)
         id: send_callback
         if: always() && github.event_name == 'workflow_dispatch'
