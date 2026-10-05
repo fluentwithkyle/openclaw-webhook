@@ -27,9 +27,9 @@ jobs:
           target_agent: Gemini Builder
           repository: fluentwithkyle/openclaw-webhook
           base_branch: main
-          task_mode: EXECUTE
-          capabilities:
-          - inspect
+           task_mode: BUILDER
+           capabilities:
+          - read_only
           - modify_files
           - run_tests
           - commit
@@ -161,7 +161,7 @@ jobs:
               request_id: $request_id,
               target: $target,
               task_mode: $task_mode,
-              capabilities: ["inspect", "modify_files", "run_tests", "commit", "push"],
+              capabilities: ["read_only", "modify_files", "run_tests", "commit", "push"],
               permitted_paths: [".github/workflows/gemini-builder.yml", "poc/**", "services/**", "tests/**", "docs/ai/**"],
               repository: $repository,
               base_branch: $base_branch
@@ -199,7 +199,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           BASE_BRANCH: main
           TASK_MODE: BUILDER
-          CAPABILITIES: inspect,modify_files,run_tests,commit,push
+          CAPABILITIES: read_only,modify_files,run_tests,commit,push
           PERMITTED_PATHS: .github/workflows/gemini-builder.yml,poc/**,services/**,tests/**,docs/ai/**
           APPROVAL_ID: ${{ steps.director_approval.outputs.approval_id }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
@@ -454,17 +454,30 @@ jobs:
 
           DESCRIPTOR_FILE="execution-descriptor.json"
           if [ -f "$DESCRIPTOR_FILE" ]; then
-            REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
-            TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
-            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
-            EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
-            CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
+            REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE")"
+            if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+              echo "::error::BLOCKED: server-derived request_id is missing, empty, or invalid; cannot construct callback payload"
+              exit 1
+            fi
+
+            TASK="$(jq -r '.task // ""' "$DESCRIPTOR_FILE")"
+            REPOSITORY="$(jq -r '.repository // ""' "$DESCRIPTOR_FILE")"
+            BASE_BRANCH="$(jq -r '.base_branch // ""' "$DESCRIPTOR_FILE")"
+
+            EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE")"
+            if [ -z "$EXECUTION_CLAIM_ID" ] || [ "$EXECUTION_CLAIM_ID" = "null" ]; then
+              echo "::error::BLOCKED: server-derived execution_claim_id is missing, empty, or invalid; cannot construct callback payload"
+              exit 1
+            fi
+
+            CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE")"
+            if [ -z "$CARRIER_IDENTITY" ] || [ "$CARRIER_IDENTITY" = "null" ]; then
+              echo "::error::BLOCKED: server-derived carrier_identity is missing, empty, or invalid; cannot construct callback payload"
+              exit 1
+            fi
           else
-            REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
-            TASK="${{ steps.orchestration_context.outputs.task }}"
-            REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
-            BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+            echo "::error::BLOCKED: Execution descriptor file not found; cannot construct callback payload without server-derived correlation"
+            exit 1
           fi
 
           BUILDER_EXEC_ID="${{ steps.orchestration_context.outputs.builder_execution_id }}"
@@ -538,16 +551,26 @@ jobs:
 
           cp callback_payload.json gemini-acp-report.json
 
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+
           cat callback_payload.json
 
       - name: Send callback to Render
-        if: always()
+        if: always() && steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
         env:
           CALLBACK_URL: ${{ secrets.RENDER_BUILDER_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.BUILDER_CALLBACK_SECRET }}
+          REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
         shell: bash
         run: |
           set -uo pipefail
+
+          REQUEST_ID="${REQUEST_ID:-}"
+          if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+            echo "::error::BLOCKED: request_id is missing, empty, or invalid; callback cannot execute without valid server-derived correlation"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
 
           if [ -z "$CALLBACK_URL" ] || [ -z "$CALLBACK_SECRET" ]; then
             echo "::warning::Builder callback URL or secret not configured, skipping callback"
