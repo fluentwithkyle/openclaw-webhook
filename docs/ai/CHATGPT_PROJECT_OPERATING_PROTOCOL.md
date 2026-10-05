@@ -1210,7 +1210,7 @@ ACP task binding → verify zero-input `workflow_dispatch` → create/update wor
 is absent or incorrect → independently verify workflow → establish authoritative GitHub
 registration/runnability → if GitHub registration/runnability is unavailable or fails →
 BLOCKED / NOT READY; no Run link → if all gates pass → present Run link → Director executes click →
-coordinator independently inspects resulting execution.
+inspect resulting execution.
 
 This procedure does not weaken the existing authorization boundary.
 Creating/updating a workflow remains a consequential repository mutation requiring
