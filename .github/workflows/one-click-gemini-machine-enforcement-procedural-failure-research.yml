@@ -1,0 +1,177 @@
+name: One-Click Gemini Machine Enforcement Procedural Failure Research
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  dispatch-gemini-research:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Construct research task
+        id: task
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="TASK-GEMINI-MACHINE-ENFORCEMENT-PROCEDURAL-FAILURE-EXPANSION-RESEARCH-001"
+          TASK_FILE="gemini-research-task.md"
+
+          cat > "$TASK_FILE" <<'TASK_EOF'
+          task_name:
+          TASK-GEMINI-MACHINE-ENFORCEMENT-PROCEDURAL-FAILURE-EXPANSION-RESEARCH-001
+
+          originator:
+          Kyle — Director
+
+          target_agent:
+          Gemini
+
+          repository:
+          fluentwithkyle/openclaw-webhook
+
+          base_branch:
+          main
+
+          task_mode:
+          RESEARCH_DOCUMENT
+
+          capabilities:
+          - inspect
+          - inspect_repository
+          - inspect_github_actions
+          - research
+          - analyze_machine_enforcement
+          - analyze_workflow_validation
+          - modify_files
+          - commit
+          - push
+
+          objective:
+          Expand the existing machine-enforcement research from TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001 to incorporate the recent concrete failures caused by procedural compliance being relied upon instead of deterministic machine enforcement. Determine and document the broader repository-native enforcement boundary without implementing the enforcement itself.
+
+          scope:
+          Treat the existing machine-enforcement research and current repository implementation as the baseline. Do not reconstruct the one-click architecture. Inspect and reconcile the current protocol, task standard, one-click workflow contract, external activation procedure, relevant architecture/state documentation, current one-click Gemini Research and Builder workflows, canonical activation/ACP/TaskRegistry implementation, relevant tests, and recent repository/workflow history.
+
+          Analyze these directly evidenced failure classes:
+          1. Invalid GitHub Actions YAML reaching the workflow surface.
+          2. Workflow construction occurring without deterministic validation before authoritative state.
+          3. Incorrect or incomplete activation payloads.
+          4. Missing server-derived capabilities.
+          5. Incorrect or duplicate orchestration-context identifiers.
+          6. Callback/request correlation failures, including restart-related correlation loss.
+          7. Durable evidence/finalization gaps.
+          8. Workflow/task-carrier mismatch or stale carrier assumptions.
+          9. Reliance on an agent remembering protocol requirements instead of machine-enforced gates.
+          10. Any additional directly evidenced failure where an existing procedural requirement lacked a deterministic enforcement boundary.
+
+          For each failure class determine:
+          - the existing procedural requirement;
+          - the existing deterministic mechanism, if any;
+          - whether that mechanism actually blocks invalid state before it becomes authoritative;
+          - the smallest repository-native deterministic gate that would prevent recurrence;
+          - the evidence and tests needed to prove the gate works;
+          - what remains human/agent responsibility;
+          - how the enforcement preserves the existing architecture.
+
+          Core distinction:
+          PROCEDURE -> tells an agent what it must do.
+          MACHINE ENFORCEMENT -> independently prevents or rejects invalid state when the agent does not do it.
+          Documenting a procedure is not equivalent to enforcing it.
+
+          Reconcile the previous machine-enforcement research. Identify which prior recommendations remain valid, which are superseded by newer evidence, and what consolidated enforcement model should cover workflow construction, activation, authority derivation, correlation, execution, evidence, and reconciliation.
+
+          For every major conclusion classify it as VERIFIED, INFERRED, or UNKNOWN.
+
+          Solution simplicity:
+          Evaluate existing repository tests, validators, GitHub Actions capabilities, and native repository governance before proposing custom tooling. Prefer the smallest viable existing mechanism. If custom validation is required, document why the simpler path is insufficient.
+
+          Roadmap Alignment:
+          - authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/STATE.md; applicable lifecycle-enforcement roadmap documentation.
+          - current_roadmap_phase: Establish from current repository state; do not rely on memory or prior chat.
+          - phase_completion: Establish from current repository evidence.
+          - required_next_work: Establish the machine-enforcement research/design basis for preventing recurrence of demonstrated procedural failures.
+          - proposed_task_mapping: B — Enabling/Foundation Work, if current roadmap evidence confirms this classification.
+          - prerequisite_status: Verify the existing one-click contract, external activation validation, ACP/task standards, and prior machine-enforcement research.
+          - expected_phase_advancement: Establish the research/design basis for the smallest authorized machine-enforcement increments.
+          - alignment_conclusion: PASS, REJECT, or BLOCKED based on repository evidence.
+
+          verification:
+          1. Inspect the actual current repository and GitHub implementation before drawing conclusions.
+          2. Read the existing TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001 research record before extending it.
+          3. Verify each failure class against repository/workflow evidence; do not rely on pasted agent reports as authoritative.
+          4. Determine which existing procedural requirements have no deterministic blocking gate.
+          5. Produce a durable research record under docs/ai/research/ using the exact task name.
+          6. Update docs/ai/RESEARCH_INDEX.md and docs/ai/TASK_LOG.md as required by RESEARCH_DOCUMENT.
+          7. Reconcile docs/ai/STATE.md and docs/ai/CONTROL_CENTER.md only if durable project-state understanding materially changes.
+          8. Include a mandatory Roadmap Alignment section with the required fields.
+          9. Clearly separate VERIFIED, INFERRED, and UNKNOWN findings.
+          10. Identify the consolidated machine-enforcement boundary and smallest viable implementation increments.
+          11. Preserve ACP, TaskRegistry, dispatcher/orchestrator, Kyle authorization, server-derived authority, and the single control plane.
+          12. Run repository-authorized research/documentation validation.
+          13. Review the final diff for scope compliance.
+          14. Commit and push the research/documentation result to main and report the commit SHA.
+
+          constraints:
+          - Research/documentation only.
+          - Do not implement production enforcement code.
+          - Do not modify .github/workflows/* as part of the research deliverable.
+          - Do not modify activation-policy.js, activation-ingress.js, ACP schema/engine, TaskRegistry, or runtime execution code.
+          - Do not implement workflow validation, branch protection, rulesets, or other enforcement mechanisms.
+          - Do not reconstruct or redesign the one-click architecture.
+          - Do not create a second control plane, TaskRegistry, state model, activation path, authorization mechanism, or execution authority.
+          - Preserve Kyle as final authorization authority.
+          - Treat current repository/GitHub evidence as authoritative.
+          - Do not treat agent self-report as authoritative verification.
+          - No credentials or secret material may be requested, exposed, or persisted.
+          - If evidence is insufficient, mark UNKNOWN rather than infer.
+          - persistence_expectation: same_execution
+          - deliverable_commit: true
+          - deliverable_push: true
+          - verification_requires_commit_sha: true
+
+          conflict_handling:
+          Repository instructions, AGENTS.md, GEMINI.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md take precedence. If current implementation contradicts an assumption or prior research, use current repository evidence and document the discrepancy. Do not create a competing authority.
+
+          TASK_EOF
+
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch canonical Gemini research carrier
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPOSITORY="${{ github.repository }}"
+          REQUEST_ID="${{ steps.task.outputs.request_id }}"
+          TASK_FILE="${{ steps.task.outputs.task_file }}"
+
+          jq -n             --arg ref "main"             --arg request_id "$REQUEST_ID"             --rawfile task "$TASK_FILE"             --arg repository "$REPOSITORY"             --arg base_branch "main"             --arg task_mode "RESEARCH_DOCUMENT"             --arg capabilities "inspect,inspect_repository,inspect_github_actions,research,analyze_machine_enforcement,analyze_workflow_validation,modify_files,commit,push"             --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md"             --arg verification "Inspect current procedural failures and deterministic enforcement boundaries; reconcile prior research; produce durable research record; update required research index and task log; distinguish VERIFIED/INFERRED/UNKNOWN; identify smallest machine-enforcement increments; commit and push; report commit SHA"             '{
+              ref: $ref,
+              inputs: {
+                request_id: $request_id,
+                task: ($task | rtrimstr("\n")),
+                repository: $repository,
+                base_branch: $base_branch,
+                task_mode: $task_mode,
+                capabilities: $capabilities,
+                permitted_paths: $permitted_paths,
+                verification: $verification
+              }
+            }' > dispatch-payload.json
+
+          gh api             --method POST             -H "Accept: application/vnd.github+json"             "/repos/${REPOSITORY}/actions/workflows/main.yml/dispatches"             --input dispatch-payload.json
+
+          echo "::notice::Canonical Gemini RESEARCH_DOCUMENT carrier dispatched for ${REQUEST_ID}."
