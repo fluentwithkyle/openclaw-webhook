@@ -9,6 +9,9 @@
 ---
 
 ---
+2026-10-05 | TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001 | Determined the repository-native, ACP-compliant mechanism for durably projecting canonical Gemini ACP execution reports onto readable repository evidence without concurrent main-branch push races, resolving remaining questions from TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001. Created durable research record docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001.md with VERIFIED/INFERRED/UNKNOWN classifications, git rebase/retry branch concurrency resolution, and Roadmap Alignment section. Updated RESEARCH_INDEX.md. Research-only; no source code, workflows, or runtime components modified. | SUCCESS | docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001.md, docs/ai/RESEARCH_INDEX.md
+
+---
 2026-10-05 | TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001 | Resolved remaining architectural questions from TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001 regarding durable Gemini ACP report concurrency, canonical-vs-projection, correlation, outcome coverage, atomicity/integrity, exact integration boundary, verification, retention/discoverability, simplicity, and state impact. Created durable research record docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001.md with VERIFIED/INFERRED/UNKNOWN classifications and Roadmap Alignment section. Updated RESEARCH_INDEX.md with new entry. Research-only; no source code, workflows, or runtime components modified. | SUCCESS | docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001.md, docs/ai/RESEARCH_INDEX.md
 
 ---

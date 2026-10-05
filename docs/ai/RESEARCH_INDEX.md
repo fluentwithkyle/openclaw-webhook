@@ -27,6 +27,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
+| TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001 | 2026-10-05 | Gemini | `docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-BRANCH-CONCURRENCY-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001 | 2026-10-05 | Gemini | `docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001 | 2026-10-05 | Gemini | `docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001 | 2026-10-02 | Gemini | `docs/ai/research/research-TASK-GEMINI-TASK-REGISTRY-PERSISTENCE-CONCURRENCY-ARCHITECTURE-DECISION-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
