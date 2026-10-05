@@ -1,0 +1,133 @@
+name: One-Click Gemini Activation Verify Reconcile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  dispatch-gemini-verify-reconcile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Construct Gemini verification task
+        id: task
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-ACTIVATION-VERIFY-RECONCILE-001"
+          TASK_FILE="gemini-verify-reconcile-task.md"
+
+          cat > "$TASK_FILE" <<'TASK_EOF'
+          @gemini
+
+          task_name:
+          TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-ACTIVATION-VERIFY-RECONCILE-001
+
+          originator:
+          Kyle — Director
+
+          target_agent:
+          Gemini
+
+          repository:
+          fluentwithkyle/openclaw-webhook
+
+          base_branch:
+          main
+
+          task_mode:
+          VERIFY_RECONCILE
+
+          capabilities:
+          - read_only
+          - modify_files
+          - commit
+          - push
+
+          objective:
+          Independently verify the live end-to-end Gemini RESEARCH_DOCUMENT one-click activation path and reconcile the verified result into the canonical durable project records.
+
+          scope:
+          Use the existing zero-input one-click Gemini activation workflow and canonical external-activation architecture. Inspect the actual GitHub Actions execution, canonical activation admission, server-derived authority, TaskRegistry and execution correlation, Gemini execution, canonical Gemini ACP result artifacts, callback/evidence path, and final completion state. Reconcile only docs/ai/TASK_LOG.md, docs/ai/STATE.md, and docs/ai/CONTROL_CENTER.md. Do not redesign or reconstruct the one-click architecture.
+
+          verification:
+          1. Verify the actual one-click workflow dispatch and exact execution/request correlation.
+          2. Verify canonical external activation admission and server-derived authority.
+          3. Verify TaskRegistry lifecycle and execution claim correlation through Gemini execution and callback/evidence.
+          4. Retrieve and inspect canonical gemini-acp-report and gemini-acp-report.json artifacts; these are the sole authoritative Gemini result sources.
+          5. If either canonical artifact is unavailable or insufficient, report NOT VERIFIED/BLOCKED rather than substituting workflow conclusions, job summaries, annotations, comments, or prior reports.
+          6. Classify major findings as VERIFIED, INFERRED, or UNKNOWN.
+          7. Reconcile the verified outcome into TASK_LOG.md, STATE.md, and CONTROL_CENTER.md only where evidence warrants durable state change.
+          8. Validate the reconciliation and final diff.
+          9. Commit and push the reconciliation to main and report the commit SHA.
+
+          solution_simplicity:
+          Reuse the existing one-click workflow, canonical activation ingress, TaskRegistry, execution descriptor, Gemini callback/evidence path, and existing durable records. Do not introduce another workflow architecture, task registry, control plane, validation shim, or state store.
+
+          roadmap_alignment:
+          - authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/STATE.md; docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md
+          - current_phase: Phase 3 — Autonomous Coordination Loop; Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation is the next target phase
+          - phase_completion_status: Phase 3 complete/converged
+          - relevant_prior_work: Canonical external activation, server-derived execution descriptors, Gemini RESEARCH_DOCUMENT carrier capability fixes, and the existing zero-input one-click workflow
+          - proposed_task_classification: B — Enabling/Foundation Work
+          - roadmap_requirement_addressed: Machine-verifiable coordination lifecycle and external activation evidence
+          - prerequisites_satisfied: Existing one-click contract, canonical ingress, TaskRegistry, ACP validation, execution descriptor, Gemini callback/evidence path, and durable records are present
+          - phase_unlock_or_advancement: Provides independent verification and durable reconciliation of the Gemini one-click activation path
+          - alignment_conclusion: PASS — bounded verification/reconciliation of existing foundation
+
+          constraints:
+          - Verification and reconciliation only; do not repair implementation defects.
+          - Do not modify .github/workflows/*.
+          - Do not modify poc/*, runtime source, activation policy, TaskRegistry, or execution-carrier implementation.
+          - Do not create a second control plane, executor, state store, or activation path.
+          - Canonical gemini-acp-report and gemini-acp-report.json artifacts are mandatory evidence for claiming Gemini execution success.
+          - If evidence is insufficient, mark UNKNOWN or BLOCKED.
+          - persistence_expectation: same_execution
+          - deliverable_commit: true
+          - deliverable_push: true
+          - verification_requires_commit_sha: true
+
+          conflict_handling:
+          Repository instructions, GEMINI.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md take precedence. Use repository evidence and reconcile discrepancies explicitly.
+          TASK_EOF
+
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch canonical Gemini verification carrier
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPOSITORY="${{ github.repository }}"
+          REQUEST_ID="${{ steps.task.outputs.request_id }}"
+          TASK_FILE="${{ steps.task.outputs.task_file }}"
+
+          jq -n             --arg ref "main"             --arg request_id "$REQUEST_ID"             --rawfile task "$TASK_FILE"             --arg repository "$REPOSITORY"             --arg base_branch "main"             --arg task_mode "VERIFY_RECONCILE"             --arg capabilities "read_only,modify_files,commit,push"             --arg permitted_paths "docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md"             --arg verification "Independently verify live Gemini one-click activation using canonical gemini-acp-report artifacts; reconcile verified outcome into TASK_LOG.md, STATE.md, CONTROL_CENTER.md; distinguish VERIFIED/INFERRED/UNKNOWN; commit and push; report commit SHA"             '{
+              ref: $ref,
+              inputs: {
+                request_id: $request_id,
+                task: ($task | rtrimstr("\n")),
+                repository: $repository,
+                base_branch: $base_branch,
+                task_mode: $task_mode,
+                capabilities: $capabilities,
+                permitted_paths: $permitted_paths,
+                verification: $verification
+              }
+            }' > dispatch-payload.json
+
+          gh api             --method POST             -H "Accept: application/vnd.github+json"             "/repos/${REPOSITORY}/actions/workflows/main.yml/dispatches"             --input dispatch-payload.json
+
+          echo "::notice::Canonical Gemini VERIFY_RECONCILE carrier dispatched for ${REQUEST_ID}."
