@@ -497,6 +497,111 @@ runTest('Protocol - Section 11.2 includes protocol correction for operational se
         'Protocol must include the corrected operational sequence');
 });
 
+runTest('Protocol - Section 11.2 includes the mandatory registration/runnability gate step', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/registration\/runnability gate/i.test(section),
+        'Protocol must state the registration/runnability gate as a mandatory step');
+    assert.ok(/establish authoritative/i.test(section),
+        'Gate step must reference establishing authoritative GitHub signal');
+});
+
+runTest('Protocol - Section 11.2 states workflow-file existence is insufficient', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/workflow-file existence is insufficient/i.test(section),
+        'Protocol must state workflow-file existence is insufficient');
+    assert.ok(/does.*not.*establish/i.test(section),
+        'Protocol must explain file existence does not establish GitHub registration');
+});
+
+runTest('Protocol - Section 11.2 states workflow_dispatch presence is insufficient', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/workflow_dispatch.*presence is insufficient/i.test(section) ||
+        /workflow_dispatch.*insufficient/i.test(section),
+        'Protocol must state workflow_dispatch presence is insufficient');
+    assert.ok(/HTTP 422/i.test(section) || /422/i.test(section),
+        'Protocol must cite HTTP 422 registration failure with workflow_dispatch');
+});
+
+runTest('Protocol - Section 11.2 states YAML validity is insufficient', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/YAML validity is insufficient/i.test(section),
+        'Protocol must state YAML validity is insufficient');
+    assert.ok(/YAML.*does.*not.*establish/i.test(section) || /does.*not.*establish.*registration/i.test(section),
+        'Protocol must explain YAML validity does not establish registration/dispatchability');
+});
+
+runTest('Protocol - Section 11.2 states repository-local tests cannot prove GitHub-hosted registration', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/repository-local tests.*cannot prove.*GitHub-hosted registration/i.test(section),
+        'Protocol must state repository-local tests cannot prove GitHub-hosted registration');
+    assert.ok(/GitHub Actions API[\s\S]*?dropdown[\s\S]*?workflow_dispatch[\s\S]*?run/i.test(section),
+        'Protocol must list GitHub-hosted signals that repo-local tests cannot query');
+});
+
+runTest('Protocol - Section 11.2 keeps VERIFIED / INFERRED / UNKNOWN distinct', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/VERIFIED.*INFERRED.*UNKNOWN/i.test(section),
+        'Protocol must keep VERIFIED, INFERRED, and UNKNOWN distinct');
+    assert.ok(/VERIFIED is directly[\s\S]*?established/i.test(section),
+        'Protocol must define VERIFIED as directly established');
+    assert.ok(/INFERRED is logically[\s\S]*?likely/i.test(section),
+        'Protocol must define INFERRED as logically likely');
+    assert.ok(/UNKNOWN is unestablished/i.test(section),
+        'Protocol must define UNKNOWN as unestablished');
+});
+
+runTest('Protocol - Section 11.2 states registration is UNKNOWN without authoritative GitHub evidence', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/registration is UNKNOWN without authoritative GitHub evidence/i.test(section),
+        'Protocol must state registration is UNKNOWN without authoritative GitHub evidence');
+    assert.ok(/absence.*GitHub-hosted signal/i.test(section),
+        'Protocol must state in absence of authoritative signal registration is UNKNOWN');
+});
+
+runTest('Protocol - Section 11.2 states UNKNOWN is fail-closed as BLOCKED / NOT READY', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/UNKNOWN is fail-closed/i.test(section),
+        'Protocol must state UNKNOWN is fail-closed');
+    assert.ok(/BLOCKED.*NOT READY/i.test(section) || /NOT READY.*BLOCKED/i.test(section),
+        'Protocol must state UNKNOWN results in BLOCKED/NOT READY');
+    assert.ok(/does.*not.*present[\s\S]*?Run link/i.test(section),
+        'Protocol must state no Run link is presented when UNKNOWN');
+});
+
+runTest('Protocol - Section 11.2 states Run link cannot be presented before gate passes', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/Run link cannot be presented before.*registration gate passes/i.test(section),
+        'Protocol must state Run link cannot be presented before gate passes');
+    assert.ok(/Run workflow.*link may be provided until/i.test(section),
+        'Protocol must prohibit providing Run link until verification');
+});
+
+runTest('Protocol - Section 11.2 references ONE_CLICK_WORKFLOW_CONTRACT.md Section 9 as canonical gate', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/docs\/ai\/ONE_CLICK_WORKFLOW_CONTRACT\.md.*Section 9/i.test(section),
+        'Protocol must reference the canonical contract Section 9');
+    assert.ok(/Workflow Registration & Runnability Gate/i.test(section),
+        'Protocol must name the gate as Workflow Registration & Runnability Gate');
+    assert.ok(/does not.*redefine.*weaken/i.test(section) || /invokes.*reinforces.*gate.*does not redefine/i.test(section),
+        'Protocol must state it invokes/reinforces the gate without redefining/weakening it');
+});
+
+runTest('Protocol - Section 11.2 operational sequence includes registration gate between binding and creating workflow', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    const sequencePattern = /verify exact[\s\S]*?ACP task binding[\s\S]*?verify zero-input/i;
+    assert.ok(sequencePattern.test(section),
+        'Protocol sequence must show zero-input verification after task binding');
+    const gatePattern = /establish authoritative[\s\S]*?GitHub registration\/runnability/i;
+    assert.ok(gatePattern.test(section),
+        'Protocol sequence must show establishing authoritative GitHub registration/runnability');
+    const failClosedPattern = /BLOCKED \/ NOT READY; no Run link/i;
+    assert.ok(failClosedPattern.test(section),
+        'Protocol sequence must show BLOCKED/NOT READY with no Run link on gate failure');
+    const runLinkPattern = /all gates pass[\s\S]*?present Run link/i;
+    assert.ok(runLinkPattern.test(section),
+        'Protocol sequence must show Run link presented only after all gates pass');
+});
+
 // =========================================================
 // One-click workflow file structure tests
 // =========================================================

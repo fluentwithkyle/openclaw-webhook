@@ -1202,13 +1202,59 @@ A fresh coordinator following the cold-start path will encounter
 making any activation or workflow-construction decision.
 
 **Protocol correction**: The operational sequence for a one-click request explicitly
-includes: Inspect requested task → inspect candidate workflow → verify exact embedded
-task binding → create/update workflow if binding is absent or incorrect → independently
-verify workflow → present Run link → Director executes click → inspect resulting
-execution. This procedure does not weaken the existing authorization boundary.
+includes the workflow registration/runnability gate as a mandatory coordinator
+decision step. The full sequence is:
+
+Inspect requested task → inspect candidate workflow → verify exact embedded
+ACP task binding → verify zero-input `workflow_dispatch` → create/update workflow if binding
+is absent or incorrect → independently verify workflow → establish authoritative GitHub
+registration/runnability → if GitHub registration/runnability is unavailable or fails →
+BLOCKED / NOT READY; no Run link → if all gates pass → present Run link → Director
+executes click → coordinator independently inspects resulting execution.
+
+This procedure does not weaken the existing authorization boundary.
 Creating/updating a workflow remains a consequential repository mutation requiring
 explicit ACP capabilities (including `modify_files`, `commit`, `push` where
 applicable); the Director's Run click remains the activation action.
+
+The following sub-rules are mandatory and non-overrideable within Section 11.2:
+
+* Workflow-file existence is insufficient: a workflow file present on the
+  repository default branch does **not** establish that GitHub Actions has
+  registered, parsed, or recognized the workflow as runnable.
+* `workflow_dispatch` trigger presence is insufficient: YAML-level trigger
+  presence does **not** establish GitHub registration or dropdown
+  availability (the 2026-09-16 registration incident confirmed GitHub can
+  return HTTP 422 "workflow did not have the workflow_dispatch trigger" when
+  the YAML contains a construct GitHub cannot parse).
+* YAML validity is insufficient: a structurally valid YAML workflow does
+  **not** establish GitHub registration or dispatchability.
+* Repository-local tests cannot prove GitHub-hosted registration: no test
+  running in-repository can query the GitHub Actions API, the "Run workflow"
+  dropdown, or dispatch a `workflow_dispatch` run. These require an
+  authoritative GitHub-hosted signal.
+* VERIFIED / INFERRED / UNKNOWN remain distinct: VERIFIED is directly
+  established by authoritative tooling (repo-local file-tree check, YAML
+  parse, or GitHub API returning `state: active`); INFERRED is logically
+  likely but not directly established; UNKNOWN is unestablished. YAML-based
+  "the workflow probably registered" is INFERRED, not VERIFIED.
+* Registration is UNKNOWN without authoritative GitHub evidence: in the
+  absence of a GitHub-hosted signal (API `state: active`, dropdown
+  presence, or a successful dispatch run), registration/runnability is
+  classified UNKNOWN.
+* UNKNOWN is fail-closed as BLOCKED / NOT READY: when registration/
+  runnability is UNKNOWN (no authoritative GitHub signal available), the
+  coordinator classifies the workflow as BLOCKED / NOT READY and does
+  **not** present a Run link.
+* The Run link cannot be presented before the registration gate passes: no
+  "Run workflow" link may be provided until GitHub registration and
+  runnability have been independently established as VERIFIED via an
+  authoritative GitHub-hosted signal.
+
+The canonical, normative definition of the registration/runnability gate is
+documented in `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` Section 9
+(Workflow Registration & Runnability Gate). This protocol section invokes and
+reinforces that gate; it does not redefine or weaken it.
 
 12. Standard Completion Loop
 
