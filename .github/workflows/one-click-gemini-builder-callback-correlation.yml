@@ -302,13 +302,13 @@ jobs:
           set -euo pipefail
           echo "::notice::Validating workflow YAML syntax..."
           python3 -c "
-import yaml, sys
-with open('.github/workflows/one-click-gemini-builder-callback-correlation.yml') as f:
-    doc = yaml.safe_load(f)
-assert doc['name'] == 'One-Click Gemini Builder Callback Correlation'
-assert 'workflow_dispatch' in doc['on']
-print('YAML validation passed')
-"
+          import yaml, sys
+          with open('.github/workflows/one-click-gemini-builder-callback-correlation.yml') as f:
+              doc = yaml.safe_load(f)
+          assert doc['name'] == 'One-Click Gemini Builder Callback Correlation'
+          assert 'workflow_dispatch' in doc['on']
+          print('YAML validation passed')
+          "
 
       - name: Run Gemini Builder
         id: gemini_builder_run
