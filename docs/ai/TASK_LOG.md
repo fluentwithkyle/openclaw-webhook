@@ -9,6 +9,9 @@
 ---
 
 ---
+2026-10-05 | TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001 | Researched and documented the smallest repository-native, ACP-compliant mechanism that makes the canonical Gemini ACP execution report directly readable as durable project evidence after a one-click execution, eliminating dependence on downloading GitHub Actions artifacts for independent verification while preserving the existing one-click activation architecture. Created durable research record docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001.md with VERIFIED/INFERRED/UNKNOWN classifications and Roadmap Alignment section. Updated RESEARCH_INDEX.md with new entry. Research-only; no source code, workflows, or runtime components modified. | SUCCESS | docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001.md, docs/ai/RESEARCH_INDEX.md
+
+---
 2026-10-05 | TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-ACTIVATION-VERIFY-RECONCILE-001 | Independently verified the live end-to-end Gemini RESEARCH_DOCUMENT one-click activation path and reconciled the verified result into canonical durable project records. Verified actual one-click workflow dispatch, exact execution/request correlation, canonical external activation admission, server-derived authority, TaskRegistry lifecycle and execution claim correlation, and canonical gemini-acp-report/json artifacts. Reconciled outcomes into TASK_LOG.md, STATE.md, and CONTROL_CENTER.md. All evidence classified as VERIFIED. Complying strictly with permitted paths (docs/ai/*) and verification-requires-commit-sha protocol. | SUCCESS | docs/ai/TASK_LOG.md, docs/ai/STATE.md, docs/ai/CONTROL_CENTER.md
 
 ---
