@@ -1,0 +1,171 @@
+name: One-Click Gemini ACP Report Durable Evidence Concurrency Design Research
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  dispatch-gemini-research:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Construct ACP-compliant Gemini research task
+        id: task
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001"
+          TASK_FILE="gemini-acp-report-durable-evidence-concurrency-design-research.md"
+
+          cat > "$TASK_FILE" <<'TASK_EOF'
+@kyle
+
+task_name:
+TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001
+
+originator:
+Kyle — Director
+
+target_agent:
+Gemini
+
+repository:
+fluentwithkyle/openclaw-webhook
+
+base_branch:
+main
+
+task_mode:
+RESEARCH_DOCUMENT
+
+capabilities:
+- inspect
+- inspect_repository
+- inspect_github_actions
+- research
+- analyze_workflow_validation
+- modify_files
+- commit
+- push
+
+objective:
+Resolve the remaining architectural questions from TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001 and produce an implementation-ready, ACP-compliant design for making the canonical Gemini ACP execution report directly readable as durable project evidence without weakening the existing artifact-based verification path.
+
+scope:
+Inspect the prior durable-evidence research record, current main.yml report generation and callback/evidence path, one-click workflows, ACP schema/engine, activation policy/ingress, TaskRegistry/execution descriptor and claim correlation, durable docs/ai evidence conventions, and GitHub Actions concurrency behavior. Do not implement the durable-evidence mechanism.
+
+Resolve, with repository/GitHub evidence:
+1. Whether a fixed path such as docs/ai/gemini-acp-report.json is safe under concurrent or overlapping executions.
+2. Whether durable evidence must be uniquely named/correlated per request_id, activation_id, claim_id, invocation_id, workflow run, or another existing authoritative identifier.
+3. Whether the canonical machine-authoritative report should remain the GitHub Actions gemini-acp-report artifact, with a repository-native durable projection, or whether another existing mechanism is preferable.
+4. The exact relationship between the canonical report payload and any human-readable durable record; identify which is authoritative and which is a projection.
+5. Required handling for success, failure, blocked, cancelled, superseded, and partial-execution outcomes.
+6. Required correlation/provenance fields and which are server-derived versus execution-reported.
+7. How replay/idempotency and concurrent executions affect durable evidence naming and updates.
+8. Whether existing TaskRegistry/evidence/callback mechanisms already provide enough serialization or uniqueness to avoid a new persistence/concurrency mechanism.
+9. The exact existing workflow step/boundary where a durable projection could be generated, if implementation is later authorized.
+10. The smallest implementation change set, including exact files that would require modification and the minimum authorized task mode/capabilities needed.
+11. What must remain unchanged to preserve the single control plane, single TaskRegistry, canonical ingress, execution claim, ACP validation, and existing artifact verification hierarchy.
+12. Any remaining UNKNOWN that must be resolved before implementation authorization.
+
+solution_simplicity:
+Prefer existing request/task/invocation correlation and existing repository evidence mechanisms. Validate whether unique request-scoped durable filenames plus an existing index or record convention are sufficient before considering locks, external storage, a new registry, or workflow-level serialization. Do not introduce any new control plane, state store, authority path, callback protocol, or verification mechanism.
+
+verification:
+1. Inspect the prior research record and the actual current repository implementation.
+2. Inspect the actual current one-click workflow and canonical main.yml carrier path.
+3. Verify current ACP mode capabilities and permitted-path policy.
+4. Verify current TaskRegistry/execution descriptor/claim correlation fields and replay behavior relevant to evidence identity.
+5. Analyze concurrent/overlapping workflow executions using actual repository workflow semantics and existing identifiers.
+6. Produce docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-CONCURRENCY-DESIGN-RESEARCH-001.md.
+7. Update docs/ai/RESEARCH_INDEX.md and docs/ai/TASK_LOG.md as required by RESEARCH_DOCUMENT.
+8. Reconcile docs/ai/STATE.md and docs/ai/CONTROL_CENTER.md only if the research materially changes durable project-state understanding.
+9. Include explicit VERIFIED, INFERRED, and UNKNOWN classifications.
+10. Include the required ## Roadmap Alignment section using the repository's exact required field names.
+11. Provide a concrete implementation boundary, exact smallest change set, and explicit go/no-go readiness conclusion.
+12. Run repository-authorized research/documentation validation and review the final diff for scope compliance.
+13. Commit and push the research/documentation result to main and report the commit SHA.
+
+roadmap_alignment:
+- authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md; docs/ai/STATE.md
+- current_phase: Phase 3 — Autonomous Coordination Loop; Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation is the next target phase
+- phase_completion_status: Phase 3 is technically complete/converged; authoritative phase remains Phase 3 until the existing transition gate receives the required durable transition evidence
+- relevant_prior_work: Phase 3 independent verification; canonical external activation; server-derived execution descriptors; successful Gemini one-click VERIFY_RECONCILE execution; TASK-GEMINI-ACP-REPORT-DURABLE-EVIDENCE-RESEARCH-001
+- proposed_task_classification: B — Enabling/Foundation Work
+- roadmap_requirement_addressed: Durable, machine-verifiable execution evidence and the remaining evidence prerequisite identified in the Phase 4 transition baseline
+- prerequisites_satisfied: Existing canonical ingress, ACP validation, TaskRegistry, execution claim/descriptor, Gemini callback/evidence path, one-click workflow contract, and prior durable-evidence research are present
+- phase_unlock_or_advancement: Resolves the remaining design boundary needed to authorize a narrowly scoped durable-evidence implementation and removes an evidence ambiguity currently blocking clean independent verification/reconciliation
+- alignment_conclusion: PASS — bounded enabling research/documentation work
+
+constraints:
+- Research/documentation only; do not implement the recommended durable-evidence change in this task.
+- Do not modify .github/workflows/*.
+- Do not modify poc/*, runtime source, activation policy, TaskRegistry, ACP schema/engine, callback implementation, or GitHub repository settings.
+- Do not create a second control plane, executor, state store, TaskRegistry, authority path, persistence service, or verification mechanism.
+- Preserve the existing gemini-acp-report artifact and its authoritative verification role.
+- Preserve replay/idempotency and fail-closed behavior.
+- No credentials or secret material may be requested, exposed, or persisted.
+- If concurrency or evidence semantics cannot be established from repository/GitHub evidence, mark them UNKNOWN rather than inferring.
+- persistence_expectation: same_execution
+- deliverable_commit: true
+- deliverable_push: true
+- verification_requires_commit_sha: true
+
+conflict_handling:
+Repository instructions, AGENTS.md, GEMINI.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, docs/ai/TASK_STANDARD.md, and docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md take precedence. If the prior research recommendation conflicts with current implementation, current repository evidence controls and the discrepancy must be documented.
+TASK_EOF
+
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch canonical Gemini research carrier
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPOSITORY="${{ github.repository }}"
+          REQUEST_ID="${{ steps.task.outputs.request_id }}"
+          TASK_FILE="${{ steps.task.outputs.task_file }}"
+
+          jq -n \
+            --arg ref "main" \
+            --arg request_id "$REQUEST_ID" \
+            --rawfile task "$TASK_FILE" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "main" \
+            --arg task_mode "RESEARCH_DOCUMENT" \
+            --arg capabilities "inspect,inspect_repository,inspect_github_actions,research,analyze_workflow_validation,modify_files,commit,push" \
+            --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md" \
+            --arg verification "Resolve durable Gemini ACP report concurrency, canonical-vs-projection, failure handling, provenance/correlation, replay/idempotency, and exact implementation boundary; produce durable research record; update required index/task log; distinguish VERIFIED/INFERRED/UNKNOWN; commit and push; report commit SHA" \
+            '{
+              ref: $ref,
+              inputs: {
+                request_id: $request_id,
+                task: ($task | rtrimstr("\n")),
+                repository: $repository,
+                base_branch: $base_branch,
+                task_mode: $task_mode,
+                capabilities: $capabilities,
+                permitted_paths: $permitted_paths,
+                verification: $verification
+              }
+            }' > dispatch-payload.json
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPOSITORY}/actions/workflows/main.yml/dispatches" \
+            --input dispatch-payload.json
+
+          echo "::notice::Canonical Gemini RESEARCH_DOCUMENT carrier dispatched for ${REQUEST_ID}."
