@@ -1,0 +1,104 @@
+name: One-Click Gemini Durable Readable Evidence Implementation Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  dispatch-gemini-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construct ACP verification task carrier
+        id: task
+        shell: bash
+        run: |
+          set -euo pipefail
+          REQUEST_ID="TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION-VERIFY-RECONCILE-001"
+          TASK_FILE="gemini-durable-readable-evidence-implementation-verification.md"
+          cat > "$TASK_FILE" <<'TASK_EOF'
+@kyle
+protocol_version: 0.1
+request_id: TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION-VERIFY-RECONCILE-001
+source: Kyle
+originator: Kyle — Director
+target: Gemini
+target_agent: Gemini
+task_type: verification
+repository: fluentwithkyle/openclaw-webhook
+base_branch: main
+task: Independently verify and durably document whether Kilo's implementation of TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION satisfies the original implementation task, using repository evidence and a real execution of the canonical Gemini carrier as the acceptance test.
+task_mode: VERIFY_RECONCILE
+constraints:
+  permitted_paths:
+  - docs/ai/research/
+  - docs/ai/RESEARCH_INDEX.md
+  - docs/ai/TASK_LOG.md
+authorization:
+  capabilities:
+  - read_only
+  - modify_files
+  - commit
+  - push
+original_task: TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION-001
+original_implementation_commit: 712006ed074188319c57c9c81fe84260fcb7e1be
+acceptance_requirements:
+  - Verify Kilo's implementation is present on main and inspect the exact change in .github/workflows/main.yml.
+  - Verify the durable projection is derived from canonical callback_payload.json.
+  - Verify the durable destination is uniquely correlated to request_id.
+  - Verify the existing ephemeral gemini-acp-report artifact remains intact.
+  - Verify concurrency handling against actual repository branch/push behavior and identify remaining failure modes.
+  - Execute the canonical Gemini carrier as part of this acceptance test; code inspection alone is insufficient.
+  - Locate the resulting durable report directly on main and verify its contents and request correlation.
+  - Compare the durable projection against canonical ACP report data from the same execution and identify material mismatches.
+  - Verify no second control plane, registry, state store, activation path, callback protocol, executor, or authority source was introduced.
+  - Verify the durable projection is readable directly from GitHub without artifact download.
+  - Record VERIFIED, INFERRED, and UNKNOWN findings separately.
+  - State SATISFIED, PARTIALLY SATISFIED, or NOT SATISFIED for the original implementation task.
+  - If satisfied, document the exact durable evidence path and independent verification basis.
+  - If not satisfied, document only the concrete remaining gap; do not start another implementation/research loop.
+verification: Create docs/ai/research/research-TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION-VERIFY-RECONCILE-001.md; update RESEARCH_INDEX.md and TASK_LOG.md; include repository inspection, runtime execution evidence, exact durable report path, canonical-versus-projection comparison, concurrency assessment, ACP/authorization assessment, VERIFIED/INFERRED/UNKNOWN, final verdict, independent verification procedure/result, and mandatory ## Roadmap Alignment. Commit and push and report the final commit SHA.
+runtime_test_requirement: The canonical Gemini execution triggered by this one-click workflow is part of the acceptance test. A successful Gemini task completion alone is insufficient; verification must confirm a durable report file was actually committed to main and is directly readable.
+scope: VERIFY_RECONCILE and documentation only. Modify only docs/ai/research/, docs/ai/RESEARCH_INDEX.md, and docs/ai/TASK_LOG.md. Do not modify workflows, poc, runtime source, ACP schema/engine, activation policy, TaskRegistry, callback implementation, repository settings, dependencies, secrets, or environment configuration.
+roadmap_alignment:
+  - authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/STATE.md; docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md
+  - current_roadmap_phase: Phase 3 — Autonomous Coordination Loop; Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation is the next target phase
+  - phase_completion_status: Phase 3 complete/converged; this verification does not activate Phase 4
+  - relevant_prior_work: TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION-001 and Kilo implementation commit 712006ed074188319c57c9c81fe84260fcb7e1be
+  - required_prerequisites_satisfied: durable-evidence research, concurrency research, branch-concurrency research, and implementation are present
+  - proposed_task_mapping: B — Enabling/Foundation Verification and Reconciliation
+  - phase_unlock_or_advancement: Verifies durable-readable-evidence implementation; does not activate Phase 4
+  - alignment_conclusion: PASS if bounded to acceptance/reconciliation
+constraints_additional:
+  - VERIFY_RECONCILE/documentation only.
+  - Do not modify .github/workflows/* or implementation/runtime files.
+  - Do not create a second control plane, executor, state store, registry, authority path, activation path, callback protocol, or parallel verification system.
+  - Do not accept Kilo's report as proof when repository or runtime evidence can be checked directly.
+  - If a fact cannot be established from repository or execution evidence, classify UNKNOWN.
+  - persistence_expectation: same_execution
+  - deliverable_commit: true
+  - deliverable_push: true
+  - verification_requires_commit_sha: true
+conflict_handling: Repository instructions, GEMINI.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, docs/ai/TASK_STANDARD.md, and canonical ACP/activation implementation take precedence. If task assertions conflict with repository evidence, fail closed, document the discrepancy, and classify it UNKNOWN.
+TASK_EOF
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch canonical Gemini VERIFY_RECONCILE carrier
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPOSITORY="${{ github.repository }}"
+          REQUEST_ID="${{ steps.task.outputs.request_id }}"
+          TASK_FILE="${{ steps.task.outputs.task_file }}"
+          jq -n --arg ref "main" --arg request_id "$REQUEST_ID" --rawfile task "$TASK_FILE" --arg repository "$REPOSITORY" --arg base_branch "main" --arg task_mode "VERIFY_RECONCILE" --arg capabilities "read_only,modify_files,commit,push" --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md" --arg verification "Verify Kilo implementation TASK-GEMINI-ACP-REPORT-DURABLE-READABLE-EVIDENCE-IMPLEMENTATION at 712006e; execute canonical Gemini carrier; verify durable report exists on main and is directly readable; compare canonical/projection; document VERIFIED/INFERRED/UNKNOWN; classify SATISFIED/PARTIALLY SATISFIED/NOT SATISFIED; commit and push verification record" '{ref:$ref,inputs:{request_id:$request_id,task:($task|rtrimstr("\n")),repository:$repository,base_branch:$base_branch,task_mode:$task_mode,capabilities:$capabilities,permitted_paths:$permitted_paths,verification:$verification}}' > dispatch-payload.json
+          gh api --method POST -H "Accept: application/vnd.github+json" "/repos/"'$REPOSITORY'"/actions/workflows/main.yml/dispatches" --input dispatch-payload.json
+          echo "::notice::Canonical Gemini VERIFY_RECONCILE carrier dispatched for $REQUEST_ID."
