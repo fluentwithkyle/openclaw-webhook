@@ -1057,14 +1057,13 @@ router.post('/github/webhook', async (req, res) => {
 router.post('/activation/ingress', authenticatePoc, async (req, res) => {
     const carrierIdentity = req.headers['x-carrier-identity'] || null;
 
-    const ingressResult = canonicalExternalActivationIngress(req.body, {
+    const ingressResult = await canonicalExternalActivationIngress(req.body, {
         director_approval_id: req.body && req.body.authorization && req.body.authorization.approval_id,
         carrier_identity: carrierIdentity,
         carrier_type: carrierIdentity ? 'github_workflow' : 'external'
     });
 
     if (!ingressResult.success) {
-        console.error('[activation-ingress-rejection]', JSON.stringify({ request_id: ingressResult.request_id || 'unknown', stage: ingressResult.stage, error: ingressResult.error, error_code: ingressResult.error_code }));
         const statusCode = (ingressResult.error_code === 'DUPLICATE_REQUEST_ID' || ingressResult.error_code === 'REPLAY_PAYLOAD_MISMATCH') ? 409
             : (ingressResult.stage === 'conflict' ? 409 : 403);
         return res.status(statusCode).json({
