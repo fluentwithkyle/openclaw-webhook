@@ -16,7 +16,7 @@ This distinction and the fail-closed artifact-verification rule are enforced in 
 
 All task requests must be structured with the following fields:
 
-- `task_name`: (Required) The exact task name/identifier for the task being prepared; must be present in every ACP artifact and verified against the task's actual identifier/name before authorization. When used in a one-click workflow context, the `task_name` must exactly match the embedded carrier's task_name as verified by the machine-enforceable `verifyCarrierBinding` function in `test/one-click-workflow-contract.test.js`.
+- `task_name`: (Required) The exact task name/identifier for the task being prepared; must be present in every ACP artifact and verified against the task's actual identifier/name before authorization.
 - `originator`: (Required) The persona or role initiating the task (e.g., "Kyle — Director").
 - `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Gemini Builder", "Kilo").
 - `repository`: (Required) The repository the task applies to.
