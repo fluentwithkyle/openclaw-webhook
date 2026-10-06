@@ -1,7 +1,7 @@
 name: One-Click Gemini Builder Zero-Input Activation Status Research
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: write
