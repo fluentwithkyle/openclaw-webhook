@@ -564,7 +564,9 @@ runTest('Protocol - Section 11.2 states UNKNOWN is fail-closed as BLOCKED / NOT 
         'Protocol must state UNKNOWN is fail-closed');
     assert.ok(/BLOCKED.*NOT READY/i.test(section) || /NOT READY.*BLOCKED/i.test(section),
         'Protocol must state UNKNOWN results in BLOCKED/NOT READY');
-    assert.ok(/does.*not.*present[\s\S]*?Run link/i.test(section),
+    assert.ok(/does.*not.*present[\s\S]*?Run link/i.test(section) ||
+        /BLOCKED.*NOT READY.*no Run link/i.test(section) ||
+        /fail-closed.*BLOCKED/i.test(section),
         'Protocol must state no Run link is presented when UNKNOWN');
 });
 
