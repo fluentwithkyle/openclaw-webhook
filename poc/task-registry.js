@@ -30,6 +30,8 @@ const REGISTRY_LOCK_FILE = path.join(__dirname, 'task-registry.json.lock');
 const CLAIM_STALE_MS = 15 * 60 * 1000;
 const REGISTRY_LOCK_TIMEOUT_MS = 5000;
 
+const MODULE_INSTANCE_ID = Math.random().toString(36).slice(2, 10);
+
 let memoryCache = new Map();
 let approvalCache = new Map();
 let initialized = false;
@@ -176,7 +178,9 @@ async function createDirectorApproval(scope) {
     const expiry = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const approvalId = 'dir-approval-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
     const record = { ...getDirectorScope(scope), transition_binding: scope.transition_binding || null, issuer: 'Kyle (Director)', expiry, issued_at: issuedAt, consumed_at: null, status: 'PENDING', approval_id: approvalId, scope_hash: calculateDirectorScopeHash(scope) };
+    console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] createDirectorApproval: setting approvalCache[' + approvalId + '], cache size before:', approvalCache.size);
     approvalCache.set(approvalId, record);
+    console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] createDirectorApproval: cache size after:', approvalCache.size);
     await persistCache();
     return { success: true, approval: record };
   });
@@ -221,6 +225,7 @@ async function revokePendingDirectorApprovals(requestId, reason, options) {
 }
 function getDirectorApproval(approvalId) {
   getCache();
+  console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] getDirectorApproval: looking for ' + approvalId + ', cache size:', approvalCache.size, 'keys:', Array.from(approvalCache.keys()));
   return approvalCache.get(approvalId) || null;
 }
 
@@ -805,6 +810,7 @@ async function deleteTask(requestId) {
 }
 
 function resetRegistry() {
+  console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] resetRegistry called');
   memoryCache = new Map();
   approvalCache = new Map();
   if (fs.existsSync(CLAIMS_DIR)) {
@@ -820,6 +826,7 @@ function resetRegistry() {
 }
 
 function resetMemoryCache() {
+  console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] resetMemoryCache called');
   memoryCache = new Map();
   approvalCache = new Map();
   initialized = false;
@@ -1364,5 +1371,6 @@ module.exports = {
   transitionToExecuting,
   CLAIMS_DIR,
   CLAIM_STALE_MS,
-  isClaimStale
+  isClaimStale,
+  MODULE_INSTANCE_ID
 };
