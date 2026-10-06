@@ -48,6 +48,7 @@ function validateExternalActivation(params, callbackUrl, callbackSecret) {
                         request_id: body.request_id
                     });
                 } else {
+                    console.error('::error::Canonical ingress response: ' + JSON.stringify(body));
                     resolve({
                         success: false,
                         status: res.statusCode,
