@@ -1,0 +1,140 @@
+name: One-Click Gemini Failover Execute
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  dispatch-gemini-failover:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Construct canonical failover task
+        id: task
+        shell: bash
+        run: |
+          set -euo pipefail
+          REQUEST_ID="TASK-GEMINI-BUILDER-DURABLE-TASK-REGISTRY-EXECUTION-CLAIM-RECOVERY-001"
+          TASK_FILE="gemini-failover-task.md"
+          cat > "$TASK_FILE" <<'TASK_EOF'
+          @kyle
+
+          task_name:
+          TASK-GEMINI-BUILDER-DURABLE-TASK-REGISTRY-EXECUTION-CLAIM-RECOVERY-001
+          originator:
+          Kyle — Director
+          target_agent:
+          Gemini
+          repository:
+          fluentwithkyle/openclaw-webhook
+          base_branch:
+          main
+          task_mode:
+          FAILOVER_EXECUTE
+
+          objective:
+          Implement the minimum durable TaskRegistry execution-claim and recovery mechanism required to make the existing Gemini Builder one-click activation path survive the relevant Render process/service restart boundary and safely recover an admitted task without multiple authoritative execution owners or blind duplicate execution.
+
+          scope:
+          Work only within the server-authorized poc/ execution surface. First inspect the current TaskRegistry, activation ingress/policy, ACP schema, Builder one-click path, callback/recovery implementation, relevant tests, and durable research evidence. Apply the Solution Simplicity Gate. Prefer the existing JSON/file-backed mechanism and available runtime mechanisms. Do not introduce Postgres, Key Value, a new dependency, a second control plane, a second TaskRegistry, or a new workflow architecture unless the existing mechanism is demonstrably insufficient; if so, stop blocked.
+
+          required_behavior:
+          - Durable task state and execution ownership survive the relevant process/service restart boundary.
+          - Concurrent recovery cannot create multiple authoritative owners for the same request_id.
+          - Identical replay/recovery remains idempotent.
+          - Changed authority-bearing payloads fail closed.
+          - A claimed-but-not-completed execution is not blindly duplicated after uncertain external execution.
+          - Preserve canonical external activation ingress, ACP validation, server-derived authority, Director authorization, TaskRegistry, dispatcher/orchestrator, Gemini Builder carrier, callback, evidence, and verification architecture.
+
+          verification:
+          Run focused TaskRegistry and activation tests, add only necessary implementation-level tests/files within poc/, run relevant tests and git diff --check, inspect the final diff, commit and push to main, and report the exact verification result and commit SHA. Do not declare Gemini Builder one-click VERIFIED merely because implementation tests pass; live Builder verification remains separate.
+
+          constraints:
+          - smallest-change
+          - preserve-canonical-architecture
+          - no-second-control-plane
+          - no-parallel-task-registry
+          - no-workflow-reconstruction
+          - no-secrets-in-source-or-task-output
+          - no-unrelated-Phase-4-feature-expansion
+          - persistence_expectation: same_execution
+          - deliverable_commit: true
+          - deliverable_push: true
+          - verification_requires_commit_sha: true
+          - Do not modify .github/workflows/*.
+          TASK_EOF
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Submit Director approval
+        id: director_approval
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_APPROVAL_SECRET: ${{ secrets.DIRECTOR_APPROVAL_SECRET }}
+          REQUEST_ID: ${{ steps.task.outputs.request_id }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CALLBACK_BASE_URL"
+          test -n "$DIRECTOR_APPROVAL_SECRET"
+
+          SCOPE_JSON=$(jq -n             --arg request_id "$REQUEST_ID"             --arg repository "$REPOSITORY"             '{
+              request_id: $request_id,
+              target: "Gemini",
+              task_mode: "FAILOVER_EXECUTE",
+              capabilities: ["read_only", "modify_files", "run_tests", "commit", "push"],
+              permitted_paths: ["poc/"],
+              repository: $repository,
+              base_branch: "main"
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_BASE_URL/poc/director/approve"             -H "Content-Type: application/json"             -H "x-director-approval-secret: $DIRECTOR_APPROVAL_SECRET"             -H "x-poc-trigger-secret: $ACP_POC_TRIGGER_SECRET"             -d "{\"scope\": $SCOPE_JSON}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Director approval failed (HTTP $HTTP_CODE): $BODY"
+            exit 1
+          fi
+          APPROVAL_ID=$(echo "$BODY" | jq -r '.approval_id // ""')
+          test -n "$APPROVAL_ID"
+          echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch canonical Gemini execution carrier
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          REQUEST_ID: ${{ steps.task.outputs.request_id }}
+          TASK_FILE: ${{ steps.task.outputs.task_file }}
+          APPROVAL_ID: ${{ steps.director_approval.outputs.approval_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n             --arg ref "main"             --arg request_id "$REQUEST_ID"             --rawfile task "$TASK_FILE"             --arg repository "$REPOSITORY"             --arg base_branch "main"             --arg task_mode "FAILOVER_EXECUTE"             --arg capabilities "read_only,modify_files,run_tests,commit,push"             --arg permitted_paths "poc/"             --arg verification "Implement and test the durable TaskRegistry execution-claim/recovery mechanism within poc/; preserve canonical architecture; commit and push; report exact verification result and commit SHA."             --arg approval_id "$APPROVAL_ID"             '{
+              ref: $ref,
+              inputs: {
+                request_id: $request_id,
+                task: ($task | rtrimstr("\n")),
+                repository: $repository,
+                base_branch: $base_branch,
+                task_mode: $task_mode,
+                capabilities: $capabilities,
+                permitted_paths: $permitted_paths,
+                verification: $verification,
+                approval_id: $approval_id
+              }
+            }' > dispatch-payload.json
+
+          gh api --method POST             -H "Accept: application/vnd.github+json"             "/repos/${REPOSITORY}/actions/workflows/main.yml/dispatches"             --input dispatch-payload.json
+
+          echo "::notice::Canonical Gemini FAILOVER_EXECUTE carrier dispatched for ${REQUEST_ID}."
