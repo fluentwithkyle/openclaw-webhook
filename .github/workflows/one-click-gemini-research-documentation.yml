@@ -23,94 +23,82 @@ jobs:
         run: |
           set -euo pipefail
 
-          REQUEST_ID="TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001"
+          REQUEST_ID="TASK-GEMINI-BUILDER-ONE-CLICK-ACTIVATION-STATUS-RESEARCH-001"
           TASK_FILE="gemini-research-task.md"
 
           cat > "$TASK_FILE" <<'TASK_EOF'
           @kyle
-          
+
           task_name:
-          TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001
-          
+          TASK-GEMINI-BUILDER-ONE-CLICK-ACTIVATION-STATUS-RESEARCH-001
+
           originator:
           Kyle — Director
-          
+
           target_agent:
           Gemini
-          
+
           repository:
           fluentwithkyle/openclaw-webhook
-          
+
           base_branch:
           main
-          
+
           task_mode:
           RESEARCH_DOCUMENT
-          
+
           capabilities:
           - inspect
           - inspect_repository
           - inspect_github_actions
           - research
-          - analyze_workflow_validation
-          - analyze_machine_enforcement
+          - analyze_activation_architecture
+          - analyze_builder_one_click
+          - analyze_execution_claims
           - modify_files
           - commit
           - push
-          
+
           objective:
-          Determine the best repository-native, machine-enforced mechanism that prevents an invalid or structurally unsafe GitHub Actions workflow from becoming authoritative main-branch state, based on the concrete failure of the one-click Gemini Builder workflow YAML. Research the existing project mechanisms first, identify the simplest viable enforcement path, and durably document the recommended implementation approach without implementing the enforcement itself.
-          
+          Independently determine the current VERIFIED status of Gemini Builder one-click activation in the repository and GitHub Actions, using the existing Gemini Researcher one-click activation path. Do not redesign or rebuild the one-click architecture. Inspect the actual current implementation, workflows, tests, durable records, and relevant recent execution evidence; identify exactly what is working, what is not, and the single remaining blocker or next action, if any.
+
           scope:
-          Inspect and reconcile the current project protocol, task standard, one-click workflow contract, authoritative state, architecture, Gemini workflows, existing tests, and relevant workflow-validation or repository-governance mechanisms. Focus specifically on machine enforcement of GitHub Actions workflow validity and the existing one-click workflow contract.
-          
+          Inspect the existing one-click workflow contract, Gemini Builder activation workflow/carrier, canonical main.yml carrier, activation policy and ingress, ACP schema, TaskRegistry execution-claim/recovery path, Builder callback/evidence path, relevant tests, durable research records, and recent GitHub Actions execution evidence. Reconcile repository evidence against the existing project claims. Focus specifically on whether a Director can use a zero-input one-click workflow to activate Gemini Builder and have the Builder execute the intended task through the canonical external-activation architecture.
+
           Research and determine:
-          1. What currently validates GitHub Actions YAML/workflow structure before changes reach main.
-          2. Whether existing repository tests/control-plane mechanisms can enforce this requirement directly.
-          3. Whether GitHub-native workflow validation, required status checks, branch protection/rulesets, or repository tests provide the strongest practical enforcement boundary.
-          4. What deterministic validation can be performed in-repository without relying on ChatGPT memory.
-          5. How enforcement should cover all .github/workflows/*.yml and *.yaml files.
-          6. How one-click workflows should be validated, including zero-input workflow_dispatch semantics and ONE_CLICK_WORKFLOW_CONTRACT.
-          7. How failure should fail closed and prevent invalid workflow state from becoming authoritative.
-          8. Whether the proposed enforcement preserves ACP, TaskRegistry, dispatcher/orchestrator, Kyle authorization, and the single-control-plane architecture.
-          9. The smallest implementation increment that would mechanically prevent recurrence.
-          10. What remains human/agent responsibility versus machine-enforced responsibility.
-          
-          For every major conclusion classify it as VERIFIED, INFERRED, or UNKNOWN.
-          
-          Solution simplicity:
-          Evaluate existing repository tests, GitHub Actions capabilities, and native repository governance before proposing custom tooling. Prefer the smallest viable existing mechanism. If custom validation is required, document why.
-          
-          Roadmap alignment:
-          - authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/STATE.md; docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md
-          - current_phase: Phase 3 — Autonomous Coordination Loop; Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation is the next PROPOSED/TARGET phase pending durable transition evidence
-          - phase_completion_status: Phase 3 complete/converged; Phase 4 transition evidence pending the first authorized Phase 4 research/reconciliation record
-          - relevant_prior_work: One-Click Workflow Coordinator Contract is implemented and machine-verified; external activation validation and server-derived execution descriptors exist; lifecycle-enforcement research established the need for machine enforcement
-          - proposed_task_classification: B — Enabling/Foundation Work
-          - roadmap_requirement_addressed: Machine-enforced lifecycle/control-boundary hardening
-          - prerequisites_satisfied: Existing one-click contract, external activation validation, ACP/task standards, and lifecycle-enforcement research are present
-          - phase_unlock_or_advancement: Establishes the research/design basis for a narrowly scoped machine-enforcement increment
-          - alignment_conclusion: PASS — bounded research/documentation foundation work
-          
+          1. Whether the Gemini Builder one-click workflow exists and is zero-input workflow_dispatch.
+          2. Whether its embedded task/carrier binding is exact and machine-verifiable.
+          3. Whether it dispatches the canonical activation carrier rather than creating a parallel path.
+          4. Whether activation policy, ACP validation, server-derived authority, and TaskRegistry execution claims are correctly applied.
+          5. Whether Builder execution survives the known Render restart/callback-correlation boundary.
+          6. Whether the Builder callback/evidence path currently completes successfully.
+          7. Whether recent GitHub Actions runs provide current evidence of successful end-to-end execution.
+          8. Whether any remaining persistence/concurrency/recovery issue prevents calling Builder one-click activation VERIFIED.
+          9. The exact minimum next action required if it is not VERIFIED.
+          10. Which conclusions are VERIFIED, INFERRED, or UNKNOWN.
+
+          Required conclusion:
+          Give a direct final verdict of VERIFIED, BLOCKED, or NOT VERIFIED for Gemini Builder one-click activation. Do not substitute a generic assessment of the Researcher one-click path.
+
           verification:
-          1. Inspect the actual current repository implementation and existing workflow-validation mechanisms.
-          2. Inspect the exact one-click workflow failure and corrected current workflow.
-          3. Establish the current validation/enforcement boundary for GitHub Actions workflows.
-          4. Compare the simplest viable native/repository mechanisms.
-          5. Produce docs/ai/research/research-TASK-GEMINI-WORKFLOW-VALIDATION-MACHINE-ENFORCEMENT-RESEARCH-001.md.
-          6. Include the mandatory ## Roadmap Alignment section using the exact required field names.
-          7. Update RESEARCH_INDEX.md and TASK_LOG.md as required by RESEARCH_DOCUMENT.
-          8. Reconcile STATE.md and CONTROL_CENTER.md only if durable project-state understanding materially changes.
-          9. Clearly separate VERIFIED, INFERRED, and UNKNOWN findings.
-          10. Identify the recommended machine-enforcement boundary and smallest implementation increment.
-          11. Explain preservation of ACP, TaskRegistry, dispatcher/orchestrator, Kyle authorization, and the single control plane.
+          1. Inspect the actual current repository implementation and current GitHub Actions workflows.
+          2. Inspect the exact Builder one-click carrier and canonical main.yml dispatch path.
+          3. Inspect activation-policy.js, activation-ingress.js, ACP schema, and TaskRegistry execution claim/recovery code relevant to Builder activation.
+          4. Inspect relevant Builder callback/evidence workflows and tests.
+          5. Inspect recent GitHub Actions execution evidence where available.
+          6. Inspect relevant durable research records and reconcile claims with current repository evidence.
+          7. Produce docs/ai/research/research-TASK-GEMINI-BUILDER-ONE-CLICK-ACTIVATION-STATUS-RESEARCH-001.md.
+          8. Update RESEARCH_INDEX.md and TASK_LOG.md as required by RESEARCH_DOCUMENT.
+          9. Reconcile STATE.md and CONTROL_CENTER.md only if durable project-state understanding materially changes.
+          10. Clearly separate VERIFIED, INFERRED, and UNKNOWN findings.
+          11. State the exact remaining blocker and minimum next action if the verdict is not VERIFIED.
           12. Run repository-authorized research/documentation validation.
           13. Review the final diff for scope compliance.
           14. Commit and push the research/documentation result to main and report the commit SHA.
-          
+
           constraints:
           - Research/documentation only.
-          - Do not implement workflow validation or branch protection in this task.
+          - Do not implement or redesign Gemini Builder one-click activation.
           - Do not modify .github/workflows/*.
           - Do not modify runtime source code or poc/*.
           - Do not modify secrets, credentials, environment configuration, dependencies, or GitHub settings.
@@ -122,13 +110,10 @@ jobs:
           - deliverable_commit: true
           - deliverable_push: true
           - verification_requires_commit_sha: true
-          
+
           conflict_handling:
           Repository instructions, ARCHITECTURE.md, GEMINI.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md take precedence. If current implementation contradicts an assumption, use repository evidence and document the discrepancy.
           TASK_EOF
-          
-          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
-          echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch canonical Gemini research carrier
         env:
@@ -154,7 +139,7 @@ jobs:
             --arg repository "$REPOSITORY" \
             --arg base_branch "main" \
             --arg task_mode "RESEARCH_DOCUMENT" \
-            --arg capabilities "inspect,inspect_repository,inspect_github_actions,research,analyze_workflow_validation,analyze_machine_enforcement,modify_files,commit,push" \
+            --arg capabilities "inspect,inspect_repository,inspect_github_actions,research,analyze_activation_architecture,analyze_builder_one_click,analyze_execution_claims,modify_files,commit,push" \
             --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md" \
             --arg verification "Inspect current workflow validation and one-click contract; produce durable research record; update required research index and task log; distinguish VERIFIED/INFERRED/UNKNOWN; identify smallest machine-enforcement increment; commit and push; report commit SHA" \
             '{
