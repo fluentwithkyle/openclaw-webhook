@@ -52,6 +52,51 @@ function listOneClickWorkflows() {
         .sort();
 }
 
+function extractCarrierField(workflowRaw, field) {
+    const fieldPattern = new RegExp(
+        '(?:^|\\n)\\s*' + field + ':\\s*(?:\\n\\s*)?([^\\n]+)',
+        'i'
+    );
+    const match = workflowRaw.match(fieldPattern);
+    return match ? match[1].trim() : null;
+}
+
+const CARRIER_STATES = Object.freeze({
+    CARRIER_NOT_FOUND: 'CARRIER_NOT_FOUND',
+    CARRIER_FOUND: 'CARRIER_FOUND',
+    CARRIER_TASK_MISMATCH: 'CARRIER_TASK_MISMATCH',
+    CARRIER_READY: 'CARRIER_READY',
+    EXECUTION_STARTED: 'EXECUTION_STARTED',
+    EXECUTION_VERIFIED: 'EXECUTION_VERIFIED'
+});
+
+function evaluateOneClickCarrierBinding(workflowRaw, requestedTask) {
+    const hasWorkflowDispatch = /workflow_dispatch/i.test(workflowRaw);
+    const hasRequiredInputs = /required:\s*true/i.test(workflowRaw);
+    const routesViaCanonicalActivation = /validate-external-activation\.js/i.test(workflowRaw) ||
+        /actions\/workflows\/main\.yml\/dispatches/i.test(workflowRaw);
+    const taskName = extractCarrierField(workflowRaw, 'task_name');
+    const targetAgent = extractCarrierField(workflowRaw, 'target_agent');
+    const taskMode = extractCarrierField(workflowRaw, 'task_mode');
+    if (!hasWorkflowDispatch || hasRequiredInputs || !taskName || !targetAgent || !taskMode) {
+        return { state: CARRIER_STATES.CARRIER_NOT_FOUND, ready: false, reason: 'No valid zero-input canonical carrier is present.' };
+    }
+    if (taskName !== requestedTask.task_name) {
+        return { state: CARRIER_STATES.CARRIER_TASK_MISMATCH, ready: false, reason: 'Embedded task_name differs from requested task_name.' };
+    }
+    if (targetAgent !== requestedTask.target_agent || taskMode !== requestedTask.task_mode) {
+        return { state: CARRIER_STATES.CARRIER_FOUND, ready: false, reason: 'Embedded target_agent or task_mode differs from the requested task.' };
+    }
+    if (!routesViaCanonicalActivation) {
+        return { state: CARRIER_STATES.CARRIER_FOUND, ready: false, reason: 'Carrier does not use the canonical external-activation path.' };
+    }
+    return { state: CARRIER_STATES.CARRIER_READY, ready: true, reason: 'Exact task, agent, mode, zero-input, and canonical activation binding verified.' };
+}
+
+function fixture(taskFields) {
+    return 'on:\n  workflow_dispatch:\n' + taskFields + 'route: poc/validate-external-activation.js\n';
+}
+
 // =========================================================
 // Canonical phrase definition tests
 // =========================================================
@@ -342,6 +387,58 @@ runTest('Contract - prohibits claiming readiness based on agent/task-mode alone 
         'Contract must prohibit claiming readiness based on agent/task-mode alone');
 });
 
+// =========================================================
+// Machine-enforced task-to-carrier binding gate tests
+// =========================================================
+
+runTest('Binding gate - exact task binding passes', () => {
+    const workflow = fixture('task_name:\nTASK-EXACT-001\ntarget_agent:\nGemini\ntask_mode:\nRESEARCH_DOCUMENT\n');
+    const result = evaluateOneClickCarrierBinding(workflow, { task_name: 'TASK-EXACT-001', target_agent: 'Gemini', task_mode: 'RESEARCH_DOCUMENT' });
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_READY); assert.strictEqual(result.ready, true);
+});
+
+runTest('Binding gate - mismatched task_name fails closed', () => {
+    const workflow = fixture('task_name:\nTASK-OTHER-001\ntarget_agent:\nGemini\ntask_mode:\nRESEARCH_DOCUMENT\n');
+    const result = evaluateOneClickCarrierBinding(workflow, { task_name: 'TASK-REQUESTED-001', target_agent: 'Gemini', task_mode: 'RESEARCH_DOCUMENT' });
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_TASK_MISMATCH); assert.strictEqual(result.ready, false);
+});
+
+runTest('Binding gate - target_agent mismatch fails closed', () => {
+    const workflow = fixture('task_name:\nTASK-EXACT-001\ntarget_agent:\nKilo\ntask_mode:\nRESEARCH_DOCUMENT\n');
+    const result = evaluateOneClickCarrierBinding(workflow, { task_name: 'TASK-EXACT-001', target_agent: 'Gemini', task_mode: 'RESEARCH_DOCUMENT' });
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_FOUND); assert.strictEqual(result.ready, false);
+});
+
+runTest('Binding gate - task_mode mismatch fails closed', () => {
+    const workflow = fixture('task_name:\nTASK-EXACT-001\ntarget_agent:\nGemini\ntask_mode:\nVERIFY_RECONCILE\n');
+    const result = evaluateOneClickCarrierBinding(workflow, { task_name: 'TASK-EXACT-001', target_agent: 'Gemini', task_mode: 'RESEARCH_DOCUMENT' });
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_FOUND); assert.strictEqual(result.ready, false);
+});
+
+runTest('Binding gate - required workflow_dispatch input fails closed', () => {
+    const workflow = 'on:\n  workflow_dispatch:\n    inputs:\n      task:\n        required: true\n' + 'task_name:\nTASK-EXACT-001\ntarget_agent:\nGemini\ntask_mode:\nRESEARCH_DOCUMENT\nroute: poc/validate-external-activation.js\n';
+    const result = evaluateOneClickCarrierBinding(workflow, { task_name: 'TASK-EXACT-001', target_agent: 'Gemini', task_mode: 'RESEARCH_DOCUMENT' });
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_NOT_FOUND); assert.strictEqual(result.ready, false);
+});
+
+runTest('Binding gate - non-canonical activation path fails closed', () => {
+    const workflow = fixture('task_name:\nTASK-EXACT-001\ntarget_agent:\nGemini\ntask_mode:\nRESEARCH_DOCUMENT\n').replace('poc/validate-external-activation.js', 'alternate-activation.js');
+    const result = evaluateOneClickCarrierBinding(workflow, { task_name: 'TASK-EXACT-001', target_agent: 'Gemini', task_mode: 'RESEARCH_DOCUMENT' });
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_FOUND); assert.strictEqual(result.ready, false);
+});
+
+runTest('Binding gate - actual one-click carriers expose fields required for exact binding', () => {
+    for (const wf of listOneClickWorkflows()) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(extractCarrierField(wfRaw, 'task_name'), `${wf} must expose task_name`);
+        assert.ok(extractCarrierField(wfRaw, 'target_agent'), `${wf} must expose target_agent`);
+        assert.ok(extractCarrierField(wfRaw, 'task_mode'), `${wf} must expose task_mode`);
+    }
+});
+
+runTest('Binding gate - state model is explicit and fail-closed', () => {
+    assert.deepStrictEqual(Object.keys(CARRIER_STATES), ['CARRIER_NOT_FOUND', 'CARRIER_FOUND', 'CARRIER_TASK_MISMATCH', 'CARRIER_READY', 'EXECUTION_STARTED', 'EXECUTION_VERIFIED']);
+});
 // =========================================================
 // Exact-task inspection tests
 // =========================================================
