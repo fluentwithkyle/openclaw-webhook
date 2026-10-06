@@ -49,6 +49,7 @@ const acpSchemaRaw = fs.readFileSync(ACP_SCHEMA_PATH, 'utf8');
 function listOneClickWorkflows() {
     return fs.readdirSync(ONE_CLICK_DIR)
         .filter(f => /^one-click-.*\.yml$/i.test(f))
+        .filter(f => f !== 'one-click-contract-test.yml')
         .sort();
 }
 
@@ -496,14 +497,14 @@ runTest('Contract - requires verifying authority fields remain server-derived', 
 // Dedicated workflow tests
 // =========================================================
 
-runTest('Contract - requires dedicated workflow when existing workflow has different task', () => {
-    assert.ok(/Dedicated Workflow When Necessary/i.test(contractRaw),
-        'Contract must have dedicated workflow section');
-    const section = contractRaw.slice(contractRaw.indexOf('Dedicated Workflow'));
-    assert.ok(/create.*update.*workflow.*different task/i.test(section),
-        'Contract must require creating/updating workflow when task differs');
-    assert.ok(/must not silently reuse/i.test(section),
-        'Contract must prohibit silently reusing old workflow');
+runTest('Contract - requires existing carrier retarget and revalidation when task differs', () => {
+    assert.ok(/Existing Carrier \+ Wrong Task/i.test(contractRaw),
+        'Contract must have existing-carrier wrong-task section');
+    const section = contractRaw.slice(contractRaw.indexOf('Existing Carrier + Wrong Task'));
+    assert.ok(/update.*existing.*carrier.*requested task.*revalidate/i.test(section),
+        'Contract must require updating and revalidating the existing carrier when task differs');
+    assert.ok(/must not.*silently reuse/i.test(section),
+        'Contract must prohibit silently reusing the old task');
 });
 
 // =========================================================
