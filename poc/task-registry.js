@@ -172,6 +172,7 @@ async function createTaskUnchecked(command, options) {
 async function createDirectorApproval(scope) {
   return withRegistryLock(async () => {
     getCache();
+    console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] createDirectorApproval: inside lock, cache size:', approvalCache.size);
     const validation = validateDirectorApprovalScope(scope);
     if (!validation.valid) return { success: false, error: validation.error };
     const issuedAt = new Date().toISOString();
@@ -182,6 +183,7 @@ async function createDirectorApproval(scope) {
     approvalCache.set(approvalId, record);
     console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] createDirectorApproval: cache size after:', approvalCache.size);
     await persistCache();
+    console.log('[TASK-REGISTRY:' + MODULE_INSTANCE_ID + '] createDirectorApproval: after persistCache, cache size:', approvalCache.size);
     return { success: true, approval: record };
   });
 }

@@ -28,9 +28,9 @@ const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
 let passCount = 0;
 let failCount = 0;
 
-function runTest(name, fn) {
+async function runTest(name, fn) {
     try {
-        fn();
+        await fn();
         console.log(`PASS: ${name}`);
         passCount++;
     } catch (err) {
