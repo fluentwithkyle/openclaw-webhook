@@ -1,0 +1,546 @@
+name: One-Click Gemini Builder Coordinator Registration Gate Enforcement (Fixed)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  builder:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Construct one-click task and correlation
+        id: one_click_context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001"
+          BUILDER_EXEC_ID="builder-coordinator-registration-gate-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+
+          TASK='task_name: TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001\n          originator: Kyle — Director\n          target_agent: Gemini Builder\n          repository: fluentwithkyle/openclaw-webhook\n          base_branch: main\n          task_mode: BUILDER\n          capabilities:\n          - read_only\n          - modify_files\n          - run_tests\n          - commit\n          - push\n\n          objective: >\n            Strengthen the existing one-click coordinator protocol and machine-verification tests so GitHub workflow registration and runnability is an explicit mandatory coordinator decision gate before any Run workflow link is presented. Extend existing protocol and test machinery only.\n\n          scope:\n            permitted_paths:\n            - docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md\n            - docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md\n            - test/one-click-workflow-contract.test.js\n            - test/external-activation-procedure.test.js\n            - test/external-activation-bypass.test.js\n            - test/workflow-expression.test.js\n            - docs/ai/TASK_LOG.md\n            - docs/ai/RESEARCH_INDEX.md\n            out_of_scope:\n            - .github/workflows/*\n            - poc/activation-policy.js\n            - poc/activation-ingress.js\n            - poc/activation-engine.js\n            - poc/task-registry.js\n            - runtime source\n            - repository settings\n            - secrets\n            - dependencies\n            - new control plane\n            - new activation path\n\n          verification:\n            required:\n            - Read and apply TASK_STANDARD.md and the current one-click workflow contract.\n            - Make the registration/runnability gate an explicit mandatory coordinator protocol step.\n            - Require authoritative GitHub evidence before presenting a Run workflow link.\n            - State that workflow-file existence, YAML inspection, and repository-local tests alone do not prove GitHub registration.\n            - Require VERIFIED / INFERRED / UNKNOWN classification; UNKNOWN or unavailable registration evidence must fail closed as BLOCKED / NOT READY.\n            - Enforce the ordering: inspect task; inspect workflow; verify exact task binding; verify zero-input workflow_dispatch; establish authoritative GitHub registration/runnability; only then present Run link; Director clicks; coordinator verifies resulting execution.\n            - Add machine-verification tests for these protocol invariants without pretending repository tests can query GitHub registration.\n            - Run focused and applicable broader tests and report exact results.\n            - Inspect the final diff for authorized scope only.\n            - Commit and push the changes to main in the same execution.\n\n          constraints:\n          - smallest-change\n          - preserve-existing-one-click-contract\n          - preserve-canonical-external-activation\n          - preserve-server-derived-authority\n          - no-new-control-plane\n          - no-new-activation-path\n          - no-workflow-modification\n          - no-runtime-modification\n          - no-unrelated-refactoring\n          - no-secrets\n          - persistence_expectation: same_execution\n          - deliverable_commit: true\n          - deliverable_push: true\n          - verification_requires_commit_sha: true\n\n          roadmap_alignment:\n            authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/STATE.md; docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md\n            current_roadmap_phase: Phase 3 — Autonomous Coordination Loop\n            phase_completion_status: Phase 3 complete/converged; Phase 4 is the next target and is not activated by this task\n            relevant_prior_work: One-Click Workflow Coordinator Contract registration/runnability gate and external activation enforcement\n            required_prerequisites_satisfied: Existing one-click contract, ACP task standards, canonical activation path, and prior registration incident evidence\n            proposed_task_mapping: B — Enabling/Foundation Work\n            phase_unlock_or_advancement: Makes the coordinator registration/runnability gate explicit and machine-verified\n            alignment_conclusion: PASS — bounded lifecycle/control-boundary hardening\n\n          conflict_handling: Repository instructions, GEMINI.md, ARCHITECTURE.md, CHATGPT_PROJECT_OPERATING_PROTOCOL.md, TASK_STANDARD.md, and canonical ACP/activation implementation take precedence. If task assertions conflict with repository evidence, fail closed and document the discrepancy.'
+
+          {
+            echo 'request_id<<EOF'
+            echo "$REQUEST_ID"
+            echo 'EOF'
+            echo 'builder_execution_id<<EOF'
+            echo "$BUILDER_EXEC_ID"
+            echo 'EOF'
+            echo 'task<<EOF'
+            printf '%s\n' "$TASK"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Submit Director approval for consequential Builder activation
+        id: director_approval
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_APPROVAL_SECRET: ${{ secrets.DIRECTOR_APPROVAL_SECRET }}
+          REQUEST_ID: ${{ steps.one_click_context.outputs.request_id }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: main
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CALLBACK_BASE_URL" ]; then
+            echo "::error::RENDER_CALLBACK_BASE_URL is not configured; cannot submit Director approval"
+            exit 1
+          fi
+
+          if [ -z "$DIRECTOR_APPROVAL_SECRET" ]; then
+            echo "::error::DIRECTOR_APPROVAL_SECRET is not configured; cannot submit Director approval"
+            exit 1
+          fi
+
+          SCOPE_HASH=$(jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg target "Gemini Builder" \
+            --arg task_mode "BUILDER" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            '{
+              request_id: $request_id,
+              target: $target,
+              task_mode: $task_mode,
+              capabilities: ["read_only", "modify_files", "run_tests", "commit", "push"],
+              permitted_paths: ["docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md", "docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md", "test/one-click-workflow-contract.test.js", "test/external-activation-procedure.test.js", "test/external-activation-bypass.test.js", "test/workflow-expression.test.js", "docs/ai/TASK_LOG.md", "docs/ai/RESEARCH_INDEX.md"],
+              repository: $repository,
+              base_branch: $base_branch
+            }')
+
+          APPROVAL_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_BASE_URL/poc/director/approve" \
+            -H "Content-Type: application/json" \
+            -H "x-director-approval-secret: $DIRECTOR_APPROVAL_SECRET" \
+            -H "x-poc-trigger-secret: $ACP_POC_TRIGGER_SECRET" \
+            -d "{\"scope\": $SCOPE_HASH}")
+
+          HTTP_CODE=$(echo "$APPROVAL_RESPONSE" | tail -n1)
+          BODY=$(echo "$APPROVAL_RESPONSE" | head -n -1)
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            APPROVAL_ID=$(echo "$BODY" | jq -r '.approval_id // ""')
+            if [ -z "$APPROVAL_ID" ]; then
+              echo "::error::Director approval response did not contain approval_id"
+              exit 1
+            fi
+            echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+            echo "::notice::Director approval submitted: $APPROVAL_ID"
+          else
+            echo "::error::Director approval submission failed (HTTP $HTTP_CODE): $BODY"
+            exit 1
+          fi
+
+      - name: Validate external activation through canonical ingress
+        id: validate_activation
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          REQUEST_ID: ${{ steps.one_click_context.outputs.request_id }}
+          TASK: ${{ steps.one_click_context.outputs.task }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: main
+          TASK_MODE: BUILDER
+          CAPABILITIES: read_only,modify_files,run_tests,commit,push
+          PERMITTED_PATHS: docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md,docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md,test/one-click-workflow-contract.test.js,test/external-activation-procedure.test.js,test/external-activation-bypass.test.js,test/workflow-expression.test.js,docs/ai/TASK_LOG.md,docs/ai/RESEARCH_INDEX.md
+          APPROVAL_ID: ${{ steps.director_approval.outputs.approval_id }}
+          EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CALLBACK_BASE_URL" ]; then
+            echo "::error::RENDER_CALLBACK_BASE_URL is not configured; cannot validate activation through canonical ingress"
+            exit 1
+          fi
+
+          ACTIVATION_JSON=$(jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg task "$TASK" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            --arg task_mode "$TASK_MODE" \
+            --arg capabilities "$CAPABILITIES" \
+            --arg permitted_paths "$PERMITTED_PATHS" \
+            --arg approval_id "$APPROVAL_ID" \
+            '{
+              request_id: $request_id,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              task_mode: $task_mode,
+              capabilities: $capabilities,
+              permitted_paths: $permitted_paths,
+              approval_id: $approval_id
+            }')
+
+          node poc/validate-external-activation.js builder-workflow-dispatch "$ACTIVATION_JSON"
+
+          echo "activation_validated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare orchestration context
+        id: orchestration_context
+        if: github.event_name == 'workflow_dispatch' && steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ ! -f "$DESCRIPTOR_FILE" ]; then
+            echo "::error::Execution descriptor file not found; server validation may have produced a replay"
+            exit 1
+          fi
+
+          {
+            echo 'request_id<<EOF'
+            jq -r '.request_id' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'task<<EOF'
+            jq -r '.task' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'repository<<EOF'
+            jq -r '.repository' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'base_branch<<EOF'
+            jq -r '.base_branch' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'builder_execution_id<<EOF'
+            printf '%s\n' "${{ steps.one_click_context.outputs.builder_execution_id }}"
+            echo 'EOF'
+            echo 'kilo_execution_id<<EOF'
+            printf '%s\n' ""
+            echo 'EOF'
+            echo 'verification<<EOF'
+            jq -r '.verification' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'task_mode<<EOF'
+            jq -r '.task_mode' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'capabilities<<EOF'
+            jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'permitted_paths<<EOF'
+            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'execution_claim_id<<EOF'
+            jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'carrier_identity<<EOF'
+            jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure git identity
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "Gemini Builder"
+          git config user.email "gemini-builder@users.noreply.github.com"
+
+      - name: Validate workflow YAML syntax
+        if: github.event_name == 'workflow_dispatch' && steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice::Validating workflow YAML syntax..."
+          python3 -c "
+          import yaml, sys
+          with open('.github/workflows/one-click-gemini-builder-callback-correlation.yml') as f:
+              doc = yaml.safe_load(f)
+          assert doc['name'] == 'One-Click Gemini Builder Callback Correlation'
+          assert 'workflow_dispatch' in doc['on']
+          print('YAML validation passed')
+          "
+
+      - name: Run Gemini Builder
+        id: gemini_builder_run
+        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+          ORCHESTRATION_REQUEST_ID: ${{ steps.orchestration_context.outputs.request_id }}
+          ORCHESTRATION_TASK: ${{ steps.orchestration_context.outputs.task }}
+          ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context.outputs.repository }}
+          ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
+          ORCHESTRATION_BUILDER_EXECUTION_ID: ${{ steps.orchestration_context.outputs.builder_execution_id }}
+          ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context.outputs.kilo_execution_id }}
+          ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context.outputs.verification }}
+          ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
+          ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}
+          ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
+          ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
+          ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_BUILDER_API_KEY }}
+          gemini_model: gemini-3.1-flash-lite
+          prompt: |
+            You are Gemini Builder, the Fluent with Kyle OpenClaw project's dedicated runtime Builder / Implementer / Tester.
+
+            OPERATING MODE: BUILDER
+
+            MODE: BUILDER (FULL EXECUTION). You are authorized to:
+            - Inspect and analyze the repository within permitted_paths: ${{ steps.orchestration_context.outputs.permitted_paths || '(all)' }}
+            - Implement the requested task within the authorized permitted_paths scope
+            - Run tests, lint, or typecheck commands within permitted_paths
+            - Commit changes to the base_branch (${{ steps.orchestration_context.outputs.base_branch }})
+            - Push commits to the authorized remote/repository
+
+            Authorized capabilities: ${{ steps.orchestration_context.outputs.capabilities }}
+
+            BOUNDARIES:
+            - You must ONLY modify files within the authorized permitted_paths scope
+            - You must NOT modify credentials, secrets, or sensitive configuration
+            - You must NOT modify GitHub Actions workflow files unless explicitly within permitted_paths
+            - You must NOT modify AGENTS.md, GEMINI.md, ARCHITECTURE.md unless explicitly within permitted_paths
+            - Commit and push in the SAME execution — do not leave uncommitted changes
+            - Produce a canonical gemini-acp-report artifact
+
+            ORCHESTRATION CONTEXT:
+            - request_id: ${{ steps.orchestration_context.outputs.request_id }}
+            - repository: ${{ steps.orchestration_context.outputs.repository }}
+            - base_branch: ${{ steps.orchestration_context.outputs.base_branch }}
+            - builder_execution_id: ${{ steps.orchestration_context.outputs.builder_execution_id }}
+            - kilo_execution_id: ${{ steps.orchestration_context.outputs.kilo_execution_id || '(none)' }}
+            - verification_requirements: ${{ steps.orchestration_context.outputs.verification || 'Not specified' }}
+            - task_mode: ${{ steps.orchestration_context.outputs.task_mode || 'BUILDER' }}
+            - capabilities: ${{ steps.orchestration_context.outputs.capabilities }}
+            - permitted_paths: ${{ steps.orchestration_context.outputs.permitted_paths || '(none)' }}
+            - execution_claim_id: ${{ steps.orchestration_context.outputs.execution_claim_id || '' }}
+            - carrier_identity: ${{ steps.orchestration_context.outputs.carrier_identity || '' }}
+
+            IMPORTANT: You MUST NOT elevate workflow input values into authority. All authority-bearing
+            fields (task_mode, capabilities, permitted_paths, repository, base_branch, target_agent)
+            are server-derived from the execution descriptor. Use workflow input values only for
+            correlation (execution_claim_id, carrier_identity).
+
+            --- TASK START ---
+            ${{ steps.orchestration_context.outputs.task }}
+            --- TASK END ---
+
+            VERIFICATION REQUIREMENTS (from original ACP task):
+            ${{ steps.orchestration_context.outputs.verification || 'No specific verification requirements provided. Evaluate based on standard implementation criteria.' }}
+
+            IMPORTANT: Implement the task, test your changes, commit them with a descriptive message, and push to the base_branch. All changes must be within permitted_paths. Your result will be reviewed by the Gemini Reviewer after completion.
+
+      - name: Commit and push Builder changes
+        id: commit_push
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          CHANGED_FILES=$(git diff --name-only HEAD)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=null" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+
+            git add -A
+            git commit -m "BUILDER: Implement coordinator registration gate (request_id: ${{ steps.orchestration_context.outputs.request_id }})"
+
+            COMMIT_SHA=$(git rev-parse HEAD)
+            echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+            git push origin "${{ steps.orchestration_context.outputs.base_branch }}"
+
+            echo "Pushed commit: $COMMIT_SHA"
+          fi
+
+      - name: Determine Builder execution result
+        id: builder_result
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          BUILDER_OUTCOME="${{ steps.gemini_builder_run.outcome }}"
+
+          if [ "$BUILDER_OUTCOME" = "success" ] && [ "${{ steps.commit_push.outputs.has_changes }}" = "true" ]; then
+            STATUS="success"
+            VERIFICATION_STATUS="PASS"
+            BLOCKER_MSG=""
+          elif [ "$BUILDER_OUTCOME" = "success" ] && [ "${{ steps.commit_push.outputs.has_changes }}" = "false" ]; then
+            STATUS="success"
+            VERIFICATION_STATUS="PASS"
+            BLOCKER_MSG="Builder completed with no file changes"
+          elif [ "$BUILDER_OUTCOME" = "failure" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Gemini Builder CLI execution failed (step outcome: failure)"
+          else
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Builder workflow did not execute successfully (step outcome: ${BUILDER_OUTCOME:-none})"
+          fi
+
+          echo "builder_status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "verification_status=$VERIFICATION_STATUS" >> "$GITHUB_OUTPUT"
+          echo "blocker_message=$BLOCKER_MSG" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=${{ steps.commit_push.outputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare ACP report payload
+        id: callback_payload
+        if: always()
+        env:
+          BUILDER_SUMMARY: ${{ steps.gemini_builder_run.outputs.summary }}
+          EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
+          CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ -f "$DESCRIPTOR_FILE" ]; then
+            REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE")"
+            if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+              echo "::error::BLOCKED: server-derived request_id is missing, empty, or invalid; cannot construct callback payload"
+              exit 1
+            fi
+
+            TASK="$(jq -r '.task // ""' "$DESCRIPTOR_FILE")"
+            REPOSITORY="$(jq -r '.repository // ""' "$DESCRIPTOR_FILE")"
+            BASE_BRANCH="$(jq -r '.base_branch // ""' "$DESCRIPTOR_FILE")"
+
+            EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE")"
+            if [ -z "$EXECUTION_CLAIM_ID" ] || [ "$EXECUTION_CLAIM_ID" = "null" ]; then
+              echo "::error::BLOCKED: server-derived execution_claim_id is missing, empty, or invalid; cannot construct callback payload"
+              exit 1
+            fi
+
+            CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE")"
+            if [ -z "$CARRIER_IDENTITY" ] || [ "$CARRIER_IDENTITY" = "null" ]; then
+              echo "::error::BLOCKED: server-derived carrier_identity is missing, empty, or invalid; cannot construct callback payload"
+              exit 1
+            fi
+          else
+            echo "::error::BLOCKED: Execution descriptor file not found; cannot construct callback payload without server-derived correlation"
+            exit 1
+          fi
+
+          BUILDER_EXEC_ID="${{ steps.orchestration_context.outputs.builder_execution_id }}"
+          KILO_EXEC_ID="${{ steps.orchestration_context.outputs.kilo_execution_id || '' }}"
+          BUILDER_OUTPUT="$BUILDER_SUMMARY"
+
+          CURRENT_HEAD_SHA="${GITHUB_SHA}"
+          STATUS="${{ steps.builder_result.outputs.builder_status }}"
+          VERIFICATION_STATUS="${{ steps.builder_result.outputs.verification_status }}"
+          BLOCKER_MSG="${{ steps.builder_result.outputs.blocker_message }}"
+          COMMIT_SHA="${{ steps.builder_result.outputs.commit_sha }}"
+
+          CHANGED_FILES_JSON="[]"
+
+          if [ "$STATUS" = "failure" ]; then
+            BLOCKERS=$(jq -n --arg msg "$BLOCKER_MSG" '[$msg]')
+          else
+            BLOCKERS="[]"
+          fi
+
+          if [ "$COMMIT_SHA" = "null" ] || [ -z "$COMMIT_SHA" ]; then
+            RECON_COMMIT_SHA="null"
+            PUSH_STATUS=false
+          else
+            RECON_COMMIT_SHA="$COMMIT_SHA"
+            PUSH_STATUS=true
+          fi
+
+          INVOCATION_ID="gemini-builder-callback-corr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          RUN_ID="${GITHUB_RUN_ID}"
+
+          jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg agent "Gemini Builder" \
+            --arg status "$STATUS" \
+            --arg task "$TASK" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            --arg current_head_sha "$CURRENT_HEAD_SHA" \
+            --arg builder_output "$BUILDER_OUTPUT" \
+            --arg invocation_id "$INVOCATION_ID" \
+            --arg run_id "$RUN_ID" \
+            --argjson blockers "$BLOCKERS" \
+            --arg recon_status "SKIPPED" \
+            --argjson recon_changed_files "$CHANGED_FILES_JSON" \
+            --arg recon_commit_sha "$RECON_COMMIT_SHA" \
+            --argjson push "$PUSH_STATUS" \
+            --arg commit "$COMMIT_SHA" \
+            --arg execution_claim_id "$EXECUTION_CLAIM_ID" \
+            --arg carrier_identity "$CARRIER_IDENTITY" \
+            '{
+              request_id: (if $request_id == "" then null else $request_id end),
+              agent: $agent,
+              status: $status,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              current_head_sha: $current_head_sha,
+              changed_files: [],
+              verification: ["builder execution completed"],
+              result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id, carrier_identity: (if $carrier_identity == "" then null else $carrier_identity end), execution_claim_id: (if $execution_claim_id == "" then null else $execution_claim_id end) }, builder_output: $builder_output },
+              commit: (if $commit == "null" then null else $commit end),
+              push: $push,
+              blockers: $blockers,
+              reconciliation: {
+                status: $recon_status,
+                changed_files: $recon_changed_files,
+                commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
+              }
+            }' > callback_payload.json
+
+          cp callback_payload.json gemini-acp-report.json
+
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+
+          cat callback_payload.json
+
+      - name: Send callback to Render
+        if: always() && steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        env:
+          CALLBACK_URL: ${{ secrets.RENDER_BUILDER_CALLBACK_URL }}
+          CALLBACK_SECRET: ${{ secrets.BUILDER_CALLBACK_SECRET }}
+          REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          REQUEST_ID="${REQUEST_ID:-}"
+          if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+            echo "::error::BLOCKED: request_id is missing, empty, or invalid; callback cannot execute without valid server-derived correlation"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ -z "$CALLBACK_URL" ] || [ -z "$CALLBACK_SECRET" ]; then
+            echo "::warning::Builder callback URL or secret not configured, skipping callback"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "x-builder-callback-secret: $CALLBACK_SECRET" \
+            -d @callback_payload.json)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "Callback response: $HTTP_CODE"
+          echo "Callback body: $BODY"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "callback_sent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Builder callback failed with HTTP $HTTP_CODE: $BODY"
+            exit 1
+          fi
+
+      - name: Upload Builder result artifact
+        id: upload_artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-acp-report
+          path: gemini-acp-report.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Report artifact filing status
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          UPLOAD_OUTCOME="${{ steps.upload_artifact.outcome }}"
+
+          case "$UPLOAD_OUTCOME" in
+            success)
+              STATUS="SUCCESS"
+              ;;
+            failure)
+              STATUS="FAILED"
+              ;;
+            *)
+              STATUS="UNKNOWN"
+              ;;
+          esac
+
+          {
+            echo "## Gemini Builder Callback Correlation ACP Report Artifact Filing Status"
+            echo ""
+            echo "The \`gemini-acp-report\` artifact upload step outcome was: \`${UPLOAD_OUTCOME:-unavailable}\`"
+            echo ""
+            echo "filing_status: ${STATUS}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "filing_status=${STATUS}" >> "$GITHUB_OUTPUT"
