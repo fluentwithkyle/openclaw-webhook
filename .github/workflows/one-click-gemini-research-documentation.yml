@@ -115,6 +115,9 @@ jobs:
           Repository instructions, ARCHITECTURE.md, GEMINI.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md take precedence. If current implementation contradicts an assumption, use repository evidence and document the discrepancy.
           TASK_EOF
 
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
+
       - name: Dispatch canonical Gemini research carrier
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -141,7 +144,7 @@ jobs:
             --arg task_mode "RESEARCH_DOCUMENT" \
             --arg capabilities "inspect,inspect_repository,inspect_github_actions,research,analyze_activation_architecture,analyze_builder_one_click,analyze_execution_claims,modify_files,commit,push" \
             --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md" \
-            --arg verification "Inspect current workflow validation and one-click contract; produce durable research record; update required research index and task log; distinguish VERIFIED/INFERRED/UNKNOWN; identify smallest machine-enforcement increment; commit and push; report commit SHA" \
+            --arg verification "Inspect current Gemini Builder one-click activation status and one-click contract; produce durable research record; update required research index and task log; distinguish VERIFIED/INFERRED/UNKNOWN; state the exact remaining blocker and minimum next action; commit and push; report commit SHA" \
             '{
               ref: $ref,
               inputs: {
