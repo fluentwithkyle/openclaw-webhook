@@ -1,0 +1,51 @@
+name: One-Click Gemini Builder Coordinator Registration Gate Protocol Enforcement
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construct and dispatch canonical Gemini Builder ACP carrier
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > task.txt <<'EOF'
+protocol_version: 0.1
+request_id: TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001
+source: Kyle
+originator: Kyle — Director
+target: Gemini
+target_agent: Gemini Builder
+repository: fluentwithkyle/openclaw-webhook
+base_branch: main
+task_mode: BUILDER
+capabilities: [read_only, modify_files, run_tests, commit, push]
+objective: Strengthen the existing one-click coordinator protocol and machine-enforced tests so GitHub workflow registration/runnability is an explicit mandatory coordinator decision gate before any Run workflow link may be presented.
+scope: Extend only the existing coordinator protocol and one-click contract test machinery. Require exact task binding, zero-input workflow_dispatch, authoritative GitHub registration/runnability evidence, fail-closed BLOCKED/NOT READY when unavailable, Run-link presentation only after all gates pass, Director execution, and independent post-run verification.
+verification: Verify CHATGPT_PROJECT_OPERATING_PROTOCOL.md explicitly contains the registration/runnability gate; require authoritative GitHub-hosted evidence; reject YAML/file existence alone; enforce BLOCKED/NOT READY when unavailable; add machine tests without pretending repo-local tests can query GitHub; run the relevant one-click/external-activation/workflow-expression tests and git diff --check; commit and push to main and report the remote SHA.
+constraints:
+  permitted_paths: [docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md, test/one-click-workflow-contract.test.js, test/external-activation-procedure.test.js, test/external-activation-bypass.test.js, test/workflow-expression.test.js, docs/ai/TASK_LOG.md, docs/ai/RESEARCH_INDEX.md]
+  forbidden: [.github/workflows/*, poc/activation-policy.js, poc/activation-ingress.js, poc/activation-engine.js, poc/task-registry.js, poc/schemas/acp-schema.js, runtime code, repository settings, secrets, dependencies, new workflow registry, new control plane, new activation mechanism, unrelated changes]
+authorization_boundary: Changes are authorized only to the listed documentation/test surfaces.
+persistence_expectation: same_execution
+deliverable_commit: true
+deliverable_push: true
+fail_closed_rule: If authoritative GitHub registration/runnability cannot be established, classify the one-click workflow as BLOCKED / NOT READY and do not present a Run workflow link.
+no_claim_without_evidence: Distinguish VERIFIED, INFERRED, and UNKNOWN. Do not claim GitHub registration/runnability from repository-local inspection.
+conflict_handling: Repository instructions and canonical ACP/activation architecture take precedence; fail closed on discrepancies.
+roadmap_alignment:
+  current_roadmap_phase: Phase 3 — Autonomous Coordination Loop
+  proposed_task_classification: B — Enabling/Foundation Work
+  alignment_conclusion: PASS
+EOF
+          PAYLOAD=$(jq -n --arg task "$(cat task.txt)" '{ref:"main",inputs:{request_id:"TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001",task:$task,repository:"fluentwithkyle/openclaw-webhook",base_branch:"main",task_mode:"BUILDER",target_agent:"Gemini Builder",capabilities:"read_only,modify_files,run_tests,commit,push",permitted_paths:"docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md,docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md,test/one-click-workflow-contract.test.js,test/external-activation-procedure.test.js,test/external-activation-bypass.test.js,test/workflow-expression.test.js,docs/ai/TASK_LOG.md,docs/ai/RESEARCH_INDEX.md"}}')
+          gh api --method POST "/repos/${GITHUB_REPOSITORY}/actions/workflows/main.yml/dispatches" --input - <<< "$PAYLOAD"
