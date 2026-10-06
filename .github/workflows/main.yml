@@ -176,6 +176,7 @@ jobs:
             --arg comment_body "$COMMENT_BODY" \
             --arg repository "$REPOSITORY" \
             --arg base_branch "$BASE_BRANCH" \
+            --arg approval_id "$APPROVAL_ID" \
             '{
               comment_id: $comment_id,
               comment_body: $comment_body,
