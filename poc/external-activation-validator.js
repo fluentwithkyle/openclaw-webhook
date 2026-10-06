@@ -73,7 +73,7 @@ function validateExternalActivation(params, callbackUrl, callbackSecret) {
     });
 }
 
-function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch) {
+function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch, approvalId) {
     const stripped = commentBody.replace('@gemini-cli', '').trim();
 
     let taskMode = 'REVIEW';
@@ -100,7 +100,7 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
         task: task,
         task_mode: taskMode,
         constraints: { permitted_paths: permittedPaths.split(',') },
-        authorization: { capabilities: capabilities.split(',') },
+        authorization: { capabilities: capabilities.split(','), ...(approvalId ? { approval_id: approvalId } : {}) },
         verification: taskMode === 'FAILOVER_EXECUTE'
             ? 'All changes must be within permitted_paths. Implement, test, commit, and push within scope.'
             : 'Review the request and provide analysis, risk assessment, and implementation plans.',
