@@ -35,6 +35,10 @@ on:
         description: 'Original ACP task verification requirements for Gemini review'
         required: false
         type: string
+      approval_id:
+        description: 'Director approval identifier for consequential FAILOVER_EXECUTE activation'
+        required: false
+        type: string
       task_mode:
         description: 'Operating mode: REVIEW (read-only), VERIFY_RECONCILE (bounded commit/push), RESEARCH_DOCUMENT (research + documentation persistence), or FAILOVER_EXECUTE (full execution)'
         required: false
@@ -149,6 +153,7 @@ jobs:
           TASK_MODE: ${{ inputs.task_mode || 'REVIEW' }}
           CAPABILITIES: ${{ inputs.capabilities || 'read_only' }}
           PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}
+          APPROVAL_ID: ${{ inputs.approval_id || '' }}
           VERIFICATION: ${{ inputs.verification || '' }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
@@ -168,6 +173,7 @@ jobs:
             --arg task_mode "$TASK_MODE" \
             --arg capabilities "$CAPABILITIES" \
             --arg permitted_paths "$PERMITTED_PATHS" \
+            --arg approval_id "$APPROVAL_ID" \
             --arg verification "$VERIFICATION" \
             '{
               request_id: $request_id,
@@ -177,6 +183,7 @@ jobs:
               task_mode: $task_mode,
               capabilities: $capabilities,
               permitted_paths: $permitted_paths,
+              approval_id: $approval_id,
               verification: $verification
             }')
 
