@@ -32,7 +32,8 @@ async function main() {
             params.comment_id,
             params.comment_body,
             params.repository,
-            params.base_branch
+            params.base_branch,
+            params.approval_id
         );
         targetAgent = 'Gemini';
     } else if (command === 'gemini-workflow-dispatch') {
