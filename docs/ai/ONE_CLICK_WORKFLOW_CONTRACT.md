@@ -130,9 +130,13 @@ Before presenting the Run workflow link, the coordinator must inspect the actual
 - The carrier's `objective`/`scope` correspond to the requested task.
 - Authority-bearing fields remain subject to server-side activation policy rather than becoming workflow-input authority.
 
+This inspection is **machine-enforced** by the `verifyCarrierBinding` function in `test/one-click-workflow-contract.test.js`. The function fails closed: any mismatch in `task_name`, `target_agent`, or `task_mode`, any required `workflow_dispatch` input, or any missing canonical activation path reference causes the function to return a non-`CARRIER_READY` state, and the coordinator must not present a Run link.
+
 ### 4.5 Dedicated Workflow When Necessary
 
 If an existing one-click workflow contains a different task in its embedded carrier, the coordinator must create or update the appropriate one-click workflow before presenting a Run link. It must not silently reuse the old workflow.
+
+**Carrier-update rule:** When an existing carrier is found but its embedded `task_name` does not exactly match the requested task, the coordinator must update the carrier to embed the exact requested task, then revalidate using `verifyCarrierBinding` to confirm the binding now returns `CARRIER_READY` before presenting a Run link. The updated workflow must still satisfy all one-click invariants (zero-input, canonical activation path, server-derived authority, no second control plane).
 
 ### 4.6 Run-Link Validity
 
@@ -291,6 +295,21 @@ These tests verify:
 13. **Workflow registration/runnability gate** — Section 9 establishes that GitHub workflow registration/runnability must be independently established via an authoritative GitHub-hosted signal before a Run link is presented, and that repository-local YAML inspection alone is insufficient (the 2026-09-16 registration incident is referenced).
 14. **Fail-closed registration** — The contract requires BLOCKED/NOT READY when GitHub registration/runnability cannot be established, and prohibits treating YAML existence as proof of GitHub recognition.
 15. **VERIFIED / INFERRED / UNKNOWN classification** — Section 9.8 defines the evidence-classification terms and requires the coordinator to distinguish direct evidence from inference.
+16. **Machine-enforceable binding verification** — The `verifyCarrierBinding` function in `test/one-click-workflow-contract.test.js` implements the machine-enforceable task-to-carrier binding check. It extracts the embedded canonical ACP task carrier fields (`task_name`, `target_agent`, `task_mode`) from the workflow YAML text (supporting both YAML-style and JSON-style embedded carriers), verifies the `workflow_dispatch` trigger is zero-input (no required inputs), and compares the embedded values against the requested task_name, target_agent, and task_mode. The function returns a structured state model:
+
+    | State | Meaning |
+    |---|---|
+    | `CARRIER_NOT_FOUND` | No embedded carrier or canonical activation path reference found — fail closed, do not present Run link |
+    | `CARRIER_FOUND` | Carrier fields detected but binding not yet verified (intermediate state) |
+    | `CARRIER_TASK_MISMATCH` | Embedded `task_name` does not exactly match the requested task_name — fail closed |
+    | `CARRIER_AGENT_MISMATCH` | Embedded `target_agent` does not match the requested target_agent — fail closed |
+    | `CARRIER_TASK_MODE_MISMATCH` | Embedded `task_mode` does not match the requested task_mode — fail closed |
+    | `CARRIER_HAS_REQUIRED_INPUTS` | `workflow_dispatch` has required inputs, violating the zero-input requirement — fail closed |
+    | `CARRIER_READY` | All checks passed: embedded carrier match (exact task_name, target_agent, task_mode) confirmed, zero-input confirmed, canonical activation path verified |
+    | `EXECUTION_STARTED` | The workflow has been dispatched and execution has begun (external state, verified via GitHub signals) |
+    | `EXECUTION_VERIFIED` | The resulting execution has been independently verified against the original objective |
+
+    The function fails closed: any state other than `CARRIER_READY` (and `EXECUTION_VERIFIED` for completion) must prevent the coordinator from presenting a Run link. Regression tests in `test/one-click-workflow-contract.test.js` verify: (a) exact task match returns `CARRIER_READY`, (b) mismatched task_name returns `CARRIER_TASK_MISMATCH`, (c) mismatched target_agent returns `CARRIER_AGENT_MISMATCH`, (d) mismatched task_mode returns `CARRIER_TASK_MODE_MISMATCH`, (e) required workflow_dispatch inputs returns `CARRIER_HAS_REQUIRED_INPUTS`, (f) missing embedded carrier returns `CARRIER_NOT_FOUND`, (g) JSON-style and YAML multi-line carrier formats are parsed correctly.
 
 ---
 
@@ -425,11 +444,12 @@ This one-click contract defines the **additional** requirement that a one-click 
 | A specific-task one-click request must bind the exact canonical ACP task to the embedded carrier | **ENFORCED** |
 | No task substitution — no linking older/different-task workflows, no generic pages, no separate ACP task with unchanged carrier | **ENFORCED** |
 | Exact-task inspection required before presenting a Run link (zero-input, embedded carrier, target_agent, task_name, task_mode, objective/scope) | **ENFORCED** |
+| Machine-enforceable binding verification via `verifyCarrierBinding` in `test/one-click-workflow-contract.test.js` with fail-closed state model (CARRIER_READY / CARRIER_TASK_MISMATCH / CARRIER_AGENT_MISMATCH / CARRIER_TASK_MODE_MISMATCH / CARRIER_HAS_REQUIRED_INPUTS / CARRIER_NOT_FOUND) | **ENFORCED** |
 | A Run workflow link is valid only after the referenced workflow is independently inspected and confirmed to contain the exact task | **ENFORCED** |
-| Dedicated workflow created/updated when an existing one-click workflow contains a different task | **ENFORCED** |
+| Dedicated workflow created/updated when an existing one-click workflow contains a different task; revalidate via `verifyCarrierBinding` after carrier update | **ENFORCED** |
 | Verification vs. workflow construction distinction enforced | **ENFORCED** |
 | Discoverable from the documented cold-start path | **ENFORCED** |
-| GitHub workflow registration/runnability must be independently established before presenting a Run link; repository-local YAML inspection alone is insufficient | **ENFORCED** |
+|| GitHub workflow registration/runnability must be independently established before presenting a Run link; repository-local YAML inspection alone is insufficient | **ENFORCED** |
 | Registration/availability failure is classified BLOCKED/NOT READY, not inferred away | **ENFORCED** |
 | VERIFIED / INFERRED / UNKNOWN evidence classification applied to registration gate | **ENFORCED** |
 
@@ -449,7 +469,8 @@ This one-click contract defines the **additional** requirement that a one-click 
 | A specific-task one-click request must bind the exact canonical ACP task to the embedded carrier | **ENFORCED** |
 | No task substitution — no linking older/different-task workflows, no generic pages, no separate ACP task with unchanged carrier | **ENFORCED** |
 | Exact-task inspection required before presenting a Run link (zero-input, embedded carrier, target_agent, task_name, task_mode, objective/scope) | **ENFORCED** |
+| Machine-enforceable binding verification via `verifyCarrierBinding` in `test/one-click-workflow-contract.test.js` with fail-closed state model (CARRIER_READY / CARRIER_TASK_MISMATCH / CARRIER_AGENT_MISMATCH / CARRIER_TASK_MODE_MISMATCH / CARRIER_HAS_REQUIRED_INPUTS / CARRIER_NOT_FOUND) | **ENFORCED** |
 | A Run workflow link is valid only after the referenced workflow is independently inspected and confirmed to contain the exact task | **ENFORCED** |
-| Dedicated workflow created/updated when an existing one-click workflow contains a different task | **ENFORCED** |
+| Dedicated workflow created/updated when an existing one-click workflow contains a different task; revalidate via `verifyCarrierBinding` after carrier update | **ENFORCED** |
 | Verification vs. workflow construction distinction enforced | **ENFORCED** |
 | Discoverable from the documented cold-start path | **ENFORCED** |

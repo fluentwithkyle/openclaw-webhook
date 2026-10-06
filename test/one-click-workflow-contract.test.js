@@ -1465,7 +1465,7 @@ runTest('Machine enforcement - one-click-gemini-activation-verify-reconcile.yml 
         requestedTaskName: 'TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-ACTIVATION-VERIFY-RECONCILE-001',
         requestedTargetAgent: 'Gemini',
         requestedTaskMode: 'VERIFY_RECONCILE',
-        canonicalActivationPath: 'poc/validate-external-activation\\.js'
+        canonicalActivationPath: 'actions/workflows/main\\.yml/dispatches'
     });
     assert.strictEqual(result.state, 'CARRIER_READY',
         `Expected CARRIER_READY but got ${result.state}: ${result.details}`);
@@ -1491,7 +1491,7 @@ runTest('Machine enforcement - one-click-gemini-builder-coordinator-registration
         requestedTaskName: 'TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001',
         requestedTargetAgent: 'Gemini',
         requestedTaskMode: 'BUILDER',
-        canonicalActivationPath: 'poc/validate-external-activation\\.js'
+        canonicalActivationPath: 'actions/workflows/main\\.yml/dispatches'
     });
     assert.strictEqual(result.state, 'CARRIER_READY',
         `Expected CARRIER_READY but got ${result.state}: ${result.details}`);

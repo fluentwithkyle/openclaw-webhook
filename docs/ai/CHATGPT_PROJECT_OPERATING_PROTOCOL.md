@@ -1212,6 +1212,20 @@ registration/runnability → if GitHub registration/runnability is unavailable o
 BLOCKED / NOT READY; no Run link → if all gates pass → present Run link → Director executes click →
 inspect resulting execution.
 
+**Machine-enforced binding**: The task-to-carrier binding step is machine-enforced by
+the `verifyCarrierBinding` function in `test/one-click-workflow-contract.test.js`. This
+function extracts the embedded canonical ACP task carrier fields (`task_name`,
+`target_agent`, `task_mode`) from the workflow YAML text, verifies zero-input
+`workflow_dispatch`, and verifies the canonical activation path reference. It returns
+a fail-closed state: `CARRIER_READY` only when all checks pass, or
+`CARRIER_TASK_MISMATCH` / `CARRIER_AGENT_MISMATCH` / `CARRIER_TASK_MODE_MISMATCH` /
+`CARRIER_HAS_REQUIRED_INPUTS` / `CARRIER_NOT_FOUND` when any check fails. A non-
+`CARRIER_READY` result blocks the Run link.
+
+**Carrier-update rule**: When an existing carrier is found but its embedded task_name
+does not match the requested task, update the carrier to embed the exact requested
+task, then revalidate via `verifyCarrierBinding` before presenting a Run link.
+
 This procedure does not weaken the existing authorization boundary.
 Creating/updating a workflow remains a consequential repository mutation requiring
 explicit ACP capabilities (including `modify_files`, `commit`, `push` where
