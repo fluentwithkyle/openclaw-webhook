@@ -20,7 +20,7 @@ function authenticateCarrier(dispatchContext) {
   return { valid: true };
 }
 
-function canonicalExternalActivationIngress(request, dispatchContext) {
+async function canonicalExternalActivationIngress(request, dispatchContext) {
   const errors = [];
   const warnings = [];
 
@@ -210,7 +210,7 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
 
   let taskResult;
   if (isConsequential && dispatchContext && dispatchContext.director_approval_id) {
-    taskResult = taskRegistry.createTaskWithDirectorAuthorization(command);
+    taskResult = await taskRegistry.createTaskWithDirectorAuthorization(command);
   } else if (isConsequential) {
     return {
       success: false,
@@ -221,7 +221,7 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
       director_approval_required: true
     };
   } else {
-    taskResult = taskRegistry.createTask(command);
+    taskResult = await taskRegistry.createTask(command);
   }
 
   if (!taskResult.success) {
@@ -268,7 +268,7 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
     taskEntry.activation_provenance.parent_activation = taskEntry.lineage.parent_activation_id;
   }
 
-  taskRegistry.persistCache();
+  await taskRegistry.persistCache();
 
   const carrierIdentity = dispatchContext && dispatchContext.carrier_identity;
   const carrierType = dispatchContext && dispatchContext.carrier_type;
@@ -290,7 +290,7 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
       };
     }
 
-    const transitionResult = taskRegistry.transitionToExecuting(requestId);
+    const transitionResult = await taskRegistry.transitionToExecuting(requestId);
     if (!transitionResult.success) {
       return {
         success: false,
@@ -311,7 +311,7 @@ function canonicalExternalActivationIngress(request, dispatchContext) {
       carrier_type: carrierType || 'github_workflow'
     };
 
-    const claimResult = taskRegistry.claimExecutionContext(requestId, claimIdentity);
+    const claimResult = await taskRegistry.claimExecutionContext(requestId, claimIdentity);
 
     if (!claimResult.success) {
       return {

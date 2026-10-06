@@ -17,10 +17,10 @@ function sanitizeDispatchError(error) {
         .replace(/(authorization|token|api[_ -]?key|secret)\s*[:=]\s*\S+/gi, '$1=[redacted]');
 }
 
-function transitionToExecuting(requestId) {
+async function transitionToExecuting(requestId) {
     const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
     for (const status of transitions) {
-        const result = taskRegistry.updateTaskStatus(requestId, status);
+        const result = await taskRegistry.updateTaskStatus(requestId, status);
         if (!result.success) {
             return { success: false, error: result.error };
         }
@@ -181,7 +181,7 @@ router.post('/kilo', authenticatePoc, async (req, res) => {
         command.request_id = requestId; // Ensure unique ID
 
         // Create task in registry
-        const taskResult = taskRegistry.createTask(command);
+        const taskResult = await taskRegistry.createTask(command);
         if (!taskResult.success) {
             return res.status(409).json({
                 request_id: requestId,
@@ -202,7 +202,7 @@ router.post('/kilo', authenticatePoc, async (req, res) => {
                 task.kilo.provider_message_id = result.provider_message_id;
                 task.kilo.provider_invocation_id = result.provider_invocation_id;
                 task.updated_at = new Date().toISOString();
-                taskRegistry.persistCache();
+                await taskRegistry.persistCache();
             }
         }
 
@@ -262,7 +262,7 @@ router.post('/builder/dispatch', authenticatePoc, async (req, res) => {
     }
 
     try {
-        const result = taskRegistry.createTaskWithDirectorAuthorization(command);
+        const result = await taskRegistry.createTaskWithDirectorAuthorization(command);
         if (!result.success) {
             if (result.authorization) {
                 return res.status(403).json({
@@ -396,7 +396,7 @@ router.post('/kilo/callback', authenticateKiloCallback, async (req, res) => {
     }
 
     // Process through orchestrator (handles idempotency and state transitions)
-    const result = orchestrator.handleKiloCompletion(requestId, req.body);
+    const result = await orchestrator.handleKiloCompletion(requestId, req.body);
 
     if (!result.success) {
         const httpStatus = result.duplicate ? 409 : 400;
@@ -501,7 +501,7 @@ router.post('/gemini/callback', authenticateGeminiCallback, async (req, res) => 
     }
 
     // Process through orchestrator (handles idempotency and state transitions)
-    const result = orchestrator.handleGeminiCompletion(requestId, req.body);
+    const result = await orchestrator.handleGeminiCompletion(requestId, req.body);
 
     if (!result.success) {
         const httpStatus = result.duplicate ? 409 : 400;
@@ -571,7 +571,7 @@ router.post('/builder/callback', authenticateBuilderCallback, async (req, res) =
             });
         }
 
-        const rehydrateResult = taskRegistry.rehydrateTaskFromCallback(requestId, req.body);
+        const rehydrateResult = await taskRegistry.rehydrateTaskFromCallback(requestId, req.body);
         if (!rehydrateResult.success) {
             const isAuthError = rehydrateResult.error_code === 'EXECUTION_CLAIM_MISMATCH' || rehydrateResult.error_code === 'CARRIER_IDENTITY_MISMATCH';
             return res.status(isAuthError ? 403 : 404).json({
@@ -651,7 +651,7 @@ router.post('/builder/callback', authenticateBuilderCallback, async (req, res) =
         }
     }
 
-    const result = orchestrator.handleGeminiBuilderCompletion(requestId, req.body);
+    const result = await orchestrator.handleGeminiBuilderCompletion(requestId, req.body);
 
     if (!result.success) {
         const httpStatus = result.duplicate ? 409 : 400;
@@ -773,7 +773,7 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
     }
 
     try {
-        const result = taskRegistry.createTask(command);
+        const result = await taskRegistry.createTask(command);
         if (!result.success) {
             if (result.authorization) {
                 return res.status(403).json({
@@ -819,7 +819,7 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
                 task.kilo.provider_message_id = dispatchResult.provider_message_id;
                 task.kilo.provider_invocation_id = dispatchResult.provider_invocation_id;
                 task.updated_at = new Date().toISOString();
-                taskRegistry.persistCache();
+                await taskRegistry.persistCache();
             }
         }
 
@@ -872,11 +872,11 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
 
 router.post('/deepseek-runtime', authenticateChatboxGateway, createDeepSeekRuntimeHandler());
 
-router.post('/director/approve', authenticateDirectorApproval, (req, res) => {
+router.post('/director/approve', authenticateDirectorApproval, async (req, res) => {
     const scope = req.body && req.body.scope;
     const validation = validateDirectorApprovalScope(scope);
     if (!validation.valid) return res.status(400).json({ request_id: scope?.request_id || 'unknown', status: 'validation blocked', stage: 'validation blocked', error: validation.error });
-    const result = taskRegistry.createDirectorApproval(scope);
+    const result = await taskRegistry.createDirectorApproval(scope);
     if (!result.success) return res.status(400).json({ request_id: scope.request_id, status: 'validation blocked', stage: 'validation blocked', error: result.error });
     return res.status(201).json({ request_id: scope.request_id, status: 'Director approval issued', approval_id: result.approval.approval_id, expiry: result.approval.expiry, scope_hash: result.approval.scope_hash });
 });
@@ -895,7 +895,7 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
     }
 
     try {
-        const result = taskRegistry.createTaskWithDirectorAuthorization(command);
+        const result = await taskRegistry.createTaskWithDirectorAuthorization(command);
         if (!result.success) {
             if (result.authorization) {
                 return res.status(403).json({
@@ -942,7 +942,7 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
                 task.kilo.provider_message_id = dispatchResult.provider_message_id;
                 task.kilo.provider_invocation_id = dispatchResult.provider_invocation_id;
                 task.updated_at = new Date().toISOString();
-                taskRegistry.persistCache();
+                await taskRegistry.persistCache();
             }
         }
 

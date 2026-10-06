@@ -26,7 +26,7 @@ function validateRepositoryContext(report, expectedRepository, expectedBaseBranc
   return { valid: true };
 }
 
-function handleKiloCompletion(requestId, report) {
+async function handleKiloCompletion(requestId, report) {
   const validation = validateExecutionReport(report);
   if (!validation.valid) {
     return { success: false, error: `Invalid execution report: ${validation.error}`, stage: 'validation' };
@@ -51,7 +51,7 @@ function handleKiloCompletion(requestId, report) {
   }
 
   const executionId = report.execution_id || report.result?.execution_metadata?.invocation_id || null;
-  const updateResult = taskRegistry.updateAgentResult(requestId, 'Kilo', {
+  const updateResult = await taskRegistry.updateAgentResult(requestId, 'Kilo', {
     status: report.status,
     execution_id: executionId,
     report: report
@@ -67,19 +67,19 @@ function handleKiloCompletion(requestId, report) {
     nextAction = 'trigger_builder';
   } else if (report.status === 'failure') {
     nextAction = 'human_review';
-    const statusResult = taskRegistry.updateTaskStatus(requestId, 'FAILED');
+    const statusResult = await taskRegistry.updateTaskStatus(requestId, 'FAILED');
     if (!statusResult.success) {
       return { success: false, error: statusResult.error, stage: 'status_transition' };
     }
   } else if (report.status === 'blocked') {
     nextAction = 'human_review';
-    const statusResult = taskRegistry.updateTaskStatus(requestId, 'BLOCKED');
+    const statusResult = await taskRegistry.updateTaskStatus(requestId, 'BLOCKED');
     if (!statusResult.success) {
       return { success: false, error: statusResult.error, stage: 'status_transition' };
     }
   }
 
-  taskRegistry.setNextAction(requestId, nextAction);
+  await taskRegistry.setNextAction(requestId, nextAction);
 
   return {
     success: true,
@@ -89,7 +89,7 @@ function handleKiloCompletion(requestId, report) {
   };
 }
 
-function handleGeminiCompletion(requestId, report) {
+async function handleGeminiCompletion(requestId, report) {
   const validation = validateExecutionReport(report);
   if (!validation.valid) {
     return { success: false, error: `Invalid execution report: ${validation.error}`, stage: 'validation' };
@@ -113,7 +113,7 @@ function handleGeminiCompletion(requestId, report) {
     return { success: false, error: 'Gemini result already recorded (idempotency)', stage: 'idempotency', duplicate: true };
   }
 
-  const updateResult = taskRegistry.updateAgentResult(requestId, 'Gemini', {
+  const updateResult = await taskRegistry.updateAgentResult(requestId, 'Gemini', {
     status: report.status,
     execution_id: report.execution_id || null,
     report: report
@@ -146,12 +146,12 @@ function handleGeminiCompletion(requestId, report) {
     nextAction = 'human_review';
   }
 
-  const statusResult = taskRegistry.updateTaskStatus(requestId, nextStatus);
+  const statusResult = await taskRegistry.updateTaskStatus(requestId, nextStatus);
   if (!statusResult.success) {
     return { success: false, error: statusResult.error, stage: 'status_transition' };
   }
 
-  taskRegistry.setNextAction(requestId, nextAction);
+  await taskRegistry.setNextAction(requestId, nextAction);
 
   return {
     success: true,
@@ -161,7 +161,7 @@ function handleGeminiCompletion(requestId, report) {
   };
 }
 
-function handleGeminiBuilderCompletion(requestId, report) {
+async function handleGeminiBuilderCompletion(requestId, report) {
   const validation = validateExecutionReport(report);
   if (!validation.valid) {
     return { success: false, error: `Invalid execution report: ${validation.error}`, stage: 'validation' };
@@ -185,7 +185,7 @@ function handleGeminiBuilderCompletion(requestId, report) {
     return { success: false, error: 'Gemini Builder result already recorded (idempotency)', stage: 'idempotency', duplicate: true };
   }
 
-  const updateResult = taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
+  const updateResult = await taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
     status: report.status,
     execution_id: report.execution_id || null,
     report: report
@@ -201,19 +201,19 @@ function handleGeminiBuilderCompletion(requestId, report) {
     nextAction = 'trigger_gemini';
   } else if (report.status === 'failure') {
     nextAction = 'human_review';
-    const statusResult = taskRegistry.updateTaskStatus(requestId, 'FAILED');
+    const statusResult = await taskRegistry.updateTaskStatus(requestId, 'FAILED');
     if (!statusResult.success) {
       return { success: false, error: statusResult.error, stage: 'status_transition' };
     }
   } else if (report.status === 'blocked') {
     nextAction = 'human_review';
-    const statusResult = taskRegistry.updateTaskStatus(requestId, 'BLOCKED');
+    const statusResult = await taskRegistry.updateTaskStatus(requestId, 'BLOCKED');
     if (!statusResult.success) {
       return { success: false, error: statusResult.error, stage: 'status_transition' };
     }
   }
 
-  taskRegistry.setNextAction(requestId, nextAction);
+  await taskRegistry.setNextAction(requestId, nextAction);
 
   return {
     success: true,
@@ -297,7 +297,7 @@ async function triggerGemini(requestId, githubToken) {
     };
   }
 
-  const updateResult = taskRegistry.updateAgentResult(requestId, 'Gemini', {
+  const updateResult = await taskRegistry.updateAgentResult(requestId, 'Gemini', {
     status: 'running',
     execution_id: `dispatched-${Date.now()}`,
     report: null
@@ -307,7 +307,7 @@ async function triggerGemini(requestId, githubToken) {
     return { success: false, error: updateResult.error, stage: 'update' };
   }
 
-  taskRegistry.setNextAction(requestId, 'waiting_gemini_callback');
+  await taskRegistry.setNextAction(requestId, 'waiting_gemini_callback');
 
   return {
     success: true,
@@ -381,7 +381,7 @@ async function triggerGeminiBuilder(requestId, githubToken, builderApiKey) {
     };
   }
 
-  const updateResult = taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
+  const updateResult = await taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
     status: 'running',
     execution_id: executionId,
     report: null
@@ -391,7 +391,7 @@ async function triggerGeminiBuilder(requestId, githubToken, builderApiKey) {
     return { success: false, error: updateResult.error, stage: 'update' };
   }
 
-  taskRegistry.setNextAction(requestId, 'waiting_builder_callback');
+  await taskRegistry.setNextAction(requestId, 'waiting_builder_callback');
 
   return {
     success: true,

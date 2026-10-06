@@ -958,10 +958,10 @@ async function runDeepSeekTurn({ messages, env, httpClient = axios, coordination
             }
             submittedTaskIds.add(command.request_id);
             if (!coordinationContext) {
-                const contextResult = taskRegistry.createCoordinationContext(command.request_id, MAX_AUTONOMOUS_COORDINATION_TURNS);
+                const contextResult = await taskRegistry.createCoordinationContext(command.request_id, MAX_AUTONOMOUS_COORDINATION_TURNS);
                 if (contextResult.success) createdCoordinationContext = contextResult.context;
             } else {
-                const contextResult = taskRegistry.advanceCoordinationContext(coordinationContext.context_id, command.request_id);
+                const contextResult = await taskRegistry.advanceCoordinationContext(coordinationContext.context_id, command.request_id);
                 if (!contextResult.success) throw new RuntimeError(409, 'COORDINATION_TURN_EXHAUSTED', contextResult.error);
             }
             toolResultContent = JSON.stringify({
