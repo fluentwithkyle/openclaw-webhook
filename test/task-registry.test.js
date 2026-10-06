@@ -6,9 +6,9 @@ const taskRegistry = require('../poc/task-registry');
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
 
-function runTest(name, fn) {
+async function runTest(name, fn) {
   try {
-    fn();
+    await fn();
     console.log(`PASS: ${name}`);
     return true;
   } catch (err) {
@@ -34,8 +34,8 @@ function assertDeepEqual(actual, expected, msg) {
 let passCount = 0;
 let failCount = 0;
 
-function test(name, fn) {
-  const result = runTest(name, fn);
+async function test(name, fn) {
+  const result = await runTest(name, fn);
   if (result) passCount++; else failCount++;
 }
 
@@ -61,9 +61,9 @@ function cleanup() {
   taskRegistry.resetRegistry();
 }
 
-test('createTask - creates new task successfully', () => {
+await test('createTask - creates new task successfully', async () => {
   cleanup();
-  const result = taskRegistry.createTask(validCommand);
+  const result = await taskRegistry.createTask(validCommand);
   assertEqual(result.success, true);
   assertEqual(result.entry.request_id, 'test-reg-1');
   assertEqual(result.entry.status, 'PENDING');
@@ -72,20 +72,20 @@ test('createTask - creates new task successfully', () => {
   cleanup();
 });
 
-test('createTask - duplicate request_id returns error', () => {
+await test('createTask - duplicate request_id returns error', async () => {
   cleanup();
-  taskRegistry.createTask(validCommand);
-  const result = taskRegistry.createTask(validCommand);
+  await taskRegistry.createTask(validCommand);
+  const result = await taskRegistry.createTask(validCommand);
   assertEqual(result.success, false);
   assertEqual(result.duplicate, true);
   assert(result.error.includes('Duplicate'));
   cleanup();
 });
 
-test('createTask - Gemini Builder target sets current_agent to Gemini Builder', () => {
+await test('createTask - Gemini Builder target sets current_agent to Gemini Builder', async () => {
   cleanup();
   const builderCommand = { ...validCommand, request_id: 'builder-task-1', target: 'Gemini Builder' };
-  const result = taskRegistry.createTask(builderCommand);
+  const result = await taskRegistry.createTask(builderCommand);
   assertEqual(result.success, true);
   assertEqual(result.entry.current_agent, 'Gemini Builder');
   assertEqual(result.entry.next_agent, 'Gemini');
