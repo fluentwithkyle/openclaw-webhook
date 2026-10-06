@@ -129,7 +129,10 @@ function buildActivationPayloadForWorkflowDispatch(inputs) {
         task: inputs.task,
         task_mode: taskMode,
         constraints: { permitted_paths: permittedPaths.split(',').filter(Boolean) },
-        authorization: { capabilities: capabilities.split(',').filter(Boolean) },
+        authorization: {
+            capabilities: capabilities.split(',').filter(Boolean),
+            ...(inputs.approval_id ? { approval_id: inputs.approval_id } : {})
+        },
         verification: inputs.verification || 'Review the request and provide analysis.',
         reporting: 'json',
         originator: 'Kyle',
