@@ -1,4 +1,4 @@
-name: One-Click Gemini Builder Zero-Input Activation Status Research
+name: One-Click Gemini Builder Activation Status Research
 
 on:
   workflow_dispatch:
@@ -25,81 +25,53 @@ jobs:
           TASK_FILE="gemini-builder-one-click-status-research.md"
           cat > "$TASK_FILE" <<'TASK_EOF'
 @kyle
-protocol_version: 0.1
-request_id: TASK-GEMINI-BUILDER-ONE-CLICK-ZERO-INPUT-ACTIVATION-STATUS-RESEARCH-001
-source: Kyle
+
+task_name: TASK-GEMINI-BUILDER-ONE-CLICK-ZERO-INPUT-ACTIVATION-STATUS-RESEARCH-001
 originator: Kyle — Director
-target: Gemini
 target_agent: Gemini
-task_type: research
 repository: fluentwithkyle/openclaw-webhook
 base_branch: main
-task: Research and document the current repository and GitHub state of activating Gemini Builder through a true one-click zero-input workflow, determine exactly what already works, what is missing or blocked, and identify the smallest concrete next action required to make the Builder activation path operational. This is a status/reconciliation research mission, not an implementation task.
 task_mode: RESEARCH_DOCUMENT
 capabilities:
-  - read_only
-  - modify_files
-  - commit
-  - push
-objective: Establish an evidence-based current-state assessment of the Gemini Builder one-click zero-input activation path, using repository evidence and available GitHub execution/registration evidence rather than prior agent claims or conversational memory.
+- read_only
+- modify_files
+- commit
+- push
+objective: >
+  Research and document the current repository and GitHub state of activating
+  Gemini Builder through a true one-click zero-input workflow. Determine what
+  already works, what is missing or blocked, and the smallest next action
+  required to make Builder activation operational. This is research only.
 scope:
-  repository inspection:
-  - .github/workflows/
-  - docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md
-  - docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md
-  - docs/ai/TASK_STANDARD.md
-  - docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md
-  - poc/activation-policy.js
-  - poc/activation-ingress.js
-  - poc/schemas/acp-schema.js
-  - relevant TaskRegistry/execution-descriptor code
-  - relevant one-click workflow tests
-  - relevant docs/ai/research/ records and TASK_LOG/RESEARCH_INDEX entries
-  github_state:
-  - determine whether the candidate Gemini Builder one-click workflow(s) are actually registered and dispatchable on GitHub
-  - inspect relevant recent workflow runs and failures when available
-  - distinguish repository-local evidence from authoritative GitHub-hosted registration/runnability evidence
-  permitted_documentation_changes:
-  - docs/ai/research/
-  - docs/ai/RESEARCH_INDEX.md
-  - docs/ai/TASK_LOG.md
- verification:
-  - Create docs/ai/research/research-TASK-GEMINI-BUILDER-ONE-CLICK-ZERO-INPUT-ACTIVATION-STATUS-RESEARCH-001.md.
-  - Include exact candidate workflow path(s), their workflow_dispatch shape, required-input count, embedded carrier/task binding, target agent, task mode, capabilities, and canonical dispatch path.
-  - Identify the current Gemini Builder carrier and explain whether the one-click workflow actually reaches that carrier through the canonical external-activation architecture.
-  - Check the new coordinator registration/runnability gate and classify each relevant workflow as VERIFIED, INFERRED, or UNKNOWN for GitHub registration/runnability.
-  - Inspect actual GitHub workflow/run evidence where available; do not treat a workflow file, YAML validity, repository-local tests, or an agent self-report as proof of GitHub registration.
-  - Identify any known Builder callback/correlation failures or prior fixes that materially affect one-click readiness.
-  - State the exact remaining blocker(s), if any, and the smallest next authorized action. Do not implement that action.
-  - Include a concise end-to-end readiness verdict: READY, PARTIALLY READY, or BLOCKED.
-  - Include VERIFIED, INFERRED, and UNKNOWN findings separately.
-  - Include an explicit "No implementation performed" statement.
-  - Include mandatory ## Roadmap Alignment with the exact required fields.
-  - Update docs/ai/RESEARCH_INDEX.md and docs/ai/TASK_LOG.md.
-  - Commit and push the research record and documentation updates to main and report the commit SHA.
+  - Inspect existing Gemini Builder one-click workflows and recent runs.
+  - Inspect the one-click workflow contract and canonical activation architecture.
+  - Inspect activation policy, ingress, ACP schema, TaskRegistry/execution descriptor,
+    relevant tests, and durable research records.
+  - Determine GitHub registration/runnability using authoritative evidence where available.
+  - Produce the durable research record at docs/ai/research/research-TASK-GEMINI-BUILDER-ONE-CLICK-ZERO-INPUT-ACTIVATION-STATUS-RESEARCH-001.md.
+verification:
+  - Distinguish VERIFIED, INFERRED, and UNKNOWN.
+  - Include mandatory ## Roadmap Alignment with exact required fields.
+  - Update RESEARCH_INDEX.md and TASK_LOG.md as required.
+  - State the exact blockers and smallest next authorized action.
+  - State READY, PARTIALLY READY, or BLOCKED.
+  - Explicitly state no implementation was performed.
+  - Commit and push the research/documentation result and report the commit SHA.
 constraints:
-  - Research/documentation only. Do not modify .github/workflows/*.
-  - Do not modify poc/activation-policy.js, poc/activation-ingress.js, poc/schemas/acp-schema.js, TaskRegistry, execution-descriptor, callback implementation, repository settings, secrets, dependencies, or runtime source.
-  - Do not create a second control plane, activation path, registry, executor, state store, or verification system.
-  - Do not reconstruct the one-click architecture; inspect and assess the existing architecture.
+  - Research/documentation only.
+  - Do not modify .github/workflows/*.
+  - Do not modify runtime source or activation implementation.
+  - Do not reconstruct or redesign the existing one-click architecture.
   - Do not claim GitHub registration/runnability without authoritative GitHub evidence.
-  - If authoritative GitHub evidence is unavailable, classify the relevant fact UNKNOWN and state BLOCKED/NOT READY for that gate.
-  - The simplest viable next action must be identified before recommending any additional architecture or implementation.
+  - If authoritative GitHub evidence is unavailable, classify it UNKNOWN and fail closed.
   - persistence_expectation: same_execution
   - deliverable_commit: true
   - deliverable_push: true
   - verification_requires_commit_sha: true
-conflict_handling: Repository instructions, GEMINI.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, docs/ai/TASK_STANDARD.md, and the canonical ACP/activation implementation take precedence. If task assertions conflict with repository evidence, fail closed and document the discrepancy.
-roadmap_alignment:
-  authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/STATE.md; docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md
-  current_roadmap_phase: Phase 3 — Autonomous Coordination Loop; Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation is the next target
-  phase_completion_status: Phase 3 complete/converged
-  relevant_prior_work: Gemini one-click research activation verification, Gemini Builder callback-correlation work, durable readable evidence work, and coordinator registration/runnability gate enforcement
-  required_prerequisites_satisfied: Existing external-activation architecture, Gemini Builder carrier, one-click contract, and registration/runnability gate are present and require current-state reconciliation
-  proposed_task_mapping: B — Enabling/Foundation Work; this research reconciles an existing activation capability needed for reliable coordinator operation and prevents duplicate implementation
-  phase_unlock_or_advancement: Establishes whether Builder one-click activation is operationally ready without introducing new runtime capability
-  alignment_conclusion: PASS — bounded status/reconciliation research supporting the existing Phase 3 coordination loop; it does not activate Phase 4
-
+conflict_handling: >
+  Repository instructions, GEMINI.md, ARCHITECTURE.md,
+  docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, docs/ai/TASK_STANDARD.md,
+  and canonical activation implementation take precedence.
 TASK_EOF
           echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
           echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
@@ -113,6 +85,5 @@ TASK_EOF
           REPOSITORY="${{ github.repository }}"
           REQUEST_ID="${{ steps.task.outputs.request_id }}"
           TASK_FILE="${{ steps.task.outputs.task_file }}"
-          jq -n             --arg ref "main"             --arg request_id "$REQUEST_ID"             --rawfile task "$TASK_FILE"             --arg repository "$REPOSITORY"             --arg base_branch "main"             --arg task_mode "RESEARCH_DOCUMENT"             --arg capabilities "read_only,modify_files,commit,push"             --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md"             --arg verification "Create durable research record for TASK-GEMINI-BUILDER-ONE-CLICK-ZERO-INPUT-ACTIVATION-STATUS-RESEARCH-001; inspect Builder one-click activation state; distinguish VERIFIED/INFERRED/UNKNOWN; identify blockers and smallest next action; commit and push."             '{ref:$ref,inputs:{request_id:$request_id,task:($task|rtrimstr("\n")),repository:$repository,base_branch:$base_branch,task_mode:$task_mode,capabilities:$capabilities,permitted_paths:$permitted_paths,verification:$verification}}' > dispatch-payload.json
+          jq -n             --arg ref "main"             --arg request_id "$REQUEST_ID"             --rawfile task "$TASK_FILE"             --arg repository "$REPOSITORY"             --arg base_branch "main"             --arg task_mode "RESEARCH_DOCUMENT"             --arg capabilities "read_only,modify_files,commit,push"             --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md"             --arg verification "Create durable research record; inspect Gemini Builder one-click activation; distinguish VERIFIED/INFERRED/UNKNOWN; identify blockers and smallest next action; commit and push."             '{ref:$ref,inputs:{request_id:$request_id,task:($task|rtrimstr("\n")),repository:$repository,base_branch:$base_branch,task_mode:$task_mode,capabilities:$capabilities,permitted_paths:$permitted_paths,verification:$verification}}' > dispatch-payload.json
           gh api --method POST -H "Accept: application/vnd.github+json" "/repos/$REPOSITORY/actions/workflows/main.yml/dispatches" --input dispatch-payload.json
-          echo "::notice::Canonical Gemini RESEARCH_DOCUMENT carrier dispatched for $REQUEST_ID."
