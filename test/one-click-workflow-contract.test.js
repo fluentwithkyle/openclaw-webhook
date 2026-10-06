@@ -583,6 +583,13 @@ runTest('Protocol - Section 11.2 includes no-task-substitution prohibition', () 
         'Protocol Section 11.2 must reference no-task-substitution');
 });
 
+runTest('Protocol - Section 11.2 requires existing-carrier retarget and revalidation', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
+    assert.ok(/Existing carrier.*wrong task.*update.*carrier.*revalidate/i.test(section) ||
+        /update that existing carrier.*requested task.*revalidate/i.test(section),
+        'Protocol Section 11.2 must require retargeting and revalidation when an existing carrier has the wrong task');
+});
+
 runTest('Protocol - Section 11.2 includes coordinator decision rule', () => {
     const section = protocolRaw.slice(protocolRaw.indexOf('### 11.2'));
     assert.ok(/coordinator decision rule|executable carrier.*embedded task/i.test(section),
