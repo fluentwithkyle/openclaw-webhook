@@ -130,9 +130,13 @@ Before presenting the Run workflow link, the coordinator must inspect the actual
 - The carrier's `objective`/`scope` correspond to the requested task.
 - Authority-bearing fields remain subject to server-side activation policy rather than becoming workflow-input authority.
 
-### 4.5 Dedicated Workflow When Necessary
+### 4.5 Existing Carrier + Wrong Task
 
-If an existing one-click workflow contains a different task in its embedded carrier, the coordinator must create or update the appropriate one-click workflow before presenting a Run link. It must not silently reuse the old workflow.
+If an existing zero-input one-click workflow contains a different task in its embedded carrier, the coordinator must **update that existing carrier to the requested task, then revalidate the carrier** before presenting a Run link. The governing rule is:
+
+> **Existing carrier + wrong task = update the carrier, then revalidate.**
+
+The coordinator must not treat the existing task as authoritative merely because the workflow, agent, or task mode already matches. It must not silently reuse the old task or create a second activation architecture when the existing carrier can be retargeted.
 
 ### 4.6 Run-Link Validity
 
@@ -151,6 +155,27 @@ The coordinator must distinguish:
 - **Verifying the resulting execution** — inspecting the executed result against the original objective.
 
 The coordinator must not confuse an existing workflow artifact (or a completed previous execution) with proof that the requested task has executed. The existence of a workflow file with a matching task_name does not establish that the task was executed or verified.
+
+### 4.10 Machine-Enforced Binding Gate
+
+The task-to-workflow binding is a fail-closed machine gate, not a coordinator judgment call. The repository test suite implements the gate against embedded carrier fields and regression fixtures.
+
+The gate evaluates a requested `{ task_name, target_agent, task_mode }` against a candidate one-click workflow and permits readiness only when all of these are true:
+
+1. The workflow uses `workflow_dispatch` with no required inputs.
+2. An embedded `task_name`, `target_agent`, and `task_mode` are present.
+3. `task_name` exactly equals the requested `task_name`.
+4. `target_agent` exactly equals the requested agent.
+5. `task_mode` exactly equals the requested task mode.
+6. The workflow routes through the canonical external-activation path.
+
+The gate returns the explicit state model:
+
+`CARRIER_NOT_FOUND` → `CARRIER_FOUND` → `CARRIER_TASK_MISMATCH` → `CARRIER_READY` → `EXECUTION_STARTED` → `EXECUTION_VERIFIED`.
+
+A task mismatch, agent mismatch, task-mode mismatch, required input, missing carrier field, or non-canonical activation path is **not ready** and must fail closed. A coordinator may retarget an existing carrier, but the carrier must pass the gate again after the update and before its Run link is considered valid.
+
+This machine gate verifies workflow readiness; it does not claim that the resulting task executed. Execution remains a separate activation and verification step.
 
 ### 4.9 Coordinator Decision Rule
 
