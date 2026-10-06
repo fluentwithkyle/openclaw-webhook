@@ -19,33 +19,71 @@ jobs:
         run: |
           set -euo pipefail
           cat > task.txt <<'EOF'
+@kyle
 protocol_version: 0.1
+task_name: TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001
 request_id: TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001
 source: Kyle
 originator: Kyle — Director
 target: Gemini
-target_agent: Gemini Builder
+target_agent: Gemini
 repository: fluentwithkyle/openclaw-webhook
 base_branch: main
 task_mode: BUILDER
-capabilities: [read_only, modify_files, run_tests, commit, push]
+capabilities:
+- inspect
+- modify_files
+- run_tests
+- commit
+- push
+
 objective: Strengthen the existing one-click coordinator protocol and machine-enforced tests so GitHub workflow registration/runnability is an explicit mandatory coordinator decision gate before any Run workflow link may be presented.
-scope: Extend only the existing coordinator protocol and one-click contract test machinery. Require exact task binding, zero-input workflow_dispatch, authoritative GitHub registration/runnability evidence, fail-closed BLOCKED/NOT READY when unavailable, Run-link presentation only after all gates pass, Director execution, and independent post-run verification.
-verification: Verify CHATGPT_PROJECT_OPERATING_PROTOCOL.md explicitly contains the registration/runnability gate; require authoritative GitHub-hosted evidence; reject YAML/file existence alone; enforce BLOCKED/NOT READY when unavailable; add machine tests without pretending repo-local tests can query GitHub; run the relevant one-click/external-activation/workflow-expression tests and git diff --check; commit and push to main and report the remote SHA.
+
+scope: Extend only the existing coordinator protocol and one-click contract test machinery. The mandatory coordinator sequence is: inspect requested task; inspect candidate workflow; verify exact embedded ACP task binding; verify zero-input workflow_dispatch; establish authoritative GitHub registration/runnability; if unavailable/failing classify BLOCKED / NOT READY and do not present a Run link; only then present the Run link; Director executes; coordinator independently inspects the resulting execution.
+
+verification: Explicitly require authoritative GitHub-hosted registration/runnability evidence; state that workflow-file existence, workflow_dispatch, and YAML validity are insufficient; keep VERIFIED/INFERRED/UNKNOWN distinct; make UNKNOWN fail closed as BLOCKED / NOT READY; add machine tests for the protocol ordering without pretending repo-local tests query GitHub; preserve the detailed ONE_CLICK_WORKFLOW_CONTRACT gate; run the required tests; commit and push to main; verify the remote commit.
+
 constraints:
-  permitted_paths: [docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md, test/one-click-workflow-contract.test.js, test/external-activation-procedure.test.js, test/external-activation-bypass.test.js, test/workflow-expression.test.js, docs/ai/TASK_LOG.md, docs/ai/RESEARCH_INDEX.md]
-  forbidden: [.github/workflows/*, poc/activation-policy.js, poc/activation-ingress.js, poc/activation-engine.js, poc/task-registry.js, poc/schemas/acp-schema.js, runtime code, repository settings, secrets, dependencies, new workflow registry, new control plane, new activation mechanism, unrelated changes]
+  permitted_paths:
+  - docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md
+  - docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md
+  - test/one-click-workflow-contract.test.js
+  - test/external-activation-procedure.test.js
+  - test/external-activation-bypass.test.js
+  - test/workflow-expression.test.js
+  - docs/ai/TASK_LOG.md
+  - docs/ai/RESEARCH_INDEX.md
+  forbidden:
+  - .github/workflows/*
+  - poc/*
+  - runtime source
+  - ACP/activation implementation
+  - repository settings
+  - secrets
+  - dependencies
+  - new control plane, registry, activation path, or verification subsystem
+  - unrelated changes
+
 authorization_boundary: Changes are authorized only to the listed documentation/test surfaces.
 persistence_expectation: same_execution
 deliverable_commit: true
 deliverable_push: true
-fail_closed_rule: If authoritative GitHub registration/runnability cannot be established, classify the one-click workflow as BLOCKED / NOT READY and do not present a Run workflow link.
-no_claim_without_evidence: Distinguish VERIFIED, INFERRED, and UNKNOWN. Do not claim GitHub registration/runnability from repository-local inspection.
-conflict_handling: Repository instructions and canonical ACP/activation architecture take precedence; fail closed on discrepancies.
+verification_requires_commit_sha: true
+fail_closed_rule: If authoritative GitHub registration/runnability cannot be established, classify the workflow as BLOCKED / NOT READY and do not present a Run workflow link.
+no_claim_without_evidence: Do not claim completion, commit, push, or verification without repository evidence.
+
 roadmap_alignment:
+  authoritative_roadmap: ARCHITECTURE.md §16.6; docs/ai/STATE.md; docs/ai/DEESEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md
   current_roadmap_phase: Phase 3 — Autonomous Coordination Loop
+  phase_completion_status: Phase 3 complete/converged; Phase 4 is the next target
+  relevant_prior_work: TASK-KILO-ONE-CLICK-WORKFLOW-REGISTRATION-GATE-MACHINE-ENFORCEMENT-001 and its persisted registration/runnability contract
   proposed_task_classification: B — Enabling/Foundation Work
+  roadmap_requirement_addressed: Deterministic machine-enforced coordinator behavior and fail-closed activation surfaces
+  required_prerequisites_satisfied: Existing one-click contract and registration gate are present on main
+  phase_unlock_or_advancement: Strengthens Phase 3 foundation; does not activate Phase 4
   alignment_conclusion: PASS
+
+conflict_handling: Repository instructions, GEMINI.md, ARCHITECTURE.md, CHATGPT_PROJECT_OPERATING_PROTOCOL.md, TASK_STANDARD.md, ONE_CLICK_WORKFLOW_CONTRACT.md, and canonical ACP/activation implementation take precedence. Fail closed on discrepancies.
 EOF
-          PAYLOAD=$(jq -n --arg task "$(cat task.txt)" '{ref:"main",inputs:{request_id:"TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001",task:$task,repository:"fluentwithkyle/openclaw-webhook",base_branch:"main",task_mode:"BUILDER",target_agent:"Gemini Builder",capabilities:"read_only,modify_files,run_tests,commit,push",permitted_paths:"docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md,docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md,test/one-click-workflow-contract.test.js,test/external-activation-procedure.test.js,test/external-activation-bypass.test.js,test/workflow-expression.test.js,docs/ai/TASK_LOG.md,docs/ai/RESEARCH_INDEX.md"}}')
+          PAYLOAD=$(jq -n --arg task "$(cat task.txt)" '{ref:"main",inputs:{request_id:"TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001",task:$task,repository:"fluentwithkyle/openclaw-webhook",base_branch:"main",task_mode:"BUILDER",target_agent:"Gemini",capabilities:"inspect,modify_files,run_tests,commit,push",permitted_paths:"docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md,docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md,test/one-click-workflow-contract.test.js,test/external-activation-procedure.test.js,test/external-activation-bypass.test.js,test/workflow-expression.test.js,docs/ai/TASK_LOG.md,docs/ai/RESEARCH_INDEX.md",verification:"Enforce the mandatory GitHub registration/runnability gate in the coordinator protocol and tests; run required tests; commit and push; verify remote main."}}')
           gh api --method POST "/repos/${GITHUB_REPOSITORY}/actions/workflows/main.yml/dispatches" --input - <<< "$PAYLOAD"
