@@ -117,7 +117,6 @@ async function persistCache() {
 }
 
 function persistCacheSync() {
-  loadFromFile();
   const data = Object.fromEntries(memoryCache);
   data.__director_approvals__ = Object.fromEntries(approvalCache);
   atomicWrite(data);
