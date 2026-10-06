@@ -59,7 +59,7 @@ function listOneClickWorkflows() {
 
 function extractCarrierField(workflowRaw, field) {
     const fieldPattern = new RegExp(
-        '(?:^|\\n)\\s*' + field + ':\\s*(?:\\n\\s*)?([^\\n]+)',
+        '(?:^|\\n)\\s*(?:[^\\n]*[\\x27\\x22])?' + field + ':\\s*(?:\\n\\s*)?([^\\n]+)',
         'i'
     );
     const match = workflowRaw.match(fieldPattern);
