@@ -1,0 +1,32 @@
+{
+  "request_id": "TASK-GEMINI-BUILDER-DURABLE-TASK-REGISTRY-EXECUTION-CLAIM-RECOVERY-001",
+  "agent": "Gemini",
+  "status": "failure",
+  "task": "@kyle\n\ntask_name:\nTASK-GEMINI-BUILDER-DURABLE-TASK-REGISTRY-EXECUTION-CLAIM-RECOVERY-001\n\noriginator:\nKyle — Director\n\ntarget_agent:\nGemini\n\nrepository:\nfluentwithkyle/openclaw-webhook\n\nbase_branch:\nmain\n\ntask_mode:\nFAILOVER_EXECUTE\n\nobjective:\nImplement the minimum durable TaskRegistry execution-claim and recovery mechanism required to make the existing Gemini Builder one-click activation path survive the relevant Render process/service restart boundary and safely recover an admitted task without multiple authoritative execution owners or blind duplicate execution.\n\nscope:\nInspect the existing TaskRegistry, activation ingress/policy, ACP schema, Builder one-click path, callback/recovery implementation, relevant tests, and durable research evidence before modifying anything. Apply the Solution Simplicity Gate. Prefer the existing JSON/file-backed mechanism and available runtime mechanisms. Work only within server-authorized poc/. Do not introduce a second control plane, second TaskRegistry, new workflow architecture, Postgres, Key Value, or a new dependency unless the existing mechanism is demonstrably insufficient; if so, stop blocked.\n\nrequired_behavior:\nDurable task state and execution ownership survive the relevant restart boundary; concurrent recovery cannot create multiple authoritative owners; identical replay remains idempotent; changed authority-bearing payloads fail closed; uncertain external execution is not blindly duplicated; canonical activation, ACP, TaskRegistry, dispatcher, Gemini Builder, callback, evidence, and verification architecture remain intact.\n\nverification:\nRun focused TaskRegistry and activation tests, add only necessary implementation-level tests within poc/ scope, run relevant tests and git diff --check, inspect the final diff, commit and push to main, and report the exact verification result and commit SHA. Do not declare Gemini Builder one-click VERIFIED merely because implementation tests pass.\n\nconstraints:\nsmallest-change; preserve-canonical-architecture; no-second-control-plane; no-parallel-task-registry; no-workflow-reconstruction; no-secrets; no-unrelated-Phase-4-expansion; same_execution; commit; push.\n\nconflict_handling:\nIf the existing mechanism cannot safely satisfy the persistence/concurrency contract within poc/, stop with status: blocked and identify the exact missing prerequisite.",
+  "repository": "fluentwithkyle/openclaw-webhook",
+  "base_branch": "main",
+  "current_head_sha": "f0df637c6ddda1e9c9e801d7dd33e85db4cec141",
+  "changed_files": [],
+  "verification": [
+    "advisory review completed"
+  ],
+  "result": {
+    "execution_metadata": {
+      "invocation_id": "gemini-37443799808-1",
+      "run_id": "37443799808",
+      "carrier_identity": "github-workflow-37443799808-1",
+      "execution_claim_id": "claim-1791279228664-k5a558bl"
+    },
+    "gemini_output": ""
+  },
+  "commit": null,
+  "push": false,
+  "blockers": [
+    "Gemini workflow did not execute successfully (step outcome: cancelled)"
+  ],
+  "reconciliation": {
+    "status": "SKIPPED",
+    "changed_files": [],
+    "commit_sha": null
+  }
+}
