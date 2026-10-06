@@ -128,15 +128,21 @@ jobs:
             exit 1
           fi
 
-          # Build the activation payload and validate through the canonical ingress.
-          # This step ensures the activation is server-validated before the Gemini CLI is invoked,
-          # closing the external-activation producer bypass.
-          node poc/validate-external-activation.js gemini-issue-comment "{
-            \"comment_id\": \"$COMMENT_ID\",
-            \"comment_body\": \"$COMMENT_BODY\",
-            \"repository\": \"$REPOSITORY\",
-            \"base_branch\": \"$BASE_BRANCH\"
-          }"
+          # Build the activation payload with jq so multiline/control characters in
+          # the GitHub comment are JSON-escaped before canonical validation.
+          ACTIVATION_JSON=$(jq -n \
+            --arg comment_id "$COMMENT_ID" \
+            --arg comment_body "$COMMENT_BODY" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            '{
+              comment_id: $comment_id,
+              comment_body: $comment_body,
+              repository: $repository,
+              base_branch: $base_branch
+            }')
+
+          node poc/validate-external-activation.js gemini-issue-comment "$ACTIVATION_JSON"
 
           echo "activation_validated=true" >> "$GITHUB_OUTPUT"
 
