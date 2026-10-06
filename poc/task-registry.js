@@ -25,8 +25,10 @@ const {
 const REGISTRY_FILE = path.join(__dirname, 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, 'task-registry.json.bak');
 const CLAIMS_DIR = path.join(__dirname, 'claims');
+const REGISTRY_LOCK_FILE = path.join(__dirname, 'task-registry.json.lock');
 
 const CLAIM_STALE_MS = 15 * 60 * 1000;
+const REGISTRY_LOCK_TIMEOUT_MS = 5000;
 
 let memoryCache = new Map();
 let approvalCache = new Map();
@@ -41,6 +43,41 @@ function ensureRegistryFile() {
 function ensureClaimsDir() {
   if (!fs.existsSync(CLAIMS_DIR)) {
     fs.mkdirSync(CLAIMS_DIR, { recursive: true });
+  }
+}
+
+async function acquireRegistryLock() {
+  const startTime = Date.now();
+  while (Date.now() - startTime < REGISTRY_LOCK_TIMEOUT_MS) {
+    try {
+      const fd = fs.openSync(REGISTRY_LOCK_FILE, 'wx');
+      fs.closeSync(fd);
+      return true;
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        const waitTime = Math.min(10 + Math.random() * 20, 100);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Failed to acquire registry lock within timeout');
+}
+
+function releaseRegistryLock() {
+  try {
+    fs.unlinkSync(REGISTRY_LOCK_FILE);
+  } catch (err) {
+  }
+}
+
+async function withRegistryLock(fn) {
+  await acquireRegistryLock();
+  try {
+    return await fn();
+  } finally {
+    releaseRegistryLock();
   }
 }
 
@@ -74,83 +111,114 @@ function atomicWrite(data) {
   fs.renameSync(BACKUP_FILE, REGISTRY_FILE);
 }
 
-function persistCache() {
+async function persistCache() {
+  // Use sync version - caller should hold the lock
+  return persistCacheSync();
+}
+
+function persistCacheSync() {
+  loadFromFile();
   const data = Object.fromEntries(memoryCache);
   data.__director_approvals__ = Object.fromEntries(approvalCache);
   atomicWrite(data);
 }
 
-function createTask(command) {
+async function createTask(command) {
   return createTaskUnchecked(command);
 }
 
-function createTaskWithDirectorAuthorization(command) {
+async function createTaskWithDirectorAuthorization(command) {
   return isConsequentialCommand(command) ? consumeDirectorApprovalAndCreateTask(command) : module.exports.createTask(command);
 }
 
-function createTaskUnchecked(command, options) {
-  const cache = getCache();
-  const requestId = command.request_id;
+async function createTaskUnchecked(command, options) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const requestId = command.request_id;
 
-  if (cache.has(requestId)) {
-    const existing = cache.get(requestId);
-    return {
-      success: false,
-      error: 'Duplicate request_id',
-      entry: existing,
-      duplicate: true
-    };
-  }
-
-  const parentId = command.parent_request_id;
-
-  if (parentId) {
-    const lineageCheck = validateLineageForCreate(parentId, requestId);
-    if (!lineageCheck.valid) {
-      return { success: false, error: lineageCheck.error };
+    if (cache.has(requestId)) {
+      const existing = cache.get(requestId);
+      return {
+        success: false,
+        error: 'Duplicate request_id',
+        entry: existing,
+        duplicate: true
+      };
     }
-  }
 
-  const entry = createInitialTaskRegistryEntry(requestId, command);
-  entry.replay_fingerprint = computePayloadFingerprint(command);
-  const validation = validateTaskRegistryEntry(entry);
-  if (!validation.valid) {
-    return { success: false, error: validation.error };
-  }
+    const parentId = command.parent_request_id;
 
-  cache.set(requestId, entry);
-  if (!options || options.persist !== false) persistCache();
-  return { success: true, entry };
+    if (parentId) {
+      const lineageCheck = validateLineageForCreate(parentId, requestId);
+      if (!lineageCheck.valid) {
+        return { success: false, error: lineageCheck.error };
+      }
+    }
+
+    const entry = createInitialTaskRegistryEntry(requestId, command);
+    entry.replay_fingerprint = computePayloadFingerprint(command);
+    const validation = validateTaskRegistryEntry(entry);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    cache.set(requestId, entry);
+    if (!options || options.persist !== false) await persistCache();
+    return { success: true, entry };
+  });
 }
 
-function createDirectorApproval(scope) {
-  getCache();
-  const validation = validateDirectorApprovalScope(scope);
-  if (!validation.valid) return { success: false, error: validation.error };
-  const issuedAt = new Date().toISOString();
-  const expiry = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  const approvalId = 'dir-approval-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
-  const record = { ...getDirectorScope(scope), transition_binding: scope.transition_binding || null, issuer: 'Kyle (Director)', expiry, issued_at: issuedAt, consumed_at: null, status: 'PENDING', approval_id: approvalId, scope_hash: calculateDirectorScopeHash(scope) };
-  approvalCache.set(approvalId, record);
-  persistCache();
-  return { success: true, approval: record };
+async function createDirectorApproval(scope) {
+  return withRegistryLock(async () => {
+    getCache();
+    const validation = validateDirectorApprovalScope(scope);
+    if (!validation.valid) return { success: false, error: validation.error };
+    const issuedAt = new Date().toISOString();
+    const expiry = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const approvalId = 'dir-approval-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    const record = { ...getDirectorScope(scope), transition_binding: scope.transition_binding || null, issuer: 'Kyle (Director)', expiry, issued_at: issuedAt, consumed_at: null, status: 'PENDING', approval_id: approvalId, scope_hash: calculateDirectorScopeHash(scope) };
+    approvalCache.set(approvalId, record);
+    await persistCache();
+    return { success: true, approval: record };
+  });
 }
 
-function consumeDirectorApproval(approvalId) { getCache(); const record = approvalCache.get(approvalId); if (!record) return { success:false, error:'Director approval does not exist' }; if (record.status !== 'PENDING') return { success:false, error:'Director approval is not pending' }; if (Date.parse(record.expiry) <= Date.now()) { record.status='EXPIRED'; approvalCache.set(approvalId, record); persistCache(); return { success:false, error:'Director approval has expired' }; } record.status='CONSUMED'; record.consumed_at=new Date().toISOString(); approvalCache.set(approvalId, record); persistCache(); return { success:true, approval:record }; }
-
-function revokePendingDirectorApprovals(requestId, reason) {
-  getCache();
-  let revoked = 0;
-  for (const [approvalId, record] of approvalCache.entries()) {
-    if (record.request_id === requestId && record.status === 'PENDING') {
-      record.status = 'REVOKED';
-      record.revoked_at = new Date().toISOString();
-      record.revocation_reason = reason;
+async function consumeDirectorApproval(approvalId) {
+  return withRegistryLock(async () => {
+    getCache();
+    const record = approvalCache.get(approvalId);
+    if (!record) return { success: false, error: 'Director approval does not exist' };
+    if (record.status !== 'PENDING') return { success: false, error: 'Director approval is not pending' };
+    if (Date.parse(record.expiry) <= Date.now()) {
+      record.status = 'EXPIRED';
       approvalCache.set(approvalId, record);
-      revoked++;
+      await persistCache();
+      return { success: false, error: 'Director approval has expired' };
     }
-  }
-  return revoked;
+    record.status = 'CONSUMED';
+    record.consumed_at = new Date().toISOString();
+    approvalCache.set(approvalId, record);
+    await persistCache();
+    return { success: true, approval: record };
+  });
+}
+
+async function revokePendingDirectorApprovals(requestId, reason) {
+  return withRegistryLock(async () => {
+    getCache();
+    let revoked = 0;
+    for (const [approvalId, record] of approvalCache.entries()) {
+      if (record.request_id === requestId && record.status === 'PENDING') {
+        record.status = 'REVOKED';
+        record.revoked_at = new Date().toISOString();
+        record.revocation_reason = reason;
+        approvalCache.set(approvalId, record);
+        revoked++;
+      }
+    }
+    await persistCache();
+    return revoked;
+  });
 }
 
 function getDirectorApproval(approvalId) {
@@ -158,24 +226,26 @@ function getDirectorApproval(approvalId) {
   return approvalCache.get(approvalId) || null;
 }
 
-function consumeDirectorApprovalAndCreateTask(command) {
-  const cache = getCache();
-  const approvalId = command.authorization && command.authorization.approval_id;
-  if (typeof approvalId !== 'string' || approvalId.length === 0) return { success: false, authorization: true, error: 'Director approval is required for consequential task' };
-  const record = approvalCache.get(approvalId);
-  if (!record) return { success: false, authorization: true, error: 'Director approval does not exist' };
-  if (record.status !== 'PENDING') return { success: false, authorization: true, error: 'Director approval is not pending' };
-  if (Date.parse(record.expiry) <= Date.now()) { record.status = 'EXPIRED'; approvalCache.set(approvalId, record); persistCache(); return { success: false, authorization: true, error: 'Director approval has expired' }; }
-  if (record.scope_hash !== calculateDirectorScopeHash(getDirectorScope(command))) return { success: false, authorization: true, error: 'Director approval scope mismatch' };
-  const result = createTaskUnchecked(command, { persist: false });
-  if (!result.success) return result;
-  record.status = 'CONSUMED';
-  record.consumed_at = new Date().toISOString();
-  approvalCache.set(approvalId, record);
-  result.entry.authorization_proof = { approval_id: approvalId, scope_hash: record.scope_hash, issuer: record.issuer, consumed_at: record.consumed_at };
-  cache.set(command.request_id, result.entry);
-  persistCache();
-  return result;
+async function consumeDirectorApprovalAndCreateTask(command) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const approvalId = command.authorization && command.authorization.approval_id;
+    if (typeof approvalId !== 'string' || approvalId.length === 0) return { success: false, authorization: true, error: 'Director approval is required for consequential task' };
+    const record = approvalCache.get(approvalId);
+    if (!record) return { success: false, authorization: true, error: 'Director approval does not exist' };
+    if (record.status !== 'PENDING') return { success: false, authorization: true, error: 'Director approval is not pending' };
+    if (Date.parse(record.expiry) <= Date.now()) { record.status = 'EXPIRED'; approvalCache.set(approvalId, record); await persistCache(); return { success: false, authorization: true, error: 'Director approval has expired' }; }
+    if (record.scope_hash !== calculateDirectorScopeHash(getDirectorScope(command))) return { success: false, authorization: true, error: 'Director approval scope mismatch' };
+    const result = await createTaskUnchecked(command, { persist: false });
+    if (!result.success) return result;
+    record.status = 'CONSUMED';
+    record.consumed_at = new Date().toISOString();
+    approvalCache.set(approvalId, record);
+    result.entry.authorization_proof = { approval_id: approvalId, scope_hash: record.scope_hash, issuer: record.issuer, consumed_at: record.consumed_at };
+    cache.set(command.request_id, result.entry);
+    await persistCache();
+    return result;
+  });
 }
 
 function getTask(requestId) {
@@ -335,34 +405,36 @@ function resolveCurrentLineage(requestId) {
   return currentId;
 }
 
-function addEvidence(requestId, evidenceType, agent, reportData) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) {
-    return { success: false, error: 'Task not found' };
-  }
+async function addEvidence(requestId, evidenceType, agent, reportData) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
 
-  if (!EVIDENCE_TYPES.includes(evidenceType)) {
-    return { success: false, error: 'Invalid evidence_type: ' + evidenceType };
-  }
+    if (!EVIDENCE_TYPES.includes(evidenceType)) {
+      return { success: false, error: 'Invalid evidence_type: ' + evidenceType };
+    }
 
-  const agentEvidenceValidation = validateAgentEvidenceType(agent, evidenceType);
-  if (!agentEvidenceValidation.valid) {
-    return { success: false, error: agentEvidenceValidation.error };
-  }
+    const agentEvidenceValidation = validateAgentEvidenceType(agent, evidenceType);
+    if (!agentEvidenceValidation.valid) {
+      return { success: false, error: agentEvidenceValidation.error };
+    }
 
-  const evidence = createEvidenceRecord(requestId, evidenceType, agent, reportData, entry);
-  const validation = validateEvidenceRecord(evidence);
-  if (!validation.valid) {
-    return { success: false, error: validation.error };
-  }
+    const evidence = createEvidenceRecord(requestId, evidenceType, agent, reportData, entry);
+    const validation = validateEvidenceRecord(evidence);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
 
-  entry.evidence = entry.evidence || [];
-  entry.evidence.push(evidence);
-  entry.updated_at = new Date().toISOString();
-  cache.set(requestId, entry);
-  persistCache();
-  return { success: true, entry, evidence_record: evidence };
+    entry.evidence = entry.evidence || [];
+    entry.evidence.push(evidence);
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, entry, evidence_record: evidence };
+  });
 }
 
 function getEvidenceByType(requestId, evidenceType) {
@@ -381,31 +453,33 @@ function hasEvidenceOfType(requestId, evidenceType) {
   return result.evidence.length > 0;
 }
 
-function recordConfigVerification(requestId, configKey, verificationResult, claimed) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) {
-    return { success: false, error: 'Task not found' };
-  }
+async function recordConfigVerification(requestId, configKey, verificationResult, claimed) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
 
-  const runtimeEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
-  const authoritativeResult = verifyConfiguration(configKey, {
-    env: runtimeEnv,
-    task: entry,
-    claimed: claimed
+    const runtimeEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
+    const authoritativeResult = verifyConfiguration(configKey, {
+      env: runtimeEnv,
+      task: entry,
+      claimed: claimed
+    });
+
+    entry.config_verification = entry.config_verification || {};
+    entry.config_verification[configKey] = {
+      state: authoritativeResult.state,
+      verified: Boolean(authoritativeResult.verified),
+      source: authoritativeResult.source || null,
+      timestamp: new Date().toISOString()
+    };
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, entry, config_verification: entry.config_verification[configKey] };
   });
-
-  entry.config_verification = entry.config_verification || {};
-  entry.config_verification[configKey] = {
-    state: authoritativeResult.state,
-    verified: Boolean(authoritativeResult.verified),
-    source: authoritativeResult.source || null,
-    timestamp: new Date().toISOString()
-  };
-  entry.updated_at = new Date().toISOString();
-  cache.set(requestId, entry);
-  persistCache();
-  return { success: true, entry, config_verification: entry.config_verification[configKey] };
 }
 
 function getConfigVerificationState(requestId, configKey) {
@@ -448,252 +522,268 @@ function verifyConfig(requestId, configKey, options) {
   return result;
 }
 
-function supersedeTask(requestId, reason) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) {
-    return { success: false, error: 'Task not found' };
-  }
+async function supersedeTask(requestId, reason) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
 
-  if (isSuperseded(requestId)) {
-    return { success: false, error: 'Task already superseded', superseded: true };
-  }
+    if (isSuperseded(requestId)) {
+      return { success: false, error: 'Task already superseded', superseded: true };
+    }
 
-  if (isCancelled(requestId)) {
-    return { success: false, error: 'Task already cancelled, cannot supersede', cancelled: true };
-  }
+    if (isCancelled(requestId)) {
+      return { success: false, error: 'Task already cancelled, cannot supersede', cancelled: true };
+    }
 
-  if (entry.status === 'COMPLETE') {
-    return { success: false, error: 'Cannot supersede a completed task' };
-  }
+    if (entry.status === 'COMPLETE') {
+      return { success: false, error: 'Cannot supersede a completed task' };
+    }
 
-  const newRequestId = requestId + '-superseded-' + Date.now();
+    const newRequestId = requestId + '-superseded-' + Date.now();
 
-  revokePendingDirectorApprovals(requestId, 'task superseded');
-  entry.lineage = entry.lineage || {};
-  entry.lineage.superseded_by = newRequestId;
-  entry.lineage.superseded_at = new Date().toISOString();
-  entry.lineage.supersede_reason = reason || 'no reason provided';
-  cache.set(requestId, entry);
+    await revokePendingDirectorApprovals(requestId, 'task superseded');
+    entry.lineage = entry.lineage || {};
+    entry.lineage.superseded_by = newRequestId;
+    entry.lineage.superseded_at = new Date().toISOString();
+    entry.lineage.supersede_reason = reason || 'no reason provided';
+    cache.set(requestId, entry);
 
-  const command = {
-    request_id: newRequestId,
-    target: entry.current_agent || 'Kilo',
-    task: entry.task,
-    repository: entry.repository,
-    base_branch: entry.base_branch,
-    constraints: { permitted_paths: entry.permitted_paths || [] },
-    authorization: { capabilities: entry.capabilities || ['read_only'] },
-    verification: entry.verification,
-    reporting: 'json',
-    task_mode: entry.task_mode,
-    workflow_stage: entry.workflow_stage,
-    originator: entry.originator,
-    parent_request_id: requestId
-  };
+    const command = {
+      request_id: newRequestId,
+      target: entry.current_agent || 'Kilo',
+      task: entry.task,
+      repository: entry.repository,
+      base_branch: entry.base_branch,
+      constraints: { permitted_paths: entry.permitted_paths || [] },
+      authorization: { capabilities: entry.capabilities || ['read_only'] },
+      verification: entry.verification,
+      reporting: 'json',
+      task_mode: entry.task_mode,
+      workflow_stage: entry.workflow_stage,
+      originator: entry.originator,
+      parent_request_id: requestId
+    };
 
-  const createResult = createTask(command);
-  if (!createResult.success) {
-    return createResult;
-  }
+    const createResult = await createTask(command);
+    if (!createResult.success) {
+      return createResult;
+    }
 
-  const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
-  for (const status of transitions) {
-    const r = updateTaskStatus(newRequestId, status);
-    if (!r.success) {
+    const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
+    for (const status of transitions) {
+      const r = await updateTaskStatus(newRequestId, status);
+      if (!r.success) {
+        return {
+          success: false,
+          error: 'Failed to transition to ' + status + ': ' + r.error
+        };
+      }
+    }
+
+    await persistCache();
+    return {
+      success: true,
+      new_request_id: newRequestId,
+      new_entry: getTask(newRequestId),
+      superseded_entry: getTask(requestId)
+    };
+  });
+}
+
+async function cancelTask(requestId, reason) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    if (isCancelled(requestId)) {
+      return { success: false, error: 'Task already cancelled', cancelled: true };
+    }
+
+    if (entry.status === 'COMPLETE') {
+      return { success: false, error: 'Cannot cancel a completed task' };
+    }
+
+    await revokePendingDirectorApprovals(requestId, 'task cancelled');
+    entry.lineage = entry.lineage || {};
+    entry.lineage.cancelled = true;
+    entry.lineage.cancelled_at = new Date().toISOString();
+    entry.lineage.cancel_reason = reason || 'no reason provided';
+    entry.status = 'FAILED';
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, entry };
+  });
+}
+
+async function updateTaskStatus(requestId, newStatus) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    if (isCancelled(requestId)) {
+      return { success: false, error: 'Cannot update status of a cancelled task' };
+    }
+
+    if (isSuperseded(requestId)) {
+      return { success: false, error: 'Cannot update status of a superseded task' };
+    }
+
+    const evidenceValidation = validateStateTransitionWithEvidence(
+      entry.status,
+      newStatus,
+      entry.evidence || []
+    );
+    if (!evidenceValidation.valid) {
       return {
         success: false,
-        error: 'Failed to transition to ' + status + ': ' + r.error
+        error: evidenceValidation.error,
+        missing_evidence: evidenceValidation.missing_evidence
       };
     }
-  }
 
-  persistCache();
-  return {
-    success: true,
-    new_request_id: newRequestId,
-    new_entry: getTask(newRequestId),
-    superseded_entry: getTask(requestId)
-  };
+    entry.status = newStatus;
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, entry };
+  });
 }
 
-function cancelTask(requestId, reason) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) {
-    return { success: false, error: 'Task not found' };
-  }
+async function updateAgentResult(requestId, agent, result) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
 
-  if (isCancelled(requestId)) {
-    return { success: false, error: 'Task already cancelled', cancelled: true };
-  }
+    const evidenceType = AGENT_EVIDENCE_TYPE[agent];
+    if (!evidenceType) {
+      return { success: false, error: 'Unknown agent: ' + agent };
+    }
 
-  if (entry.status === 'COMPLETE') {
-    return { success: false, error: 'Cannot cancel a completed task' };
-  }
+    if (agent === 'Kilo') {
+      entry.kilo = {
+        ...entry.kilo,
+        status: result.status,
+        execution_id: result.execution_id || null,
+        report: result.report || null
+      };
+      entry.current_agent = 'Gemini';
+      entry.next_agent = 'Gemini';
+    } else if (agent === 'Gemini Builder') {
+      entry.builder = {
+        status: result.status,
+        execution_id: result.execution_id || null,
+        report: result.report || null
+      };
+      entry.current_agent = 'Gemini';
+      entry.next_agent = 'Gemini';
+    } else if (agent === 'Gemini') {
+      entry.gemini = {
+        status: result.status,
+        execution_id: result.execution_id || null,
+        report: result.report || null
+      };
+      entry.current_agent = null;
+      entry.next_agent = null;
+    }
 
-  revokePendingDirectorApprovals(requestId, 'task cancelled');
-  entry.lineage = entry.lineage || {};
-  entry.lineage.cancelled = true;
-  entry.lineage.cancelled_at = new Date().toISOString();
-  entry.lineage.cancel_reason = reason || 'no reason provided';
-  entry.status = 'FAILED';
-  entry.updated_at = new Date().toISOString();
-  cache.set(requestId, entry);
-  persistCache();
-  return { success: true, entry };
+    const reportData = result.report || {};
+    if (result.execution_id) reportData.execution_id = result.execution_id;
+    if (result.status) reportData.status = result.status;
+
+    const evidence = createEvidenceRecord(requestId, evidenceType, agent, reportData, entry);
+    const evidenceValidation = validateEvidenceRecord(evidence);
+    if (evidenceValidation.valid) {
+      entry.evidence = entry.evidence || [];
+      entry.evidence.push(evidence);
+    }
+
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, entry, evidence_record: evidence };
+  });
 }
 
-function updateTaskStatus(requestId, newStatus) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) {
-    return { success: false, error: 'Task not found' };
-  }
+async function setNextAction(requestId, nextAction) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
 
-  if (isCancelled(requestId)) {
-    return { success: false, error: 'Cannot update status of a cancelled task' };
-  }
+    entry.next_action = nextAction;
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, entry };
+  });
+}
 
-  if (isSuperseded(requestId)) {
-    return { success: false, error: 'Cannot update status of a superseded task' };
-  }
-
-  const evidenceValidation = validateStateTransitionWithEvidence(
-    entry.status,
-    newStatus,
-    entry.evidence || []
-  );
-  if (!evidenceValidation.valid) {
-    return {
-      success: false,
-      error: evidenceValidation.error,
-      missing_evidence: evidenceValidation.missing_evidence
+async function createCoordinationContext(requestId, maxAutonomousTurns) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) return { success: false, error: 'Task not found' };
+    if (entry.coordination_context) return { success: true, context: entry.coordination_context, existing: true };
+    const context = {
+      context_id: requestId,
+      root_request_id: requestId,
+      current_request_id: requestId,
+      autonomous_turns: 0,
+      max_autonomous_turns: maxAutonomousTurns,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
-  }
-
-  entry.status = newStatus;
-  entry.updated_at = new Date().toISOString();
-  cache.set(requestId, entry);
-  persistCache();
-  return { success: true, entry };
+    entry.coordination_context = context;
+    entry.updated_at = context.updated_at;
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, context };
+  });
 }
 
-function updateAgentResult(requestId, agent, result) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) {
-    return { success: false, error: 'Task not found' };
-  }
-
-  const evidenceType = AGENT_EVIDENCE_TYPE[agent];
-  if (!evidenceType) {
-    return { success: false, error: 'Unknown agent: ' + agent };
-  }
-
-  if (agent === 'Kilo') {
-    entry.kilo = {
-      ...entry.kilo,
-      status: result.status,
-      execution_id: result.execution_id || null,
-      report: result.report || null
-    };
-    entry.current_agent = 'Gemini';
-    entry.next_agent = 'Gemini';
-  } else if (agent === 'Gemini Builder') {
-    entry.builder = {
-      status: result.status,
-      execution_id: result.execution_id || null,
-      report: result.report || null
-    };
-    entry.current_agent = 'Gemini';
-    entry.next_agent = 'Gemini';
-  } else if (agent === 'Gemini') {
-    entry.gemini = {
-      status: result.status,
-      execution_id: result.execution_id || null,
-      report: result.report || null
-    };
-    entry.current_agent = null;
-    entry.next_agent = null;
-  }
-
-  const reportData = result.report || {};
-  if (result.execution_id) reportData.execution_id = result.execution_id;
-  if (result.status) reportData.status = result.status;
-
-  const evidence = createEvidenceRecord(requestId, evidenceType, agent, reportData, entry);
-  const evidenceValidation = validateEvidenceRecord(evidence);
-  if (evidenceValidation.valid) {
-    entry.evidence = entry.evidence || [];
-    entry.evidence.push(evidence);
-  }
-
-  entry.updated_at = new Date().toISOString();
-  cache.set(requestId, entry);
-  persistCache();
-  return { success: true, entry, evidence_record: evidence };
+async function advanceCoordinationContext(contextId, currentRequestId) {
+  return withRegistryLock(async () => {
+    const entry = getTask(contextId);
+    const context = entry && entry.coordination_context;
+    if (!context || context.context_id !== contextId) return { success: false, error: 'Coordination context not found' };
+    if (context.autonomous_turns >= context.max_autonomous_turns) return { success: false, error: 'Coordination context autonomous-turn limit exhausted' };
+    context.autonomous_turns++;
+    context.current_request_id = currentRequestId;
+    context.updated_at = new Date().toISOString();
+    entry.updated_at = context.updated_at;
+    memoryCache.set(contextId, entry);
+    await persistCache();
+    return { success: true, context };
+  });
 }
 
-function setNextAction(requestId, nextAction) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) {
-    return { success: false, error: 'Task not found' };
-  }
-
-  entry.next_action = nextAction;
-  entry.updated_at = new Date().toISOString();
-  cache.set(requestId, entry);
-  persistCache();
-  return { success: true, entry };
-}
-
-function createCoordinationContext(requestId, maxAutonomousTurns) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-  if (!entry) return { success: false, error: 'Task not found' };
-  if (entry.coordination_context) return { success: true, context: entry.coordination_context, existing: true };
-  const context = {
-    context_id: requestId,
-    root_request_id: requestId,
-    current_request_id: requestId,
-    autonomous_turns: 0,
-    max_autonomous_turns: maxAutonomousTurns,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
-  entry.coordination_context = context;
-  entry.updated_at = context.updated_at;
-  cache.set(requestId, entry);
-  persistCache();
-  return { success: true, context };
-}
-
-function advanceCoordinationContext(contextId, currentRequestId) {
-  const entry = getTask(contextId);
-  const context = entry && entry.coordination_context;
-  if (!context || context.context_id !== contextId) return { success: false, error: 'Coordination context not found' };
-  if (context.autonomous_turns >= context.max_autonomous_turns) return { success: false, error: 'Coordination context autonomous-turn limit exhausted' };
-  context.autonomous_turns++;
-  context.current_request_id = currentRequestId;
-  context.updated_at = new Date().toISOString();
-  entry.updated_at = context.updated_at;
-  memoryCache.set(contextId, entry);
-  persistCache();
-  return { success: true, context };
-}
-
-function setCoordinationContextCurrent(contextId, currentRequestId) {
-  const entry = getTask(contextId);
-  const context = entry && entry.coordination_context;
-  if (!context || context.context_id !== contextId) return { success: false, error: 'Coordination context not found' };
-  context.current_request_id = currentRequestId;
-  context.updated_at = new Date().toISOString();
-  entry.updated_at = context.updated_at;
-  memoryCache.set(contextId, entry);
-  persistCache();
-  return { success: true, context };
+async function setCoordinationContextCurrent(contextId, currentRequestId) {
+  return withRegistryLock(async () => {
+    const entry = getTask(contextId);
+    const context = entry && entry.coordination_context;
+    if (!context || context.context_id !== contextId) return { success: false, error: 'Coordination context not found' };
+    context.current_request_id = currentRequestId;
+    context.updated_at = new Date().toISOString();
+    entry.updated_at = context.updated_at;
+    memoryCache.set(contextId, entry);
+    await persistCache();
+    return { success: true, context };
+  });
 }
 
 function getAllTasks() {
@@ -706,13 +796,15 @@ function getTasksByStatus(status) {
   return Array.from(cache.values()).filter(t => t.status === status);
 }
 
-function deleteTask(requestId) {
-  const cache = getCache();
-  const deleted = cache.delete(requestId);
-  if (deleted) {
-    persistCache();
-  }
-  return { success: deleted };
+async function deleteTask(requestId) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const deleted = cache.delete(requestId);
+    if (deleted) {
+      await persistCache();
+    }
+    return { success: deleted };
+  });
 }
 
 function resetRegistry() {
@@ -724,6 +816,8 @@ function resetRegistry() {
       try { fs.unlinkSync(path.join(CLAIMS_DIR, file)); } catch (err) {}
     }
   }
+  // Also remove registry lock file
+  try { fs.unlinkSync(REGISTRY_LOCK_FILE); } catch (err) {}
   atomicWrite({ __director_approvals__: {} });
   return { success: true };
 }
@@ -735,7 +829,7 @@ function resetMemoryCache() {
   return { success: true };
 }
 
-function rehydrateTask(command) {
+async function rehydrateTask(command) {
   const requestId = command.request_id;
 
   const currentId = resolveCurrentLineage(requestId);
@@ -804,7 +898,7 @@ function rehydrateTask(command) {
       else if (state === 'PLANNED') transitions.push('EXECUTING');
 
       for (const status of transitions) {
-        const r = updateTaskStatus(currentId, status);
+        const r = await updateTaskStatus(currentId, status);
         if (!r.success) {
           return {
             success: false,
@@ -828,14 +922,14 @@ function rehydrateTask(command) {
     };
   }
 
-  const createResult = createTask(command);
+  const createResult = await createTask(command);
   if (!createResult.success) {
     return createResult;
   }
 
   const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
   for (const status of transitions) {
-    const r = updateTaskStatus(requestId, status);
+    const r = await updateTaskStatus(requestId, status);
     if (!r.success) {
       return {
         success: false,
@@ -873,158 +967,179 @@ function isTerminalStatus(status) {
   return ['COMPLETE', 'FAILED', 'BLOCKED'].includes(status);
 }
 
-function claimExecutionContext(requestId, claimIdentity) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
-
-  if (!entry) {
-    return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_NOT_FOUND', error: 'Task not found in registry' };
-  }
-
-  if (isCancelled(requestId)) {
-    return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_CANCELLED', error: 'Task is cancelled, cannot claim execution' };
-  }
-
-  if (isSuperseded(requestId)) {
-    return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_SUPERSEDED', error: 'Task is superseded, cannot claim execution' };
-  }
-
-  if (isTerminalStatus(entry.status)) {
-    return { success: false, status: 'COMPLETE', error_code: 'TASK_TERMINAL', error: 'Task is in terminal state ' + entry.status + ', no re-execution' };
-  }
-
-  if (entry.status !== 'EXECUTING') {
-    return { success: false, status: 'BLOCKED', error_code: 'TASK_NOT_EXECUTING', error: 'Task is not in EXECUTING state (status: ' + entry.status + ')' };
-  }
-
-  const lockPath = claimLockPath(requestId);
-
-  try {
-    const fd = fs.openSync(lockPath, 'wx');
-    const claimRecord = {
-      request_id: requestId,
-      execution_claim_id: 'claim-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
-      carrier_identity: claimIdentity && claimIdentity.carrier_id ? claimIdentity.carrier_id : null,
-      carrier_type: claimIdentity && claimIdentity.carrier_type ? claimIdentity.carrier_type : null,
-      claimed_at: new Date().toISOString(),
-      claim_epoch: Date.now()
-    };
-    fs.writeFileSync(fd, JSON.stringify(claimRecord), 'utf8');
-    fs.closeSync(fd);
-
-    entry.execution_claim = {
-      execution_claim_id: claimRecord.execution_claim_id,
-      carrier_identity: claimRecord.carrier_identity,
-      carrier_type: claimRecord.carrier_type,
-      claimed_at: claimRecord.claimed_at,
-      claim_epoch: claimRecord.claim_epoch
-    };
-    entry.updated_at = claimRecord.claimed_at;
-    cache.set(requestId, entry);
-    persistCache();
-
-    return {
-      success: true,
-      status: 'CLAIMED',
-      error_code: 'CLAIMED',
-      execution_claim_id: claimRecord.execution_claim_id,
-      carrier_identity: claimRecord.carrier_identity,
-      task: entry
-    };
-  } catch (err) {
-    if (err.code === 'EEXIST') {
-      const existingClaim = readClaimLock(lockPath);
-
-      if (existingClaim && existingClaim.request_id !== requestId) {
-        return { success: false, status: 'UNAUTHORIZED', error_code: 'MISMATCH', error: 'Claim lock exists for a different request_id', existing_claim: existingClaim };
-      }
-
-      if (existingClaim) {
-        const age = Date.now() - (existingClaim.claim_epoch || 0);
-        if (age > CLAIM_STALE_MS) {
-          clearClaimLock(lockPath);
-          try {
-            const fd = fs.openSync(lockPath, 'wx');
-            const claimRecord = {
-              request_id: requestId,
-              execution_claim_id: 'claim-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
-              carrier_identity: claimIdentity && claimIdentity.carrier_id ? claimIdentity.carrier_id : null,
-              carrier_type: claimIdentity && claimIdentity.carrier_type ? claimIdentity.carrier_type : null,
-              claimed_at: new Date().toISOString(),
-              claim_epoch: Date.now()
-            };
-            fs.writeFileSync(fd, JSON.stringify(claimRecord), 'utf8');
-            fs.closeSync(fd);
-
-            entry.execution_claim = {
-              execution_claim_id: claimRecord.execution_claim_id,
-              carrier_identity: claimRecord.carrier_identity,
-              carrier_type: claimRecord.carrier_type,
-              claimed_at: claimRecord.claimed_at,
-              claim_epoch: claimRecord.claim_epoch
-            };
-            entry.updated_at = claimRecord.claimed_at;
-            cache.set(requestId, entry);
-            persistCache();
-
-            return {
-              success: true,
-              status: 'CLAIMED',
-              error_code: 'CLAIMED',
-              execution_claim_id: claimRecord.execution_claim_id,
-              carrier_identity: claimRecord.carrier_identity,
-              task: entry
-            };
-          } catch (retryErr) {
-            if (retryErr.code === 'EEXIST') {
-              return { success: false, status: 'ALREADY_CLAIMED', error_code: 'ALREADY_CLAIMED', error: 'Another carrier claimed this task while recovering stale lock' };
-            }
-            return { success: false, status: 'FAILED', error_code: 'CLAIM_FAILED', error: retryErr.message };
-          }
-        }
-
-        return {
-          success: false,
-          status: 'ALREADY_CLAIMED',
-          error_code: 'ALREADY_CLAIMED',
-          error: 'Task already has an active execution claim',
-          existing_claim: existingClaim
-        };
-      }
-
-      return { success: false, status: 'ALREADY_CLAIMED', error_code: 'ALREADY_CLAIMED', error: 'Task already has an active execution claim' };
-    }
-    return { success: false, status: 'FAILED', error_code: 'CLAIM_FAILED', error: err.message };
-  }
+function isClaimStale(claimRecord) {
+  if (!claimRecord || !claimRecord.claim_epoch) return true;
+  const age = Date.now() - claimRecord.claim_epoch;
+  return age > CLAIM_STALE_MS;
 }
 
-function releaseExecutionClaim(requestId, executionClaimId) {
-  const cache = getCache();
-  const entry = cache.get(requestId);
+async function claimExecutionContext(requestId, claimIdentity) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
 
-  if (!entry) {
-    return { success: false, error_code: 'TASK_NOT_FOUND', error: 'Task not found in registry' };
-  }
-
-  const lockPath = claimLockPath(requestId);
-
-  if (executionClaimId) {
-    const existingClaim = readClaimLock(lockPath);
-    if (existingClaim && existingClaim.execution_claim_id !== executionClaimId) {
-      return { success: false, error_code: 'CLAIM_MISMATCH', error: 'Execution claim ID does not match current claim', existing_claim: existingClaim };
+    if (!entry) {
+      return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_NOT_FOUND', error: 'Task not found in registry' };
     }
-  }
 
-  clearClaimLock(lockPath);
+    if (isCancelled(requestId)) {
+      return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_CANCELLED', error: 'Task is cancelled, cannot claim execution' };
+    }
 
-  if (entry.execution_claim) {
-    delete entry.execution_claim;
-    entry.updated_at = new Date().toISOString();
-    cache.set(requestId, entry);
-    persistCache();
-  }
+    if (isSuperseded(requestId)) {
+      return { success: false, status: 'UNAUTHORIZED', error_code: 'TASK_SUPERSEDED', error: 'Task is superseded, cannot claim execution' };
+    }
 
-  return { success: true, status: 'RELEASED', error_code: 'RELEASED', error: null };
+    if (isTerminalStatus(entry.status)) {
+      return { success: false, status: 'COMPLETE', error_code: 'TASK_TERMINAL', error: 'Task is in terminal state ' + entry.status + ', no re-execution' };
+    }
+
+    if (entry.status !== 'EXECUTING') {
+      return { success: false, status: 'BLOCKED', error_code: 'TASK_NOT_EXECUTING', error: 'Task is not in EXECUTING state (status: ' + entry.status + ')' };
+    }
+
+    // Check if there's already an execution claim in the entry
+    if (entry.execution_claim && !isClaimStale(entry.execution_claim)) {
+      return {
+        success: false,
+        status: 'ALREADY_CLAIMED',
+        error_code: 'ALREADY_CLAIMED',
+        error: 'Task already has an active execution claim',
+        existing_claim: entry.execution_claim
+      };
+    }
+
+    const lockPath = claimLockPath(requestId);
+
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      const claimRecord = {
+        request_id: requestId,
+        execution_claim_id: 'claim-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+        carrier_identity: claimIdentity && claimIdentity.carrier_id ? claimIdentity.carrier_id : null,
+        carrier_type: claimIdentity && claimIdentity.carrier_type ? claimIdentity.carrier_type : null,
+        claimed_at: new Date().toISOString(),
+        claim_epoch: Date.now()
+      };
+      fs.writeFileSync(fd, JSON.stringify(claimRecord), 'utf8');
+      fs.closeSync(fd);
+
+      entry.execution_claim = {
+        execution_claim_id: claimRecord.execution_claim_id,
+        carrier_identity: claimRecord.carrier_identity,
+        carrier_type: claimRecord.carrier_type,
+        claimed_at: claimRecord.claimed_at,
+        claim_epoch: claimRecord.claim_epoch
+      };
+      entry.updated_at = claimRecord.claimed_at;
+      cache.set(requestId, entry);
+      await persistCache();
+
+      return {
+        success: true,
+        status: 'CLAIMED',
+        error_code: 'CLAIMED',
+        execution_claim_id: claimRecord.execution_claim_id,
+        carrier_identity: claimRecord.carrier_identity,
+        task: entry
+      };
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        const existingClaim = readClaimLock(lockPath);
+
+        if (existingClaim && existingClaim.request_id !== requestId) {
+          return { success: false, status: 'UNAUTHORIZED', error_code: 'MISMATCH', error: 'Claim lock exists for a different request_id', existing_claim: existingClaim };
+        }
+
+        if (existingClaim) {
+          const age = Date.now() - (existingClaim.claim_epoch || 0);
+          if (age > CLAIM_STALE_MS) {
+            clearClaimLock(lockPath);
+            try {
+              const fd = fs.openSync(lockPath, 'wx');
+              const claimRecord = {
+                request_id: requestId,
+                execution_claim_id: 'claim-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+                carrier_identity: claimIdentity && claimIdentity.carrier_id ? claimIdentity.carrier_id : null,
+                carrier_type: claimIdentity && claimIdentity.carrier_type ? claimIdentity.carrier_type : null,
+                claimed_at: new Date().toISOString(),
+                claim_epoch: Date.now()
+              };
+              fs.writeFileSync(fd, JSON.stringify(claimRecord), 'utf8');
+              fs.closeSync(fd);
+
+              entry.execution_claim = {
+                execution_claim_id: claimRecord.execution_claim_id,
+                carrier_identity: claimRecord.carrier_identity,
+                carrier_type: claimRecord.carrier_type,
+                claimed_at: claimRecord.claimed_at,
+                claim_epoch: claimRecord.claim_epoch
+              };
+              entry.updated_at = claimRecord.claimed_at;
+              cache.set(requestId, entry);
+              await persistCache();
+
+              return {
+                success: true,
+                status: 'CLAIMED',
+                error_code: 'CLAIMED',
+                execution_claim_id: claimRecord.execution_claim_id,
+                carrier_identity: claimRecord.carrier_identity,
+                task: entry
+              };
+            } catch (retryErr) {
+              if (retryErr.code === 'EEXIST') {
+                return { success: false, status: 'ALREADY_CLAIMED', error_code: 'ALREADY_CLAIMED', error: 'Another carrier claimed this task while recovering stale lock' };
+              }
+              return { success: false, status: 'FAILED', error_code: 'CLAIM_FAILED', error: retryErr.message };
+            }
+          }
+
+          return {
+            success: false,
+            status: 'ALREADY_CLAIMED',
+            error_code: 'ALREADY_CLAIMED',
+            error: 'Task already has an active execution claim',
+            existing_claim: existingClaim
+          };
+        }
+
+        return { success: false, status: 'ALREADY_CLAIMED', error_code: 'ALREADY_CLAIMED', error: 'Task already has an active execution claim' };
+      }
+      return { success: false, status: 'FAILED', error_code: 'CLAIM_FAILED', error: err.message };
+    }
+  });
+}
+
+async function releaseExecutionClaim(requestId, executionClaimId) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+
+    if (!entry) {
+      return { success: false, error_code: 'TASK_NOT_FOUND', error: 'Task not found in registry' };
+    }
+
+    const lockPath = claimLockPath(requestId);
+
+    if (executionClaimId) {
+      const existingClaim = readClaimLock(lockPath);
+      if (existingClaim && existingClaim.execution_claim_id !== executionClaimId) {
+        return { success: false, error_code: 'CLAIM_MISMATCH', error: 'Execution claim ID does not match current claim', existing_claim: existingClaim };
+      }
+    }
+
+    clearClaimLock(lockPath);
+
+    if (entry.execution_claim) {
+      delete entry.execution_claim;
+      entry.updated_at = new Date().toISOString();
+      cache.set(requestId, entry);
+      await persistCache();
+    }
+
+    return { success: true, status: 'RELEASED', error_code: 'RELEASED', error: null };
+  });
 }
 
 function getExecutionClaim(requestId) {
@@ -1053,115 +1168,117 @@ function getExecutionClaimFromDisk(requestId) {
   return readClaimLock(lockPath);
 }
 
-function rehydrateTaskFromCallback(requestId, callbackReport) {
-  const callbackClaimId = callbackReport &&
-    callbackReport.result &&
-    callbackReport.result.execution_metadata &&
-    callbackReport.result.execution_metadata.execution_claim_id;
+async function rehydrateTaskFromCallback(requestId, callbackReport) {
+  return withRegistryLock(async () => {
+    const callbackClaimId = callbackReport &&
+      callbackReport.result &&
+      callbackReport.result.execution_metadata &&
+      callbackReport.result.execution_metadata.execution_claim_id;
 
-  const callbackCarrierIdentity = callbackReport &&
-    callbackReport.result &&
-    callbackReport.result.execution_metadata &&
-    callbackReport.result.execution_metadata.carrier_identity;
+    const callbackCarrierIdentity = callbackReport &&
+      callbackReport.result &&
+      callbackReport.result.execution_metadata &&
+      callbackReport.result.execution_metadata.carrier_identity;
 
-  const diskClaim = getExecutionClaimFromDisk(requestId);
+    const diskClaim = getExecutionClaimFromDisk(requestId);
 
-  if (!diskClaim) {
-    return {
-      success: false,
-      error_code: 'NO_CLAIM_ON_DISK',
-      error: 'Task not in registry and no execution claim lock found on disk'
-    };
-  }
-
-  if (diskClaim.execution_claim_id !== callbackClaimId) {
-    return {
-      success: false,
-      error_code: 'EXECUTION_CLAIM_MISMATCH',
-      error: `Execution claim ID mismatch: expected ${diskClaim.execution_claim_id}, got ${callbackClaimId}`
-    };
-  }
-
-  if (diskClaim.carrier_identity !== callbackCarrierIdentity) {
-    return {
-      success: false,
-      error_code: 'CARRIER_IDENTITY_MISMATCH',
-      error: `Carrier identity mismatch: expected ${diskClaim.carrier_identity}, got ${callbackCarrierIdentity}`
-    };
-  }
-
-  const cache = getCache();
-  if (cache.has(requestId)) {
-    return {
-      success: false,
-      error_code: 'TASK_EXISTS',
-      error: 'Task already exists in registry'
-    };
-  }
-
-  const now = new Date().toISOString();
-  const entry = {
-    request_id: requestId,
-    parent_request_id: null,
-    originator: callbackReport.originator || 'Kyle',
-    current_agent: 'Gemini',
-    next_agent: 'Gemini',
-    repository: callbackReport.repository || 'fluentwithkyle/openclaw-webhook',
-    base_branch: callbackReport.base_branch || 'main',
-    task: callbackReport.task || '',
-    task_mode: 'BUILDER',
-    workflow_stage: null,
-    status: 'EXECUTING',
-    created_at: now,
-    updated_at: now,
-    kilo: {
-      status: 'success',
-      execution_id: null,
-      report: null,
-      provider_session_id: null,
-      provider_message_id: null,
-      provider_invocation_id: null
-    },
-    gemini: {
-      status: 'pending',
-      execution_id: null,
-      report: null
-    },
-    builder: {
-      status: 'pending',
-      execution_id: null,
-      report: null
-    },
-    next_action: 'trigger_gemini',
-    verification: callbackReport.verification || null,
-    capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
-    permitted_paths: ['poc/'],
-    evidence: [],
-    lineage: {
-      superseded_by: null,
-      superseded_at: null,
-      cancelled: false,
-      cancelled_at: null
-    },
-    config_verification: {},
-    transition_decision_provenance: null,
-    execution_claim: {
-      execution_claim_id: diskClaim.execution_claim_id,
-      carrier_identity: diskClaim.carrier_identity,
-      carrier_type: diskClaim.carrier_type || 'github_workflow',
-      claimed_at: diskClaim.claimed_at,
-      claim_epoch: diskClaim.claim_epoch
+    if (!diskClaim) {
+      return {
+        success: false,
+        error_code: 'NO_CLAIM_ON_DISK',
+        error: 'Task not in registry and no execution claim lock found on disk'
+      };
     }
-  };
 
-  cache.set(requestId, entry);
-  persistCache();
+    if (diskClaim.execution_claim_id !== callbackClaimId) {
+      return {
+        success: false,
+        error_code: 'EXECUTION_CLAIM_MISMATCH',
+        error: `Execution claim ID mismatch: expected ${diskClaim.execution_claim_id}, got ${callbackClaimId}`
+      };
+    }
 
-  return {
-    success: true,
-    entry: entry,
-    rehydrated: true
-  };
+    if (diskClaim.carrier_identity !== callbackCarrierIdentity) {
+      return {
+        success: false,
+        error_code: 'CARRIER_IDENTITY_MISMATCH',
+        error: `Carrier identity mismatch: expected ${diskClaim.carrier_identity}, got ${callbackCarrierIdentity}`
+      };
+    }
+
+    const cache = getCache();
+    if (cache.has(requestId)) {
+      return {
+        success: false,
+        error_code: 'TASK_EXISTS',
+        error: 'Task already exists in registry'
+      };
+    }
+
+    const now = new Date().toISOString();
+    const entry = {
+      request_id: requestId,
+      parent_request_id: null,
+      originator: callbackReport.originator || 'Kyle',
+      current_agent: 'Gemini',
+      next_agent: 'Gemini',
+      repository: callbackReport.repository || 'fluentwithkyle/openclaw-webhook',
+      base_branch: callbackReport.base_branch || 'main',
+      task: callbackReport.task || '',
+      task_mode: 'BUILDER',
+      workflow_stage: null,
+      status: 'EXECUTING',
+      created_at: now,
+      updated_at: now,
+      kilo: {
+        status: 'success',
+        execution_id: null,
+        report: null,
+        provider_session_id: null,
+        provider_message_id: null,
+        provider_invocation_id: null
+      },
+      gemini: {
+        status: 'pending',
+        execution_id: null,
+        report: null
+      },
+      builder: {
+        status: 'pending',
+        execution_id: null,
+        report: null
+      },
+      next_action: 'trigger_gemini',
+      verification: callbackReport.verification || null,
+      capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+      permitted_paths: ['poc/'],
+      evidence: [],
+      lineage: {
+        superseded_by: null,
+        superseded_at: null,
+        cancelled: false,
+        cancelled_at: null
+      },
+      config_verification: {},
+      transition_decision_provenance: null,
+      execution_claim: {
+        execution_claim_id: diskClaim.execution_claim_id,
+        carrier_identity: diskClaim.carrier_identity,
+        carrier_type: diskClaim.carrier_type || 'github_workflow',
+        claimed_at: diskClaim.claimed_at,
+        claim_epoch: diskClaim.claim_epoch
+      }
+    };
+
+    cache.set(requestId, entry);
+    await persistCache();
+
+    return {
+      success: true,
+      entry: entry,
+      rehydrated: true
+    };
+  });
 }
 
 function buildExecutionDescriptor(requestId, taskEntry, executionClaimId) {
@@ -1190,10 +1307,10 @@ function buildExecutionDescriptor(requestId, taskEntry, executionClaimId) {
   };
 }
 
-function transitionToExecuting(requestId) {
+async function transitionToExecuting(requestId) {
   const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
   for (const status of transitions) {
-    const r = updateTaskStatus(requestId, status);
+    const r = await updateTaskStatus(requestId, status);
     if (!r.success) {
       return { success: false, error: r.error };
     }
@@ -1221,9 +1338,9 @@ module.exports = {
   getAllTasks,
   getTasksByStatus,
   deleteTask,
-   resetRegistry,
-   resetMemoryCache,
-   rehydrateTask,
+  resetRegistry,
+  resetMemoryCache,
+  rehydrateTask,
   loadFromFile,
   persistCache,
   REGISTRY_FILE,
@@ -1238,16 +1355,17 @@ module.exports = {
   hasEvidenceOfType,
   supersedeTask,
   cancelTask,
-   recordConfigVerification,
-   getConfigVerificationState,
-   requireConfigVerified,
-   verifyConfig,
-   claimExecutionContext,
-   releaseExecutionClaim,
-    getExecutionClaim,
-    rehydrateTaskFromCallback,
-    buildExecutionDescriptor,
-   transitionToExecuting,
-   CLAIMS_DIR,
-   CLAIM_STALE_MS
+  recordConfigVerification,
+  getConfigVerificationState,
+  requireConfigVerified,
+  verifyConfig,
+  claimExecutionContext,
+  releaseExecutionClaim,
+  getExecutionClaim,
+  rehydrateTaskFromCallback,
+  buildExecutionDescriptor,
+  transitionToExecuting,
+  CLAIMS_DIR,
+  CLAIM_STALE_MS,
+  isClaimStale
 };
