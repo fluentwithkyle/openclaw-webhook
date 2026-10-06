@@ -1064,6 +1064,7 @@ router.post('/activation/ingress', authenticatePoc, async (req, res) => {
     });
 
     if (!ingressResult.success) {
+        console.error('[activation-ingress-rejection]', JSON.stringify({ request_id: ingressResult.request_id || 'unknown', stage: ingressResult.stage, error: ingressResult.error, error_code: ingressResult.error_code }));
         const statusCode = (ingressResult.error_code === 'DUPLICATE_REQUEST_ID' || ingressResult.error_code === 'REPLAY_PAYLOAD_MISMATCH') ? 409
             : (ingressResult.stage === 'conflict' ? 409 : 403);
         return res.status(statusCode).json({
