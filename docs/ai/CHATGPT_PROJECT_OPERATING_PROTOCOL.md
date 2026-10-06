@@ -1201,6 +1201,8 @@ A fresh coordinator following the cold-start path will encounter
 `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md` via `docs/ai/CHATGPT_START_HERE.md` before
 making any activation or workflow-construction decision.
 
+**Binding correction**: If an existing zero-input one-click carrier contains a different embedded task, the coordinator must update that existing carrier to the requested task and revalidate the exact task binding before presenting a Run link. The governing rule is: **Existing carrier + wrong task = update the carrier, then revalidate.** A matching agent or task mode does not make a different task executable for the request.
+
 **Protocol correction**: The operational sequence for a one-click request explicitly
 includes the workflow registration/runnability gate as a mandatory coordinator
 decision step. The full sequence is:
