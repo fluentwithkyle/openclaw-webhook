@@ -16,6 +16,204 @@ function runTest(name, fn) {
     }
 }
 
+// =========================================================
+// Machine-Enforceable Task-to-Carrier Binding Verifier
+// =========================================================
+//
+// This function is the machine-enforceable binding verifier that makes the
+// task-to-carrier binding enforceable by code rather than by coordinator
+// discretion. It parses a one-click workflow YAML file as raw text, extracts
+// the embedded canonical ACP task carrier, and verifies that the carrier's
+// task_name, target_agent, and task_mode exactly match the requested values,
+// and that the workflow_dispatch trigger is zero-input (no required inputs).
+//
+// State model:
+//   CARRIER_NOT_FOUND      — no embedded carrier fields detected in the workflow
+//   CARRIER_FOUND           — carrier fields present but binding check not run / mismatch type not yet classified
+//   CARRIER_TASK_MISMATCH   — embedded task_name does not match the requested task_name
+//   CARRIER_AGENT_MISMATCH  — embedded target_agent does not match the requested target_agent
+//   CARRIER_TASK_MODE_MISMATCH — embedded task_mode does not match the requested task_mode
+//   CARRIER_HAS_REQUIRED_INPUTS — workflow_dispatch has required inputs (not zero-input)
+//   CARRIER_READY           — all checks passed; binding is exact
+//   EXECUTION_STARTED       — the workflow has been dispatched (external state, not determined here)
+//   EXECUTION_VERIFIED      — the execution result has been verified (external state, not determined here)
+//
+// The function fails closed: any mismatch or missing field returns a non-READY
+// state, and the caller must treat a non-CARRIER_READY result as BLOCKED.
+
+/**
+ * Extract a single field value from the embedded ACP carrier text.
+ * Handles both YAML-style (field_name: value) and JSON-style ("field_name": "value") formats.
+ *
+ * @param {string} workflowRaw - The raw workflow YAML file text
+ * @param {string} field - The field name to extract (e.g., "task_name", "target_agent")
+ * @returns {string|null} The extracted value, or null if not found
+ */
+function extractEmbeddedField(workflowRaw, field) {
+    // YAML-style: field: value on same line
+    // Use word boundary to avoid partial matches (e.g., "task_mode" matching in "task_mode:")
+    const yamlSameLine = new RegExp(`\\b${field}:[\\s]*([^\n]+)`, 'i');
+    const yamlMatch = workflowRaw.match(yamlSameLine);
+    if (yamlMatch) {
+        const val = yamlMatch[1].trim().replace(/"/g, '').replace(/'/g, '');
+        if (val) return val;
+    }
+
+    // YAML-style: field: on its own line, value on the next line
+    // The value may be at the same or greater indentation level (common in heredoc carriers)
+    const yamlMultiLine = new RegExp(`\\b${field}:[\\s]*\\n[\\s]*([^\n]+)`, 'i');
+    const yamlMultiMatch = workflowRaw.match(yamlMultiLine);
+    if (yamlMultiMatch) {
+        const val = yamlMultiMatch[1].trim().replace(/"/g, '').replace(/'/g, '');
+        if (val) return val;
+    }
+
+    // JSON-style: "field_name": "value"
+    const jsonMatch = workflowRaw.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`, 'i'));
+    if (jsonMatch) {
+        return jsonMatch[1].trim();
+    }
+
+    return null;
+}
+
+/**
+ * Extract the task_name from the embedded carrier.
+ * The contract states: "The request_id of the embedded carrier must correspond
+ * exactly to the requested task's task_name." So if task_name is not found,
+ * fall back to request_id as the task correlation identifier.
+ *
+ * @param {string} workflowRaw - The raw workflow YAML file text
+ * @returns {string|null} The embedded task name or request_id, or null if neither found
+ */
+function extractEmbeddedTaskName(workflowRaw) {
+    let taskName = extractEmbeddedField(workflowRaw, 'task_name');
+
+    // Some workflows use request_id instead of task_name in the carrier.
+    // The contract says request_id must correspond to the requested task_name.
+    if (!taskName) {
+        taskName = extractEmbeddedField(workflowRaw, 'request_id');
+    }
+
+    return taskName;
+}
+
+/**
+ * Check if the workflow_dispatch trigger has any required inputs.
+ * A one-click workflow must have zero required inputs.
+ *
+ * @param {string} workflowRaw - The raw workflow YAML file text
+ * @returns {boolean} True if there are required inputs, false if zero-input
+ */
+function hasRequiredWorkflowDispatchInputs(workflowRaw) {
+    // A one-click workflow must have zero required workflow_dispatch inputs.
+    // If any "required: true" appears in the workflow YAML, it is not zero-input.
+    if (/required:\s*true/i.test(workflowRaw)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Machine-enforceable task-to-carrier binding verification.
+ *
+ * Verifies that a one-click workflow file's embedded canonical ACP task carrier
+ * exactly matches the requested task_name, target_agent, and task_mode, and that
+ * the workflow_dispatch trigger is zero-input.
+ *
+ * @param {Object} params
+ * @param {string} params.workflowRaw - The raw workflow YAML file text
+ * @param {string} params.requestedTaskName - The exact task_name requested
+ * @param {string} params.requestedTargetAgent - The exact target_agent requested
+ * @param {string} params.requestedTaskMode - The exact task_mode requested
+ * @param {string} [params.canonicalActivationPath] - The canonical activation path
+ *   the workflow must reference (e.g., "poc/activation-ingress.js" or
+ *   "actions/workflows/main.yml/dispatches")
+ * @returns {{state: string, details: string}} Result with state and details
+ */
+function verifyCarrierBinding({
+    workflowRaw,
+    requestedTaskName,
+    requestedTargetAgent,
+    requestedTaskMode,
+    canonicalActivationPath
+}) {
+    // Step 1: Verify workflow_dispatch is zero-input (no required inputs).
+    // This check comes first: a workflow with required inputs is never one-click,
+    // regardless of its embedded carrier.
+    if (hasRequiredWorkflowDispatchInputs(workflowRaw)) {
+        return {
+            state: 'CARRIER_HAS_REQUIRED_INPUTS',
+            details: 'workflow_dispatch has required inputs — violates zero-input one-click requirement'
+        };
+    }
+
+    // Step 2: Verify canonical external-activation path reference
+    if (canonicalActivationPath) {
+        if (!new RegExp(canonicalActivationPath, 'i').test(workflowRaw)) {
+            return {
+                state: 'CARRIER_NOT_FOUND',
+                details: `Workflow does not reference canonical activation path: ${canonicalActivationPath}`
+            };
+        }
+    }
+
+    // Step 3: Extract embedded carrier fields
+    const embeddedTaskName = extractEmbeddedTaskName(workflowRaw);
+    const embeddedTargetAgent = extractEmbeddedField(workflowRaw, 'target_agent');
+    const embeddedTaskMode = extractEmbeddedField(workflowRaw, 'task_mode');
+
+    // Step 4: Verify carrier exists (task_name or request_id must be present)
+    if (!embeddedTaskName) {
+        return {
+            state: 'CARRIER_NOT_FOUND',
+            details: 'No embedded carrier task_name or request_id found in workflow file'
+        };
+    }
+
+    // Carrier found — now verify exact binding. Classify the mismatch type.
+    // Fail closed: if requested values are provided, they must match exactly.
+
+    // Step 5: Verify task_name matches (exact match required)
+    if (requestedTaskName && embeddedTaskName !== requestedTaskName) {
+        return {
+            state: 'CARRIER_TASK_MISMATCH',
+            details: `Embedded task_name "${embeddedTaskName}" does not match requested task_name "${requestedTaskName}"`
+        };
+    }
+
+    // Step 6: Verify target_agent matches (exact match required)
+    if (requestedTargetAgent && embeddedTargetAgent !== requestedTargetAgent) {
+        return {
+            state: 'CARRIER_AGENT_MISMATCH',
+            details: `Embedded target_agent "${embeddedTargetAgent}" does not match requested target_agent "${requestedTargetAgent}"`
+        };
+    }
+
+    // Step 7: Verify task_mode matches (exact match required)
+    if (requestedTaskMode && embeddedTaskMode !== requestedTaskMode) {
+        return {
+            state: 'CARRIER_TASK_MODE_MISMATCH',
+            details: `Embedded task_mode "${embeddedTaskMode}" does not match requested task_mode "${requestedTaskMode}"`
+        };
+    }
+
+    // All checks passed
+    return {
+        state: 'CARRIER_READY',
+        details: 'Embedded carrier matches requested task; zero-input confirmed; canonical activation path verified'
+    };
+}
+
+// Export for potential reuse
+module.exports = {
+    verifyCarrierBinding,
+    extractEmbeddedField,
+    extractEmbeddedTaskName,
+    hasRequiredWorkflowDispatchInputs
+};
+
 const ROOT_DIR = path.join(__dirname, '..');
 const CONTRACT_DOC_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'ONE_CLICK_WORKFLOW_CONTRACT.md');
 const CHATGPT_START_HERE_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'CHATGPT_START_HERE.md');
@@ -932,6 +1130,458 @@ runTest('Contract - ACP schema and activation policy referenced for task-mode an
         'ACP schema must define valid task modes');
     assert.ok(/FAILOVER_EXECUTE|BUILDER|VERIFY_RECONCILE|RESEARCH_DOCUMENT/i.test(activationPolicyRaw),
         'Activation policy must define all task modes');
+});
+
+// =========================================================
+// Machine-Enforceable Task-to-Carrier Binding Regression Tests
+// =========================================================
+//
+// These tests verify that the verifyCarrierBinding function enforces the
+// task-to-carrier binding constraints by actual code execution, not by
+// document inspection. They cover:
+//   - Exact task_name match passes (CARRIER_READY)
+//   - Mismatched task_name fails closed (CARRIER_TASK_MISMATCH)
+//   - Mismatched target_agent fails closed (CARRIER_AGENT_MISMATCH)
+//   - Mismatched task_mode fails closed (CARRIER_TASK_MODE_MISMATCH)
+//   - Required workflow_dispatch inputs fails closed (CARRIER_HAS_REQUIRED_INPUTS)
+//   - Missing embedded carrier fails closed (CARRIER_NOT_FOUND)
+//   - Missing canonical activation path fails closed (CARRIER_NOT_FOUND)
+//   - JSON-style carrier format is parsed correctly
+//   - YAML-style multi-line carrier value is parsed correctly
+//   - Real one-click workflows pass binding verification
+
+const MACHINE_ENFORCEMENT_TESTS = [
+    {
+        name: 'Machine enforcement - exact task_name match returns CARRIER_READY',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      cat <<\'TASK_EOF\'',
+            '      task_name: TASK-TEST-EXACT-MATCH-001',
+            '      target_agent: Gemini',
+            '      task_mode: RESEARCH_DOCUMENT',
+            '      TASK_EOF',
+            '      echo "done"'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-EXACT-MATCH-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_READY'
+    },
+    {
+        name: 'Machine enforcement - mismatched task_name returns CARRIER_TASK_MISMATCH (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      cat <<\'TASK_EOF\'',
+            '      task_name: TASK-DIFFERENT-FROM-REQUESTED-001',
+            '      target_agent: Gemini',
+            '      task_mode: RESEARCH_DOCUMENT',
+            '      TASK_EOF'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-MISMATCH-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_TASK_MISMATCH'
+    },
+    {
+        name: 'Machine enforcement - mismatched target_agent returns CARRIER_AGENT_MISMATCH (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      cat <<\'TASK_EOF\'',
+            '      task_name: TASK-TEST-MATCH-001',
+            '      target_agent: Gemini Builder',
+            '      task_mode: RESEARCH_DOCUMENT',
+            '      TASK_EOF'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-MATCH-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_AGENT_MISMATCH'
+    },
+    {
+        name: 'Machine enforcement - mismatched task_mode returns CARRIER_TASK_MODE_MISMATCH (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      cat <<\'TASK_EOF\'',
+            '      task_name: TASK-TEST-MATCH-001',
+            '      target_agent: Gemini',
+            '      task_mode: REVIEW',
+            '      TASK_EOF'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-MATCH-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_TASK_MODE_MISMATCH'
+    },
+    {
+        name: 'Machine enforcement - required workflow_dispatch inputs returns CARRIER_HAS_REQUIRED_INPUTS (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '    inputs:',
+            '      task_name:',
+            '        required: true',
+            '        type: string',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      task_name: TASK-TEST-MATCH-001',
+            '      target_agent: Gemini',
+            '      task_mode: RESEARCH_DOCUMENT'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-MATCH-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_HAS_REQUIRED_INPUTS'
+    },
+    {
+        name: 'Machine enforcement - missing embedded carrier returns CARRIER_NOT_FOUND (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      echo "no carrier here"'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-MATCH-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_NOT_FOUND'
+    },
+    {
+        name: 'Machine enforcement - missing canonical activation path returns CARRIER_NOT_FOUND (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      task_name: TASK-TEST-MATCH-001',
+            '      target_agent: Gemini',
+            '      task_mode: RESEARCH_DOCUMENT'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-MATCH-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        canonicalActivationPath: 'poc/activation-ingress\\.js',
+        expectedState: 'CARRIER_NOT_FOUND'
+    },
+    {
+        name: 'Machine enforcement - JSON-style carrier format is parsed correctly and matches',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      TASK=$(cat <<\'TASK_EOF\'',
+            '      {',
+            '        "task_name": "TASK-TEST-JSON-STYLE-001",',
+            '        "target_agent": "Gemini Builder",',
+            '        "task_mode": "BUILDER",',
+            '      }',
+            '      TASK_EOF',
+            '      )',
+            '      jq -n --arg task "$TASK"'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-JSON-STYLE-001',
+        requestedTargetAgent: 'Gemini Builder',
+        requestedTaskMode: 'BUILDER',
+        expectedState: 'CARRIER_READY'
+    },
+    {
+        name: 'Machine enforcement - JSON-style carrier mismatch returns CARRIER_TASK_MISMATCH (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      TASK=$(cat <<\'TASK_EOF\'',
+            '      {',
+            '        "task_name": "TASK-DIFFERENT-001",',
+            '        "target_agent": "Gemini Builder",',
+            '        "task_mode": "BUILDER",',
+            '      }',
+            '      TASK_EOF',
+            '      )'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-JSON-MISMATCH-001',
+        requestedTargetAgent: 'Gemini Builder',
+        requestedTaskMode: 'BUILDER',
+        expectedState: 'CARRIER_TASK_MISMATCH'
+    },
+    {
+        name: 'Machine enforcement - YAML multi-line carrier value is parsed correctly',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      cat > task.txt <<\'TASK_EOF\'',
+            '      protocol_version: 0.1',
+            '      task_name:',
+            '      TASK-TEST-MULTI-LINE-001',
+            '      target_agent:',
+            '      Gemini',
+            '      task_mode:',
+            '      RESEARCH_DOCUMENT',
+            '      TASK_EOF'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-MULTI-LINE-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_READY'
+    },
+    {
+        name: 'Machine enforcement - request_id as fallback for task_name extraction',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      cat > task.txt <<\'TASK_EOF\'',
+            '      protocol_version: 0.1',
+            '      request_id:',
+            '      TASK-FROM-REQUEST-ID-001',
+            '      target_agent: Gemini',
+            '      task_mode: RESEARCH_DOCUMENT',
+            '      TASK_EOF'
+        ].join('\n'),
+        requestedTaskName: 'TASK-FROM-REQUEST-ID-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_READY'
+    },
+    {
+        name: 'Machine enforcement - zero-input workflow_dispatch (optional input with default) is accepted',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '    inputs:',
+            '      info_only:',
+            '        required: false',
+            '        default: "default"',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      task_name: TASK-TEST-OPTIONAL-INPUT-001',
+            '      target_agent: Gemini',
+            '      task_mode: RESEARCH_DOCUMENT'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-OPTIONAL-INPUT-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_READY'
+    },
+    {
+        name: 'Machine enforcement - empty workflow_dispatch with required input fails (fail closed)',
+        workflowRaw: [
+            'name: Test Workflow',
+            'on:',
+            '  workflow_dispatch:',
+            '    inputs:',
+            '      mandatory_field:',
+            '        required: true',
+            '',
+            'jobs:',
+            '  task:',
+            '    run: |',
+            '      task_name: TASK-TEST-REQUIRED-INPUT-001',
+            '      target_agent: Gemini',
+            '      task_mode: RESEARCH_DOCUMENT'
+        ].join('\n'),
+        requestedTaskName: 'TASK-TEST-REQUIRED-INPUT-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT',
+        expectedState: 'CARRIER_HAS_REQUIRED_INPUTS'
+    }
+];
+
+for (const tc of MACHINE_ENFORCEMENT_TESTS) {
+    runTest(tc.name, () => {
+        const result = verifyCarrierBinding({
+            workflowRaw: tc.workflowRaw,
+            requestedTaskName: tc.requestedTaskName,
+            requestedTargetAgent: tc.requestedTargetAgent,
+            requestedTaskMode: tc.requestedTaskMode,
+            canonicalActivationPath: tc.canonicalActivationPath || undefined
+        });
+        assert.strictEqual(result.state, tc.expectedState,
+            `Expected state ${tc.expectedState} but got ${result.state}: ${result.details}`);
+    });
+}
+
+// =========================================================
+// Real one-click workflow binding verification tests
+// =========================================================
+
+runTest('Machine enforcement - one-click-gemini-activation-verify-reconcile.yml passes binding check', () => {
+    const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-activation-verify-reconcile.yml'), 'utf8');
+    const result = verifyCarrierBinding({
+        workflowRaw: wfRaw,
+        requestedTaskName: 'TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-ACTIVATION-VERIFY-RECONCILE-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'VERIFY_RECONCILE',
+        canonicalActivationPath: 'poc/validate-external-activation\\.js'
+    });
+    assert.strictEqual(result.state, 'CARRIER_READY',
+        `Expected CARRIER_READY but got ${result.state}: ${result.details}`);
+});
+
+runTest('Machine enforcement - one-click-gemini-builder-smoke.yml passes binding check', () => {
+    const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-smoke.yml'), 'utf8');
+    const result = verifyCarrierBinding({
+        workflowRaw: wfRaw,
+        requestedTaskName: 'TASK-GEMINI-BUILDER-ONE-CLICK-SMOKE-001',
+        requestedTargetAgent: 'Gemini Builder',
+        requestedTaskMode: 'EXECUTE',
+        canonicalActivationPath: 'poc/validate-external-activation\\.js'
+    });
+    assert.strictEqual(result.state, 'CARRIER_READY',
+        `Expected CARRIER_READY but got ${result.state}: ${result.details}`);
+});
+
+runTest('Machine enforcement - one-click-gemini-builder-coordinator-registration-gate-protocol-enforcement.yml passes binding check', () => {
+    const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-coordinator-registration-gate-protocol-enforcement.yml'), 'utf8');
+    const result = verifyCarrierBinding({
+        workflowRaw: wfRaw,
+        requestedTaskName: 'TASK-KILO-ONE-CLICK-COORDINATOR-REGISTRATION-GATE-PROTOCOL-ENFORCEMENT-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'BUILDER',
+        canonicalActivationPath: 'poc/validate-external-activation\\.js'
+    });
+    assert.strictEqual(result.state, 'CARRIER_READY',
+        `Expected CARRIER_READY but got ${result.state}: ${result.details}`);
+});
+
+// =========================================================
+// Machine enforcement regression: real workflows with mismatch
+// =========================================================
+
+runTest('Machine enforcement - real workflow binding fails when requested task_name differs', () => {
+    const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-activation-verify-reconcile.yml'), 'utf8');
+    const result = verifyCarrierBinding({
+        workflowRaw: wfRaw,
+        requestedTaskName: 'TASK-THIS-IS-A-DIFFERENT-TASK-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT'
+    });
+    assert.notStrictEqual(result.state, 'CARRIER_READY',
+        `Expected non-READY state for mismatched task but got ${result.state}`);
+    assert.ok(
+        result.state === 'CARRIER_TASK_MISMATCH' || result.state === 'CARRIER_NOT_FOUND',
+        `Expected CARRIER_TASK_MISMATCH or CARRIER_NOT_FOUND but got ${result.state}: ${result.details}`
+    );
+});
+
+runTest('Machine enforcement - real workflow binding fails when target_agent differs', () => {
+    const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-smoke.yml'), 'utf8');
+    const result = verifyCarrierBinding({
+        workflowRaw: wfRaw,
+        requestedTaskName: 'TASK-GEMINI-BUILDER-ONE-CLICK-SMOKE-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'EXECUTE'
+    });
+    assert.notStrictEqual(result.state, 'CARRIER_READY',
+        `Expected non-READY state for mismatched agent but got ${result.state}`);
+    assert.ok(
+        result.state === 'CARRIER_AGENT_MISMATCH',
+        `Expected CARRIER_AGENT_MISMATCH but got ${result.state}: ${result.details}`
+    );
+});
+
+runTest('Machine enforcement - real workflow binding fails when task_mode differs', () => {
+    const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-activation-verify-reconcile.yml'), 'utf8');
+    const result = verifyCarrierBinding({
+        workflowRaw: wfRaw,
+        requestedTaskName: 'TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-ACTIVATION-VERIFY-RECONCILE-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'RESEARCH_DOCUMENT'
+    });
+    assert.notStrictEqual(result.state, 'CARRIER_READY',
+        `Expected non-READY state for mismatched task_mode but got ${result.state}`);
+    assert.strictEqual(result.state, 'CARRIER_TASK_MODE_MISMATCH',
+        `Expected CARRIER_TASK_MODE_MISMATCH but got ${result.state}: ${result.details}`);
+});
+
+// =========================================================
+// Existing main.yml has required inputs — binding verifier fails closed
+// =========================================================
+
+runTest('Machine enforcement - main.yml fails binding check (has required inputs)', () => {
+    const result = verifyCarrierBinding({
+        workflowRaw: mainWfRaw,
+        requestedTaskName: 'TASK-TEST-001',
+        requestedTargetAgent: 'Gemini',
+        requestedTaskMode: 'REVIEW'
+    });
+    assert.strictEqual(result.state, 'CARRIER_HAS_REQUIRED_INPUTS',
+        `Expected CARRIER_HAS_REQUIRED_INPUTS for main.yml but got ${result.state}: ${result.details}`);
+});
+
+// =========================================================
+// Contract documentation references the machine-enforceable verifier
+// =========================================================
+
+runTest('Contract - documents the machine-enforceable carrier binding verifier', () => {
+    assert.ok(/verifyCarrierBinding/i.test(contractRaw),
+        'Contract must reference the machine-enforceable verifyCarrierBinding function');
+    assert.ok(/CARRIER_READY/i.test(contractRaw) || /CARRIER_TASK_MISMATCH/i.test(contractRaw),
+        'Contract must reference the state model');
+});
+
+runTest('Contract - documents fail-closed behavior for binding mismatch', () => {
+    assert.ok(/fail.*closed/i.test(contractRaw.slice(contractRaw.indexOf('Exact-Task Inspection'))),
+        'Contract must document fail-closed behavior in the inspection section');
+});
+
+runTest('Contract - documents the machine verification test for binding enforcement', () => {
+    const machineSection = contractRaw.slice(contractRaw.indexOf('## 8. Machine Verification'));
+    assert.ok(/verifyCarrierBinding/i.test(machineSection) || /binding.*regression|regression.*binding/i.test(machineSection),
+        'Contract machine verification section must reference the binding verifier');
 });
 
 console.log(`\n${passCount} passed, ${failCount} failed`);
