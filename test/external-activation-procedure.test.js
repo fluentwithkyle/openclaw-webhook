@@ -96,6 +96,25 @@ runTest('Procedure - main.yml canonical ingress is the activation entry point', 
     assertTrue(validatorRaw.includes('/poc/activation/ingress'), 'external-activation-validator.js must call the canonical ingress path');
 });
 
+runTest('Procedure - issue_comment activation safely serializes multiline comment JSON', () => {
+    assertTrue(mainRaw.includes('ACTIVATION_JSON=$(jq -n'), 'issue_comment validation must build JSON with jq');
+    assertTrue(mainRaw.includes('--arg comment_body "$COMMENT_BODY"'), 'comment body must be passed to jq as an argument');
+    assertTrue(mainRaw.includes('node poc/validate-external-activation.js gemini-issue-comment "$ACTIVATION_JSON"'),
+        'canonical validator must receive the serialized activation payload');
+    assertTrue(!mainRaw.includes('\\\"comment_body\\\": \\\"$COMMENT_BODY\\\"'),
+        'workflow must not interpolate raw comment text into a JSON string');
+
+    const multilineComment = '@gemini-cli FAILOVER_EXECUTE first line\\nsecond line with "quotes" and \\backslashes';
+    const serialized = JSON.stringify({
+        comment_id: 'regression-1',
+        comment_body: multilineComment,
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+    const parsed = JSON.parse(serialized);
+
+    assert.equal(parsed.comment_body, multilineComment, 'JSON serialization must preserve exact multiline comment content');
+});
 // =========================================================
 // 2. Canonical ingress validation step before agent execution
 // =========================================================
