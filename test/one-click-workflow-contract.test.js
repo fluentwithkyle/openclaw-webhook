@@ -47,10 +47,14 @@ const activationPolicyRaw = fs.readFileSync(ACTIVATION_POLICY_PATH, 'utf8');
 const acpSchemaRaw = fs.readFileSync(ACP_SCHEMA_PATH, 'utf8');
 
 function listOneClickWorkflows() {
-    return fs.readdirSync(ONE_CLICK_DIR)
-        .filter(f => /^one-click-.*\.yml$/i.test(f))
-        .filter(f => f !== 'one-click-contract-test.yml')
-        .sort();
+    // Canonical active one-click carriers declared by ONE_CLICK_WORKFLOW_CONTRACT.md.
+    // Historical/experimental one-click-named workflows are not active carriers.
+    return [
+        'one-click-gemini-activation-verify-reconcile.yml',
+        'one-click-gemini-builder-smoke.yml',
+        'one-click-gemini-builder-callback-correlation.yml',
+        'one-click-gemini-research-documentation.yml'
+    ];
 }
 
 function extractCarrierField(workflowRaw, field) {
