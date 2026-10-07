@@ -7,9 +7,9 @@ const orchestrator = require('../poc/orchestrator');
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
 
-function runTest(name, fn) {
+async function runTest(name, fn) {
   try {
-    fn();
+    await fn();
     console.log(`PASS: ${name}`);
     return true;
   } catch (err) {
@@ -26,10 +26,10 @@ function assertEqual(actual, expected, msg) {
 
 let passCount = 0;
 let failCount = 0;
+const tests = [];
 
 function test(name, fn) {
-  const result = runTest(name, fn);
-  if (result) passCount++; else failCount++;
+  tests.push({ name, fn });
 }
 
 const validCommand = {
@@ -80,16 +80,18 @@ function cleanup() {
   taskRegistry.resetRegistry();
 }
 
-function setupTask() {
+async function setupTask() {
   cleanup();
-  taskRegistry.createTask(validCommand);
-  taskRegistry.updateTaskStatus('test-orch-1', 'SELECTED');
-  taskRegistry.updateTaskStatus('test-orch-1', 'PLANNED');
-  taskRegistry.updateTaskStatus('test-orch-1', 'EXECUTING');
+  const created = await taskRegistry.createTask(validCommand);
+  if (!created.success) throw new Error(`setupTask createTask failed: ${created.error}`);
+  for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) {
+    const result = await await taskRegistry.updateTaskStatus('test-orch-1', status);
+    if (!result.success) throw new Error(`setupTask ${status} failed: ${result.error}`);
+  }
 }
 
-test('handleKiloCompletion - valid success report', () => {
-  setupTask();
+test('handleKiloCompletion - valid success report', async () => {
+  await setupTask();
   const result = orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
   assertEqual(result.success, true);
   assertEqual(result.next_action, 'trigger_builder');
@@ -183,7 +185,7 @@ test('handleKiloCompletion - non-existent task fails', () => {
 
 test('handleGeminiCompletion - valid success report', () => {
   setupTask();
-  taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+  await taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
   const result = orchestrator.handleGeminiCompletion('test-orch-1', validGeminiReport);
   assertEqual(result.success, true);
   assertEqual(result.next_action, 'complete');
@@ -451,5 +453,10 @@ test('canTriggerGeminiBuilder - returns false when task not EXECUTING', () => {
   cleanup();
 });
 
-console.log(`\n=== Orchestrator Tests: ${passCount} passed, ${failCount} failed ===`);
-if (failCount > 0) process.exit(1);
+(async () => {
+  for (const { name, fn } of tests) {
+    if (await runTest(name, fn)) passCount++; else failCount++;
+  }
+  console.log(`\n=== Orchestrator Tests: ${passCount} passed, ${failCount} failed ===`);
+  if (failCount > 0) process.exit(1);
+})();
