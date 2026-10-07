@@ -281,7 +281,7 @@ test('getOrchestrationState - returns current state', async () => {
 
 test('determineNextAction - returns next action', async () => {
   await setupTask();
-  orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
+  await orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
   const result = orchestrator.determineNextAction('test-orch-1');
   assertEqual(result.success, true);
   assertEqual(result.next_action, 'trigger_builder');
