@@ -535,6 +535,27 @@ This chain is the documented, authoritative retrieval path. The procedure MUST b
 
 > **Mandatory retrieval behavior.** When Kyle says "find Gemini's report," "get Gemini's results," "retrieve Gemini's report," or equivalent wording (see the project-wide terminology mapping in `docs/ai/README.md` — *Terminology and Artifact Retrieval*), ChatGPT MUST interpret this as a GitHub Actions artifact retrieval task and MUST independently perform the documented retrieval procedure above. ChatGPT MUST NOT ask Kyle where Gemini stored the result or ask Kyle to copy/paste the result unless the documented retrieval procedure has already been independently attempted and is unavailable or blocked.
 
+### 5.1.2 Durable Gemini Evidence Retrieval Procedure
+
+When prior Gemini execution or research evidence is needed, ChatGPT MUST use the repository's durable evidence projection before treating the result as unavailable. This procedure supplements the GitHub Actions artifact procedure above; the durable repository projection is the persistent retrieval path across new chats.
+
+The mandatory retrieval hierarchy is:
+
+1. Inspect `docs/ai/RESEARCH_INDEX.md` for the exact `task_name` and the linked research record.
+2. Search `docs/ai/reports/gemini-acp-report-*.json` using the exact `task_name` or `request_id` when available. The durable ACP report is the first place to inspect for the actual Gemini execution result.
+3. For human-readable research analysis, inspect the corresponding `docs/ai/research/research-*.md` record.
+4. Use `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, and `docs/ai/CONTROL_CENTER.md` for project-state and navigation context; they do not substitute for the underlying ACP report or research record.
+5. Repository evidence is authoritative over Gemini's natural-language completion summary. If the durable ACP report contradicts the agent's prose, report the repository evidence.
+6. ChatGPT MUST NOT conclude that a Gemini result or research artifact is missing until the durable report and applicable research locations have been checked.
+7. If a Gemini execution reports successful artifact filing, ChatGPT MUST locate the durable repository projection before asking Kyle to provide or download the artifact.
+8. Retrieval MUST be task/request-ID driven. Do not guess a report filename when a `request_id` or exact `task_name` is available.
+
+The durable evidence mapping is therefore:
+
+`task_name/request_id → RESEARCH_INDEX.md → docs/ai/reports/gemini-acp-report-*.json → docs/ai/research/research-*.md`
+
+This rule is repository retrieval procedure, not a new persistence mechanism, control plane, authorization path, or source of project authority.
+
 6. Documentation and State Reconciliation
 
 The following hierarchy should be respected:

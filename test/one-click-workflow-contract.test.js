@@ -1043,5 +1043,60 @@ runTest('Contract - ACP schema and activation policy referenced for task-mode an
         'Activation policy must define all task modes');
 });
 
+
+// =========================================================
+// Durable Gemini evidence retrieval procedure tests
+// =========================================================
+
+const RESEARCH_INDEX_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'RESEARCH_INDEX.md');
+const GEMINI_REPORTS_DIR = path.join(ROOT_DIR, 'docs', 'ai', 'reports');
+const GEMINI_RESEARCH_DIR = path.join(ROOT_DIR, 'docs', 'ai', 'research');
+const researchIndexRaw = fs.readFileSync(RESEARCH_INDEX_PATH, 'utf8');
+
+runTest('Protocol - defines durable Gemini evidence retrieval hierarchy', () => {
+    assert.ok(protocolRaw.includes('### 5.1.2 Durable Gemini Evidence Retrieval Procedure'),
+        'Protocol must define the durable Gemini evidence retrieval procedure');
+    assert.ok(protocolRaw.includes('docs/ai/RESEARCH_INDEX.md'),
+        'Protocol must require RESEARCH_INDEX.md inspection');
+    assert.ok(protocolRaw.includes('docs/ai/reports/gemini-acp-report-*.json'),
+        'Protocol must require durable Gemini ACP report search');
+    assert.ok(protocolRaw.includes('docs/ai/research/research-*.md'),
+        'Protocol must require durable research record inspection');
+});
+
+runTest('Protocol - forbids declaring Gemini evidence missing before durable locations are checked', () => {
+    assert.ok(/MUST NOT conclude that a Gemini result or research artifact is missing until the durable report and applicable research locations have been checked/i.test(protocolRaw),
+        'Protocol must require durable evidence checks before declaring Gemini evidence missing');
+});
+
+runTest('Protocol - makes durable ACP report the first actual execution-result source', () => {
+    assert.ok(/durable ACP report is the first place to inspect for the actual Gemini execution result/i.test(protocolRaw),
+        'Protocol must identify durable ACP reports as the first execution-result source');
+});
+
+runTest('Protocol - requires exact task_name/request_id driven retrieval', () => {
+    assert.ok(/using the exact.*task_name.*request_id/i.test(protocolRaw),
+        'Protocol must require exact task_name/request_id retrieval');
+    assert.ok(/Do not guess a report filename/i.test(protocolRaw),
+        'Protocol must prohibit guessed report filenames when identifiers are available');
+});
+
+runTest('Protocol - makes repository evidence authoritative over Gemini prose', () => {
+    assert.ok(/Repository evidence is authoritative over Gemini's natural-language completion summary/i.test(protocolRaw),
+        'Protocol must make repository evidence authoritative over agent prose');
+});
+
+runTest('Protocol - identifies project-state documents as navigation/context rather than evidence substitutes', () => {
+    assert.ok(/TASK_LOG\.md.*STATE\.md.*CONTROL_CENTER\.md.*do not substitute for the underlying ACP report or research record/i.test(protocolRaw),
+        'Protocol must distinguish state/navigation records from underlying evidence');
+});
+
+runTest('Durable Gemini evidence locations exist in the repository', () => {
+    assert.ok(fs.existsSync(RESEARCH_INDEX_PATH), 'RESEARCH_INDEX.md must exist');
+    assert.ok(fs.existsSync(GEMINI_REPORTS_DIR), 'docs/ai/reports must exist');
+    assert.ok(fs.existsSync(GEMINI_RESEARCH_DIR), 'docs/ai/research must exist');
+    assert.ok(researchIndexRaw.includes('Task ID'), 'RESEARCH_INDEX.md must remain a task-oriented index');
+});
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);
