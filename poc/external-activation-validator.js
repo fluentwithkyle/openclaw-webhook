@@ -1,5 +1,6 @@
 const https = require('https');
 const crypto = require('crypto');
+const taskRegistry = require('./task-registry');
 
 const ACTIVATION_INGRESS_PATH = '/poc/activation/ingress';
 
@@ -36,6 +37,37 @@ function verifyDirectorOriginAssertion(assertion, requestId, directorOriginSecre
     }
 }
 
+function verifyDirectorOriginAssertionAgainstTaskRegistry(assertion, requestId, directorOriginSecret) {
+    if (!assertion || typeof assertion !== 'string') return false;
+    if (!directorOriginSecret) return false;
+    if (!requestId) return false;
+
+    try {
+        const decoded = Buffer.from(assertion, 'base64').toString('utf8');
+        const parsed = JSON.parse(decoded);
+        if (parsed.request_id !== requestId) return false;
+        if (!parsed.execution_claim_id) return false;
+
+        const expected = crypto
+            .createHmac('sha256', directorOriginSecret)
+            .update(requestId + ':' + parsed.execution_claim_id)
+            .digest('hex');
+
+        const tokenMatch = crypto.timingSafeEqual(Buffer.from(parsed.token, 'hex'), Buffer.from(expected, 'hex'));
+        if (!tokenMatch) return false;
+
+        const taskEntry = taskRegistry.getTask(requestId);
+        if (!taskEntry) return false;
+
+        const actualClaim = taskRegistry.getExecutionClaim(requestId);
+        if (!actualClaim || actualClaim.execution_claim_id !== parsed.execution_claim_id) return false;
+
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
 function validateExternalActivation(params, callbackUrl, callbackSecret, directorOriginSecret, directorOriginAssertion) {
     const payload = JSON.stringify(params);
 
@@ -58,15 +90,11 @@ function validateExternalActivation(params, callbackUrl, callbackSecret, directo
     const requestId = params && params.request_id;
     const requiresAssertion = params && (params.target === 'Gemini Builder');
 
-    let directorAuthorizationEstablished = false;
-
     if (directorOriginAssertion) {
-        directorAuthorizationEstablished = verifyDirectorOriginAssertion(directorOriginAssertion, requestId, directorOriginSecret);
-    } else if (!requiresAssertion) {
-        directorAuthorizationEstablished = true;
+        options.headers['x-director-origin-assertion'] = directorOriginAssertion;
     }
 
-    if (directorAuthorizationEstablished && directorOriginSecret) {
+    if (directorOriginSecret && !requiresAssertion) {
         options.headers['x-director-origin-secret'] = directorOriginSecret;
     }
 
@@ -229,5 +257,6 @@ module.exports = {
     buildBuilderActivationPayload,
     generateDirectorOriginAssertion,
     verifyDirectorOriginAssertion,
+    verifyDirectorOriginAssertionAgainstTaskRegistry,
     ACTIVATION_INGRESS_PATH
 };
