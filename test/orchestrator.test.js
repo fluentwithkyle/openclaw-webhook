@@ -345,6 +345,59 @@ test('handleGeminiBuilderCompletion - invalid report fails validation', () => {
   cleanup();
 });
 
+test('triggerGemini - propagates existing Director approval_id from TaskRegistry authorization proof', async () => {
+  setupTask();
+  const task = taskRegistry.getTask('test-orch-1');
+  task.task_mode = 'FAILOVER_EXECUTE';
+  task.capabilities = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+  task.permitted_paths = ['poc/orchestrator.js'];
+  task.authorization_proof = {
+    approval_id: 'dir-approval-test-123'
+  };
+
+  const originalDispatch = geminiTrigger.dispatchGemini;
+  let capturedApprovalId = undefined;
+  geminiTrigger.dispatchGemini = async (
+    requestId, taskName, repository, baseBranch, kiloExecutionId,
+    githubToken, verification, taskMode, capabilities, permittedPaths, approvalId
+  ) => {
+    capturedApprovalId = approvalId;
+    return { success: false, error: 'Mocked', stage: 'dispatch' };
+  };
+
+  try {
+    await orchestrator.triggerGemini('test-orch-1', 'fake-token');
+    assertEqual(capturedApprovalId, 'dir-approval-test-123');
+  } finally {
+    geminiTrigger.dispatchGemini = originalDispatch;
+    cleanup();
+  }
+});
+
+test('triggerGemini - does not invent approval_id when authorization proof is absent', async () => {
+  setupTask();
+  const task = taskRegistry.getTask('test-orch-1');
+  delete task.authorization_proof;
+
+  const originalDispatch = geminiTrigger.dispatchGemini;
+  let capturedApprovalId = 'unexpected';
+  geminiTrigger.dispatchGemini = async (
+    requestId, taskName, repository, baseBranch, kiloExecutionId,
+    githubToken, verification, taskMode, capabilities, permittedPaths, approvalId
+  ) => {
+    capturedApprovalId = approvalId;
+    return { success: false, error: 'Mocked', stage: 'dispatch' };
+  };
+
+  try {
+    await orchestrator.triggerGemini('test-orch-1', 'fake-token');
+    assertEqual(capturedApprovalId, null);
+  } finally {
+    geminiTrigger.dispatchGemini = originalDispatch;
+    cleanup();
+  }
+});
+
 test('canTriggerGeminiBuilder - returns true after Kilo success', () => {
   setupTask();
   taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
