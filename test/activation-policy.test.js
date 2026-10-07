@@ -70,8 +70,8 @@ function makeKiloFailoverCommand(requestId, overrides) {
     }, overrides || {});
 }
 
-function setupDirectorApproval(requestId, target, taskMode, capabilities, permittedPaths) {
-    const approvalResult = taskRegistry.createDirectorApproval({
+async function setupDirectorApproval(requestId, target, taskMode, capabilities, permittedPaths) {
+    const approvalResult = await taskRegistry.createDirectorApproval({
         request_id: requestId,
         target: target,
         task_mode: taskMode,
@@ -418,7 +418,7 @@ async function main() {
     await runTest('Ingress - valid Kilo FAILOVER_EXECUTE creates task and returns success', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-1');
-        const approval = setupDirectorApproval('ingress-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success, 'Approval should be created');
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -431,7 +431,7 @@ async function main() {
     await runTest('Ingress - valid Gemini FAILOVER_EXECUTE creates task and returns success', async () => {
         cleanup();
         const cmd = makeGeminiFailoverCommand('ingress-test-2');
-        const approval = setupDirectorApproval('ingress-test-2', 'Gemini', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-2', 'Gemini', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success, 'Approval should be created');
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -443,7 +443,7 @@ async function main() {
     await runTest('Ingress - valid Builder BUILDER creates task and returns success', async () => {
         cleanup();
         const cmd = makeBuilderCommand('ingress-test-3');
-        const approval = setupDirectorApproval('ingress-test-3', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-3', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success, 'Approval should be created');
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -543,7 +543,7 @@ async function main() {
     await runTest('Ingress - duplicate request_id with identical payload is idempotent', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-idempotent-1');
-        const approval = setupDirectorApproval('ingress-idempotent-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-idempotent-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success, 'Approval should be created');
         cmd.authorization.approval_id = approval.approval.approval_id;
         const first = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -567,7 +567,7 @@ async function main() {
     await runTest('Ingress - consequential command with director approval succeeds', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-14');
-        const approvalResult = taskRegistry.createDirectorApproval({
+        const approvalResult = await taskRegistry.createDirectorApproval({
             request_id: 'ingress-test-14',
             target: 'Kilo',
             task_mode: 'FAILOVER_EXECUTE',
@@ -587,7 +587,7 @@ async function main() {
     await runTest('Ingress - canonicalizes activation metadata into command', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-15');
-        const approval = setupDirectorApproval('ingress-test-15', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-15', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -601,7 +601,7 @@ async function main() {
     await runTest('Ingress - activation_provenance stored in task entry', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-16');
-        const approval = setupDirectorApproval('ingress-test-16', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-16', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -615,7 +615,7 @@ async function main() {
     await runTest('Ingress - server-derived capabilities override command capabilities', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-17');
-        const approval = setupDirectorApproval('ingress-test-17', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-17', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -627,7 +627,7 @@ async function main() {
     await runTest('Ingress - server-derived permitted_paths override command paths', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-18');
-        const approval = setupDirectorApproval('ingress-test-18', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-18', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -647,7 +647,7 @@ async function main() {
     await runTest('Ingress - workflow_dispatch surface valid for Gemini BUILDER', async () => {
         cleanup();
         const cmd = makeBuilderCommand('ingress-test-20');
-        const approval = setupDirectorApproval('ingress-test-20', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-20', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -658,7 +658,7 @@ async function main() {
     await runTest('Ingress - github_push_event valid for Kilo FAILOVER_EXECUTE', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-21');
-        const approval = setupDirectorApproval('ingress-test-21', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-21', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -692,7 +692,7 @@ async function main() {
         delete process.env.DEEPSEEK_COORDINATOR_SECRET;
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-22');
-        const approval = setupDirectorApproval('ingress-test-22', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-22', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -709,7 +709,7 @@ async function main() {
     await runTest('Ingress - identical replay is idempotent (not a conflict)', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-dup-1');
-        const approval = setupDirectorApproval('ingress-dup-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-dup-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success, 'Approval should be created: ' + approval.error);
         cmd.authorization.approval_id = approval.approval.approval_id;
 
@@ -726,7 +726,7 @@ async function main() {
     await runTest('Ingress - replay with modified payload fails closed (REPLAY_PAYLOAD_MISMATCH)', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-dup-2');
-        const approval = setupDirectorApproval('ingress-dup-2', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-dup-2', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
 
@@ -745,7 +745,7 @@ async function main() {
     await runTest('Ingress - replay with modified task_type fails closed', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-dup-3');
-        const approval = setupDirectorApproval('ingress-dup-3', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-dup-3', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
 
@@ -763,7 +763,7 @@ async function main() {
     await runTest('Ingress - replay returns existing task entry without creating duplicate', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-dup-4');
-        const approval = setupDirectorApproval('ingress-dup-4', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-dup-4', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
 
@@ -785,7 +785,7 @@ async function main() {
     await runTest('Ingress - replay preserves activation_provenance from original task', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-dup-5');
-        const approval = setupDirectorApproval('ingress-dup-5', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-dup-5', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
 
@@ -836,7 +836,7 @@ async function main() {
     await runTest('Ingress - task registered in single TaskRegistry (no second registry)', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-23');
-        const approval = setupDirectorApproval('ingress-test-23', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-23', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
@@ -850,7 +850,7 @@ async function main() {
     await runTest('Ingress - activation ingress uses existing ACP validate function', async () => {
         cleanup();
         const cmd = makeKiloFailoverCommand('ingress-test-24');
-        const approval = setupDirectorApproval('ingress-test-24', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        const approval = await setupDirectorApproval('ingress-test-24', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
