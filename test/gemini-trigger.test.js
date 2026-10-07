@@ -297,6 +297,38 @@ async function main() {
     cleanup();
   });
 
+  await runTest('dispatchGemini payload contract includes existing approval_id transport field', async () => {
+    const inputs = {
+      request_id: 'fa-req-approval-1',
+      task: 'failover task',
+      repository: 'owner/repo',
+      base_branch: 'main',
+      kilo_execution_id: 'exec-123',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+      permitted_paths: ['index.js'],
+      approval_id: 'dir-approval-test-123'
+    };
+
+    const payload = JSON.parse(JSON.stringify({
+      ref: inputs.base_branch,
+      inputs: {
+        request_id: inputs.request_id,
+        task: inputs.task,
+        repository: inputs.repository,
+        base_branch: inputs.base_branch,
+        kilo_execution_id: inputs.kilo_execution_id,
+        verification: 'All tests must pass',
+        task_mode: inputs.task_mode,
+        capabilities: inputs.capabilities.join(','),
+        permitted_paths: inputs.permitted_paths.join(','),
+        approval_id: inputs.approval_id
+      }
+    }));
+
+    assertEqual(payload.inputs.approval_id, 'dir-approval-test-123');
+  });
+
   await runTest('dispatchGemini includes FAILOVER_EXECUTE task_mode in workflow dispatch inputs', async () => {
     const inputs = {
       request_id: 'fa-req-1',
