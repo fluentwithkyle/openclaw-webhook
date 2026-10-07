@@ -86,7 +86,7 @@ async function setupTask() {
   const created = await taskRegistry.createTask(validCommand);
   if (!created.success) throw new Error(`setupTask createTask failed: ${created.error}`);
   for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) {
-    const result = await await taskRegistry.updateTaskStatus('test-orch-1', status);
+    const result = await taskRegistry.updateTaskStatus('test-orch-1', status);
     if (!result.success) throw new Error(`setupTask ${status} failed: ${result.error}`);
   }
 }
@@ -168,7 +168,7 @@ test('handleKiloCompletion - wrong agent fails', async () => {
 
 test('handleKiloCompletion - idempotency prevents duplicate', async () => {
   await setupTask();
-  orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
+  await orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
   const result = await orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
   assertEqual(result.success, false);
   assert(result.error.includes('already recorded'));
@@ -212,7 +212,7 @@ test('handleGeminiCompletion - failure transitions to FAILED', async () => {
 test('handleGeminiCompletion - idempotency prevents duplicate', async () => {
   await setupTask();
   await taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
-  orchestrator.handleGeminiCompletion('test-orch-1', validGeminiReport);
+  await orchestrator.handleGeminiCompletion('test-orch-1', validGeminiReport);
   const result = await orchestrator.handleGeminiCompletion('test-orch-1', validGeminiReport);
   assertEqual(result.success, false);
   assert(result.error.includes('already recorded'));
@@ -269,7 +269,7 @@ test('canTriggerGemini - returns false when task not EXECUTING', async () => {
 
 test('getOrchestrationState - returns current state', async () => {
   await setupTask();
-  orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
+  await orchestrator.handleKiloCompletion('test-orch-1', validKiloReport);
   const result = orchestrator.getOrchestrationState('test-orch-1');
   assertEqual(result.success, true);
   assertEqual(result.state.kilo_status, 'success');
@@ -330,7 +330,7 @@ test('handleGeminiBuilderCompletion - failure transitions to FAILED', async () =
 test('handleGeminiBuilderCompletion - idempotency prevents duplicate', async () => {
   await setupTask();
   await taskRegistry.updateAgentResult('test-orch-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
-  orchestrator.handleGeminiBuilderCompletion('test-orch-1', validBuilderReport);
+  await orchestrator.handleGeminiBuilderCompletion('test-orch-1', validBuilderReport);
   const result = await orchestrator.handleGeminiBuilderCompletion('test-orch-1', validBuilderReport);
   assertEqual(result.success, false);
   assert(result.error.includes('already recorded'));
