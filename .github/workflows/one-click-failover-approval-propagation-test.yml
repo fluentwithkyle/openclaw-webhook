@@ -1,0 +1,55 @@
+name: One-Click FAILOVER Approval Propagation Test Suite
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Embedded canonical ACP task carrier:
+# task_name: TASK-CHATGPT-FAILOVER-APPROVAL-PROPAGATION-TEST-SUITE-001
+# originator: Kyle — Director
+# target_agent: CHATGPT
+# repository: fluentwithkyle/openclaw-webhook
+# base_branch: main
+# task_mode: REVIEW
+# capabilities:
+#   - read_only
+# objective: Provide a zero-input GitHub Actions workflow that runs the regression suites covering the FAILOVER_EXECUTE approval propagation implementation and its surrounding one-click/activation contracts.
+# scope:
+#   permitted_paths:
+#     - .github/workflows/one-click-failover-approval-propagation-test.yml
+#   architectural_boundary: Test execution only. Do not modify runtime, authorization, TaskRegistry, activation, or one-click architecture.
+# verification:
+#   - workflow_dispatch has zero required inputs
+#   - workflow executes orchestrator, Gemini-trigger, activation-policy/ingress, and one-click contract test suites
+#   - workflow contains this exact canonical task carrier
+# constraints:
+#   - No runtime changes
+#   - No alternate authorization or activation path
+#   - No secrets
+# conflict_handling: Repository instructions and canonical project protocol take precedence; stop rather than expand scope.
+
+jobs:
+  failover-approval-propagation-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run orchestrator regression tests
+        run: node test/orchestrator.test.js
+
+      - name: Run Gemini trigger regression tests
+        run: node test/gemini-trigger.test.js
+
+      - name: Run activation-policy and ingress regression tests
+        run: node test/activation-policy.test.js
+
+      - name: Run one-click contract regression tests
+        run: node test/one-click-workflow-contract.test.js
