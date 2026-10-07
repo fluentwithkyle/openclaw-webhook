@@ -14,19 +14,21 @@ function generateDirectorOriginAssertion(requestId, executionClaimId, directorOr
     return Buffer.from(JSON.stringify({ request_id: requestId, execution_claim_id: executionClaimId || null, token })).toString('base64');
 }
 
-function verifyDirectorOriginAssertion(assertion, requestId, directorOriginSecret) {
+function verifyDirectorOriginAssertion(assertion, requestId, expectedExecutionClaimId, directorOriginSecret) {
     if (!assertion || typeof assertion !== 'string') return false;
     if (!directorOriginSecret) return false;
     if (!requestId) return false;
+    if (!expectedExecutionClaimId) return false;
 
     try {
         const decoded = Buffer.from(assertion, 'base64').toString('utf8');
         const parsed = JSON.parse(decoded);
         if (parsed.request_id !== requestId) return false;
+        if (parsed.execution_claim_id !== expectedExecutionClaimId) return false;
 
         const expected = crypto
             .createHmac('sha256', directorOriginSecret)
-            .update(requestId + ':' + (parsed.execution_claim_id || ''))
+            .update(requestId + ':' + expectedExecutionClaimId)
             .digest('hex');
 
         return crypto.timingSafeEqual(Buffer.from(parsed.token, 'hex'), Buffer.from(expected, 'hex'));
@@ -35,7 +37,7 @@ function verifyDirectorOriginAssertion(assertion, requestId, directorOriginSecre
     }
 }
 
-function validateExternalActivation(params, callbackUrl, callbackSecret, directorOriginSecret, directorOriginAssertion) {
+function validateExternalActivation(params, callbackUrl, callbackSecret, directorOriginSecret, directorOriginAssertion, expectedExecutionClaimId) {
     const payload = JSON.stringify(params);
 
     const parsedUrl = new URL(callbackUrl.replace(/\/+$/, '') + ACTIVATION_INGRESS_PATH);
@@ -60,7 +62,7 @@ function validateExternalActivation(params, callbackUrl, callbackSecret, directo
     let directorAuthorizationEstablished = false;
 
     if (directorOriginAssertion) {
-        directorAuthorizationEstablished = verifyDirectorOriginAssertion(directorOriginAssertion, requestId, directorOriginSecret);
+        directorAuthorizationEstablished = verifyDirectorOriginAssertion(directorOriginAssertion, requestId, expectedExecutionClaimId, directorOriginSecret);
     } else if (!requiresAssertion) {
         directorAuthorizationEstablished = true;
     }

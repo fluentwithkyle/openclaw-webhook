@@ -466,13 +466,39 @@ function runTestAsync(name, fn) {
     assert.equal(response2.body.replay, true, 'Should be flagged as replay');
   });
 
-  runTestAsync('Manual Builder director_origin_assertion without DIRECTOR_ORIGIN_SECRET cannot establish authorization', async () => {
+  runTestAsync('Builder assertion - correct request_id + correct execution_claim_id passes verification', async () => {
     const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
 
-    const forgedAssertion = generateDirectorOriginAssertion('attacker-request', null, 'guessed-secret');
-    assert(forgedAssertion, 'Forged assertion should be generated (but will fail verification)');
+    const requestId = 'builder-correct-req';
+    const executionClaimId = 'claim-correct-456';
+    const assertion = generateDirectorOriginAssertion(requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
 
-    const verified = verifyDirectorOriginAssertion(forgedAssertion, 'attacker-request', DIRECTOR_ORIGIN_SECRET);
+    const verified = verifyDirectorOriginAssertion(assertion, requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, true,
+      'Valid assertion with correct request_id and execution_claim_id must verify');
+  });
+
+  runTestAsync('Builder assertion - correct request_id + different execution_claim_id fails', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
+
+    const requestId = 'builder-mismatch-req';
+    const executionClaimId = 'claim-original-789';
+    const assertion = generateDirectorOriginAssertion(requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
+
+    const wrongClaimId = 'claim-different-000';
+    const verified = verifyDirectorOriginAssertion(assertion, requestId, wrongClaimId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Assertion with mismatched execution_claim_id must fail verification');
+  });
+
+  runTestAsync('Builder assertion - forged assertion (guessed secret) fails verification', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
+
+    const requestId = 'builder-forged-req';
+    const executionClaimId = 'claim-forged-111';
+    const forgedAssertion = generateDirectorOriginAssertion(requestId, executionClaimId, 'guessed-secret');
+
+    const verified = verifyDirectorOriginAssertion(forgedAssertion, requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
     assert.equal(verified, false,
       'Forged assertion using guessed secret must fail verification against real DIRECTOR_ORIGIN_SECRET');
 
@@ -482,16 +508,16 @@ function runTestAsync(name, fn) {
       'Assertion token must not contain the raw DIRECTOR_ORIGIN_SECRET');
   });
 
-  runTestAsync('Server-generated Builder assertion with correct request_id establishes authorization', async () => {
+  runTestAsync('Server-generated Builder assertion with correct request_id + execution_claim_id establishes authorization', async () => {
     const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
 
-    const validRequestId = 'server-generated-request';
+    const requestId = 'server-generated-request';
     const executionClaimId = 'claim-123';
-    const validAssertion = generateDirectorOriginAssertion(validRequestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
+    const assertion = generateDirectorOriginAssertion(requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
 
-    const verified = verifyDirectorOriginAssertion(validAssertion, validRequestId, DIRECTOR_ORIGIN_SECRET);
+    const verified = verifyDirectorOriginAssertion(assertion, requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
     assert.equal(verified, true,
-      'Valid server-generated assertion should verify against real DIRECTOR_ORIGIN_SECRET');
+      'Valid server-generated assertion with matching execution_claim_id should verify');
   });
 
   await Promise.all(pendingAsyncTests);
