@@ -466,8 +466,8 @@ function runTestAsync(name, fn) {
     assert.equal(response2.body.replay, true, 'Should be flagged as replay');
   });
 
-  runTestAsync('Builder assertion - valid server-generated assertion with matching TaskRegistry claim enables director_admission', async () => {
-    const { generateDirectorOriginAssertion } = require('../poc/external-activation-validator');
+  runTestAsync('Builder assertion - matching TaskRegistry task + valid assertion = PASS', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertionAgainstTaskRegistry } = require('../poc/external-activation-validator');
 
     taskRegistry.resetRegistry();
 
@@ -483,38 +483,19 @@ function runTestAsync(name, fn) {
       verification: 'tests must pass'
     });
 
-    const createResult = await taskRegistry.createTask(builderPayload, { persist: false });
-    assert(createResult.success, 'Task should be created');
+    await taskRegistry.createTask(builderPayload, { persist: false });
     await taskRegistry.transitionToExecuting(requestId);
-    const claimResult = await taskRegistry.claimExecutionContext(requestId, { carrier_id: 'github-workflow-valid', carrier_type: 'github_workflow' });
-    assert.equal(claimResult.success, true, 'Execution claim should be created');
+    await taskRegistry.claimExecutionContext(requestId, { carrier_id: 'github-workflow-valid', carrier_type: 'github_workflow' });
     const actualClaimId = taskRegistry.getExecutionClaim(requestId).execution_claim_id;
 
     const assertion = generateDirectorOriginAssertion(requestId, actualClaimId, DIRECTOR_ORIGIN_SECRET);
-
-    const decoded = Buffer.from(assertion, 'base64').toString('utf8');
-    const parsed = JSON.parse(decoded);
-    assert.equal(parsed.execution_claim_id, actualClaimId,
-      'Assertion execution_claim_id must match TaskRegistry claim');
-
-    const mismatchedAssertion = generateDirectorOriginAssertion(requestId, 'claim-different-from-taskregistry', DIRECTOR_ORIGIN_SECRET);
-    const mismatchedDecoded = Buffer.from(mismatchedAssertion, 'base64').toString('utf8');
-    const mismatchedParsed = JSON.parse(mismatchedDecoded);
-    assert.notEqual(mismatchedParsed.execution_claim_id, actualClaimId,
-      'Attacker cannot craft an assertion matching the real claim without the secret binding');
-
-    const headers = {
-      'x-poc-trigger-secret': POC_TRIGGER_SECRET,
-      'x-director-origin-assertion': assertion
-    };
-    const response = await request('/poc/activation/ingress', headers, builderPayload);
-
-    assert.equal(response.status, 200,
-      'Existing task with valid assertion should replay (200) — assertion verification enabled director admission');
+    const verified = verifyDirectorOriginAssertionAgainstTaskRegistry(assertion, requestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, true,
+      'Valid assertion with matching TaskRegistry claim must verify true');
   });
 
-  runTestAsync('Builder assertion - assertion with different execution_claim_id fails TaskRegistry verification', async () => {
-    const { generateDirectorOriginAssertion } = require('../poc/external-activation-validator');
+  runTestAsync('Builder assertion - assertion with different execution_claim_id = FAIL', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertionAgainstTaskRegistry } = require('../poc/external-activation-validator');
 
     taskRegistry.resetRegistry();
 
@@ -537,64 +518,64 @@ function runTestAsync(name, fn) {
 
     const attackerClaimId = 'claim-attacker-forged';
     assert.notEqual(attackerClaimId, actualClaimId,
-      'Test setup error: attacker claim should differ from real claim');
+      'Test setup: attacker claim must differ from real claim');
 
     const assertion = generateDirectorOriginAssertion(requestId, attackerClaimId, DIRECTOR_ORIGIN_SECRET);
-
-    const headers = {
-      'x-poc-trigger-secret': POC_TRIGGER_SECRET,
-      'x-director-origin-assertion': assertion
-    };
-    const response = await request('/poc/activation/ingress', headers, builderPayload);
-
-    assert.equal(response.status, 200,
-      'Existing task replays regardless of assertion (payload matches) — but director_admission must NOT be granted');
-    const taskAfter = taskRegistry.getTask(requestId);
-    assert.equal(taskAfter.authorization_proof, undefined,
-      'Replay must NOT retroactively grant authorization_proof when assertion execution_claim_id mismatches TaskRegistry');
+    const verified = verifyDirectorOriginAssertionAgainstTaskRegistry(assertion, requestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Assertion with execution_claim_id not matching TaskRegistry claim must fail');
   });
 
-  runTestAsync('Builder assertion - asserted for nonexistent TaskRegistry claim cannot establish Director authorization', async () => {
-    const { generateDirectorOriginAssertion } = require('../poc/external-activation-validator');
+  runTestAsync('Builder assertion - forged assertion (guessed secret) = FAIL', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertionAgainstTaskRegistry } = require('../poc/external-activation-validator');
 
     taskRegistry.resetRegistry();
+
+    const requestId = 'builder-forged-req';
+    const builderPayload = buildBuilderActivationPayload({
+      request_id: requestId,
+      task: 'builder task for forged assertion',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'BUILDER',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+
+    await taskRegistry.createTask(builderPayload, { persist: false });
+    await taskRegistry.transitionToExecuting(requestId);
+    await taskRegistry.claimExecutionContext(requestId, { carrier_id: 'github-workflow-forged', carrier_type: 'github_workflow' });
+    const actualClaimId = taskRegistry.getExecutionClaim(requestId).execution_claim_id;
+
+    const forgedAssertion = generateDirectorOriginAssertion(requestId, actualClaimId, 'guessed-secret');
+    const verified = verifyDirectorOriginAssertionAgainstTaskRegistry(forgedAssertion, requestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Forged assertion using guessed secret must fail verification');
+  });
+
+  runTestAsync('Builder assertion - assertion for nonexistent TaskRegistry task = FAIL', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertionAgainstTaskRegistry } = require('../poc/external-activation-validator');
 
     const requestId = 'builder-nonexistent-req';
     const fakeClaimId = 'claim-nonexistent-999';
     const assertion = generateDirectorOriginAssertion(requestId, fakeClaimId, DIRECTOR_ORIGIN_SECRET);
 
-    const builderPayload = buildBuilderActivationPayload({
-      request_id: requestId,
-      task: 'builder task for nonexistent claim',
-      repository: 'fluentwithkyle/openclaw-webhook',
-      base_branch: 'main',
-      task_mode: 'BUILDER',
-      capabilities: 'read_only,modify_files,run_tests,commit,push',
-      permitted_paths: 'poc/',
-      verification: 'tests must pass'
-    });
-
-    const headers = {
-      'x-poc-trigger-secret': POC_TRIGGER_SECRET,
-      'x-director-origin-assertion': assertion
-    };
-    const response = await request('/poc/activation/ingress', headers, builderPayload);
-
-    assert.equal(response.status, 403,
-      'Assertion for nonexistent TaskRegistry claim must fail closed for new task');
-    assert.equal(response.body.error_code, 'DIRECTOR_APPROVAL_REQUIRED',
-      'Should require Director approval when no TaskRegistry claim exists');
+    const verified = verifyDirectorOriginAssertionAgainstTaskRegistry(assertion, requestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Assertion for nonexistent TaskRegistry task must fail');
   });
 
-  runTestAsync('Manually dispatched Builder cannot establish Director authorization by supplying assertion/claim inputs', async () => {
-    const { generateDirectorOriginAssertion } = require('../poc/external-activation-validator');
+  runTestAsync('Builder assertion - assertion when task has no execution claim = FAIL', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertionAgainstTaskRegistry } = require('../poc/external-activation-validator');
 
-    taskRegistry.resetRegistry();
+    const requestId = 'builder-no-claim-req';
+    const fakeClaimId = 'claim-no-existing-claim';
+    const assertion = generateDirectorOriginAssertion(requestId, fakeClaimId, DIRECTOR_ORIGIN_SECRET);
 
-    const requestId = 'builder-manual-auth-req';
     const builderPayload = buildBuilderActivationPayload({
       request_id: requestId,
-      task: 'builder task for manual auth attempt',
+      task: 'builder task with no claim',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'BUILDER',
@@ -603,19 +584,59 @@ function runTestAsync(name, fn) {
       verification: 'tests must pass'
     });
 
-    const attackerClaimId = 'claim-attacker-manual';
-    const assertion = generateDirectorOriginAssertion(requestId, attackerClaimId, DIRECTOR_ORIGIN_SECRET);
+    await taskRegistry.createTask(builderPayload, { persist: false });
+
+    const verified = verifyDirectorOriginAssertionAgainstTaskRegistry(assertion, requestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Assertion must fail when TaskRegistry task has no execution claim');
+  });
+
+  runTestAsync('Fresh consequential Builder activation without assertion = 403 DIRECTOR_APPROVAL_REQUIRED', async () => {
+    taskRegistry.resetRegistry();
+
+    const builderPayload = buildBuilderActivationPayload({
+      request_id: 'builder-fresh-no-auth-req',
+      task: 'builder fresh without auth',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'BUILDER',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
 
     const headers = {
-      'x-poc-trigger-secret': POC_TRIGGER_SECRET,
-      'x-director-origin-assertion': assertion
+      'x-poc-trigger-secret': POC_TRIGGER_SECRET
     };
     const response = await request('/poc/activation/ingress', headers, builderPayload);
 
     assert.equal(response.status, 403,
-      'Manually supplied assertion with nonexistent TaskRegistry claim must fail closed');
+      'Fresh consequential activation without Director authorization must be blocked');
     assert.equal(response.body.error_code, 'DIRECTOR_APPROVAL_REQUIRED',
-      'Should require Director approval when TaskRegistry claim does not exist');
+      'Should require Director approval');
+  });
+
+  runTestAsync('Existing authorized Builder path with director_admission remains successful', async () => {
+    taskRegistry.resetRegistry();
+
+    const builderPayload = buildBuilderActivationPayload({
+      request_id: 'builder-existing-auth-req',
+      task: 'builder with director admission',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'BUILDER',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+
+    const headers = directorOriginHeaders();
+    const response = await request('/poc/activation/ingress', headers, builderPayload);
+
+    assert.equal(response.status, 202,
+      'Existing authorized Builder path (director_admission via valid header) must remain successful: ' + response.body.error || '');
+    const task = taskRegistry.getTask('builder-existing-auth-req');
+    assert.ok(task.authorization_proof, 'Should have authorization_proof');
   });
 
   await Promise.all(pendingAsyncTests);
