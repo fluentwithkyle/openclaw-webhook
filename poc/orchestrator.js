@@ -274,6 +274,7 @@ async function triggerGemini(requestId, githubToken) {
   const taskMode = task.task_mode || 'REVIEW';
   const capabilities = task.capabilities || ['read_only'];
   const permittedPaths = task.permitted_paths || [];
+  const approvalId = task.authorization_proof?.approval_id || null;
 
   const dispatchResult = await geminiTrigger.dispatchGemini(
     task.request_id,
@@ -285,7 +286,8 @@ async function triggerGemini(requestId, githubToken) {
     verification,
     taskMode,
     capabilities,
-    permittedPaths
+    permittedPaths,
+    approvalId
   );
 
   if (!dispatchResult.success) {
