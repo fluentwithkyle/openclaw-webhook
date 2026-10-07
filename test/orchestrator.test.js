@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const taskRegistry = require('../poc/task-registry');
 const orchestrator = require('../poc/orchestrator');
+const geminiTrigger = require('../poc/gemini-trigger');
 
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
@@ -85,7 +86,7 @@ async function setupTask() {
   const created = await taskRegistry.createTask(validCommand);
   if (!created.success) throw new Error(`setupTask createTask failed: ${created.error}`);
   for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) {
-    const result = await await taskRegistry.updateTaskStatus('test-orch-1', status);
+    const result = await taskRegistry.updateTaskStatus('test-orch-1', status);
     if (!result.success) throw new Error(`setupTask ${status} failed: ${result.error}`);
   }
 }
