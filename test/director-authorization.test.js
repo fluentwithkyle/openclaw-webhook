@@ -11,6 +11,10 @@ const { buildBuilderActivationPayload, buildActivationPayloadForWorkflowDispatch
 process.env.DIRECTOR_APPROVAL_SECRET = `test-director-${Date.now()}`;
 process.env.DEEPSEEK_COORDINATOR_SECRET = `test-coordinator-${Date.now()}`;
 process.env.ACP_POC_TRIGGER_SECRET = `test-poc-trigger-${Date.now()}`;
+process.env.DIRECTOR_ORIGIN_SECRET = `test-director-origin-${Date.now()}`;
+const POC_TRIGGER_SECRET = process.env.ACP_POC_TRIGGER_SECRET;
+const DIRECTOR_ORIGIN_SECRET = process.env.DIRECTOR_ORIGIN_SECRET;
+
 const { router } = require('../routes/poc');
 const app = express();
 app.use(express.json());
@@ -29,6 +33,8 @@ function request(path, headers, body) {
     req.on('error', reject); req.end(JSON.stringify(body));
   });
 }
+function pocHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET }; }
+function directorOriginHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET, 'x-director-origin-secret': DIRECTOR_ORIGIN_SECRET }; }
 function scope(cmd) { return { request_id: cmd.request_id, target: cmd.target, task_mode: cmd.task_mode, capabilities: cmd.authorization.capabilities, permitted_paths: cmd.constraints.permitted_paths, repository: cmd.repository, base_branch: cmd.base_branch }; }
 function command(requestId) {
   return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Kilo', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Make the approved change', task_mode: 'BUILDER', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@kilo', activation_surface: 'github_issue_comment' };
@@ -122,6 +128,9 @@ function runTestAsync(name, fn) {
   // These tests verify the atomic auto-authorization path that
   // eliminates the redundant separate POST /poc/director/approve
   // round-trip for authenticated Director task admission.
+  //
+  // Trust boundary: director_admission is SERVER-DERIVED from
+  // the X-Director-Origin-Secret header — NOT from the request body.
   // =========================================================
 
   runTestAsync('createTaskWithAutoDirectorAuthorization - atomically creates and consumes approval', async () => {
@@ -276,6 +285,185 @@ function runTestAsync(name, fn) {
     assert.ok(proof.scope_hash, 'Must have scope_hash');
     assert.equal(proof.issuer, 'Kyle (Director)', 'Must have issuer');
     assert.ok(proof.consumed_at, 'Must have consumed_at');
+  });
+
+  // =========================================================
+  // Route-level trust boundary tests
+  // These verify that the /activation/ingress route handler
+  // does NOT trust client-supplied director_admission and
+  // requires a valid X-Director-Origin-Secret header.
+  // =========================================================
+
+  runTestAsync('Route - consequential FAILOVER_EXECUTE succeeds with valid Director-origin secret header', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'route-dir-authed-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const response = await request('/poc/activation/ingress', directorOriginHeaders(), payload);
+    assert.equal(response.status, 202, 'Should succeed: ' + (response.body.error || ''));
+    const task = taskRegistry.getTask('route-dir-authed-1');
+    assert.ok(task, 'Task should exist');
+    assert.ok(task.authorization_proof, 'Should have authorization_proof');
+    assert.equal(task.authorization_proof.issuer, 'Kyle (Director)');
+    const approval = taskRegistry.getDirectorApproval(task.authorization_proof.approval_id);
+    assert.equal(approval.status, 'CONSUMED', 'Approval should be consumed atomically');
+  });
+
+  runTestAsync('Route - generic POC secret alone (without Director-origin secret) fails closed for FAILOVER_EXECUTE', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'route-no-dir-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const response = await request('/poc/activation/ingress', pocHeaders(), payload);
+    assert.equal(response.status, 403, 'Should fail closed without Director-origin secret');
+    assert.equal(response.body.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+  });
+
+  runTestAsync('Route - client-supplied director_admission in body is ignored', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'route-body-injection-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    payload.director_admission = true;
+    payload.authorization.director_admission = true;
+    const response = await request('/poc/activation/ingress', pocHeaders(), payload);
+    assert.equal(response.status, 403, 'Client-supplied director_admission must be ignored');
+    assert.equal(response.body.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+  });
+
+  runTestAsync('Route - BUILDER fails closed without Director-origin secret', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildBuilderActivationPayload({
+      request_id: 'route-no-dir-builder-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'BUILDER',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/'
+    });
+    const response = await request('/poc/activation/ingress', pocHeaders(), payload);
+    assert.equal(response.status, 403, 'BUILDER should fail without Director-origin secret');
+    assert.equal(response.body.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+  });
+
+  runTestAsync('Route - BUILDER succeeds with Director-origin secret header', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildBuilderActivationPayload({
+      request_id: 'route-dir-builder-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'BUILDER',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/'
+    });
+    const response = await request('/poc/activation/ingress', directorOriginHeaders(), payload);
+    assert.equal(response.status, 202, 'BUILDER should succeed with Director-origin secret: ' + (response.body.error || ''));
+    const task = taskRegistry.getTask('route-dir-builder-1');
+    assert.ok(task.authorization_proof, 'Should have authorization_proof');
+    assert.equal(task.authorization_proof.issuer, 'Kyle (Director)');
+  });
+
+  runTestAsync('Route - invalid Director-origin secret fails closed', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'route-bad-secret-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const response = await request('/poc/activation/ingress', { 'x-poc-trigger-secret': POC_TRIGGER_SECRET, 'x-director-origin-secret': 'wrong-secret' }, payload);
+    assert.equal(response.status, 403, 'Invalid Director-origin secret should fail closed');
+    assert.equal(response.body.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+  });
+
+  runTestAsync('Route - REVIEW mode succeeds without Director-origin secret (non-consequential)', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'route-review-1',
+      task: 'review this code',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'REVIEW',
+      capabilities: 'read_only',
+      permitted_paths: 'poc/',
+      verification: 'none'
+    });
+    const response = await request('/poc/activation/ingress', pocHeaders(), payload);
+    assert.equal(response.status, 202, 'REVIEW should succeed without Director-origin secret');
+  });
+
+  runTestAsync('Route - pre-issued approval_id works without Director-origin secret', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'route-preissued-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const approval = await taskRegistry.createDirectorApproval({
+      request_id: 'route-preissued-1', target: 'Gemini', task_mode: 'FAILOVER_EXECUTE',
+      capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], permitted_paths: ['poc/'],
+      repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main'
+    });
+    assert.ok(approval.success, 'Pre-issued approval should succeed');
+    payload.authorization.approval_id = approval.approval.approval_id;
+    const response = await request('/poc/activation/ingress', pocHeaders(), payload);
+    assert.equal(response.status, 202, 'Pre-issued approval should work without Director-origin secret');
+    const task = taskRegistry.getTask('route-preissued-1');
+    assert.ok(task.authorization_proof, 'Should have authorization_proof');
+    assert.equal(task.authorization_proof.approval_id, approval.approval.approval_id);
+    const consumed = taskRegistry.getDirectorApproval(approval.approval.approval_id);
+    assert.equal(consumed.status, 'CONSUMED');
+  });
+
+  runTestAsync('Route - atomic auto-authorization preserves replay/idempotency', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'route-replay-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const response1 = await request('/poc/activation/ingress', directorOriginHeaders(), payload);
+    assert.equal(response1.status, 202, 'First request should succeed');
+    const response2 = await request('/poc/activation/ingress', directorOriginHeaders(), payload);
+    assert.equal(response2.status, 200, 'Replay should return 200 (matched existing)');
+    assert.equal(response2.body.replay, true, 'Should be flagged as replay');
   });
 
   await Promise.all(pendingAsyncTests);

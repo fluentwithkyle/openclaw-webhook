@@ -119,6 +119,7 @@ jobs:
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_ORIGIN_SECRET: ${{ steps.request_comment.outputs.task_mode == 'FAILOVER_EXECUTE' && secrets.DIRECTOR_ORIGIN_SECRET || '' }}
           COMMENT_ID: ${{ github.event.comment.id }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           REPOSITORY: ${{ github.repository }}
@@ -157,10 +158,11 @@ jobs:
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_ORIGIN_SECRET: ${{ (inputs.task_mode == 'FAILOVER_EXECUTE' && inputs.approval_id == '' && (github.actor == 'fluentwithkyle' || github.event.pull_request.user.login == 'fluentwithkyle')) && secrets.DIRECTOR_ORIGIN_SECRET || '' }}
           REQUEST_ID: ${{ inputs.request_id }}
           TASK: ${{ inputs.task }}
           REPOSITORY: ${{ inputs.repository }}
-          BASE_BRANCH: ${{ inputs.base_branch }}
+          BASE_BRANCH: ${{ github.ref_name }}
           TASK_MODE: ${{ inputs.task_mode || 'REVIEW' }}
           CAPABILITIES: ${{ inputs.capabilities || 'read_only' }}
           PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}

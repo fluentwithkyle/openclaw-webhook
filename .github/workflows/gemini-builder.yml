@@ -61,6 +61,7 @@ jobs:
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_ORIGIN_SECRET: ${{ secrets.DIRECTOR_ORIGIN_SECRET }}
           REQUEST_ID: ${{ inputs.request_id }}
           TASK: ${{ inputs.task }}
           REPOSITORY: ${{ inputs.repository }}

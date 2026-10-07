@@ -2,7 +2,7 @@ const https = require('https');
 
 const ACTIVATION_INGRESS_PATH = '/poc/activation/ingress';
 
-function validateExternalActivation(params, callbackUrl, callbackSecret) {
+function validateExternalActivation(params, callbackUrl, callbackSecret, directorOriginSecret) {
     const payload = JSON.stringify(params);
 
     const parsedUrl = new URL(callbackUrl.replace(/\/+$/, '') + ACTIVATION_INGRESS_PATH);
@@ -19,6 +19,10 @@ function validateExternalActivation(params, callbackUrl, callbackSecret) {
 
     if (callbackSecret) {
         options.headers['x-poc-trigger-secret'] = callbackSecret;
+    }
+
+    if (directorOriginSecret) {
+        options.headers['x-director-origin-secret'] = directorOriginSecret;
     }
 
     const carrierIdentity = process.env.GITHUB_RUN_ID
