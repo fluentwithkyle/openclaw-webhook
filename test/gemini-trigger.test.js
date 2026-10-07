@@ -56,13 +56,13 @@ function makeKiloReport(requestId, task = 'test-task', status = 'success') {
   };
 }
 
-function setupTask(requestId, task = 'test-task') {
+async function setupTask(requestId, task = 'test-task') {
   cleanup();
-  taskRegistry.createTask(makeCommand(requestId, task));
-  taskRegistry.updateTaskStatus(requestId, 'SELECTED');
-  taskRegistry.updateTaskStatus(requestId, 'PLANNED');
-  taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
-  orchestrator.handleKiloCompletion(requestId, makeKiloReport(requestId, task));
+  await taskRegistry.createTask(makeCommand(requestId, task));
+  await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+  await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+  await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+  await orchestrator.handleKiloCompletion(requestId, makeKiloReport(requestId, task));
 }
 
 async function runTest(name, fn) {
@@ -156,18 +156,18 @@ async function main() {
   });
 
   await runTest('canTriggerGemini - returns true after Kilo success', async () => {
-    setupTask('test-1');
+    await setupTask('test-1');
     const result = orchestrator.canTriggerGemini('test-1');
     assertEqual(result.canTrigger, true);
   });
 
   await runTest('canTriggerGemini - returns false when Kilo not success', async () => {
     cleanup();
-    taskRegistry.createTask(makeCommand('test-2'));
-    taskRegistry.updateTaskStatus('test-2', 'SELECTED');
-    taskRegistry.updateTaskStatus('test-2', 'PLANNED');
-    taskRegistry.updateTaskStatus('test-2', 'EXECUTING');
-    orchestrator.handleKiloCompletion('test-2', makeKiloReport('test-2', 'test-task', 'failure'));
+    await taskRegistry.createTask(makeCommand('test-2'));
+    await taskRegistry.updateTaskStatus('test-2', 'SELECTED');
+    await taskRegistry.updateTaskStatus('test-2', 'PLANNED');
+    await taskRegistry.updateTaskStatus('test-2', 'EXECUTING');
+    await orchestrator.handleKiloCompletion('test-2', makeKiloReport('test-2', 'test-task', 'failure'));
     const result = orchestrator.canTriggerGemini('test-2');
     assertEqual(result.canTrigger, false);
     assert(result.reason.includes('not success'));
@@ -175,11 +175,11 @@ async function main() {
 
   await runTest('triggerGemini - fails when preconditions not met', async () => {
     cleanup();
-    taskRegistry.createTask(makeCommand('test-3'));
-    taskRegistry.updateTaskStatus('test-3', 'SELECTED');
-    taskRegistry.updateTaskStatus('test-3', 'PLANNED');
-    taskRegistry.updateTaskStatus('test-3', 'EXECUTING');
-    orchestrator.handleKiloCompletion('test-3', makeKiloReport('test-3', 'test-task', 'failure'));
+    await taskRegistry.createTask(makeCommand('test-3'));
+    await taskRegistry.updateTaskStatus('test-3', 'SELECTED');
+    await taskRegistry.updateTaskStatus('test-3', 'PLANNED');
+    await taskRegistry.updateTaskStatus('test-3', 'EXECUTING');
+    await orchestrator.handleKiloCompletion('test-3', makeKiloReport('test-3', 'test-task', 'failure'));
     const result = await orchestrator.triggerGemini('test-3', 'fake-token');
     assertEqual(result.success, false);
     assert(result.error.includes('not success'));
@@ -193,7 +193,7 @@ async function main() {
   });
 
   await runTest('dispatchGemini - dispatches when preconditions met (mocked)', async () => {
-    setupTask('test-4');
+    await setupTask('test-4');
     const result = await orchestrator.triggerGemini('test-4', 'fake-token');
     assertEqual(result.success, false);
     assert(result.error.includes('GitHub API error') || result.error.includes('Network error'));
@@ -204,7 +204,7 @@ async function main() {
   await runTest('task registry stores verification from ACP command', async () => {
     cleanup();
     const cmd = makeCommand('verify-test-1', 'verification test task');
-    taskRegistry.createTask(cmd);
+    await taskRegistry.createTask(cmd);
     const task = taskRegistry.getTask('verify-test-1');
     assertEqual(task.verification, 'All tests must pass; lint must pass; no security vulnerabilities');
     cleanup();
@@ -213,11 +213,11 @@ async function main() {
   await runTest('triggerGemini includes verification in dispatch inputs', async () => {
     cleanup();
     const cmd = makeCommand('verify-test-2', 'verification test task 2');
-    taskRegistry.createTask(cmd);
-    taskRegistry.updateTaskStatus('verify-test-2', 'SELECTED');
-    taskRegistry.updateTaskStatus('verify-test-2', 'PLANNED');
-    taskRegistry.updateTaskStatus('verify-test-2', 'EXECUTING');
-    taskRegistry.updateAgentResult('verify-test-2', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+    await taskRegistry.createTask(cmd);
+    await taskRegistry.updateTaskStatus('verify-test-2', 'SELECTED');
+    await taskRegistry.updateTaskStatus('verify-test-2', 'PLANNED');
+    await taskRegistry.updateTaskStatus('verify-test-2', 'EXECUTING');
+    await taskRegistry.updateAgentResult('verify-test-2', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
 
     // Mock the dispatchGemini to capture inputs
     const originalDispatch = geminiTrigger.dispatchGemini;
@@ -241,11 +241,11 @@ async function main() {
     cleanup();
     const cmd = { ...makeCommand('fo-test-1', 'failover execution task'), task_mode: 'FAILOVER_EXECUTE' };
     cmd.authorization.capabilities = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
-    taskRegistry.createTask(cmd);
-    taskRegistry.updateTaskStatus('fo-test-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('fo-test-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('fo-test-1', 'EXECUTING');
-    taskRegistry.updateAgentResult('fo-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+    await taskRegistry.createTask(cmd);
+    await taskRegistry.updateTaskStatus('fo-test-1', 'SELECTED');
+    await taskRegistry.updateTaskStatus('fo-test-1', 'PLANNED');
+    await taskRegistry.updateTaskStatus('fo-test-1', 'EXECUTING');
+    await taskRegistry.updateAgentResult('fo-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
 
     const originalDispatch = geminiTrigger.dispatchGemini;
     let capturedTaskMode = null;
@@ -269,11 +269,11 @@ async function main() {
     const cmd = { ...makeCommand('fo-test-2', 'failover execution task 2'), task_mode: 'FAILOVER_EXECUTE' };
     cmd.authorization.capabilities = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
     cmd.constraints.permitted_paths = ['index.js', 'utils/'];
-    taskRegistry.createTask(cmd);
-    taskRegistry.updateTaskStatus('fo-test-2', 'SELECTED');
-    taskRegistry.updateTaskStatus('fo-test-2', 'PLANNED');
-    taskRegistry.updateTaskStatus('fo-test-2', 'EXECUTING');
-    taskRegistry.updateAgentResult('fo-test-2', 'Kilo', { status: 'success', execution_id: 'exec-2', report: {} });
+    await taskRegistry.createTask(cmd);
+    await taskRegistry.updateTaskStatus('fo-test-2', 'SELECTED');
+    await taskRegistry.updateTaskStatus('fo-test-2', 'PLANNED');
+    await taskRegistry.updateTaskStatus('fo-test-2', 'EXECUTING');
+    await taskRegistry.updateAgentResult('fo-test-2', 'Kilo', { status: 'success', execution_id: 'exec-2', report: {} });
 
     const originalDispatch = geminiTrigger.dispatchGemini;
     let capturedCaps = null;
