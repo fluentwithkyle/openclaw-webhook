@@ -466,39 +466,31 @@ function runTestAsync(name, fn) {
     assert.equal(response2.body.replay, true, 'Should be flagged as replay');
   });
 
-  runTestAsync('Builder assertion - correct request_id + correct execution_claim_id passes verification', async () => {
+  runTestAsync('Builder assertion - valid server-generated assertion verifies (HMAC bound to real execution_claim_id)', async () => {
     const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
 
     const requestId = 'builder-correct-req';
     const executionClaimId = 'claim-correct-456';
     const assertion = generateDirectorOriginAssertion(requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
 
-    const verified = verifyDirectorOriginAssertion(assertion, requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
+    const verified = verifyDirectorOriginAssertion(assertion, requestId, DIRECTOR_ORIGIN_SECRET);
     assert.equal(verified, true,
-      'Valid assertion with correct request_id and execution_claim_id must verify');
+      'Valid server-generated assertion with non-null execution_claim_id must verify');
+
+    const decoded = Buffer.from(assertion, 'base64').toString('utf8');
+    const parsed = JSON.parse(decoded);
+    assert.equal(parsed.execution_claim_id, executionClaimId,
+      'Assertion must carry the server-derived execution_claim_id');
   });
 
-  runTestAsync('Builder assertion - correct request_id + different execution_claim_id fails', async () => {
-    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
-
-    const requestId = 'builder-mismatch-req';
-    const executionClaimId = 'claim-original-789';
-    const assertion = generateDirectorOriginAssertion(requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
-
-    const wrongClaimId = 'claim-different-000';
-    const verified = verifyDirectorOriginAssertion(assertion, requestId, wrongClaimId, DIRECTOR_ORIGIN_SECRET);
-    assert.equal(verified, false,
-      'Assertion with mismatched execution_claim_id must fail verification');
-  });
-
-  runTestAsync('Builder assertion - forged assertion (guessed secret) fails verification', async () => {
+  runTestAsync('Builder assertion - forged assertion with guessed secret fails verification', async () => {
     const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
 
     const requestId = 'builder-forged-req';
     const executionClaimId = 'claim-forged-111';
     const forgedAssertion = generateDirectorOriginAssertion(requestId, executionClaimId, 'guessed-secret');
 
-    const verified = verifyDirectorOriginAssertion(forgedAssertion, requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
+    const verified = verifyDirectorOriginAssertion(forgedAssertion, requestId, DIRECTOR_ORIGIN_SECRET);
     assert.equal(verified, false,
       'Forged assertion using guessed secret must fail verification against real DIRECTOR_ORIGIN_SECRET');
 
@@ -508,16 +500,43 @@ function runTestAsync(name, fn) {
       'Assertion token must not contain the raw DIRECTOR_ORIGIN_SECRET');
   });
 
-  runTestAsync('Server-generated Builder assertion with correct request_id + execution_claim_id establishes authorization', async () => {
+  runTestAsync('Builder assertion - assertion with null execution_claim_id fails verification', async () => {
     const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
 
-    const requestId = 'server-generated-request';
-    const executionClaimId = 'claim-123';
-    const assertion = generateDirectorOriginAssertion(requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
+    const requestId = 'builder-null-claim-req';
+    const assertion = generateDirectorOriginAssertion(requestId, null, DIRECTOR_ORIGIN_SECRET);
+    assert(assertion, 'Assertion should be generated even with null execution_claim_id');
 
-    const verified = verifyDirectorOriginAssertion(assertion, requestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
-    assert.equal(verified, true,
-      'Valid server-generated assertion with matching execution_claim_id should verify');
+    const verified = verifyDirectorOriginAssertion(assertion, requestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Assertion with null execution_claim_id must fail verification (defense-in-depth against replay)');
+  });
+
+  runTestAsync('Manually dispatched Builder cannot establish Director authorization by supplying assertion/claim inputs', async () => {
+    // A manual workflow_dispatch caller cannot produce a valid assertion because
+    // they do not possess DIRECTOR_ORIGIN_SECRET (the HMAC key).
+    // They can supply arbitrary execution_claim_id values as workflow inputs,
+    // but those are NOT used for verification — only the assertion's HMAC matters.
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
+
+    const requestId = 'builder-manual-req';
+    const attackerSuppliedClaimId = 'attacker-claim-999';
+
+    // Attacker generates an assertion with a guessed secret (no access to real secret)
+    const attackerAssertion = generateDirectorOriginAssertion(requestId, attackerSuppliedClaimId, 'attacker-guessed-secret');
+
+    // Server verifies against the real DIRECTOR_ORIGIN_SECRET
+    const verified = verifyDirectorOriginAssertion(attackerAssertion, requestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Manually dispatched Builder cannot establish Director authorization without the server secret');
+
+    // Even if attacker somehow obtained an assertion, they cannot substitute
+    // the execution_claim_id — it is bound in the HMAC and verified server-side
+    const validAssertion = generateDirectorOriginAssertion(requestId, 'server-claim-123', DIRECTOR_ORIGIN_SECRET);
+    const decoded = Buffer.from(validAssertion, 'base64').toString('utf8');
+    const parsed = JSON.parse(decoded);
+    assert.notEqual(parsed.execution_claim_id, attackerSuppliedClaimId,
+      'Attacker cannot substitute the server-derived execution_claim_id in the assertion');
   });
 
   await Promise.all(pendingAsyncTests);

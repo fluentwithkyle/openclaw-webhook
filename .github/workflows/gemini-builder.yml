@@ -49,10 +49,6 @@ on:
         description: 'Server-signed assertion proving Director-originated Builder dispatch (opaque to client)'
         required: false
         type: string
-      execution_claim_id:
-        description: 'Server-derived execution claim ID that the assertion is bound to'
-        required: false
-        type: string
 
 jobs:
   builder:
@@ -79,7 +75,6 @@ jobs:
           PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}
           VERIFICATION: ${{ inputs.verification || '' }}
           DIRECTOR_ORIGIN_ASSERTION: ${{ inputs.director_origin_assertion || '' }}
-          EXPECTED_EXECUTION_CLAIM_ID: ${{ inputs.execution_claim_id || '' }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
         run: |

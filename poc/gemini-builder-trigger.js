@@ -28,8 +28,7 @@ function triggerGeminiBuilderWorkflow(inputs, githubToken, request = https.reque
         task_mode: inputs.task_mode || 'BUILDER',
         capabilities: Array.isArray(inputs.capabilities) ? inputs.capabilities.join(',') : (inputs.capabilities || 'read_only,modify_files,run_tests,commit,push'),
         permitted_paths: Array.isArray(inputs.permitted_paths) ? inputs.permitted_paths.join(',') : '',
-        director_origin_assertion: inputs.director_origin_assertion || '',
-        execution_claim_id: inputs.execution_claim_id || ''
+        director_origin_assertion: inputs.director_origin_assertion || ''
       }
     });
 
@@ -107,8 +106,7 @@ async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, gi
     task_mode: taskMode || 'BUILDER',
     capabilities: capabilities || ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
     permitted_paths: permittedPaths || [],
-    director_origin_assertion: directorOriginAssertion || '',
-    execution_claim_id: executionClaimId || ''
+    director_origin_assertion: directorOriginAssertion || ''
   };
 
   try {
