@@ -5,14 +5,21 @@ const taskRegistry = require('../poc/task-registry');
 const { setDispatcher } = require('../services/transport-provider');
 const { buildControlPlaneCommand } = require('../services/deepseek-runtime');
 const geminiBuilderTrigger = require('../poc/gemini-builder-trigger');
+const { canonicalExternalActivationIngress } = require('../poc/activation-ingress');
+const { buildBuilderActivationPayload, buildActivationPayloadForWorkflowDispatch } = require('../poc/external-activation-validator');
 
 process.env.DIRECTOR_APPROVAL_SECRET = `test-director-${Date.now()}`;
 process.env.DEEPSEEK_COORDINATOR_SECRET = `test-coordinator-${Date.now()}`;
+process.env.ACP_POC_TRIGGER_SECRET = `test-poc-trigger-${Date.now()}`;
 const { router } = require('../routes/poc');
 const app = express();
 app.use(express.json());
 app.use('/poc', router);
 const server = app.listen(3015);
+
+let passCount = 0;
+let failCount = 0;
+let pendingAsyncTests = [];
 
 function request(path, headers, body) {
   return new Promise((resolve, reject) => {
@@ -26,6 +33,18 @@ function scope(cmd) { return { request_id: cmd.request_id, target: cmd.target, t
 function command(requestId) {
   return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Kilo', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Make the approved change', task_mode: 'BUILDER', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@kilo', activation_surface: 'github_issue_comment' };
 }
+
+function runTestAsync(name, fn) {
+  const p = fn().then(() => {
+    console.log(`PASS: ${name}`);
+    passCount++;
+  }).catch(err => {
+    console.error(`FAIL: ${name} - ${err.message}`);
+    failCount++;
+  });
+  pendingAsyncTests.push(p);
+}
+
 (async () => {
   try {
     taskRegistry.resetRegistry();
@@ -91,6 +110,175 @@ function command(requestId) {
     concurrentScope.authorization.approval_id = issued.body.approval_id;
     const results = await Promise.all([request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, concurrentScope), request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, concurrentScope)]);
     assert.deepEqual(results.map(r => r.status).sort(), [202, 403]);
-    console.log('PASS: Director authorization issuance, scope binding, expiry, and single-use consumption, cancellation, and supersession revocation');
-  } finally { taskRegistry.resetRegistry(); server.close(); }
-})().catch(error => { console.error(error); process.exitCode = 1; });
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  } finally {
+    taskRegistry.resetRegistry();
+  }
+
+  // =========================================================
+  // Atomic Server-Side Director Authorization Tests
+  // These tests verify the atomic auto-authorization path that
+  // eliminates the redundant separate POST /poc/director/approve
+  // round-trip for authenticated Director task admission.
+  // =========================================================
+
+  runTestAsync('createTaskWithAutoDirectorAuthorization - atomically creates and consumes approval', async () => {
+    taskRegistry.resetRegistry();
+    const cmd = command('auto-dir-1');
+    const result = await taskRegistry.createTaskWithAutoDirectorAuthorization(cmd);
+    assert.equal(result.success, true, 'Should succeed: ' + (result.error || ''));
+    assert.equal(result.auto_authorized, true, 'Should be auto-authorized');
+    assert.ok(result.approval_id, 'Should have an approval_id');
+    assert.ok(result.entry.authorization_proof, 'Should have authorization_proof on entry');
+    assert.equal(result.entry.authorization_proof.approval_id, result.approval_id);
+    assert.ok(result.entry.authorization_proof.scope_hash, 'Should have scope_hash');
+    assert.equal(result.entry.authorization_proof.issuer, 'Kyle (Director)');
+    assert.ok(result.entry.authorization_proof.consumed_at, 'Should have consumed_at');
+    const approval = taskRegistry.getDirectorApproval(result.approval_id);
+    assert.ok(approval, 'Approval should be retrievable');
+    assert.equal(approval.status, 'CONSUMED', 'Approval should be consumed (not PENDING)');
+  });
+
+  runTestAsync('createTaskWithAutoDirectorAuthorization - non-consequential command does not require approval', async () => {
+    taskRegistry.resetRegistry();
+    const cmd = command('auto-dir-2');
+    cmd.task_mode = 'REVIEW';
+    cmd.authorization = { capabilities: ['read_only'] };
+    const result = await taskRegistry.createTaskWithAutoDirectorAuthorization(cmd);
+    assert.equal(result.success, true, 'Should succeed for non-consequential: ' + (result.error || ''));
+    assert.equal(result.auto_authorized, undefined, 'Should not be auto-authorized for non-consequential');
+  });
+
+  runTestAsync('createTaskWithAutoDirectorAuthorization - preserves replay/idempotency', async () => {
+    taskRegistry.resetRegistry();
+    const cmd = command('auto-dir-3');
+    const r1 = await taskRegistry.createTaskWithAutoDirectorAuthorization(cmd);
+    assert.equal(r1.success, true, 'First should succeed: ' + (r1.error || ''));
+    const r2 = await taskRegistry.createTaskWithAutoDirectorAuthorization(cmd);
+    assert.equal(r2.success, false, 'Duplicate should fail');
+    assert.equal(r2.duplicate, true, 'Should be flagged as duplicate');
+  });
+
+  runTestAsync('createTaskWithAutoDirectorAuthorization - scope mismatch fails closed on replay', async () => {
+    taskRegistry.resetRegistry();
+    const cmd = command('auto-dir-4');
+    const r1 = await taskRegistry.createTaskWithAutoDirectorAuthorization(cmd);
+    assert.equal(r1.success, true);
+    const changed = command('auto-dir-4');
+    changed.task = 'completely different task';
+    const r2 = await taskRegistry.createTaskWithAutoDirectorAuthorization(changed);
+    assert.equal(r2.success, false, 'Changed payload should fail');
+    assert.equal(r2.duplicate, true, 'Should be flagged as duplicate on same request_id');
+  });
+
+  runTestAsync('Ingress - FAILOVER_EXECUTE with director_admission succeeds without pre-issued approval', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'ingress-auto-auth-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const result = await canonicalExternalActivationIngress(payload, { director_admission: true });
+    assert.equal(result.success, true, 'Should succeed with director_admission: ' + (result.error || ''));
+    assert.ok(result.task_entry.authorization_proof, 'Should have authorization_proof');
+    assert.ok(result.task_entry.authorization_proof.approval_id, 'Should have approval_id in proof');
+    const task = taskRegistry.getTask('ingress-auto-auth-1');
+    assert.ok(task, 'Task should exist in registry');
+    const approval = taskRegistry.getDirectorApproval(task.authorization_proof.approval_id);
+    assert.ok(approval, 'Approval should exist');
+    assert.equal(approval.status, 'CONSUMED', 'Approval should be consumed atomically');
+  });
+
+  runTestAsync('Ingress - BUILDER with director_admission succeeds without pre-issued approval', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildBuilderActivationPayload({
+      request_id: 'ingress-auto-auth-2',
+      task: 'implement feature X',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'BUILDER',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/'
+    });
+    const result = await canonicalExternalActivationIngress(payload, { director_admission: true, carrier_identity: 'github-workflow-auto-1', carrier_type: 'github_workflow' });
+    assert.equal(result.success, true, 'Should succeed with director_admission: ' + (result.error || ''));
+    assert.ok(result.execution_descriptor, 'Should have execution descriptor');
+    assert.ok(result.task_entry.authorization_proof, 'Should have authorization_proof');
+    const approval = taskRegistry.getDirectorApproval(result.task_entry.authorization_proof.approval_id);
+    assert.ok(approval, 'Approval should exist');
+    assert.equal(approval.status, 'CONSUMED', 'Approval should be consumed atomically');
+  });
+
+  runTestAsync('Ingress - consequential without director_admission or director_approval_id fails closed', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'ingress-no-auth-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const result = await canonicalExternalActivationIngress(payload, {});
+    assert.equal(result.success, false, 'Should fail closed without Director authorization');
+    assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+  });
+
+  runTestAsync('Ingress - pre-issued director_approval_id still works (backward compatible)', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+      request_id: 'ingress-backward-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'FAILOVER_EXECUTE',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/',
+      verification: 'tests must pass'
+    });
+    const approval = await taskRegistry.createDirectorApproval({
+      request_id: 'ingress-backward-1', target: 'Gemini', task_mode: 'FAILOVER_EXECUTE',
+      capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], permitted_paths: ['poc/'],
+      repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main'
+    });
+    assert.ok(approval.success, 'Pre-issued approval should succeed');
+    payload.authorization.approval_id = approval.approval.approval_id;
+    const result = await canonicalExternalActivationIngress(payload, { director_approval_id: approval.approval.approval_id });
+    assert.equal(result.success, true, 'Should succeed with pre-issued approval: ' + (result.error || ''));
+    const consumedApproval = taskRegistry.getDirectorApproval(approval.approval.approval_id);
+    assert.equal(consumedApproval.status, 'CONSUMED', 'Pre-issued approval should be consumed');
+  });
+
+  runTestAsync('Ingress - director_admission produces authorization_proof with required provenance fields', async () => {
+    taskRegistry.resetRegistry();
+    const payload = buildBuilderActivationPayload({
+      request_id: 'ingress-proof-1',
+      task: 'implement feature',
+      repository: 'fluentwithkyle/openclaw-webhook',
+      base_branch: 'main',
+      task_mode: 'BUILDER',
+      capabilities: 'read_only,modify_files,run_tests,commit,push',
+      permitted_paths: 'poc/'
+    });
+    const result = await canonicalExternalActivationIngress(payload, { director_admission: true });
+    assert.equal(result.success, true);
+    const proof = result.task_entry.authorization_proof;
+    assert.ok(proof.approval_id, 'Must have approval_id');
+    assert.ok(proof.scope_hash, 'Must have scope_hash');
+    assert.equal(proof.issuer, 'Kyle (Director)', 'Must have issuer');
+    assert.ok(proof.consumed_at, 'Must have consumed_at');
+  });
+
+  await Promise.all(pendingAsyncTests);
+  console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
+  server.close();
+})();

@@ -211,6 +211,8 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
   let taskResult;
   if (isConsequential && dispatchContext && dispatchContext.director_approval_id) {
     taskResult = await taskRegistry.createTaskWithDirectorAuthorization(command);
+  } else if (isConsequential && dispatchContext && dispatchContext.director_admission) {
+    taskResult = await taskRegistry.createTaskWithAutoDirectorAuthorization(command);
   } else if (isConsequential) {
     return {
       success: false,

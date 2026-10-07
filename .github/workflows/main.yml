@@ -78,6 +78,7 @@ jobs:
         if: github.event_name == 'issue_comment'
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
+          ACTOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         shell: bash
         run: |
           set -euo pipefail
@@ -92,6 +93,10 @@ jobs:
           PERMITTED_PATHS="poc/"
 
           if echo "$REQUEST" | grep -qiE '^FAILOVER_EXECUTE\b'; then
+            if [ "$ACTOR_ASSOCIATION" != "OWNER" ]; then
+              echo "::error::FAILOVER_EXECUTE activation requires repository-owner Director authorization"
+              exit 1
+            fi
             TASK_MODE="FAILOVER_EXECUTE"
             CAPABILITIES="read_only,modify_files,run_tests,commit,push"
             # Strip the "FAILOVER_EXECUTE" keyword, leaving the task description
@@ -108,46 +113,6 @@ jobs:
             echo "permitted_paths=$PERMITTED_PATHS"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Issue Director approval for consequential Gemini activation (issue_comment)
-        id: director_approval_ic
-        if: github.event_name == 'issue_comment' && steps.request_comment.outputs.task_mode == 'FAILOVER_EXECUTE'
-        env:
-          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
-          DIRECTOR_APPROVAL_SECRET: ${{ secrets.DIRECTOR_APPROVAL_SECRET }}
-          COMMENT_ID: ${{ github.event.comment.id }}
-          REPOSITORY: ${{ github.repository }}
-          BASE_BRANCH: ${{ github.ref_name }}
-          CAPABILITIES: ${{ steps.request_comment.outputs.capabilities }}
-          PERMITTED_PATHS: ${{ steps.request_comment.outputs.permitted_paths }}
-          ACTOR_ASSOCIATION: ${{ github.event.comment.author_association }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "$ACTOR_ASSOCIATION" != "OWNER" ]; then
-            echo "::error::FAILOVER_EXECUTE activation requires repository-owner Director authorization"
-            exit 1
-          fi
-          APPROVAL_JSON=$(jq -n \
-            --arg request_id "$COMMENT_ID" \
-            --arg target "Gemini" \
-            --arg task_mode "FAILOVER_EXECUTE" \
-            --arg repository "$REPOSITORY" \
-            --arg base_branch "$BASE_BRANCH" \
-            --arg capabilities "$CAPABILITIES" \
-            --arg permitted_paths "$PERMITTED_PATHS" \
-            '{scope:{request_id:$request_id,target:$target,task_mode:$task_mode,capabilities:($capabilities|split(",")),permitted_paths:($permitted_paths|split(",")),repository:$repository,base_branch:$base_branch}}')
-          RESPONSE=$(curl --fail-with-body --silent --show-error \
-            -X POST "$CALLBACK_BASE_URL/poc/director/approve" \
-            -H "Content-Type: application/json" \
-            -H "x-director-approval-secret: $DIRECTOR_APPROVAL_SECRET" \
-            --data "$APPROVAL_JSON")
-          APPROVAL_ID=$(printf '%s' "$RESPONSE" | jq -r '.approval_id // empty')
-          if [ -z "$APPROVAL_ID" ]; then
-            echo "::error::Director approval response did not contain approval_id"
-            exit 1
-          fi
-          echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
-
       - name: Validate external activation through canonical ingress (issue_comment)
         id: validate_activation
         if: github.event_name == 'issue_comment'
@@ -158,7 +123,6 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
           REPOSITORY: ${{ github.repository }}
           BASE_BRANCH: ${{ github.ref_name }}
-          APPROVAL_ID: ${{ steps.director_approval_ic.outputs.approval_id }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
         run: |
@@ -176,13 +140,11 @@ jobs:
             --arg comment_body "$COMMENT_BODY" \
             --arg repository "$REPOSITORY" \
             --arg base_branch "$BASE_BRANCH" \
-            --arg approval_id "$APPROVAL_ID" \
             '{
               comment_id: $comment_id,
               comment_body: $comment_body,
               repository: $repository,
-              base_branch: $base_branch,
-              approval_id: $approval_id
+              base_branch: $base_branch
             }')
 
           node poc/validate-external-activation.js gemini-issue-comment "$ACTIVATION_JSON"

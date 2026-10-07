@@ -1056,9 +1056,11 @@ router.post('/github/webhook', async (req, res) => {
 // dispatch the agent directly, preventing recursive ingress -> workflow -> ingress.
 router.post('/activation/ingress', authenticatePoc, async (req, res) => {
     const carrierIdentity = req.headers['x-carrier-identity'] || null;
+    const directorApprovalId = req.body && req.body.authorization && req.body.authorization.approval_id;
 
     const ingressResult = await canonicalExternalActivationIngress(req.body, {
-        director_approval_id: req.body && req.body.authorization && req.body.authorization.approval_id,
+        director_approval_id: directorApprovalId,
+        director_admission: !directorApprovalId,
         carrier_identity: carrierIdentity,
         carrier_type: carrierIdentity ? 'github_workflow' : 'external'
     });
