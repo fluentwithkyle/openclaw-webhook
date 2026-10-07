@@ -749,7 +749,7 @@ async function main() {
         assertTrue(approval.success);
         cmd.authorization.approval_id = approval.approval.approval_id;
 
-        canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
 
         const modified = makeKiloFailoverCommand('ingress-dup-3', { task_type: 'research' });
         modified.authorization = { ...cmd.authorization };
