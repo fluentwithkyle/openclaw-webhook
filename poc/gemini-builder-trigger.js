@@ -1,4 +1,5 @@
 const https = require('https');
+const { generateDirectorOriginAssertion } = require('./external-activation-validator');
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const WORKFLOW_FILE = 'gemini-builder.yml';
@@ -26,7 +27,8 @@ function triggerGeminiBuilderWorkflow(inputs, githubToken, request = https.reque
         verification: inputs.verification || '',
         task_mode: inputs.task_mode || 'BUILDER',
         capabilities: Array.isArray(inputs.capabilities) ? inputs.capabilities.join(',') : (inputs.capabilities || 'read_only,modify_files,run_tests,commit,push'),
-        permitted_paths: Array.isArray(inputs.permitted_paths) ? inputs.permitted_paths.join(',') : ''
+        permitted_paths: Array.isArray(inputs.permitted_paths) ? inputs.permitted_paths.join(',') : '',
+        director_origin_assertion: inputs.director_origin_assertion || ''
       }
     });
 
@@ -77,7 +79,7 @@ function triggerGeminiBuilderWorkflow(inputs, githubToken, request = https.reque
   });
 }
 
-async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, githubToken, verification, taskMode, capabilities, permittedPaths, builderApiKey, request) {
+async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, githubToken, verification, taskMode, capabilities, permittedPaths, builderApiKey, request, executionClaimId) {
   if (!githubToken) {
     return {
       success: false,
@@ -89,6 +91,11 @@ async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, gi
     };
   }
 
+  const directorOriginSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+  const directorOriginAssertion = directorOriginSecret
+    ? generateDirectorOriginAssertion(requestId, executionClaimId, directorOriginSecret)
+    : null;
+
   const inputs = {
     request_id: requestId,
     task: task,
@@ -98,7 +105,8 @@ async function dispatchGeminiBuilder(requestId, task, repository, baseBranch, gi
     verification: verification,
     task_mode: taskMode || 'BUILDER',
     capabilities: capabilities || ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
-    permitted_paths: permittedPaths || []
+    permitted_paths: permittedPaths || [],
+    director_origin_assertion: directorOriginAssertion || ''
   };
 
   try {

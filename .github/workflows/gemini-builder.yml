@@ -45,6 +45,10 @@ on:
         description: 'Comma-separated authorized file paths for Builder execution'
         required: false
         type: string
+      director_origin_assertion:
+        description: 'Server-signed assertion proving Director-originated Builder dispatch (opaque to client)'
+        required: false
+        type: string
 
 jobs:
   builder:
@@ -70,6 +74,7 @@ jobs:
           CAPABILITIES: ${{ inputs.capabilities || 'read_only,modify_files,run_tests,commit,push' }}
           PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}
           VERIFICATION: ${{ inputs.verification || '' }}
+          DIRECTOR_ORIGIN_ASSERTION: ${{ inputs.director_origin_assertion || '' }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
         run: |

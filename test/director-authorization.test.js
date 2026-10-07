@@ -466,6 +466,34 @@ function runTestAsync(name, fn) {
     assert.equal(response2.body.replay, true, 'Should be flagged as replay');
   });
 
+  runTestAsync('Manual Builder director_origin_assertion without DIRECTOR_ORIGIN_SECRET cannot establish authorization', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
+
+    const forgedAssertion = generateDirectorOriginAssertion('attacker-request', null, 'guessed-secret');
+    assert(forgedAssertion, 'Forged assertion should be generated (but will fail verification)');
+
+    const verified = verifyDirectorOriginAssertion(forgedAssertion, 'attacker-request', DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, false,
+      'Forged assertion using guessed secret must fail verification against real DIRECTOR_ORIGIN_SECRET');
+
+    const decoded = Buffer.from(forgedAssertion, 'base64').toString('utf8');
+    const parsed = JSON.parse(decoded);
+    assert.notEqual(parsed.token, DIRECTOR_ORIGIN_SECRET,
+      'Assertion token must not contain the raw DIRECTOR_ORIGIN_SECRET');
+  });
+
+  runTestAsync('Server-generated Builder assertion with correct request_id establishes authorization', async () => {
+    const { generateDirectorOriginAssertion, verifyDirectorOriginAssertion } = require('../poc/external-activation-validator');
+
+    const validRequestId = 'server-generated-request';
+    const executionClaimId = 'claim-123';
+    const validAssertion = generateDirectorOriginAssertion(validRequestId, executionClaimId, DIRECTOR_ORIGIN_SECRET);
+
+    const verified = verifyDirectorOriginAssertion(validAssertion, validRequestId, DIRECTOR_ORIGIN_SECRET);
+    assert.equal(verified, true,
+      'Valid server-generated assertion should verify against real DIRECTOR_ORIGIN_SECRET');
+  });
+
   await Promise.all(pendingAsyncTests);
   console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
   server.close();
