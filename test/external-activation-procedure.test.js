@@ -30,7 +30,16 @@ let failCount = 0;
 
 function runTest(name, fn) {
     try {
-        fn();
+        const result = fn();
+        if (result && typeof result.then === 'function') {
+            return result.then(() => {
+                console.log(`PASS: ${name}`);
+                passCount++;
+            }).catch(err => {
+                console.error(`FAIL: ${name} - ${err.message}`);
+                failCount++;
+            });
+        }
         console.log(`PASS: ${name}`);
         passCount++;
     } catch (err) {
@@ -229,7 +238,7 @@ runTest('Procedure - activation-ingress.js does NOT call getDispatcher (admissio
     assertTrue(!activationIngressRaw.includes('await dispatch'), 'activation-ingress.js must not dispatch');
 });
 
-runTest('Procedure - ingress returns server-derived execution descriptor', () => {
+runTest('Procedure - ingress returns server-derived execution descriptor', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -243,11 +252,11 @@ runTest('Procedure - ingress returns server-derived execution descriptor', () =>
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('proc-desc-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('proc-desc-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-proc-1',
         carrier_type: 'github_workflow'
@@ -260,7 +269,7 @@ runTest('Procedure - ingress returns server-derived execution descriptor', () =>
     cleanup();
 });
 
-runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)', () => {
+runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -274,11 +283,11 @@ runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('proc-once-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('proc-once-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result1 = canonicalExternalActivationIngress(payload, {
+    const result1 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-once-A',
         carrier_type: 'github_workflow'
@@ -287,7 +296,7 @@ runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)
     assertTrue(result1.success, 'First claim should succeed');
     assertTrue(result1.execution_claim_id, 'First claim should have execution_claim_id');
 
-    const result2 = canonicalExternalActivationIngress(payload, {
+    const result2 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-once-B',
         carrier_type: 'github_workflow'
@@ -301,7 +310,7 @@ runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)
 // 5. request_id / execution_claim_id / carrier_identity correlation
 // =========================================================
 
-runTest('Procedure - descriptor binds request_id, execution_claim_id, and carrier_identity', () => {
+runTest('Procedure - descriptor binds request_id, execution_claim_id, and carrier_identity', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -315,11 +324,11 @@ runTest('Procedure - descriptor binds request_id, execution_claim_id, and carrie
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('proc-corr-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('proc-corr-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-corr-1',
         carrier_type: 'github_workflow'
@@ -367,7 +376,7 @@ runTest('Procedure - callback payload preserves request/claim/carrier correlatio
 // 6. Server-derived authority (no workflow-input authority reconstruction)
 // =========================================================
 
-runTest('Procedure - server-derived authority overrides externally claimed capabilities', () => {
+runTest('Procedure - server-derived authority overrides externally claimed capabilities', async () => {
     cleanup();
     const { buildActivationPayloadForWorkflowDispatch } = require('../poc/external-activation-validator');
     const payload = buildActivationPayloadForWorkflowDispatch({
@@ -381,9 +390,7 @@ runTest('Procedure - server-derived authority overrides externally claimed capab
         verification: 'tests must pass'
     });
 
-    const { setupDirectorApproval: setupApproval } = { setupDirectorApproval: require('./external-activation-bypass.test.js') ? null : null };
-
-    const approval = setupDirectorApproval('proc-auth-test-1', 'Gemini', 'FAILOVER_EXECUTE',
+    const approval = await setupDirectorApproval('proc-auth-test-1', 'Gemini', 'FAILOVER_EXECUTE',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
@@ -392,7 +399,7 @@ runTest('Procedure - server-derived authority overrides externally claimed capab
         authorization: { capabilities: ['read_only'] }
     };
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id
     });
 
@@ -474,7 +481,7 @@ runTest('Procedure - routes/poc.js passes carrier_identity from request header',
 // 9. Consequential command requires Director approval
 // =========================================================
 
-runTest('Procedure - FAILOVER_EXECUTE without Director approval fails closed', () => {
+runTest('Procedure - FAILOVER_EXECUTE without Director approval fails closed', async () => {
     cleanup();
     const { buildActivationPayloadForWorkflowDispatch } = require('../poc/external-activation-validator');
     const payload = buildActivationPayloadForWorkflowDispatch({
@@ -488,14 +495,14 @@ runTest('Procedure - FAILOVER_EXECUTE without Director approval fails closed', (
         verification: 'tests must pass'
     });
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'FAILOVER_EXECUTE should be blocked without Director approval');
     assert.equal(result.status, 'BLOCKED');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
     cleanup();
 });
 
-runTest('Procedure - BUILDER without Director approval fails closed', () => {
+runTest('Procedure - BUILDER without Director approval fails closed', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -508,7 +515,7 @@ runTest('Procedure - BUILDER without Director approval fails closed', () => {
         permitted_paths: 'poc/'
     });
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'BUILDER should be blocked without Director approval');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
     cleanup();
