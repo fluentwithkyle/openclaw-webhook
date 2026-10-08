@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const yaml = require('js-yaml');
 
 const WF_PATH = path.join(__dirname, '..', '.github', 'workflows', 'main.yml');
 const raw = fs.readFileSync(WF_PATH, 'utf8');
@@ -553,4 +554,53 @@ runTest('main.yml FAILOVER_EXECUTE commit step runs after Gemini CLI and before 
     'all steps must exist');
   assert.ok(geminiIdx < commitIdx, 'Gemini CLI run must come before commit/push step');
   assert.ok(commitIdx < resultIdx, 'commit/push step must come before gemini_result determination');
+});
+
+runTest('main.yml is valid YAML that parses without structural errors', () => {
+  let doc;
+  try {
+    doc = yaml.load(raw);
+  } catch (err) {
+    throw new Error(`main.yml failed to parse as valid YAML: ${err.message}`);
+  }
+  assert.ok(doc, 'main.yml parsed to null/undefined');
+  assert.ok(doc.jobs, 'main.yml must have a jobs section');
+  assert.ok(doc.jobs.advisory, 'main.yml must have an advisory job');
+});
+
+runTest('commit_push step is a top-level step in the advisory job (not nested in with:)', () => {
+  const doc = yaml.load(raw);
+  const steps = doc.jobs.advisory.steps;
+  const commitPushStep = steps.find(s => s.id === 'commit_push');
+  assert.ok(commitPushStep, 'commit_push must be a direct step in advisory job steps');
+  assert.equal(commitPushStep.name, 'Commit and push Gemini changes (FAILOVER_EXECUTE only)',
+    'commit_push step name must match');
+  assert.ok(commitPushStep.if, 'commit_push step must have an if condition');
+  assert.ok(commitPushStep.run, 'commit_push step must have a run script');
+});
+
+runTest('all steps in the advisory job are top-level (6-space indentation)', () => {
+  const lines = raw.split('\n');
+  const stepLines = lines
+    .map((line, i) => ({ line: i + 1, content: line }))
+    .filter(l => /^      - name:/.test(l.content));
+  assert.ok(stepLines.length > 10, `expected 10+ top-level steps, found ${stepLines.length}`);
+  const stepNames = stepLines.map(l => l.content.replace(/^      - name: /, '').replace(/:.*$/, ''));
+  const nameSet = new Set(stepNames);
+  assert.ok(nameSet.has('Commit and push Gemini changes (FAILOVER_EXECUTE only)'),
+    'commit_push step must use 6-space indentation like all other steps');
+});
+
+runTest('no step is nested inside another step via misindented - name:', () => {
+  const doc = yaml.load(raw);
+  const steps = doc.jobs.advisory.steps;
+  for (const step of steps) {
+    if (step.with) {
+      for (const key of Object.keys(step.with)) {
+        const val = step.with[key];
+        assert.ok(!Array.isArray(val),
+          `step ${step.name || step.id || '?'}: with.${key} must not be a list (possible step-nesting regression)`);
+      }
+    }
+  }
 });

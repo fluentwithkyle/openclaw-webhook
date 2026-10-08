@@ -376,89 +376,89 @@ jobs:
             Distinguish observations from recommendations.
             Return a concrete, actionable response for the project.
 
-          - name: Commit and push Gemini changes (FAILOVER_EXECUTE only)
-            id: commit_push
-            if: always() && (steps.gemini_run.outcome == 'success' || steps.gemini_run.outcome == '') && (steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW') == 'FAILOVER_EXECUTE'
-            shell: bash
-            env:
-              PERMITTED_PATHS: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths || 'poc/' }}
-              BASE_BRANCH: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch || github.ref_name }}
-            run: |
-              set -euo pipefail
+      - name: Commit and push Gemini changes (FAILOVER_EXECUTE only)
+        id: commit_push
+        if: always() && (steps.gemini_run.outcome == 'success' || steps.gemini_run.outcome == '') && (steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW') == 'FAILOVER_EXECUTE'
+        shell: bash
+        env:
+          PERMITTED_PATHS: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths || 'poc/' }}
+          BASE_BRANCH: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
 
-              git config user.name "Gemini"
-              git config user.email "gemini@users.noreply.github.com"
-              git config --global --add safe.directory '*'
+          git config user.name "Gemini"
+          git config user.email "gemini@users.noreply.github.com"
+          git config --global --add safe.directory '*'
 
+          COMMIT_SHA="null"
+          PUSH_STATUS="false"
+          HAS_CHANGES="false"
+          UNCOMMITTED_CHANGES="false"
+          PUSH_VERIFIED="false"
+
+          # Stage only files under PERMITTED_PATHS (space-separated, e.g. "poc/")
+          # to avoid capturing unrelated worktree changes.
+          for dir in $PERMITTED_PATHS; do
+            git add "$dir" 2>/dev/null || true
+          done
+
+          CHANGED_FILES=$(git diff --cached --name-only)
+          if [ -n "$CHANGED_FILES" ]; then
+            HAS_CHANGES="true"
+            git commit -m "FAILOVER_EXECUTE: Persist authorized implementation changes (request_id: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id || 'manual' }})" || {
+              echo "::error::FAILOVER_EXECUTE commit failed"
               COMMIT_SHA="null"
               PUSH_STATUS="false"
-              HAS_CHANGES="false"
-              UNCOMMITTED_CHANGES="false"
-              PUSH_VERIFIED="false"
+              UNCOMMITTED_CHANGES="true"
+              echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+              echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+              echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+              echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+              exit 1
+            }
+            COMMIT_SHA=$(git rev-parse HEAD)
+            echo "Committed: $COMMIT_SHA"
+            echo "$CHANGED_FILES"
 
-              # Stage only files under PERMITTED_PATHS (space-separated, e.g. "poc/")
-              # to avoid capturing unrelated worktree changes.
-              for dir in $PERMITTED_PATHS; do
-                git add "$dir" 2>/dev/null || true
-              done
+            # Push to the authorized base branch
+            git push "origin" "$BASE_BRANCH" || {
+              echo "::error::FAILOVER_EXECUTE push to origin/$BASE_BRANCH failed"
+              PUSH_STATUS="false"
+              UNCOMMITTED_CHANGES="true"
+              echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+              echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+              echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+              echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+              exit 1
+            }
+            PUSH_STATUS="true"
+            echo "Pushed to origin/$BASE_BRANCH"
 
-              CHANGED_FILES=$(git diff --cached --name-only)
-              if [ -n "$CHANGED_FILES" ]; then
-                HAS_CHANGES="true"
-                git commit -m "FAILOVER_EXECUTE: Persist authorized implementation changes (request_id: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id || 'manual' }})" || {
-                  echo "::error::FAILOVER_EXECUTE commit failed"
-                  COMMIT_SHA="null"
-                  PUSH_STATUS="false"
-                  UNCOMMITTED_CHANGES="true"
-                  echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
-                  echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
-                  echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
-                  echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
-                  exit 1
-                }
-                COMMIT_SHA=$(git rev-parse HEAD)
-                echo "Committed: $COMMIT_SHA"
-                echo "$CHANGED_FILES"
-
-                # Push to the authorized base branch
-                git push "origin" "$BASE_BRANCH" || {
-                  echo "::error::FAILOVER_EXECUTE push to origin/$BASE_BRANCH failed"
-                  PUSH_STATUS="false"
-                  UNCOMMITTED_CHANGES="true"
-                  echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
-                  echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
-                  echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
-                  echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
-                  exit 1
-                }
-                PUSH_STATUS="true"
-                echo "Pushed to origin/$BASE_BRANCH"
-
-                # Verify the commit is present on the remote base branch
-                REMOTE_HEAD=$(git ls-remote "origin" "$BASE_BRANCH" | awk '{print $1}')
-                if [ -n "$REMOTE_HEAD" ] && [ "$COMMIT_SHA" = "$REMOTE_HEAD" ]; then
-                  PUSH_VERIFIED="true"
-                  echo "Verified commit on remote: $COMMIT_SHA"
-                else
-                  echo "::error::FAILOVER_EXECUTE push verification failed: remote HEAD ($REMOTE_HEAD) != local HEAD ($COMMIT_SHA)"
-                  PUSH_STATUS="false"
-                  UNCOMMITTED_CHANGES="true"
-                  echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
-                  echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
-                  echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
-                  echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
-                  echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
-                  exit 1
-                fi
-              else
-                echo "::warning::No changes to commit in FAILOVER_EXECUTE mode within permitted_paths: $PERMITTED_PATHS"
-              fi
-
+            # Verify the commit is present on the remote base branch
+            REMOTE_HEAD=$(git ls-remote "origin" "$BASE_BRANCH" | awk '{print $1}')
+            if [ -n "$REMOTE_HEAD" ] && [ "$COMMIT_SHA" = "$REMOTE_HEAD" ]; then
+              PUSH_VERIFIED="true"
+              echo "Verified commit on remote: $COMMIT_SHA"
+            else
+              echo "::error::FAILOVER_EXECUTE push verification failed: remote HEAD ($REMOTE_HEAD) != local HEAD ($COMMIT_SHA)"
+              PUSH_STATUS="false"
+              UNCOMMITTED_CHANGES="true"
               echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
               echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
               echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
               echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
               echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+          else
+            echo "::warning::No changes to commit in FAILOVER_EXECUTE mode within permitted_paths: $PERMITTED_PATHS"
+          fi
+
+          echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+          echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+          echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
 
       - name: Determine Gemini execution result
         id: gemini_result
