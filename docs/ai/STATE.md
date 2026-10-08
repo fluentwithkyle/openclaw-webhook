@@ -1197,3 +1197,32 @@ The admission/authorization architecture is resolved, but implementation readine
 **Next blocker**: resolve and authorize the single authoritative persistence/concurrency mechanism that can serialize TaskRegistry create/recover/claim mutations across the actual Render process/instance topology. Phase 4 remains PROPOSED / TARGET and its transition gate is unchanged.
 
 **Durable research record**: `docs/ai/research/research-TASK-CHATGPT-EXTERNAL-ACTIVATION-EXECUTION-CLAIM-RECOVERY-RESEARCH-001.md`.
+
+---
+
+## Config Prerequisite Director Notification Persistance — IMPLEMENTED / VERIFIED
+
+**Task**: TASK-KILO-CONFIG-PREREQUISITE-VALIDATION-IMPLEMENT-001 (follow-up)
+**Status**: IMPLEMENTED / VERIFIED
+**Commit**: `1ee13f7` on `kilo/astral-lens-lzs`
+
+Follow-up to the config prerequisite validation implementation. The
+`DIRECTOR_NOTIFIED` state previously only set bookkeeping fields without a
+durable, machine-visible notification. This fix persists a structured
+Director notification record on the TaskRegistry entry when consequential
+execution is blocked by unsatisfied prerequisites, reusing the existing
+control-plane mechanisms:
+
+- `recordDirectorNotification()` creates a notification record on the task
+  entry with `config_key`, `reason`, `error_code`, `notified_at` timestamp,
+  and `satisfies_prerequisite: false`
+- Task status transitions to `BLOCKED` with `block_reason` and `block_details`
+- `next_action` set to `director_notification` for control-plane visibility
+- `getDirectorNotifications()` and `hasDirectorNotification()` provide read
+  access to the persisted notification records
+- `checkPrerequisites` is now async to properly await notification persistence
+- Notification does NOT satisfy the prerequisite (`satisfies_prerequisite=false`)
+
+**Verification**: 89/89 activation-policy tests pass (including 9 new
+notification persistence tests). No new test failures in other suites.
+`git diff --check` clean.
