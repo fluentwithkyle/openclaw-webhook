@@ -24,9 +24,15 @@ const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
 let passCount = 0;
 let failCount = 0;
 
-function runTest(name, fn) {
+function assertTrue(condition, msg) {
+    if (!condition) {
+        throw new Error(msg || 'Assertion failed: expected truthy value');
+    }
+}
+
+async function runTest(name, fn) {
     try {
-        fn();
+        await fn();
         console.log(`PASS: ${name}`);
         passCount++;
     } catch (err) {
@@ -41,7 +47,7 @@ function cleanup() {
     taskRegistry.resetRegistry();
 }
 
-function setupDirectorApproval(requestId, target, taskMode, capabilities, permittedPaths) {
+async function setupDirectorApproval(requestId, target, taskMode, capabilities, permittedPaths) {
     return taskRegistry.createDirectorApproval({
         request_id: requestId,
         target: target,
@@ -53,11 +59,15 @@ function setupDirectorApproval(requestId, target, taskMode, capabilities, permit
     });
 }
 
+async function main() {
+    process.env.ACP_POC_TRIGGER_SECRET = 'test-secret';
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+
 // =========================================================
 // Workflow file structure tests - prove bypass is closed
 // =========================================================
 
-runTest('main.yml: issue_comment path has activation validation step before Gemini CLI', () => {
+await runTest('main.yml: issue_comment path has activation validation step before Gemini CLI', async () => {
     const validateIdx = mainRaw.indexOf('Validate external activation through canonical ingress (issue_comment)');
     assert.ok(validateIdx !== -1, 'issue_comment activation validation step missing');
 
@@ -67,7 +77,7 @@ runTest('main.yml: issue_comment path has activation validation step before Gemi
     assert.ok(validateIdx < geminiIdx, 'activation validation must come BEFORE Gemini CLI run');
 });
 
-runTest('main.yml: workflow_dispatch path has activation validation step before Gemini CLI', () => {
+await runTest('main.yml: workflow_dispatch path has activation validation step before Gemini CLI', async () => {
     const validateIdx = mainRaw.indexOf('Validate external activation through canonical ingress (workflow_dispatch)');
     assert.ok(validateIdx !== -1, 'workflow_dispatch activation validation step missing');
 
@@ -77,14 +87,14 @@ runTest('main.yml: workflow_dispatch path has activation validation step before 
     assert.ok(validateIdx < geminiIdx, 'activation validation must come BEFORE Gemini CLI run');
 });
 
-runTest('main.yml: activation validation calls poc/validate-external-activation.js', () => {
+await runTest('main.yml: activation validation calls poc/validate-external-activation.js', async () => {
     assert.ok(mainRaw.includes('poc/validate-external-activation.js gemini-issue-comment'),
         'issue_comment validation must call poc/validate-external-activation.js');
     assert.ok(mainRaw.includes('poc/validate-external-activation.js gemini-workflow-dispatch'),
         'workflow_dispatch validation must call poc/validate-external-activation.js');
 });
 
-runTest('main.yml: Run Gemini step is gated on activation validation output', () => {
+await runTest('main.yml: Run Gemini step is gated on activation validation output', async () => {
     const geminiIdx = mainRaw.indexOf('Run Gemini in advisory mode');
     assert.ok(geminiIdx !== -1);
 
@@ -96,12 +106,12 @@ runTest('main.yml: Run Gemini step is gated on activation validation output', ()
         'Run Gemini step must NOT bypass validation via event_name escape hatch');
 });
 
-runTest('main.yml: validation step calls Render server activation ingress endpoint', () => {
+await runTest('main.yml: validation step calls Render server activation ingress endpoint', async () => {
     assert.ok(mainRaw.includes('RENDER_CALLBACK_BASE_URL'), 'should reference RENDER_CALLBACK_BASE_URL');
     assert.ok(mainRaw.includes('ACP_POC_TRIGGER_SECRET'), 'should reference ACP_POC_TRIGGER_SECRET');
 });
 
-runTest('gemini-builder.yml: validation step exists before Gemini Builder run', () => {
+await runTest('gemini-builder.yml: validation step exists before Gemini Builder run', async () => {
     const validateIdx = builderRaw.indexOf('Validate external activation through canonical ingress');
     assert.ok(validateIdx !== -1, 'activation validation step missing in builder workflow');
 
@@ -111,12 +121,12 @@ runTest('gemini-builder.yml: validation step exists before Gemini Builder run', 
     assert.ok(validateIdx < builderRunIdx, 'activation validation must come BEFORE Gemini Builder run');
 });
 
-runTest('gemini-builder.yml: validation calls poc/validate-external-activation.js', () => {
+await runTest('gemini-builder.yml: validation calls poc/validate-external-activation.js', async () => {
     assert.ok(builderRaw.includes('poc/validate-external-activation.js builder-workflow-dispatch'),
         'builder validation must call poc/validate-external-activation.js');
 });
 
-runTest('gemini-builder.yml: Run Gemini Builder step is gated on activation validation', () => {
+await runTest('gemini-builder.yml: Run Gemini Builder step is gated on activation validation', async () => {
     const builderRunIdx = builderRaw.indexOf('Run Gemini Builder');
     assert.ok(builderRunIdx !== -1);
 
@@ -125,7 +135,7 @@ runTest('gemini-builder.yml: Run Gemini Builder step is gated on activation vali
         'Run Gemini Builder step should be gated on activation validation');
 });
 
-runTest('gemini-builder.yml: validation step calls Render server', () => {
+await runTest('gemini-builder.yml: validation step calls Render server', async () => {
     assert.ok(builderRaw.includes('RENDER_CALLBACK_BASE_URL'), 'should reference RENDER_CALLBACK_BASE_URL');
     assert.ok(builderRaw.includes('ACP_POC_TRIGGER_SECRET'), 'should reference ACP_POC_TRIGGER_SECRET');
 });
@@ -134,7 +144,7 @@ runTest('gemini-builder.yml: validation step calls Render server', () => {
 // Activation payload builder tests
 // =========================================================
 
-runTest('buildActivationPayloadForIssueComment - REVIEW mode (default @gemini-cli)', () => {
+await runTest('buildActivationPayloadForIssueComment - REVIEW mode (default @gemini-cli)', async () => {
     const payload = buildActivationPayloadForIssueComment(
         '123456',
         '@gemini-cli review the architecture',
@@ -152,7 +162,7 @@ runTest('buildActivationPayloadForIssueComment - REVIEW mode (default @gemini-cl
     assert.ok(payload.task.includes('review the architecture'));
 });
 
-runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE mode', () => {
+await runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE mode', async () => {
     const payload = buildActivationPayloadForIssueComment(
         '123456',
         '@gemini-cli FAILOVER_EXECUTE implement feature X',
@@ -169,7 +179,7 @@ runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE mode', () => {
     assert.ok(!payload.task.includes('FAILOVER_EXECUTE'));
 });
 
-runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE without keyword defaults to REVIEW', () => {
+await runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE without keyword defaults to REVIEW', async () => {
     const payload = buildActivationPayloadForIssueComment(
         '123456',
         '@gemini-cli what do you think about the architecture?',
@@ -181,7 +191,7 @@ runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE without keywor
     assert.deepStrictEqual(payload.authorization.capabilities, ['read_only']);
 });
 
-runTest('buildActivationPayloadForWorkflowDispatch - preserves all input fields', () => {
+await runTest('buildActivationPayloadForWorkflowDispatch - preserves all input fields', async () => {
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'req-123',
         task: 'test task',
@@ -201,7 +211,7 @@ runTest('buildActivationPayloadForWorkflowDispatch - preserves all input fields'
     assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/', 'index.js']);
 });
 
-runTest('buildBuilderActivationPayload - produces correct BUILDER payload', () => {
+await runTest('buildBuilderActivationPayload - produces correct BUILDER payload', async () => {
     const payload = buildBuilderActivationPayload({
         request_id: 'builder-req-1',
         task: 'implement feature',
@@ -224,7 +234,7 @@ runTest('buildBuilderActivationPayload - produces correct BUILDER payload', () =
 // Canonical ingress integration tests
 // =========================================================
 
-runTest('Ingress - REVIEW mode issue_comment activation succeeds without Director approval', () => {
+await runTest('Ingress - REVIEW mode issue_comment activation succeeds without Director approval', async () => {
     cleanup();
     const payload = buildActivationPayloadForIssueComment(
         'ingress-review-ic-1',
@@ -233,14 +243,14 @@ runTest('Ingress - REVIEW mode issue_comment activation succeeds without Directo
         'main'
     );
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assertTrue(result.success, 'REVIEW mode should pass without approval: ' + (result.error || ''));
     assert.equal(result.activation_provenance.activation_target, 'Gemini');
     assert.equal(result.activation_provenance.activation_task_mode, 'REVIEW');
     cleanup();
 });
 
-runTest('Ingress - FAILOVER_EXECUTE issue_comment activation fails closed without Director approval', () => {
+await runTest('Ingress - FAILOVER_EXECUTE issue_comment activation fails closed without Director approval', async () => {
     cleanup();
     const payload = buildActivationPayloadForIssueComment(
         'ingress-fo-ic-1',
@@ -249,14 +259,14 @@ runTest('Ingress - FAILOVER_EXECUTE issue_comment activation fails closed withou
         'main'
     );
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'FAILOVER_EXECUTE should be blocked without Director approval');
     assert.equal(result.status, 'BLOCKED');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
     cleanup();
 });
 
-runTest('Ingress - FAILOVER_EXECUTE workflow_dispatch activation fails closed without Director approval', () => {
+await runTest('Ingress - FAILOVER_EXECUTE workflow_dispatch activation fails closed without Director approval', async () => {
     cleanup();
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'ingress-fo-wfd-1',
@@ -269,14 +279,14 @@ runTest('Ingress - FAILOVER_EXECUTE workflow_dispatch activation fails closed wi
         verification: 'tests must pass'
     });
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'FAILOVER_EXECUTE via workflow_dispatch should be blocked without Director approval');
     assert.equal(result.status, 'BLOCKED');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
     cleanup();
 });
 
-runTest('Ingress - BUILDER activation fails closed without Director approval', () => {
+await runTest('Ingress - BUILDER activation fails closed without Director approval', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'ingress-builder-1',
@@ -288,14 +298,14 @@ runTest('Ingress - BUILDER activation fails closed without Director approval', (
         permitted_paths: 'poc/'
     });
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'BUILDER should be blocked without Director approval');
     assert.equal(result.status, 'BLOCKED');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
     cleanup();
 });
 
-runTest('Ingress - BUILDER activation succeeds with Director approval', () => {
+await runTest('Ingress - BUILDER activation succeeds with Director approval', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'ingress-builder-approved-1',
@@ -307,18 +317,18 @@ runTest('Ingress - BUILDER activation succeeds with Director approval', () => {
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('ingress-builder-approved-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('ingress-builder-approved-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     assert.ok(approval.success, 'Approval should be created');
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, { director_approval_id: payload.authorization.approval_id });
+    const result = await canonicalExternalActivationIngress(payload, { director_approval_id: payload.authorization.approval_id });
     assert.ok(result.success, 'BUILDER should succeed with Director approval: ' + (result.error || ''));
     assert.equal(result.activation_provenance.activation_target, 'Gemini Builder');
     cleanup();
 });
 
-runTest('Ingress - FAILOVER_EXECUTE with Director approval succeeds', () => {
+await runTest('Ingress - FAILOVER_EXECUTE with Director approval succeeds', async () => {
     cleanup();
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'ingress-fo-approved-1',
@@ -331,17 +341,17 @@ runTest('Ingress - FAILOVER_EXECUTE with Director approval succeeds', () => {
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('ingress-fo-approved-1', 'Gemini', 'FAILOVER_EXECUTE',
+    const approval = await setupDirectorApproval('ingress-fo-approved-1', 'Gemini', 'FAILOVER_EXECUTE',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     assert.ok(approval.success);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, { director_approval_id: payload.authorization.approval_id });
+    const result = await canonicalExternalActivationIngress(payload, { director_approval_id: payload.authorization.approval_id });
     assert.ok(result.success, 'FAILOVER_EXECUTE should succeed with approval: ' + (result.error || ''));
     cleanup();
 });
 
-runTest('Ingress - authority conflict on externally claimed task_mode fails closed', () => {
+await runTest('Ingress - authority conflict on externally claimed task_mode fails closed', async () => {
     cleanup();
     const payload = buildActivationPayloadForIssueComment(
         'ingress-auth-conflict-1',
@@ -356,13 +366,13 @@ runTest('Ingress - authority conflict on externally claimed task_mode fails clos
         capabilities: ['read_only']
     };
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'Authority conflict should block activation');
     assert.equal(result.error_code, 'AUTHORITY_CONFLICT');
     cleanup();
 });
 
-runTest('Ingress - authority conflict on externally claimed target fails closed', () => {
+await runTest('Ingress - authority conflict on externally claimed target fails closed', async () => {
     cleanup();
     const payload = buildActivationPayloadForIssueComment(
         'ingress-auth-conflict-2',
@@ -375,13 +385,13 @@ runTest('Ingress - authority conflict on externally claimed target fails closed'
         target: 'Gemini Builder'
     };
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'Authority conflict on target should block');
     assert.equal(result.error_code, 'AUTHORITY_CONFLICT');
     cleanup();
 });
 
-runTest('Ingress - authority conflict on externally claimed capabilities fails closed', () => {
+await runTest('Ingress - authority conflict on externally claimed capabilities fails closed', async () => {
     cleanup();
     const payload = buildActivationPayloadForIssueComment(
         'ingress-auth-conflict-3',
@@ -394,13 +404,13 @@ runTest('Ingress - authority conflict on externally claimed capabilities fails c
         authorization: { capabilities: ['read_only', 'modify_files', 'commit', 'push'] }
     };
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'Authority conflict on capabilities should block');
     assert.equal(result.error_code, 'AUTHORITY_CONFLICT');
     cleanup();
 });
 
-runTest('Ingress - authority conflict on externally claimed permitted_paths fails closed', () => {
+await runTest('Ingress - authority conflict on externally claimed permitted_paths fails closed', async () => {
     cleanup();
     const payload = buildActivationPayloadForIssueComment(
         'ingress-auth-conflict-4',
@@ -413,13 +423,13 @@ runTest('Ingress - authority conflict on externally claimed permitted_paths fail
         constraints: { permitted_paths: ['index.js', 'services/'] }
     };
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'Authority conflict on permitted_paths should block');
     assert.equal(result.error_code, 'AUTHORITY_CONFLICT');
     cleanup();
 });
 
-runTest('Ingress - server-derived authority overrides any externally claimed capabilities', () => {
+await runTest('Ingress - server-derived authority overrides any externally claimed capabilities', async () => {
     cleanup();
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'ingress-server-authority-1',
@@ -432,12 +442,12 @@ runTest('Ingress - server-derived authority overrides any externally claimed cap
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('ingress-server-authority-1', 'Gemini', 'FAILOVER_EXECUTE',
+    const approval = await setupDirectorApproval('ingress-server-authority-1', 'Gemini', 'FAILOVER_EXECUTE',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     assert.ok(approval.success);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, { director_approval_id: payload.authorization.approval_id });
+    const result = await canonicalExternalActivationIngress(payload, { director_approval_id: payload.authorization.approval_id });
     assert.ok(result.success, 'Should succeed: ' + (result.error || ''));
 
     const serverCaps = result.command.authorization.capabilities;
@@ -452,19 +462,19 @@ runTest('Ingress - server-derived authority overrides any externally claimed cap
 // Activation surface policy tests
 // =========================================================
 
-runTest('Policy - @gemini-cli issue_comment is permitted for Gemini FAILOVER_EXECUTE', () => {
+await runTest('Policy - @gemini-cli issue_comment is permitted for Gemini FAILOVER_EXECUTE', async () => {
     const surfaces = activationPolicy.getPermittedActivationSurfaces('Gemini', 'FAILOVER_EXECUTE');
     assert.ok(surfaces.includes('github_issue_comment'), 'github_issue_comment should be permitted');
     assert.ok(surfaces.includes('workflow_dispatch'), 'workflow_dispatch should be permitted');
 });
 
-runTest('Policy - workflow_dispatch is NOT permitted for Kilo FAILOVER_EXECUTE', () => {
+await runTest('Policy - workflow_dispatch is NOT permitted for Kilo FAILOVER_EXECUTE', async () => {
     const surfaces = activationPolicy.getPermittedActivationSurfaces('Kilo', 'FAILOVER_EXECUTE');
     assert.ok(!surfaces.includes('workflow_dispatch'), 'workflow_dispatch should NOT be permitted for Kilo');
     assert.ok(surfaces.includes('github_issue_comment'), 'github_issue_comment should be permitted for Kilo');
 });
 
-runTest('Policy - @gemini-cli issue_comment is permitted for Gemini Builder BUILDER', () => {
+await runTest('Policy - @gemini-cli issue_comment is permitted for Gemini Builder BUILDER', async () => {
     const surfaces = activationPolicy.getPermittedActivationSurfaces('Gemini Builder', 'BUILDER');
     assert.ok(surfaces.includes('workflow_dispatch'), 'workflow_dispatch should be permitted for Builder');
 });
@@ -473,11 +483,11 @@ runTest('Policy - @gemini-cli issue_comment is permitted for Gemini Builder BUIL
 // External activation validator tests
 // =========================================================
 
-runTest('validateExternalActivation - returns correct path constant', () => {
+await runTest('validateExternalActivation - returns correct path constant', async () => {
     assert.equal(ACTIVATION_INGRESS_PATH, '/poc/activation/ingress');
 });
 
-runTest('buildActivationPayloadForIssueComment - produces ACP-compliant payload structure', () => {
+await runTest('buildActivationPayloadForIssueComment - produces ACP-compliant payload structure', async () => {
     const payload = buildActivationPayloadForIssueComment(
         'payload-test-1',
         '@gemini-cli review the architecture',
@@ -506,7 +516,7 @@ runTest('buildActivationPayloadForIssueComment - produces ACP-compliant payload 
 // Bypass prevention tests
 // =========================================================
 
-runTest('Bypass prevention - main.yml workflow_dispatch cannot bypass validation when called from gemini-trigger', () => {
+await runTest('Bypass prevention - main.yml workflow_dispatch cannot bypass validation when called from gemini-trigger', async () => {
     // The gemini-trigger.js triggers workflow_dispatch on main.yml.
     // Before this fix, the workflow would run Gemini directly.
     // After this fix, the validation step runs first.
@@ -516,7 +526,7 @@ runTest('Bypass prevention - main.yml workflow_dispatch cannot bypass validation
         'validation output must be checked');
 });
 
-runTest('Bypass prevention - main.yml issue_comment cannot bypass validation for FAILOVER_EXECUTE', () => {
+await runTest('Bypass prevention - main.yml issue_comment cannot bypass validation for FAILOVER_EXECUTE', async () => {
     // The @gemini-cli FAILOVER_EXECUTE issue_comment path was a direct bypass.
     // After this fix, it must go through the canonical ingress.
     const payload = buildActivationPayloadForIssueComment(
@@ -526,12 +536,12 @@ runTest('Bypass prevention - main.yml issue_comment cannot bypass validation for
         'main'
     );
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'FAILOVER_EXECUTE via issue_comment must be blocked without Director approval');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
 });
 
-runTest('Bypass prevention - gemini-builder.yml cannot bypass validation', () => {
+await runTest('Bypass prevention - gemini-builder.yml cannot bypass validation', async () => {
     // The gemini-builder.yml workflow_dispatch path was a direct bypass for the Builder.
     // After this fix, it must go through the canonical ingress.
     const payload = buildBuilderActivationPayload({
@@ -544,24 +554,24 @@ runTest('Bypass prevention - gemini-builder.yml cannot bypass validation', () =>
         permitted_paths: 'poc/'
     });
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'BUILDER via workflow_dispatch must be blocked without Director approval');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
 });
 
-runTest('Bypass prevention - issue_comment with @kilo activation is not accepted by @gemini-cli workflow', () => {
+await runTest('Bypass prevention - issue_comment with @kilo activation is not accepted by @gemini-cli workflow', async () => {
     // The activation syntax validation ensures the correct syntax for each target.
     const result = activationPolicy.validateActivationSyntax('@kilo', 'Gemini');
     assert.ok(!result.valid, '@kilo should not be valid for Gemini target');
 });
 
-runTest('Bypass prevention - invalid activation surface for target agent is rejected', () => {
+await runTest('Bypass prevention - invalid activation surface for target agent is rejected', async () => {
     // Kilo FAILOVER_EXECUTE should not accept workflow_dispatch surface
     const result = activationPolicy.validateActivationSurface('workflow_dispatch', 'Kilo', 'FAILOVER_EXECUTE');
     assert.ok(!result.valid, 'workflow_dispatch should not be valid for Kilo FAILOVER_EXECUTE');
 });
 
-runTest('Bypass prevention - external activation validator module exists and is referenced by both workflows', () => {
+await runTest('Bypass prevention - external activation validator module exists and is referenced by both workflows', async () => {
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'poc', 'validate-external-activation.js')),
         'poc/validate-external-activation.js must exist');
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'poc', 'external-activation-validator.js')),
@@ -576,7 +586,7 @@ runTest('Bypass prevention - external activation validator module exists and is 
 // Phase 4: Execution-claim mechanism tests
 // =========================================================
 
-runTest('Ingress - BUILDER with carrier identity returns execution_descriptor', () => {
+await runTest('Ingress - BUILDER with carrier identity returns execution_descriptor', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-1',
@@ -588,11 +598,11 @@ runTest('Ingress - BUILDER with carrier identity returns execution_descriptor', 
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('claim-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('claim-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-test-123',
         carrier_type: 'github_workflow'
@@ -610,7 +620,7 @@ runTest('Ingress - BUILDER with carrier identity returns execution_descriptor', 
     cleanup();
 });
 
-runTest('Ingress - without carrier identity, task admitted but not execution-claimed', () => {
+await runTest('Ingress - without carrier identity, task admitted but not execution-claimed', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-2',
@@ -622,11 +632,11 @@ runTest('Ingress - without carrier identity, task admitted but not execution-cla
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('claim-test-2', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('claim-test-2', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: null,
         carrier_type: 'external'
@@ -639,7 +649,7 @@ runTest('Ingress - without carrier identity, task admitted but not execution-cla
     cleanup();
 });
 
-runTest('Execution claim - exactly one authoritative claim per task (concurrent claims blocked)', () => {
+await runTest('Execution claim - exactly one authoritative claim per task (concurrent claims blocked)', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-3',
@@ -651,11 +661,11 @@ runTest('Execution claim - exactly one authoritative claim per task (concurrent 
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('claim-test-3', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('claim-test-3', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result1 = canonicalExternalActivationIngress(payload, {
+    const result1 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-carrier-A',
         carrier_type: 'github_workflow'
@@ -664,7 +674,7 @@ runTest('Execution claim - exactly one authoritative claim per task (concurrent 
     assert.ok(result1.success, 'First claim should succeed: ' + (result1.error || ''));
     assert.ok(result1.execution_claim_id, 'First claim should return execution_claim_id');
 
-    const result2 = canonicalExternalActivationIngress(payload, {
+    const result2 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-carrier-B',
         carrier_type: 'github_workflow'
@@ -676,7 +686,7 @@ runTest('Execution claim - exactly one authoritative claim per task (concurrent 
     cleanup();
 });
 
-runTest('Execution claim - getExecutionClaim returns the active claim', () => {
+await runTest('Execution claim - getExecutionClaim returns the active claim', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-4',
@@ -688,11 +698,11 @@ runTest('Execution claim - getExecutionClaim returns the active claim', () => {
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('claim-test-4', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('claim-test-4', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-carrier-C',
         carrier_type: 'github_workflow'
@@ -707,7 +717,7 @@ runTest('Execution claim - getExecutionClaim returns the active claim', () => {
     cleanup();
 });
 
-runTest('Execution claim - releaseExecutionClaim clears the claim', () => {
+await runTest('Execution claim - releaseExecutionClaim clears the claim', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-5',
@@ -719,11 +729,11 @@ runTest('Execution claim - releaseExecutionClaim clears the claim', () => {
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('claim-test-5', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('claim-test-5', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-carrier-D',
         carrier_type: 'github_workflow'
@@ -731,7 +741,7 @@ runTest('Execution claim - releaseExecutionClaim clears the claim', () => {
 
     assert.ok(result.success);
 
-    const releaseResult = taskRegistry.releaseExecutionClaim('claim-test-5', result.execution_claim_id);
+    const releaseResult = await taskRegistry.releaseExecutionClaim('claim-test-5', result.execution_claim_id);
     assert.ok(releaseResult.success, 'Should release claim: ' + (releaseResult.error || ''));
     assert.equal(releaseResult.error_code, 'RELEASED');
 
@@ -740,7 +750,7 @@ runTest('Execution claim - releaseExecutionClaim clears the claim', () => {
     cleanup();
 });
 
-runTest('Descriptor - buildExecutionDescriptor binds authority-bearing fields from task entry', () => {
+await runTest('Descriptor - buildExecutionDescriptor binds authority-bearing fields from task entry', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'desc-test-1',
@@ -752,11 +762,11 @@ runTest('Descriptor - buildExecutionDescriptor binds authority-bearing fields fr
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('desc-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('desc-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-desc-1',
         carrier_type: 'github_workflow'
@@ -775,7 +785,7 @@ runTest('Descriptor - buildExecutionDescriptor binds authority-bearing fields fr
     cleanup();
 });
 
-runTest('Ingress - no recursive re-entry: ingress returns descriptor, does not dispatch agent', () => {
+await runTest('Ingress - no recursive re-entry: ingress returns descriptor, does not dispatch agent', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'norecurse-test-1',
@@ -787,11 +797,11 @@ runTest('Ingress - no recursive re-entry: ingress returns descriptor, does not d
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('norecurse-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('norecurse-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-norecurse-1',
         carrier_type: 'github_workflow'
@@ -806,37 +816,37 @@ runTest('Ingress - no recursive re-entry: ingress returns descriptor, does not d
     cleanup();
 });
 
-runTest('Workflow - main.yml uses $GITHUB_OUTPUT instead of deprecated ::set-output', () => {
+await runTest('Workflow - main.yml uses $GITHUB_OUTPUT instead of deprecated ::set-output', async () => {
     assert.ok(!mainRaw.includes('::set-output'), 'main.yml should not use deprecated ::set-output');
     assert.ok(mainRaw.includes('$GITHUB_OUTPUT'), 'main.yml should use $GITHUB_OUTPUT');
 });
 
-runTest('Workflow - gemini-builder.yml uses $GITHUB_OUTPUT instead of deprecated ::set-output', () => {
+await runTest('Workflow - gemini-builder.yml uses $GITHUB_OUTPUT instead of deprecated ::set-output', async () => {
     assert.ok(!builderRaw.includes('::set-output'), 'gemini-builder.yml should not use deprecated ::set-output');
     assert.ok(builderRaw.includes('$GITHUB_OUTPUT'), 'gemini-builder.yml should use $GITHUB_OUTPUT');
 });
 
-runTest('Workflow - validate-external-activation.js persists execution descriptor file', () => {
+await runTest('Workflow - validate-external-activation.js persists execution descriptor file', async () => {
     const scriptRaw = fs.readFileSync(path.join(__dirname, '..', 'poc', 'validate-external-activation.js'), 'utf8');
     assert.ok(scriptRaw.includes('EXECUTION_DESCRIPTOR_FILE'), 'Should reference EXECUTION_DESCRIPTOR_FILE env var');
     assert.ok(scriptRaw.includes('execution-descriptor.json'), 'Should default to execution-descriptor.json');
     assert.ok(scriptRaw.includes('writeFileSync'), 'Should persist descriptor via fs.writeFileSync');
 });
 
-runTest('Workflow - main.yml orchestration context consumes execution descriptor (not workflow inputs)', () => {
+await runTest('Workflow - main.yml orchestration context consumes execution descriptor (not workflow inputs)', async () => {
     assert.ok(mainRaw.includes('execution-descriptor.json'), 'main.yml should reference execution-descriptor.json');
     assert.ok(mainRaw.includes('jq -r \'.request_id\' "$DESCRIPTOR_FILE"'), 'main.yml should read request_id from descriptor');
     assert.ok(mainRaw.includes('jq -r \'.task_mode\' "$DESCRIPTOR_FILE"'), 'main.yml should read task_mode from descriptor');
     assert.ok(mainRaw.includes('jq -r \'.capabilities | join(",")\' "$DESCRIPTOR_FILE"'), 'main.yml should read capabilities from descriptor');
 });
 
-runTest('Workflow - gemini-builder.yml orchestration context consumes execution descriptor (not workflow inputs)', () => {
+await runTest('Workflow - gemini-builder.yml orchestration context consumes execution descriptor (not workflow inputs)', async () => {
     assert.ok(builderRaw.includes('execution-descriptor.json'), 'gemini-builder.yml should reference execution-descriptor.json');
     assert.ok(builderRaw.includes('jq -r \'.task_mode\' "$DESCRIPTOR_FILE"'), 'gemini-builder.yml should read task_mode from descriptor');
     assert.ok(builderRaw.includes('jq -r \'.capabilities | join(",")\' "$DESCRIPTOR_FILE"'), 'gemini-builder.yml should read capabilities from descriptor');
 });
 
-runTest('Workflow - main.yml Run Gemini step gated on replay (non-replay only)', () => {
+await runTest('Workflow - main.yml Run Gemini step gated on replay (non-replay only)', async () => {
     const geminiIdx = mainRaw.indexOf('Run Gemini in advisory mode');
     assert.ok(geminiIdx !== -1);
     const geminiSection = mainRaw.slice(geminiIdx);
@@ -846,7 +856,7 @@ runTest('Workflow - main.yml Run Gemini step gated on replay (non-replay only)',
         'Run Gemini workflow_dispatch path should be gated to skip on replay');
 });
 
-runTest('Workflow - gemini-builder.yml Run Gemini Builder gated on replay', () => {
+await runTest('Workflow - gemini-builder.yml Run Gemini Builder gated on replay', async () => {
     const builderIdx = builderRaw.indexOf('Run Gemini Builder');
     assert.ok(builderIdx !== -1);
     const builderSection = builderRaw.slice(builderIdx, builderRaw.indexOf('Commit and push'));
@@ -854,7 +864,7 @@ runTest('Workflow - gemini-builder.yml Run Gemini Builder gated on replay', () =
         'Run Gemini Builder should be gated to skip on replay');
 });
 
-runTest('Workflow - external-activation-validator.js transmits x-carrier-identity header', () => {
+await runTest('Workflow - external-activation-validator.js transmits x-carrier-identity header', async () => {
     const validatorRaw = fs.readFileSync(path.join(__dirname, '..', 'poc', 'external-activation-validator.js'), 'utf8');
     assert.ok(validatorRaw.includes('x-carrier-identity'), 'Should transmit x-carrier-identity header');
     assert.ok(validatorRaw.includes('GITHUB_RUN_ID'), 'Should derive carrier identity from GITHUB_RUN_ID');
@@ -864,7 +874,7 @@ runTest('Workflow - external-activation-validator.js transmits x-carrier-identit
 // Phase 4: Workflow ordering and descriptor binding tests
 // =========================================================
 
-runTest('Workflow ordering - main.yml workflow_dispatch: validation step appears before orchestration context step', () => {
+await runTest('Workflow ordering - main.yml workflow_dispatch: validation step appears before orchestration context step', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const validateIdx = mainRawLocal.indexOf('Validate external activation through canonical ingress (workflow_dispatch)');
     assert.ok(validateIdx !== -1, 'workflow_dispatch validation step must exist');
@@ -876,21 +886,21 @@ runTest('Workflow ordering - main.yml workflow_dispatch: validation step appears
         'validation step must appear BEFORE orchestration context step in main.yml workflow_dispatch path');
 });
 
-runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context is gated on validation output', () => {
+await runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context is gated on validation output', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const contextSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'));
     assert.ok(/steps\.validate_activation_wfd\.outputs\.activation_validated\s*==\s*'true'/.test(contextSection),
         'orchestration context step must be gated on steps.validate_activation_wfd.outputs.activation_validated');
 });
 
-runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context is gated on non-replay', () => {
+await runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context is gated on non-replay', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const contextSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'));
     assert.ok(/!steps\.validate_activation_wfd\.outputs\.replay/.test(contextSection),
         'orchestration context step must be gated to skip on replay (workflow_dispatch)');
 });
 
-runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context reads descriptor file', () => {
+await runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context reads descriptor file', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const contextSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'));
     assert.ok(contextSection.includes('execution-descriptor.json'), 'orchestration context must reference execution-descriptor.json');
@@ -899,7 +909,7 @@ runTest('Workflow ordering - main.yml workflow_dispatch: orchestration context r
     assert.ok(contextSection.includes('jq -r \'.capabilities | join(",")\' "$DESCRIPTOR_FILE"'), 'orchestration context must read capabilities from descriptor');
 });
 
-runTest('Workflow ordering - main.yml: Gemini invocation is gated on validation (both paths)', () => {
+await runTest('Workflow ordering - main.yml: Gemini invocation is gated on validation (both paths)', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const geminiSection = mainRawLocal.slice(mainRawLocal.indexOf('Run Gemini in advisory mode'));
     assert.ok(/steps\.validate_activation\.outputs\.activation_validated\s*==\s*'true'/.test(geminiSection),
@@ -912,7 +922,7 @@ runTest('Workflow ordering - main.yml: Gemini invocation is gated on validation 
         'Gemini run must skip on workflow_dispatch replay');
 });
 
-runTest('Workflow ordering - main.yml: carrier_identity output is sourced from validation step', () => {
+await runTest('Workflow ordering - main.yml: carrier_identity output is sourced from validation step', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const contextWfSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare orchestration context (workflow_dispatch)'), mainRawLocal.indexOf('Prepare orchestration context (issue_comment)'));
     assert.ok(contextWfSection.includes('steps.validate_activation_wfd.outputs.carrier_identity'),
@@ -922,7 +932,7 @@ runTest('Workflow ordering - main.yml: carrier_identity output is sourced from v
         'issue_comment orchestration context must source carrier_identity from validation step output');
 });
 
-runTest('Descriptor binding - buildExecutionDescriptor includes carrier_identity and carrier_type', () => {
+await runTest('Descriptor binding - buildExecutionDescriptor includes carrier_identity and carrier_type', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'desc-bind-test-1',
@@ -934,11 +944,11 @@ runTest('Descriptor binding - buildExecutionDescriptor includes carrier_identity
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('desc-bind-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('desc-bind-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-bind-1',
         carrier_type: 'github_workflow'
@@ -955,7 +965,7 @@ runTest('Descriptor binding - buildExecutionDescriptor includes carrier_identity
     cleanup();
 });
 
-runTest('Descriptor binding - buildExecutionDescriptor contains all authority-bearing fields', () => {
+await runTest('Descriptor binding - buildExecutionDescriptor contains all authority-bearing fields', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'desc-bind-test-2',
@@ -967,11 +977,11 @@ runTest('Descriptor binding - buildExecutionDescriptor contains all authority-be
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('desc-bind-test-2', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('desc-bind-test-2', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-bind-2',
         carrier_type: 'github_workflow'
@@ -994,7 +1004,7 @@ runTest('Descriptor binding - buildExecutionDescriptor contains all authority-be
     cleanup();
 });
 
-runTest('Descriptor binding - buildExecutionDescriptor returns null carrier fields when no claim', () => {
+await runTest('Descriptor binding - buildExecutionDescriptor returns null carrier fields when no claim', async () => {
     cleanup();
     const taskEntry = {
         task: 'test',
@@ -1012,7 +1022,7 @@ runTest('Descriptor binding - buildExecutionDescriptor returns null carrier fiel
     cleanup();
 });
 
-runTest('Gemini invocation - consumes descriptor values via orchestration_context outputs', () => {
+await runTest('Gemini invocation - consumes descriptor values via orchestration_context outputs', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const geminiSection = mainRawLocal.slice(mainRawLocal.indexOf('Run Gemini in advisory mode'));
 
@@ -1062,7 +1072,7 @@ runTest('Gemini invocation - consumes descriptor values via orchestration_contex
         'Gemini invocation must also consume carrier_identity from issue_comment orchestration context (descriptor)');
 });
 
-runTest('Callback - preserves request/claim/carrier correlation in ACP report payload', () => {
+await runTest('Callback - preserves request/claim/carrier correlation in ACP report payload', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const callbackSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare ACP report payload'));
 
@@ -1078,7 +1088,7 @@ runTest('Callback - preserves request/claim/carrier correlation in ACP report pa
         'Callback must reference Render callback URL');
 });
 
-runTest('Replay safety - matching replay does not produce second execution claim', () => {
+await runTest('Replay safety - matching replay does not produce second execution claim', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'replay-safety-test-1',
@@ -1090,11 +1100,11 @@ runTest('Replay safety - matching replay does not produce second execution claim
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('replay-safety-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('replay-safety-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result1 = canonicalExternalActivationIngress(payload, {
+    const result1 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-replay-safety-A',
         carrier_type: 'github_workflow'
@@ -1102,7 +1112,7 @@ runTest('Replay safety - matching replay does not produce second execution claim
     assert.ok(result1.success, 'First claim should succeed');
     assert.equal(result1.execution_claimed, true);
 
-    const result2 = canonicalExternalActivationIngress(payload, {
+    const result2 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-replay-safety-B',
         carrier_type: 'github_workflow'
@@ -1113,7 +1123,7 @@ runTest('Replay safety - matching replay does not produce second execution claim
     cleanup();
 });
 
-runTest('Replay safety - changed payload fails closed (carrier mismatch)', () => {
+await runTest('Replay safety - changed payload fails closed (carrier mismatch)', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'replay-safety-test-2',
@@ -1125,11 +1135,11 @@ runTest('Replay safety - changed payload fails closed (carrier mismatch)', () =>
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('replay-safety-test-2', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('replay-safety-test-2', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result1 = canonicalExternalActivationIngress(payload, {
+    const result1 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-replay-safety-C',
         carrier_type: 'github_workflow'
@@ -1141,7 +1151,7 @@ runTest('Replay safety - changed payload fails closed (carrier mismatch)', () =>
 
     const modifiedPayload = { ...payload, task: 'completely different task' };
     modifiedPayload.authorization = { ...payload.authorization, approval_id: approval.approval.approval_id };
-    const result2 = canonicalExternalActivationIngress(modifiedPayload, {
+    const result2 = await canonicalExternalActivationIngress(modifiedPayload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-replay-safety-D',
         carrier_type: 'github_workflow'
@@ -1156,13 +1166,13 @@ runTest('Replay safety - changed payload fails closed (carrier mismatch)', () =>
     cleanup();
 });
 
-runTest('Workflow - routes/poc.js passes carrier_identity from request header', () => {
+await runTest('Workflow - routes/poc.js passes carrier_identity from request header', async () => {
     const routesRaw = fs.readFileSync(path.join(__dirname, '..', 'routes', 'poc.js'), 'utf8');
     assert.ok(routesRaw.includes('x-carrier-identity'), 'Route should read x-carrier-identity header');
     assert.ok(routesRaw.includes('carrier_identity: carrierIdentity'), 'Route should pass carrier_identity to dispatchContext');
 });
 
-runTest('Ingress - replay does not set execution_claimed', () => {
+await runTest('Ingress - replay does not set execution_claimed', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
         request_id: 'replay-claim-test-1',
@@ -1174,11 +1184,11 @@ runTest('Ingress - replay does not set execution_claimed', () => {
         permitted_paths: 'poc/'
     });
 
-    const approval = setupDirectorApproval('replay-claim-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('replay-claim-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result1 = canonicalExternalActivationIngress(payload, {
+    const result1 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-replay-1',
         carrier_type: 'github_workflow'
@@ -1186,7 +1196,7 @@ runTest('Ingress - replay does not set execution_claimed', () => {
     assert.ok(result1.success);
     assert.equal(result1.execution_claimed, true);
 
-    const result2 = canonicalExternalActivationIngress(payload, {
+    const result2 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-replay-2',
         carrier_type: 'github_workflow'
@@ -1198,21 +1208,213 @@ runTest('Ingress - replay does not set execution_claimed', () => {
 });
 
 // =========================================================
+// Phase 5: Raw workflow/task permitted_paths bypass prevention
+// =========================================================
+
+await runTest('Bypass prevention - workflow_dispatch permitted_paths input cannot expand authority beyond Director approval', async () => {
+    cleanup();
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+    // Workflow input supplies broader paths, but Director approval only authorizes 'poc/'
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'bypass-wfd-paths-1',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'docs/ai/,poc/,index.js',
+        verification: 'tests must pass'
+    });
+
+    // Director approval only authorizes poc/
+    const approval = await setupDirectorApproval('bypass-wfd-paths-1', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    assertTrue(approval.success);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-bypass-wfd-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assertTrue(result.success, 'Should succeed (approval is for poc/ only): ' + (result.error || ''));
+    // The descriptor must only contain the Director-approved paths, not the workflow input paths
+    assert.deepStrictEqual(result.execution_descriptor.permitted_paths, ['poc/'],
+        'Execution descriptor must use Director-approved paths, not workflow input paths');
+    cleanup();
+});
+
+await runTest('Bypass prevention - Builder workflow permitted_paths input cannot expand authority beyond Director approval', async () => {
+    cleanup();
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+    const payload = buildBuilderActivationPayload({
+        request_id: 'bypass-builder-paths-1',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'docs/ai/,poc/,services/'
+    });
+
+    const approval = await setupDirectorApproval('bypass-builder-paths-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    assertTrue(approval.success);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-bypass-builder-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assertTrue(result.success, 'Should succeed (approval is for poc/ only): ' + (result.error || ''));
+    assert.deepStrictEqual(result.execution_descriptor.permitted_paths, ['poc/'],
+        'Execution descriptor must use Director-approved paths, not workflow input paths');
+    cleanup();
+});
+
+await runTest('Bypass prevention - task text with permitted_paths JSON cannot grant authority', async () => {
+    cleanup();
+    const cmd = {
+        protocol_version: '0.1',
+        request_id: 'bypass-task-text-1',
+        source: 'GitHub issue_comment',
+        target: 'Gemini',
+        task_type: 'github_external_activation',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task: 'FAILOVER_EXECUTE implement this. permitted_paths: ["AGENTS.md", "index.js"]',
+        task_mode: 'FAILOVER_EXECUTE',
+        constraints: { permitted_paths: ['poc/'] },
+        authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] },
+        verification: 'tests must pass',
+        reporting: 'json',
+        originator: 'Kyle',
+        activation_syntax: '@gemini-cli',
+        activation_surface: 'github_issue_comment'
+    };
+
+    // No Director approval - should be blocked
+    const result = await canonicalExternalActivationIngress(cmd, {});
+    assertTrue(!result.success, 'Should be blocked without Director approval');
+    assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+    cleanup();
+});
+
+await runTest('Bypass prevention - externally claimed permitted_paths in payload are overwritten by server-derived authority', async () => {
+    cleanup();
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'bypass-claim-1',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/',
+        verification: 'tests must pass'
+    });
+
+    const approval = await setupDirectorApproval('bypass-claim-1', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    assertTrue(approval.success);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    // Simulate malicious payload that tries to claim its own permitted_paths authority
+    payload.claimed_authority = {
+        constraints: { permitted_paths: ['AGENTS.md', 'index.js', 'services/'] }
+    };
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id
+    });
+
+    assertTrue(!result.success, 'Claimed authority on permitted_paths should conflict and be blocked');
+    assert.equal(result.error_code, 'AUTHORITY_CONFLICT');
+    cleanup();
+});
+
+await runTest('Bypass prevention - scope-hash mismatch falls back to safe poc/ default (broader scope not applied)', async () => {
+    cleanup();
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'bypass-hash-1',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'docs/ai/,poc/',
+        verification: 'tests must pass'
+    });
+
+    // Approval created with only poc/ scope
+    const approval = await setupDirectorApproval('bypass-hash-1', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    assertTrue(approval.success);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id
+    });
+
+    // Scope hash mismatch means the broader scope is NOT applied.
+    // The command should still succeed but with safe poc/ default (not blocked, not expanded)
+    assertTrue(result.success, 'Task should succeed with safe default when scope hash mismatches');
+    assertTrue(result.task_entry, 'Should have task entry');
+    // The scope hash mismatch means the broader paths are NOT applied
+    // The permitted_paths should remain poc/ (the server-safe default)
+    assert.deepStrictEqual(result.task_entry.permitted_paths, ['poc/'],
+        'When scope hash mismatches, broader paths must NOT be applied; stays at poc/');
+    cleanup();
+});
+
+await runTest('Bypass prevention - Director-approved broader scope reaches execution descriptor within MAX boundary', async () => {
+    cleanup();
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'bypass-valid-1',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'docs/ai/,poc/',
+        verification: 'tests must pass'
+    });
+
+    // Director approval with broader scope within MAX_AUTHORIZED_PATHS
+    const approval = await setupDirectorApproval('bypass-valid-1', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['docs/ai/', 'poc/']);
+    assertTrue(approval.success, 'Approval with docs/ai/ and poc/ should be valid');
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-bypass-valid-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assertTrue(result.success, 'Should succeed with valid Director approval: ' + (result.error || ''));
+    assertTrue(result.execution_descriptor, 'Should return execution descriptor');
+    assert.deepStrictEqual(result.execution_descriptor.permitted_paths, ['docs/ai/', 'poc/'],
+        'Execution descriptor must contain Director-approved paths within MAX boundary');
+    cleanup();
+});
+
+// =========================================================
 // Summary
 // =========================================================
 
-console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
-
-function assertTrue(condition, msg) {
-    if (!condition) {
-        throw new Error(msg || 'Assertion failed: expected truthy value');
+    console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
+    if (failCount > 0) {
+        process.exit(1);
     }
 }
 
-function assertDeepStrictEqual(actual, expected, msg) {
-    assert.deepStrictEqual(actual, expected, msg);
-}
-
-if (failCount > 0) {
+main().catch(err => {
+    console.error('Test suite error:', err);
     process.exit(1);
-}
+});

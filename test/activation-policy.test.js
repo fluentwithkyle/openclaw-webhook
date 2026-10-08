@@ -1442,6 +1442,188 @@ async function main() {
         cleanup();
     });
 
+    await runTest('Bootstrap - expired Director approval is rejected (scope-hash mismatch at ingress)', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const cmd = makeKiloFailoverCommand('bootstrap-test-expiry-1');
+        const approval = await setupDirectorApproval('bootstrap-test-expiry-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, ['poc/']);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        // Manually expire the approval
+        const approvalRecord = taskRegistry.getDirectorApproval(approval.approval.approval_id);
+        assertTrue(approvalRecord !== null);
+        approvalRecord.expiry = new Date(Date.now() - 1000).toISOString();
+        await taskRegistry.persistCache();
+        const result = await canonicalExternalActivationIngress(cmd, {
+            director_approval_id: cmd.authorization.approval_id,
+            carrier_identity: 'test-carrier-expiry-1',
+            carrier_type: 'github_workflow'
+        });
+        assertTrue(!result.success, 'Expired approval should be rejected');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - Director-approved permitted_paths within MAX_AUTHORIZED_PATHS expand authority for FAILOVER_EXECUTE', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const cmd = makeKiloFailoverCommand('bootstrap-test-8');
+        cmd.constraints.permitted_paths = ['docs/ai/', 'test/', 'poc/'];
+        const approval = await setupDirectorApproval('bootstrap-test-8', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, ['docs/ai/', 'test/', 'poc/']);
+        assertTrue(approval.success, 'Approval with paths within MAX boundary should be created');
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = await canonicalExternalActivationIngress(cmd, {
+            director_approval_id: cmd.authorization.approval_id,
+            carrier_identity: 'test-carrier-bootstrap-8',
+            carrier_type: 'github_workflow'
+        });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        assertTrue(result.execution_descriptor, 'Should return execution descriptor');
+        assertDeepEqual(result.execution_descriptor.permitted_paths, ['docs/ai/', 'test/', 'poc/'],
+            'Descriptor should carry Director-approved paths within MAX boundary');
+        const taskEntry = taskRegistry.getTask('bootstrap-test-8');
+        assertDeepEqual(taskEntry.permitted_paths, ['docs/ai/', 'test/', 'poc/'],
+            'Task entry should carry Director-approved paths within MAX boundary');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - Director-approved permitted_paths within MAX boundary expand authority for BUILDER', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const cmd = makeBuilderCommand('bootstrap-test-9');
+        cmd.constraints.permitted_paths = ['docs/ai/', 'poc/'];
+        const approval = await setupDirectorApproval('bootstrap-test-9', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, ['docs/ai/', 'poc/']);
+        assertTrue(approval.success, 'BUILDER approval with paths within MAX boundary should be created');
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = await canonicalExternalActivationIngress(cmd, {
+            director_approval_id: cmd.authorization.approval_id,
+            carrier_identity: 'test-carrier-bootstrap-9',
+            carrier_type: 'github_workflow'
+        });
+        assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+        assertDeepEqual(result.execution_descriptor.permitted_paths, ['docs/ai/', 'poc/'],
+            'BUILDER descriptor should carry Director-approved paths within MAX boundary');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - Director-approved path outside MAX_AUTHORIZED_PATHS is rejected at approval creation', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        // AGENTS.md is a protected file outside MAX_AUTHORIZED_PATHS
+        const approval = await setupDirectorApproval('bootstrap-test-10', 'Kilo', 'FAILOVER_EXECUTE',
+            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['AGENTS.md']);
+        assertTrue(!approval.success, 'Approval with AGENTS.md should be rejected by MAX_AUTHORIZED_PATHS boundary');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - Director-approved path outside MAX_AUTHORIZED_PATHS (services/) is rejected', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const approval = await setupDirectorApproval('bootstrap-test-11', 'Gemini Builder', 'BUILDER',
+            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['services/']);
+        assertTrue(!approval.success, 'Approval with services/ should be rejected');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - FAILOVER_EXECUTE and BUILDER use same MAX_AUTHORIZED_PATHS boundary', async () => {
+        const failoverPaths = activationPolicy.deriveServerAuthority('Kilo', 'FAILOVER_EXECUTE');
+        const builderPaths = activationPolicy.deriveServerAuthority('Gemini Builder', 'BUILDER');
+        assertDeepEqual(failoverPaths.permitted_paths, ['poc/'], 'FAILOVER_EXECUTE default should be poc/');
+        assertDeepEqual(builderPaths.permitted_paths, ['poc/'], 'BUILDER default should be poc/');
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('index.js') === false, 'Both must reject index.js');
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('AGENTS.md') === false, 'Both must reject AGENTS.md');
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('docs/ai/') === true, 'Both must accept docs/ai/');
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('test/foo.js') === true, 'Both must accept test/foo.js');
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('poc/') === true, 'Both must accept poc/');
+    });
+
+    await runTest('Bootstrap - Replay with modified permitted_paths fails closed (REPLAY_PAYLOAD_MISMATCH)', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const cmd = makeKiloFailoverCommand('bootstrap-test-replay-1');
+        cmd.constraints.permitted_paths = ['docs/ai/', 'poc/'];
+        const approval = await setupDirectorApproval('bootstrap-test-replay-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, ['docs/ai/', 'poc/']);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const first = await canonicalExternalActivationIngress(cmd, {
+            director_approval_id: cmd.authorization.approval_id,
+            carrier_identity: 'test-carrier-replay-1',
+            carrier_type: 'github_workflow'
+        });
+        assertTrue(first.success, 'First should succeed: ' + (first.error || ''));
+
+        // Attempt replay with different permitted_paths
+        const modified = makeKiloFailoverCommand('bootstrap-test-replay-1', { task: 'different task' });
+        modified.constraints = { permitted_paths: ['poc/'] };
+        modified.authorization = { ...cmd.authorization };
+        const second = await canonicalExternalActivationIngress(modified, {
+            director_approval_id: cmd.authorization.approval_id,
+            carrier_identity: 'test-carrier-replay-1',
+            carrier_type: 'github_workflow'
+        });
+        assertTrue(!second.success, 'Replay with modified permitted_paths should fail closed');
+        assertEqual(second.error_code, 'REPLAY_PAYLOAD_MISMATCH');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - REVIEW mode paths unchanged by MAX_AUTHORIZED_PATHS (not affected)', async () => {
+        const { validatePermittedPathsForMode } = require('../poc/schemas/acp-schema');
+        const result = validatePermittedPathsForMode('REVIEW', ['poc/']);
+        assertTrue(result.valid, 'REVIEW mode should still accept poc/');
+        const result2 = validatePermittedPathsForMode('REVIEW', ['docs/ai/', 'test/', 'poc/']);
+        assertTrue(result2.valid, 'REVIEW mode should still accept docs/, test/, poc/');
+    });
+
+    await runTest('Bootstrap - RESEARCH_DOCUMENT mode paths unchanged by MAX_AUTHORIZED_PATHS', async () => {
+        const { validatePermittedPathsForMode } = require('../poc/schemas/acp-schema');
+        const result = validatePermittedPathsForMode('RESEARCH_DOCUMENT', ['docs/ai/research/', 'docs/ai/RESEARCH_INDEX.md']);
+        assertTrue(result.valid, 'RESEARCH_DOCUMENT mode should still accept docs/ai paths');
+        const result2 = validatePermittedPathsForMode('RESEARCH_DOCUMENT', ['poc/schemas/acp-schema.js', 'test/schema.test.js']);
+        assertTrue(result2.valid, 'RESEARCH_DOCUMENT mode should still accept poc/schemas/ and test/ paths');
+    });
+
+    await runTest('Bootstrap - FAILOVER_EXECUTE raw workflow permitted_paths without Director approval falls back to poc/ in descriptor', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const cmd = makeKiloFailoverCommand('bootstrap-test-raw-1');
+        // Command tries to supply broader paths externally
+        cmd.constraints.permitted_paths = ['docs/ai/', 'index.js', 'poc/'];
+        const approval = await setupDirectorApproval('bootstrap-test-raw-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, ['poc/']);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = await canonicalExternalActivationIngress(cmd, {
+            director_approval_id: cmd.authorization.approval_id,
+            carrier_identity: 'test-carrier-raw-1',
+            carrier_type: 'github_workflow'
+        });
+        assertTrue(result.success, 'Should succeed (approval is for poc/ only): ' + (result.error || ''));
+        // The descriptor should have poc/ from the approved scope, not the external 'docs/ai/' or 'index.js'
+        assertDeepEqual(result.execution_descriptor.permitted_paths, ['poc/'],
+            'Descriptor should have only Director-approved poc/, not externally supplied broader paths');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - FAILOVER_EXECUTE external payload permitted_paths do not grant authority without Director approval', async () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('bootstrap-test-raw-2');
+        // Try to supply broader paths externally without Director approval
+        cmd.constraints.permitted_paths = ['docs/ai/', 'poc/', 'test/'];
+        const result = await canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success, 'Should be blocked without Director approval');
+        assertEqual(result.status, 'BLOCKED');
+        assertEqual(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - BUILDER external payload permitted_paths do not grant authority without Director approval', async () => {
+        cleanup();
+        const cmd = makeBuilderCommand('bootstrap-test-raw-3');
+        cmd.constraints.permitted_paths = ['docs/ai/', 'poc/', 'test/'];
+        const result = await canonicalExternalActivationIngress(cmd, {});
+        assertTrue(!result.success, 'Should be blocked without Director approval');
+        assertEqual(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+        cleanup();
+    });
+
     // =========================================================
     // Summary
     // =========================================================

@@ -28,9 +28,9 @@ const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
 let passCount = 0;
 let failCount = 0;
 
-function runTest(name, fn) {
+async function runTest(name, fn) {
     try {
-        fn();
+        await fn();
         console.log(`PASS: ${name}`);
         passCount++;
     } catch (err) {
@@ -51,7 +51,7 @@ function assertTrue(condition, msg) {
     }
 }
 
-function setupDirectorApproval(requestId, target, taskMode, capabilities, permittedPaths) {
+async function setupDirectorApproval(requestId, target, taskMode, capabilities, permittedPaths) {
     return taskRegistry.createDirectorApproval({
         request_id: requestId,
         target: target,
@@ -63,13 +63,17 @@ function setupDirectorApproval(requestId, target, taskMode, capabilities, permit
     });
 }
 
-console.log('=== External Activation Procedure Machine-Verification Tests ===\n');
+async function main() {
+    process.env.ACP_POC_TRIGGER_SECRET = 'test-secret';
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+
+    console.log('=== External Activation Procedure Machine-Verification Tests ===\n');
 
 // =========================================================
 // 1. Workflow uses workflow_dispatch trigger
 // =========================================================
 
-runTest('Procedure - main.yml uses workflow_dispatch trigger with required inputs', () => {
+await runTest('Procedure - main.yml uses workflow_dispatch trigger with required inputs', async () => {
     assertTrue(mainRaw.includes('workflow_dispatch:'), 'main.yml must have workflow_dispatch trigger');
     assertTrue(mainRaw.includes('inputs:'), 'main.yml must define inputs');
     assertTrue(mainRaw.includes('request_id:'), 'main.yml must have request_id input');
@@ -79,7 +83,7 @@ runTest('Procedure - main.yml uses workflow_dispatch trigger with required input
     assertTrue(mainRaw.includes('required: true'), 'main.yml must have required inputs');
 });
 
-runTest('Procedure - gemini-builder.yml uses workflow_dispatch trigger with required inputs', () => {
+await runTest('Procedure - gemini-builder.yml uses workflow_dispatch trigger with required inputs', async () => {
     assertTrue(builderRaw.includes('workflow_dispatch:'), 'gemini-builder.yml must have workflow_dispatch trigger');
     assertTrue(builderRaw.includes('inputs:'), 'gemini-builder.yml must define inputs');
     assertTrue(builderRaw.includes('request_id:'), 'gemini-builder.yml must have request_id input');
@@ -89,14 +93,14 @@ runTest('Procedure - gemini-builder.yml uses workflow_dispatch trigger with requ
     assertTrue(builderRaw.includes('builder_execution_id:'), 'gemini-builder.yml must have builder_execution_id input');
 });
 
-runTest('Procedure - main.yml canonical ingress is the activation entry point', () => {
+await runTest('Procedure - main.yml canonical ingress is the activation entry point', async () => {
     assertTrue(mainRaw.includes('poc/validate-external-activation.js'), 'main.yml must call validate-external-activation.js');
     assertTrue(mainRaw.includes('CALLBACK_BASE_URL'), 'main.yml must reference CALLBACK_BASE_URL');
     assertTrue(mainRaw.includes('ACP_POC_TRIGGER_SECRET'), 'main.yml must reference ACP_POC_TRIGGER_SECRET');
     assertTrue(validatorRaw.includes('/poc/activation/ingress'), 'external-activation-validator.js must call the canonical ingress path');
 });
 
-runTest('Procedure - issue_comment activation safely serializes multiline comment JSON', () => {
+await runTest('Procedure - issue_comment activation safely serializes multiline comment JSON', async () => {
     assertTrue(mainRaw.includes('ACTIVATION_JSON=$(jq -n'), 'issue_comment validation must build JSON with jq');
     assertTrue(mainRaw.includes('--arg comment_body "$COMMENT_BODY"'), 'comment body must be passed to jq as an argument');
     assertTrue(mainRaw.includes('node poc/validate-external-activation.js gemini-issue-comment "$ACTIVATION_JSON"'),
@@ -119,7 +123,7 @@ runTest('Procedure - issue_comment activation safely serializes multiline commen
 // 2. Canonical ingress validation step before agent execution
 // =========================================================
 
-runTest('Procedure - main.yml: canonical ingress validation appears before Gemini CLI run (issue_comment)', () => {
+await runTest('Procedure - main.yml: canonical ingress validation appears before Gemini CLI run (issue_comment)', async () => {
     const validateIdx = mainRaw.indexOf('Validate external activation through canonical ingress (issue_comment)');
     assertTrue(validateIdx !== -1, 'issue_comment validation step must exist');
     const geminiIdx = mainRaw.indexOf('Run Gemini in advisory mode');
@@ -127,7 +131,7 @@ runTest('Procedure - main.yml: canonical ingress validation appears before Gemin
     assertTrue(validateIdx < geminiIdx, 'validation must come before Gemini CLI run');
 });
 
-runTest('Procedure - main.yml: canonical ingress validation appears before Gemini CLI run (workflow_dispatch)', () => {
+await runTest('Procedure - main.yml: canonical ingress validation appears before Gemini CLI run (workflow_dispatch)', async () => {
     const validateIdx = mainRaw.indexOf('Validate external activation through canonical ingress (workflow_dispatch)');
     assertTrue(validateIdx !== -1, 'workflow_dispatch validation step must exist');
     const geminiIdx = mainRaw.indexOf('Run Gemini in advisory mode');
@@ -135,7 +139,7 @@ runTest('Procedure - main.yml: canonical ingress validation appears before Gemin
     assertTrue(validateIdx < geminiIdx, 'validation must come before Gemini CLI run');
 });
 
-runTest('Procedure - gemini-builder.yml: canonical ingress validation appears before Builder run', () => {
+await runTest('Procedure - gemini-builder.yml: canonical ingress validation appears before Builder run', async () => {
     const validateIdx = builderRaw.indexOf('Validate external activation through canonical ingress');
     assertTrue(validateIdx !== -1, 'Builder validation step must exist');
     const builderRunIdx = builderRaw.indexOf('Run Gemini Builder');
@@ -147,7 +151,7 @@ runTest('Procedure - gemini-builder.yml: canonical ingress validation appears be
 // 3. Execution descriptor persistence and consumption
 // =========================================================
 
-runTest('Procedure - validate-external-activation.js persists execution descriptor file', () => {
+await runTest('Procedure - validate-external-activation.js persists execution descriptor file', async () => {
     assertTrue(validateScriptRaw_includes('EXECUTION_DESCRIPTOR_FILE'), 'validate-external-activation.js must reference EXECUTION_DESCRIPTOR_FILE env var');
     assertTrue(validateScriptRaw_includes('execution-descriptor.json'), 'validate-external-activation.js must default to execution-descriptor.json');
     assertTrue(validateScriptRaw_includes('writeFileSync'), 'validate-external-activation.js must persist descriptor via fs.writeFileSync');
@@ -157,7 +161,7 @@ function validateScriptRaw_includes(str) {
     return validateScriptRaw.includes(str);
 }
 
-runTest('Procedure - main.yml orchestration context consumes execution descriptor (not workflow inputs)', () => {
+await runTest('Procedure - main.yml orchestration context consumes execution descriptor (not workflow inputs)', async () => {
     assertTrue(mainRaw.includes('execution-descriptor.json'), 'main.yml must reference execution-descriptor.json');
     assertTrue(mainRaw.includes("jq -r '.request_id' \"$DESCRIPTOR_FILE\""), 'main.yml must read request_id from descriptor via jq');
     assertTrue(mainRaw.includes("jq -r '.task_mode' \"$DESCRIPTOR_FILE\""), 'main.yml must read task_mode from descriptor via jq');
@@ -165,7 +169,7 @@ runTest('Procedure - main.yml orchestration context consumes execution descripto
     assertTrue(mainRaw.includes("jq -r '.permitted_paths | join(\",\")' \"$DESCRIPTOR_FILE\""), 'main.yml must read permitted_paths from descriptor via jq');
 });
 
-runTest('Procedure - gemini-builder.yml orchestration context consumes execution descriptor (not workflow inputs)', () => {
+await runTest('Procedure - gemini-builder.yml orchestration context consumes execution descriptor (not workflow inputs)', async () => {
     assertTrue(builderRaw.includes('execution-descriptor.json'), 'gemini-builder.yml must reference execution-descriptor.json');
     assertTrue(builderRaw.includes("jq -r '.request_id' \"$DESCRIPTOR_FILE\""), 'gemini-builder.yml must read request_id from descriptor via jq');
     assertTrue(builderRaw.includes("jq -r '.task_mode' \"$DESCRIPTOR_FILE\""), 'gemini-builder.yml must read task_mode from descriptor via jq');
@@ -173,7 +177,7 @@ runTest('Procedure - gemini-builder.yml orchestration context consumes execution
     assertTrue(builderRaw.includes("jq -r '.permitted_paths | join(\",\")' \"$DESCRIPTOR_FILE\""), 'gemini-builder.yml must read permitted_paths from descriptor via jq');
 });
 
-runTest('Procedure - Gemini invocation consumes descriptor values via orchestration_context outputs', () => {
+await runTest('Procedure - Gemini invocation consumes descriptor values via orchestration_context outputs', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const geminiSection = mainRawLocal.slice(mainRawLocal.indexOf('Run Gemini in advisory mode'));
 
@@ -200,7 +204,7 @@ runTest('Procedure - Gemini invocation consumes descriptor values via orchestrat
         'Gemini must consume permitted_paths from orchestration context (descriptor)');
 });
 
-runTest('Procedure - Gemini Builder invocation consumes descriptor values via orchestration_context outputs', () => {
+await runTest('Procedure - Gemini Builder invocation consumes descriptor values via orchestration_context outputs', async () => {
     const builderSection = builderRaw.slice(builderRaw.indexOf('Run Gemini Builder'));
     assertTrue(builderSection.includes('steps.orchestration_context.outputs.request_id'), 'Builder must consume request_id from orchestration_context');
     assertTrue(builderSection.includes('steps.orchestration_context.outputs.task'), 'Builder must consume task from orchestration_context');
@@ -215,7 +219,7 @@ runTest('Procedure - Gemini Builder invocation consumes descriptor values via or
 // 4. Execution claim gating on successful activation
 // =========================================================
 
-runTest('Procedure - ingress does NOT call getDispatcher (admission-only, no double-dispatch)', () => {
+await runTest('Procedure - ingress does NOT call getDispatcher (admission-only, no double-dispatch)', async () => {
     const ingressRouteSection = ingressRouteRaw.slice(ingressRouteRaw.indexOf("router.post('/activation/ingress'"));
     const ingressRouteEnd = ingressRouteSection.indexOf('module.exports');
     const ingressHandler = ingressRouteSection.slice(0, ingressRouteEnd);
@@ -223,13 +227,13 @@ runTest('Procedure - ingress does NOT call getDispatcher (admission-only, no dou
     assertTrue(ingressRouteRaw.includes('// dispatch the agent directly, preventing recursive ingress'), 'Route must document admission-only behavior');
 });
 
-runTest('Procedure - activation-ingress.js does NOT call getDispatcher (admission-only, no double-dispatch)', () => {
+await runTest('Procedure - activation-ingress.js does NOT call getDispatcher (admission-only, no double-dispatch)', async () => {
     assertTrue(!activationIngressRaw.includes('getDispatcher('), 'activation-ingress.js must not call getDispatcher');
     assertTrue(!activationIngressRaw.includes('require(\'../services/transport-provider\')'), 'activation-ingress.js must not import transport-provider');
     assertTrue(!activationIngressRaw.includes('await dispatch'), 'activation-ingress.js must not dispatch');
 });
 
-runTest('Procedure - ingress returns server-derived execution descriptor', () => {
+await runTest('Procedure - ingress returns server-derived execution descriptor', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -243,11 +247,11 @@ runTest('Procedure - ingress returns server-derived execution descriptor', () =>
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('proc-desc-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('proc-desc-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-proc-1',
         carrier_type: 'github_workflow'
@@ -260,7 +264,7 @@ runTest('Procedure - ingress returns server-derived execution descriptor', () =>
     cleanup();
 });
 
-runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)', () => {
+await runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -274,11 +278,11 @@ runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('proc-once-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('proc-once-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result1 = canonicalExternalActivationIngress(payload, {
+    const result1 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-once-A',
         carrier_type: 'github_workflow'
@@ -287,7 +291,7 @@ runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)
     assertTrue(result1.success, 'First claim should succeed');
     assertTrue(result1.execution_claim_id, 'First claim should have execution_claim_id');
 
-    const result2 = canonicalExternalActivationIngress(payload, {
+    const result2 = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-once-B',
         carrier_type: 'github_workflow'
@@ -301,7 +305,7 @@ runTest('Procedure - execution claim is exactly-once (concurrent claims blocked)
 // 5. request_id / execution_claim_id / carrier_identity correlation
 // =========================================================
 
-runTest('Procedure - descriptor binds request_id, execution_claim_id, and carrier_identity', () => {
+await runTest('Procedure - descriptor binds request_id, execution_claim_id, and carrier_identity', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -315,11 +319,11 @@ runTest('Procedure - descriptor binds request_id, execution_claim_id, and carrie
         verification: 'tests must pass'
     });
 
-    const approval = setupDirectorApproval('proc-corr-test-1', 'Gemini Builder', 'BUILDER',
+    const approval = await setupDirectorApproval('proc-corr-test-1', 'Gemini Builder', 'BUILDER',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id,
         carrier_identity: 'github-workflow-corr-1',
         carrier_type: 'github_workflow'
@@ -340,7 +344,7 @@ runTest('Procedure - descriptor binds request_id, execution_claim_id, and carrie
     cleanup();
 });
 
-runTest('Procedure - callback payload preserves request/claim/carrier correlation', () => {
+await runTest('Procedure - callback payload preserves request/claim/carrier correlation', async () => {
     const mainRawLocal = fs.readFileSync(MAIN_WF_PATH, 'utf8');
     const callbackSection = mainRawLocal.slice(mainRawLocal.indexOf('Prepare ACP report payload'));
 
@@ -367,7 +371,7 @@ runTest('Procedure - callback payload preserves request/claim/carrier correlatio
 // 6. Server-derived authority (no workflow-input authority reconstruction)
 // =========================================================
 
-runTest('Procedure - server-derived authority overrides externally claimed capabilities', () => {
+await runTest('Procedure - server-derived authority overrides externally claimed capabilities', async () => {
     cleanup();
     const { buildActivationPayloadForWorkflowDispatch } = require('../poc/external-activation-validator');
     const payload = buildActivationPayloadForWorkflowDispatch({
@@ -381,9 +385,7 @@ runTest('Procedure - server-derived authority overrides externally claimed capab
         verification: 'tests must pass'
     });
 
-    const { setupDirectorApproval: setupApproval } = { setupDirectorApproval: require('./external-activation-bypass.test.js') ? null : null };
-
-    const approval = setupDirectorApproval('proc-auth-test-1', 'Gemini', 'FAILOVER_EXECUTE',
+    const approval = await setupDirectorApproval('proc-auth-test-1', 'Gemini', 'FAILOVER_EXECUTE',
         ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
     payload.authorization.approval_id = approval.approval.approval_id;
 
@@ -392,7 +394,7 @@ runTest('Procedure - server-derived authority overrides externally claimed capab
         authorization: { capabilities: ['read_only'] }
     };
 
-    const result = canonicalExternalActivationIngress(payload, {
+    const result = await canonicalExternalActivationIngress(payload, {
         director_approval_id: payload.authorization.approval_id
     });
 
@@ -401,7 +403,7 @@ runTest('Procedure - server-derived authority overrides externally claimed capab
     cleanup();
 });
 
-runTest('Procedure - workflow does not reconstruct authority from workflow inputs', () => {
+await runTest('Procedure - workflow does not reconstruct authority from workflow inputs', async () => {
     assertTrue(mainRaw.includes('ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode }}'),
         'main.yml must source task_mode from orchestration_context (descriptor), not inputs');
     assertTrue(mainRaw.includes('ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context_wfd.outputs.capabilities || steps.orchestration_context_ic.outputs.capabilities }}'),
@@ -419,7 +421,7 @@ runTest('Procedure - workflow does not reconstruct authority from workflow input
 // 7. Workflow gating on validation + replay
 // =========================================================
 
-runTest('Procedure - main.yml Run Gemini step gated on validation (both paths)', () => {
+await runTest('Procedure - main.yml Run Gemini step gated on validation (both paths)', async () => {
     const geminiSection = mainRaw.slice(mainRaw.indexOf('Run Gemini in advisory mode'));
     assertTrue(/steps\.validate_activation\.outputs\.activation_validated\s*==\s*'true'/.test(geminiSection),
         'Gemini run must be gated on issue_comment validation output');
@@ -431,7 +433,7 @@ runTest('Procedure - main.yml Run Gemini step gated on validation (both paths)',
         'Gemini run must skip on workflow_dispatch replay');
 });
 
-runTest('Procedure - gemini-builder.yml Run Gemini Builder gated on validation + replay', () => {
+await runTest('Procedure - gemini-builder.yml Run Gemini Builder gated on validation + replay', async () => {
     const builderSection = builderRaw.slice(builderRaw.indexOf('Run Gemini Builder'), builderRaw.indexOf('Commit and push'));
     assertTrue(/steps\.validate_activation\.outputs\.activation_validated\s*==\s*'true'/.test(builderSection),
         'Builder run must be gated on activation validation');
@@ -439,7 +441,7 @@ runTest('Procedure - gemini-builder.yml Run Gemini Builder gated on validation +
         'Builder run must skip on replay');
 });
 
-runTest('Procedure - orchestration_context gated on validation + non-replay', () => {
+await runTest('Procedure - orchestration_context gated on validation + non-replay', async () => {
     assertTrue(/steps\.validate_activation_wfd\.outputs\.activation_validated\s*==\s*'true'/.test(mainRaw),
         'main.yml: orchestration_context must be gated on activation_validated');
     assertTrue(/!steps\.validate_activation_wfd\.outputs\.replay/.test(mainRaw),
@@ -459,13 +461,13 @@ runTest('Procedure - orchestration_context gated on validation + non-replay', ()
 // 8. External activation validator transmits carrier identity
 // =========================================================
 
-runTest('Procedure - external-activation-validator.js transmits x-carrier-identity header', () => {
+await runTest('Procedure - external-activation-validator.js transmits x-carrier-identity header', async () => {
     assertTrue(validatorRaw.includes('x-carrier-identity'), 'Validator must transmit x-carrier-identity header');
     assertTrue(validatorRaw.includes('GITHUB_RUN_ID'), 'Validator must derive carrier identity from GITHUB_RUN_ID');
     assertTrue(validatorRaw.includes('x-poc-trigger-secret'), 'Validator must transmit x-poc-trigger-secret header');
 });
 
-runTest('Procedure - routes/poc.js passes carrier_identity from request header', () => {
+await runTest('Procedure - routes/poc.js passes carrier_identity from request header', async () => {
     assertTrue(ingressRouteRaw.includes('x-carrier-identity'), 'Route must read x-carrier-identity header');
     assertTrue(ingressRouteRaw.includes('carrier_identity: carrierIdentity'), 'Route must pass carrier_identity to dispatchContext');
 });
@@ -474,7 +476,7 @@ runTest('Procedure - routes/poc.js passes carrier_identity from request header',
 // 9. Consequential command requires Director approval
 // =========================================================
 
-runTest('Procedure - FAILOVER_EXECUTE without Director approval fails closed', () => {
+await runTest('Procedure - FAILOVER_EXECUTE without Director approval fails closed', async () => {
     cleanup();
     const { buildActivationPayloadForWorkflowDispatch } = require('../poc/external-activation-validator');
     const payload = buildActivationPayloadForWorkflowDispatch({
@@ -488,14 +490,14 @@ runTest('Procedure - FAILOVER_EXECUTE without Director approval fails closed', (
         verification: 'tests must pass'
     });
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'FAILOVER_EXECUTE should be blocked without Director approval');
     assert.equal(result.status, 'BLOCKED');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
     cleanup();
 });
 
-runTest('Procedure - BUILDER without Director approval fails closed', () => {
+await runTest('Procedure - BUILDER without Director approval fails closed', async () => {
     cleanup();
     const { buildBuilderActivationPayload } = require('../poc/external-activation-validator');
     const payload = buildBuilderActivationPayload({
@@ -508,7 +510,7 @@ runTest('Procedure - BUILDER without Director approval fails closed', () => {
         permitted_paths: 'poc/'
     });
 
-    const result = canonicalExternalActivationIngress(payload, {});
+    const result = await canonicalExternalActivationIngress(payload, {});
     assert.ok(!result.success, 'BUILDER should be blocked without Director approval');
     assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
     cleanup();
@@ -518,7 +520,7 @@ runTest('Procedure - BUILDER without Director approval fails closed', () => {
 // 10. Procedure document is self-consistent and references real paths
 // =========================================================
 
-runTest('Procedure - EXTERNAL_ACTIVATION_PROCEDURE.md exists and references canonical ingress', () => {
+await runTest('Procedure - EXTERNAL_ACTIVATION_PROCEDURE.md exists and references canonical ingress', async () => {
     assertTrue(procedureRaw.includes('canonical ingress'), 'Procedure must reference canonical ingress');
     assertTrue(procedureRaw.includes('/poc/activation/ingress'), 'Procedure must reference the ingress path');
     assertTrue(procedureRaw.includes('poc/activation-ingress.js'), 'Procedure must reference activation-ingress.js');
@@ -528,7 +530,7 @@ runTest('Procedure - EXTERNAL_ACTIVATION_PROCEDURE.md exists and references cano
     assertTrue(procedureRaw.includes('test/external-activation-bypass.test.js'), 'Procedure must reference bypass tests');
 });
 
-runTest('Procedure - EXTERNAL_ACTIVATION_PROCEDURE.md references correct workflow paths', () => {
+await runTest('Procedure - EXTERNAL_ACTIVATION_PROCEDURE.md references correct workflow paths', async () => {
     assertTrue(procedureRaw.includes('.github/workflows/main.yml'), 'Procedure must reference main.yml');
     assertTrue(procedureRaw.includes('.github/workflows/gemini-builder.yml'), 'Procedure must reference gemini-builder.yml');
 });
@@ -537,7 +539,7 @@ runTest('Procedure - EXTERNAL_ACTIVATION_PROCEDURE.md references correct workflo
 // 11. Failure: procedure references nonexistent canonical workflow or required activation input
 // =========================================================
 
-runTest('Procedure - tests fail if procedure references nonexistent workflow', () => {
+await runTest('Procedure - tests fail if procedure references nonexistent workflow', async () => {
     const nonexistentWorkflow = '.github/workflows/nonexistent-workflow.yml';
     assertTrue(!fs.existsSync(path.join(__dirname, '..', nonexistentWorkflow)),
         'Confirmed: nonexistent workflow does not exist (validation baseline)');
@@ -545,7 +547,7 @@ runTest('Procedure - tests fail if procedure references nonexistent workflow', (
         'Procedure must not reference nonexistent workflow paths');
 });
 
-runTest('Procedure - procedure does not reference GATEWAY_MODE or guessed env vars', () => {
+await runTest('Procedure - procedure does not reference GATEWAY_MODE or guessed env vars', async () => {
     assertTrue(!procedureRaw.includes('GATEWAY_MODE'), 'Procedure must not reference guessed environment variable');
     assertTrue(!procedureRaw.includes('gateway.mode'), 'Procedure must not reference openclaw-render.json gateway.mode');
 });
@@ -554,8 +556,13 @@ runTest('Procedure - procedure does not reference GATEWAY_MODE or guessed env va
 // Summary
 // =========================================================
 
-console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
-
-if (failCount > 0) {
-    process.exit(1);
+    console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
+    if (failCount > 0) {
+        process.exit(1);
+    }
 }
+
+main().catch(err => {
+    console.error('Test suite error:', err);
+    process.exit(1);
+});
