@@ -750,6 +750,71 @@ await runTest('Execution claim - releaseExecutionClaim clears the claim', async 
     cleanup();
 });
 
+await runTest('Execution claim - stale claim lock is recovered and overwritten by new carrier', async () => {
+    cleanup();
+    const payload = buildBuilderActivationPayload({
+        request_id: 'claim-test-stale-1',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/'
+    });
+
+    const approval = await setupDirectorApproval('claim-test-stale-1', 'Gemini Builder', 'BUILDER',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result1 = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-stale-carrier-A',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(result1.success, 'First claim should succeed: ' + (result1.error || ''));
+    assert.ok(result1.execution_claim_id, 'First claim should return execution_claim_id');
+
+    const firstClaimId = result1.execution_claim_id;
+    const lockPath = path.join(taskRegistry.CLAIMS_DIR, 'claim-test-stale-1.claim.lock');
+    assert.ok(fs.existsSync(lockPath), 'Claim lock file should exist on disk');
+
+    const staleEpoch = Date.now() - 16 * 60 * 1000;
+    const staleClaim = {
+        request_id: 'claim-test-stale-1',
+        execution_claim_id: firstClaimId,
+        carrier_identity: 'github-workflow-stale-carrier-A',
+        carrier_type: 'github_workflow',
+        claimed_at: new Date(staleEpoch).toISOString(),
+        claim_epoch: staleEpoch
+    };
+    fs.writeFileSync(lockPath, JSON.stringify(staleClaim), 'utf8');
+
+    const entry = taskRegistry.getTask('claim-test-stale-1');
+    assert.ok(entry, 'Task entry should exist');
+    entry.execution_claim.claim_epoch = staleEpoch;
+    entry.execution_claim.claimed_at = new Date(staleEpoch).toISOString();
+
+    const staleClaimRead = fs.readFileSync(lockPath, 'utf8');
+    const parsedStale = JSON.parse(staleClaimRead);
+    assert.ok(taskRegistry.isClaimStale(parsedStale), 'On-disk lock should be detected as stale');
+    assert.ok(taskRegistry.isClaimStale(entry.execution_claim), 'In-memory claim should be detected as stale');
+
+    const result2 = await taskRegistry.claimExecutionContext('claim-test-stale-1', {
+        carrier_id: 'github-workflow-stale-carrier-B',
+        carrier_type: 'github_workflow'
+    });
+    assert.ok(result2.success, 'Stale claim should be recovered and overwritten: ' + (result2.error || ''));
+    assert.strictEqual(result2.error_code, 'CLAIMED');
+    assert.ok(result2.execution_claim_id, 'Second claim should return a new execution_claim_id');
+    assert.notStrictEqual(result2.execution_claim_id, firstClaimId, 'New claim_id should differ from stale claim');
+
+    const activeClaim = taskRegistry.getExecutionClaim('claim-test-stale-1');
+    assert.ok(activeClaim, 'Should have active claim after stale recovery');
+    assert.strictEqual(activeClaim.execution_claim_id, result2.execution_claim_id);
+    assert.strictEqual(activeClaim.carrier_identity, 'github-workflow-stale-carrier-B');
+    cleanup();
+});
+
 await runTest('Descriptor - buildExecutionDescriptor binds authority-bearing fields from task entry', async () => {
     cleanup();
     const payload = buildBuilderActivationPayload({
