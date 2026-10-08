@@ -151,8 +151,74 @@ function validateExternalActivation(params, callbackUrl, callbackSecret, directo
     });
 }
 
+const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE', 'BUILDER', 'RESEARCH_DOCUMENT'];
+
+function extractEmbeddedAcpDescriptor(commentBody) {
+    if (typeof commentBody !== 'string' || commentBody.trim() === '') {
+        return null;
+    }
+
+    var stripped = commentBody.replace('@gemini-cli', '').trim();
+
+    var match = stripped.match(/\{[\s\S]*\}/);
+    if (!match) {
+        return null;
+    }
+
+    var candidate;
+    try {
+        candidate = JSON.parse(match[0]);
+    } catch (e) {
+        return null;
+    }
+
+    if (!candidate || typeof candidate !== 'object') {
+        return null;
+    }
+
+    if (candidate.task_mode && VALID_TASK_MODES.includes(candidate.task_mode) && candidate.task_mode !== 'REVIEW') {
+        return candidate;
+    }
+
+    return null;
+}
+
 function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch, approvalId) {
     const stripped = commentBody.replace('@gemini-cli', '').trim();
+
+    var embeddedDescriptor = extractEmbeddedAcpDescriptor(commentBody);
+
+    if (embeddedDescriptor) {
+        const taskMode = embeddedDescriptor.task_mode;
+        const capabilities = (embeddedDescriptor.capabilities && Array.isArray(embeddedDescriptor.capabilities))
+            ? embeddedDescriptor.capabilities.join(',')
+            : 'read_only';
+        const permittedPaths = (embeddedDescriptor.permitted_paths && Array.isArray(embeddedDescriptor.permitted_paths))
+            ? embeddedDescriptor.permitted_paths.join(',')
+            : 'poc/';
+        const task = (typeof embeddedDescriptor.task === 'string') ? embeddedDescriptor.task : stripped;
+        const verification = embeddedDescriptor.verification || 'Review the request and provide analysis, risk assessment, and implementation plans.';
+
+        return {
+            protocol_version: '0.1',
+            request_id: String(commentId),
+            source: 'GitHub issue_comment',
+            target: embeddedDescriptor.target || 'Gemini',
+            task_type: 'github_external_activation',
+            repository: repository,
+            base_branch: baseBranch,
+            task: task,
+            task_mode: taskMode,
+            constraints: { permitted_paths: permittedPaths.split(',') },
+            authorization: { capabilities: capabilities.split(','), ...(approvalId ? { approval_id: approvalId } : {}) },
+            verification: verification,
+            reporting: 'json',
+            originator: 'Kyle',
+            activation_surface: 'github_issue_comment',
+            activation_syntax: '@gemini-cli',
+            embedded_acp_descriptor: embeddedDescriptor
+        };
+    }
 
     const taskMode = 'REVIEW';
     const capabilities = 'read_only';
@@ -248,5 +314,6 @@ module.exports = {
     generateDirectorOriginAssertion,
     verifyDirectorOriginAssertion,
     verifyDirectorOriginAssertionAgainstTaskRegistry,
+    extractEmbeddedAcpDescriptor,
     ACTIVATION_INGRESS_PATH
 };

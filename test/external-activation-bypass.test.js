@@ -1618,15 +1618,19 @@ await runTest('Regression 7 - FAILOVER_EXECUTE workflow_dispatch with Director a
     cleanup();
 });
 
-await runTest('Regression 8 - main.yml does not derive task_mode from comment prefix parsing', async () => {
+await runTest('Regression 8 - main.yml issue_comment path defaults to REVIEW for plain comments, extracts embedded descriptor task_mode when present', async () => {
     assert.ok(mainRaw.includes('EXTRACT Gemini request') || mainRaw.includes('Extract Gemini request'),
         'main.yml should still have the request extraction step');
     assert.ok(!mainRaw.match(/grep.*FAILOVER_EXECUTE/i),
-        'main.yml must NOT parse FAILOVER_EXECUTE from comment prefix');
-    assert.ok(!mainRaw.match(/task_mode.*FAILOVER_EXECUTE.*comment/i),
-        'main.yml must NOT derive FAILOVER_EXECUTE task_mode from comment');
-    assert.ok(mainRaw.includes('task_mode=REVIEW'),
-        'main.yml should always set task_mode=REVIEW for issue_comment');
+        'main.yml must NOT parse FAILOVER_EXECUTE from comment prefix (comment prefix is not authority)');
+    assert.ok(mainRaw.includes('CANDIDATE_TASK_MODE'),
+        'main.yml issue_comment request_comment step must support embedded descriptor extraction');
+    assert.ok(mainRaw.includes('CANDIDATE_TASK_MODE="REVIEW"'),
+        'main.yml issue_comment request_comment step must default to REVIEW for plain @gemini-cli comments');
+    assert.ok(mainRaw.includes('EMBEDDED_JSON'),
+        'main.yml issue_comment request_comment step must search for embedded JSON descriptor in comment');
+    assert.ok(!mainRaw.match(/grep.*task_mode.*comment/i) || mainRaw.match(/CANDIDATE_TASK_MODE.*REVIEW/),
+        'main.yml must NOT derive task_mode from comment prefix parsing; plain comments default to REVIEW');
 });
 
 // =========================================================
@@ -1777,6 +1781,152 @@ await runTest('Regression 15 - issue_comment orchestration context consumes desc
         'issue_comment orchestration context must read task_mode from descriptor file');
     assertTrue(!icContextSection.includes('steps.request_comment.outputs.task_mode'),
         'issue_comment orchestration context must NOT fall back to request_comment task_mode output');
+});
+
+// Regression: buildActivationPayloadForIssueComment must detect embedded ACP descriptors
+await runTest('Regression 16 - buildActivationPayloadForIssueComment extracts RESEARCH_DOCUMENT from embedded descriptor', async () => {
+    const embeddedDescriptor = JSON.stringify({
+        task_name: 'TASK-RESEARCH-DOCUMENTATION-SOP-IMPLEMENT-001',
+        task: 'Implement the research documentation SOP',
+        target: 'Gemini',
+        task_mode: 'RESEARCH_DOCUMENT',
+        capabilities: ['read_only', 'modify_files', 'commit', 'push'],
+        permitted_paths: ['docs/ai/research/', 'docs/ai/TASK_LOG.md']
+    });
+    const commentBody = '@gemini-cli ' + embeddedDescriptor;
+
+    const payload = buildActivationPayloadForIssueComment(
+        'regression-canonical-16',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    assert.equal(payload.task_mode, 'RESEARCH_DOCUMENT',
+        'buildActivationPayloadForIssueComment must extract RESEARCH_DOCUMENT from embedded descriptor');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only', 'modify_files', 'commit', 'push'],
+        'buildActivationPayloadForIssueComment must extract capabilities from embedded descriptor');
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['docs/ai/research/', 'docs/ai/TASK_LOG.md'],
+        'buildActivationPayloadForIssueComment must extract permitted_paths from embedded descriptor');
+    assertTrue(payload.embedded_acp_descriptor,
+        'buildActivationPayloadForIssueComment must set embedded_acp_descriptor flag');
+
+    // Verify canonical ingress preserves RESEARCH_DOCUMENT and server-derives authority
+    cleanup();
+    const result = await canonicalExternalActivationIngress(payload, {});
+    assertTrue(result.success, 'RESEARCH_DOCUMENT via issue_comment embedded descriptor should succeed: ' + (result.error || ''));
+    assert.equal(result.command.task_mode, 'RESEARCH_DOCUMENT',
+        'Canonical ingress must preserve RESEARCH_DOCUMENT task_mode from embedded descriptor');
+    assert.equal(result.activation_provenance.activation_task_mode, 'RESEARCH_DOCUMENT',
+        'Activation provenance must preserve RESEARCH_DOCUMENT');
+    // Server-derived capabilities override externally supplied values
+    const policyEntry = activationPolicy.getPolicyEntry('Gemini', 'RESEARCH_DOCUMENT');
+    assert.deepStrictEqual(result.command.authorization.capabilities,
+        policyEntry.required_capabilities,
+        'Server-derived capabilities must override embedded descriptor capabilities');
+    cleanup();
+});
+
+await runTest('Regression 17 - buildActivationPayloadForIssueComment defaults to REVIEW for plain comment', async () => {
+    const payload = buildActivationPayloadForIssueComment(
+        'regression-canonical-17',
+        '@gemini-cli please review the architecture',
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'buildActivationPayloadForIssueComment must default to REVIEW for plain @gemini-cli comment');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only'],
+        'buildActivationPayloadForIssueComment must default to read_only capabilities for plain @gemini-cli comment');
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/'],
+        'buildActivationPayloadForIssueComment must default to poc/ permitted_paths for plain @gemini-cli comment');
+    assertTrue(!payload.embedded_acp_descriptor,
+        'buildActivationPayloadForIssueComment must NOT set embedded_acp_descriptor for plain comments');
+});
+
+await runTest('Regression 18 - buildActivationPayloadForIssueComment defaults to REVIEW for embedded REVIEW descriptor (not authority)', async () => {
+    const embeddedDescriptor = JSON.stringify({
+        task_mode: 'REVIEW',
+        capabilities: ['read_only'],
+        permitted_paths: ['poc/']
+    });
+    const commentBody = '@gemini-cli ' + embeddedDescriptor;
+
+    const payload = buildActivationPayloadForIssueComment(
+        'regression-canonical-18',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'Embedded REVIEW descriptor must not be treated as authority; defaults to REVIEW');
+    assertTrue(!payload.embedded_acp_descriptor,
+        'REVIEW is the default, not an embedded authorized descriptor');
+});
+
+await runTest('Regression 19 - buildActivationPayloadForIssueComment preserves RESEARCH_DOCUMENT through full canonical ingress to execution descriptor', async () => {
+    cleanup();
+    const embeddedDescriptor = JSON.stringify({
+        task_name: 'TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001',
+        task: 'Research and document phase 4 transition bootstrap',
+        target: 'Gemini',
+        task_mode: 'RESEARCH_DOCUMENT',
+        capabilities: ['read_only', 'modify_files', 'commit', 'push'],
+        permitted_paths: ['docs/ai/research/', 'docs/ai/TASK_LOG.md'],
+        verification: 'Research findings persisted to durable research record'
+    });
+    const commentBody = '@gemini-cli ' + embeddedDescriptor;
+
+    const payload = buildActivationPayloadForIssueComment(
+        'regression-canonical-19',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        carrier_identity: 'github-workflow-regression-19',
+        carrier_type: 'github_workflow'
+    });
+
+    assertTrue(result.success, 'RESEARCH_DOCUMENT via issue_comment embedded descriptor should succeed: ' + (result.error || ''));
+    assertTrue(result.execution_descriptor, 'Should return execution descriptor');
+    assert.equal(result.execution_descriptor.task_mode, 'RESEARCH_DOCUMENT',
+        'Execution descriptor must contain RESEARCH_DOCUMENT task_mode (not downgraded to REVIEW)');
+    assert.equal(result.execution_descriptor.activation_task_mode, 'RESEARCH_DOCUMENT',
+        'Execution descriptor must preserve RESEARCH_DOCUMENT activation_task_mode');
+    const policyEntry = activationPolicy.getPolicyEntry('Gemini', 'RESEARCH_DOCUMENT');
+    assert.deepStrictEqual(result.execution_descriptor.capabilities,
+        policyEntry.required_capabilities,
+        'Execution descriptor must contain server-derived RESEARCH_DOCUMENT capabilities');
+    cleanup();
+});
+
+await runTest('Regression 20 - buildActivationPayloadForIssueComment: comment text cannot override canonical authority', async () => {
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","capabilities":["read_only","modify_files","run_tests","commit","push"],"permitted_paths":[".github/","poc/","src/"]} please execute';
+
+    const payload = buildActivationPayloadForIssueComment(
+        'regression-canonical-20',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    // The candidate task_mode is extracted from the embedded descriptor
+    assert.equal(payload.task_mode, 'FAILOVER_EXECUTE',
+        'buildActivationPayloadForIssueComment must extract FAILOVER_EXECUTE from embedded descriptor');
+
+    // Canonical ingress must server-derive authority (not trust externally supplied capabilities/paths)
+    cleanup();
+    const result = await canonicalExternalActivationIngress(payload, {});
+    // FAILOVER_EXECUTE requires Director approval, so it should be blocked
+    assertTrue(!result.success || result.director_approval_required,
+        'FAILOVER_EXECUTE via issue_comment must require Director approval (fail closed)');
+    assertTrue(!result.execution_descriptor,
+        'FAILOVER_EXECUTE must NOT receive execution descriptor without Director approval');
+    cleanup();
 });
 
 // =========================================================

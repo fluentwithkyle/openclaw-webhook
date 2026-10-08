@@ -212,13 +212,15 @@ runTest('issue_comment path does NOT detect FAILOVER_EXECUTE from comment prefix
     'issue_comment path must NOT grep for FAILOVER_EXECUTE keyword');
 });
 
-runTest('issue_comment path always defaults to REVIEW/read_only for plain @gemini-cli comments', () => {
-  assert.ok(raw.includes('task_mode=REVIEW'),
-    'issue_comment request_comment step must always set task_mode=REVIEW as default for plain @gemini-cli');
-  assert.ok(raw.includes('capabilities=read_only'),
-    'issue_comment request_comment step must always set capabilities=read_only as default');
-  assert.ok(raw.includes('permitted_paths=poc/'),
-    'issue_comment request_comment step must always set permitted_paths=poc/ as default');
+runTest('issue_comment path defaults to REVIEW/read_only for plain @gemini-cli comments (embedded descriptor extraction supported)', () => {
+  assert.ok(raw.includes('CANDIDATE_TASK_MODE="REVIEW"'),
+    'issue_comment request_comment step must default to REVIEW for plain @gemini-cli');
+  assert.ok(raw.includes('CANDIDATE_CAPABILITIES="read_only"'),
+    'issue_comment request_comment step must default to read_only for plain @gemini-cli');
+  assert.ok(raw.includes('CANDIDATE_PERMITTED_PATHS="poc/"'),
+    'issue_comment request_comment step must default to poc/ for plain @gemini-cli');
+  assert.ok(!raw.match(/grep.*FAILOVER_EXECUTE/i),
+    'issue_comment request_comment step must NOT parse FAILOVER_EXECUTE from comment prefix');
 });
 
 runTest('issue_comment orchestration context step is present', () => {
@@ -245,11 +247,11 @@ runTest('issue_comment does NOT reconstruct authority from comment-prefix shell 
 });
 
 runTest('@gemini-cli plain issue_comment defaults to REVIEW (canonical descriptor is authoritative)', () => {
-  assert.ok(raw.includes('task_mode=REVIEW'),
+  assert.ok(raw.includes('CANDIDATE_TASK_MODE="REVIEW"'),
     'REVIEW default must be set for plain @gemini-cli comments in request_comment step');
-  assert.ok(raw.includes('capabilities=read_only'),
+  assert.ok(raw.includes('CANDIDATE_CAPABILITIES="read_only"'),
     'read_only default must be set for plain @gemini-cli comments in request_comment step');
-  assert.ok(raw.includes('permitted_paths=poc/'),
+  assert.ok(raw.includes('CANDIDATE_PERMITTED_PATHS="poc/"'),
     'permitted_paths default must be set for plain @gemini-cli comments in request_comment step');
 });
 
