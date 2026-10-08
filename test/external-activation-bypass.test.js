@@ -1630,6 +1630,156 @@ await runTest('Regression 8 - main.yml does not derive task_mode from comment pr
 });
 
 // =========================================================
+// Regression: canonical Gemini activation/execution propagation
+// (TASK-KILO-GEMINI-CANONICAL-TASK-MODE-PROPAGATION-FIX-002)
+// =========================================================
+
+await runTest('Regression 9 - RESEARCH_DOCUMENT task_mode preserved through canonical ingress (not downgraded to REVIEW)', async () => {
+    cleanup();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'regression-canonical-9',
+        task: 'Research and document the canonical activation path',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'RESEARCH_DOCUMENT',
+        capabilities: 'read_only,modify_files,commit,push',
+        permitted_paths: 'docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md',
+        verification: 'Research findings persisted to durable research record'
+    });
+
+    const result = await canonicalExternalActivationIngress(payload, {});
+    assertTrue(result.success, 'RESEARCH_DOCUMENT should succeed without Director approval: ' + (result.error || ''));
+
+    assert.equal(result.command.task_mode, 'RESEARCH_DOCUMENT',
+        'Command must preserve RESEARCH_DOCUMENT task_mode (not downgraded to REVIEW)');
+    assert.equal(result.activation_provenance.activation_task_mode, 'RESEARCH_DOCUMENT',
+        'Activation provenance must preserve RESEARCH_DOCUMENT task_mode');
+
+    const descriptor = taskRegistry.buildExecutionDescriptor(
+        'regression-canonical-9',
+        taskRegistry.getTask('regression-canonical-9'),
+        null
+    );
+    assert.equal(descriptor.task_mode, 'RESEARCH_DOCUMENT',
+        'Execution descriptor must contain RESEARCH_DOCUMENT task_mode');
+    assert.deepStrictEqual(descriptor.capabilities, ['read_only', 'modify_files', 'commit', 'push'],
+        'Execution descriptor must contain server-derived RESEARCH_DOCUMENT capabilities');
+    assert.ok(descriptor.permitted_paths.length > 0,
+        'Execution descriptor must contain server-derived permitted_paths');
+    cleanup();
+});
+
+await runTest('Regression 10 - plain @gemini-cli issue comment yields REVIEW payload (canonical descriptor is authoritative, not comment prefix)', async () => {
+    const payload = buildActivationPayloadForIssueComment(
+        'regression-canonical-10',
+        '@gemini-cli please review the architecture',
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'Plain @gemini-cli comment must always yield REVIEW (comment prefix is not authority)');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only'],
+        'Plain @gemini-cli comment must always yield read_only capabilities');
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/'],
+        'Plain @gemini-cli comment must always yield poc/ permitted_paths');
+
+    const result = await canonicalExternalActivationIngress(payload, {});
+    assertTrue(result.success, 'REVIEW should pass without Director approval: ' + (result.error || ''));
+    assert.equal(result.activation_provenance.activation_task_mode, 'REVIEW',
+        'Activation provenance must be REVIEW for plain @gemini-cli comment');
+    cleanup();
+});
+
+await runTest('Regression 11 - workflow_dispatch preserves authorized RESEARCH_DOCUMENT through to execution descriptor', async () => {
+    cleanup();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'regression-canonical-11',
+        task: '{"task_name":"TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001","objective":"Research phase 4 transition bootstrap"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'RESEARCH_DOCUMENT',
+        capabilities: 'read_only,modify_files,commit,push',
+        permitted_paths: 'docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md',
+        verification: 'Research findings persisted to durable research record'
+    });
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        carrier_identity: 'github-workflow-regression-11',
+        carrier_type: 'github_workflow'
+    });
+
+    assertTrue(result.success, 'RESEARCH_DOCUMENT via workflow_dispatch should succeed: ' + (result.error || ''));
+    assertTrue(result.execution_descriptor, 'Should return execution descriptor');
+
+    assert.equal(result.execution_descriptor.task_mode, 'RESEARCH_DOCUMENT',
+        'Execution descriptor must contain RESEARCH_DOCUMENT task_mode (not downgraded to REVIEW)');
+    assert.deepStrictEqual(result.execution_descriptor.capabilities, ['read_only', 'modify_files', 'commit', 'push'],
+        'Execution descriptor must contain server-derived RESEARCH_DOCUMENT capabilities');
+    assert.ok(result.execution_descriptor.permitted_paths.length > 0,
+        'Execution descriptor must contain server-derived permitted_paths');
+    cleanup();
+});
+
+await runTest('Regression 12 - server-derived capabilities and permitted_paths override externally supplied values in workflow_dispatch', async () => {
+    cleanup();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'regression-canonical-12',
+        task: 'Research task with externally claimed authority',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'RESEARCH_DOCUMENT',
+        capabilities: 'read_only',
+        permitted_paths: 'poc/',
+        verification: 'Research findings persisted'
+    });
+
+    const result = await canonicalExternalActivationIngress(payload, {});
+    assertTrue(result.success, 'RESEARCH_DOCUMENT should succeed: ' + (result.error || ''));
+
+    assert.deepStrictEqual(result.command.authorization.capabilities, ['read_only', 'modify_files', 'commit', 'push'],
+        'Server-derived capabilities must override externally supplied read_only for RESEARCH_DOCUMENT');
+    assert.deepStrictEqual(result.command.constraints.permitted_paths,
+        require('../poc/activation-policy').getAuthorizedPathsForMode('RESEARCH_DOCUMENT'),
+        'Server-derived permitted_paths must override externally supplied poc/ for RESEARCH_DOCUMENT');
+    cleanup();
+});
+
+await runTest('Regression 13 - main.yml callback payload uses descriptor task_mode for RESEARCH_DOCUMENT fail-closed check', async () => {
+    assertTrue(mainRaw.includes('TASK_MODE'),
+        'main.yml callback payload step must reference TASK_MODE variable');
+    assertTrue(mainRaw.includes('TASK_MODE'),
+        'main.yml callback payload step must check TASK_MODE for RESEARCH_DOCUMENT');
+    assertTrue(mainRaw.includes('DURABLE_RESEARCH_RECORD_PATH') || mainRaw.includes('research-'),
+        'main.yml callback payload must check for durable research record path');
+    assertTrue(mainRaw.includes('"failure"') && mainRaw.includes('RESEARCH_BLOCKER'),
+        'main.yml callback payload must fail-closed for RESEARCH_DOCUMENT with missing research record');
+});
+
+await runTest('Regression 14 - main.yml Gemini prompt includes RESEARCH_DOCUMENT mode branch', async () => {
+    const promptSection = mainRaw.slice(mainRaw.indexOf('prompt: |'));
+    assertTrue(promptSection.includes('RESEARCH_DOCUMENT'),
+        'Gemini prompt must include RESEARCH_DOCUMENT mode branch');
+    assertTrue(promptSection.includes('MODE: RESEARCH_DOCUMENT'),
+        'Gemini prompt must include "MODE: RESEARCH_DOCUMENT" instruction for the RESEARCH_DOCUMENT branch');
+    assertTrue(promptSection.includes('research record'),
+        'Gemini prompt RESEARCH_DOCUMENT branch must mention research record persistence requirement');
+});
+
+await runTest('Regression 15 - issue_comment orchestration context consumes descriptor (not request_comment fallback) for task_mode', async () => {
+    const icContextSection = mainRaw.slice(
+        mainRaw.indexOf('Prepare orchestration context (issue_comment)'),
+        mainRaw.indexOf('Run Gemini in advisory mode')
+    );
+    assertTrue(icContextSection.includes('execution-descriptor.json'),
+        'issue_comment orchestration context must reference execution-descriptor.json');
+    assertTrue(icContextSection.includes("jq -r '.task_mode' \"$DESCRIPTOR_FILE\""),
+        'issue_comment orchestration context must read task_mode from descriptor file');
+    assertTrue(!icContextSection.includes('steps.request_comment.outputs.task_mode'),
+        'issue_comment orchestration context must NOT fall back to request_comment task_mode output');
+});
+
+// =========================================================
 // Summary
 // =========================================================
 

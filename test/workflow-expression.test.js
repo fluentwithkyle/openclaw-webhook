@@ -205,19 +205,20 @@ runTest('FAILOVER_EXECUTE interpolates capabilities via format()', () => {
   assert.ok(failoverCall.some(a => a.includes('outputs.capabilities')), 'FAILOVER_EXECUTE does not interpolate capabilities via format()');
 });
 
-runTest('issue_comment orchestration context detects FAILOVER_EXECUTE keyword', () => {
-  assert.ok(raw.includes('FAILOVER_EXECUTE'), 'FAILOVER_EXECUTE keyword detection missing in issue_comment path');
-  assert.ok(raw.includes("grep -qiE '^FAILOVER_EXECUTE"), 'FAILOVER_EXECUTE keyword grep detection missing');
+runTest('issue_comment path does NOT detect FAILOVER_EXECUTE from comment prefix (canonical descriptor is authoritative)', () => {
+  assert.ok(!raw.includes("grep -qiE '^FAILOVER_EXECUTE"),
+    'issue_comment path must NOT parse FAILOVER_EXECUTE from comment prefix');
+  assert.ok(!raw.match(/grep.*FAILOVER_EXECUTE/i),
+    'issue_comment path must NOT grep for FAILOVER_EXECUTE keyword');
 });
 
-runTest('issue_comment orchestration context sets FAILOVER_EXECUTE capabilities', () => {
-  assert.ok(raw.includes('CAPABILITIES=\"read_only,modify_files,run_tests,commit,push\"'), 'FAILOVER_EXECUTE capabilities not set in issue_comment path');
-  assert.ok(raw.includes('PERMITTED_PATHS=\"poc/\"'), 'permitted_paths not set for issue_comment failover');
-});
-
-runTest('issue_comment orchestration context preserves REVIEW default for plain @gemini-cli', () => {
-  assert.ok(raw.includes('TASK_MODE=\"REVIEW\"'), 'REVIEW default not set for issue_comment path');
-  assert.ok(raw.includes('CAPABILITIES=\"read_only\"'), 'read_only default not set for issue_comment REVIEW');
+runTest('issue_comment path always defaults to REVIEW/read_only for plain @gemini-cli comments', () => {
+  assert.ok(raw.includes('task_mode=REVIEW'),
+    'issue_comment request_comment step must always set task_mode=REVIEW as default for plain @gemini-cli');
+  assert.ok(raw.includes('capabilities=read_only'),
+    'issue_comment request_comment step must always set capabilities=read_only as default');
+  assert.ok(raw.includes('permitted_paths=poc/'),
+    'issue_comment request_comment step must always set permitted_paths=poc/ as default');
 });
 
 runTest('issue_comment orchestration context step is present', () => {
@@ -225,14 +226,31 @@ runTest('issue_comment orchestration context step is present', () => {
   assert.ok(raw.includes('if: github.event_name == \'issue_comment\''), 'issue_comment orchestration context condition missing');
 });
 
-runTest('issue_comment orchestration context populates task_mode output', () => {
-  assert.ok(raw.includes('echo "task_mode=$TASK_MODE"'), 'task_mode output not set in request_comment step');
-  assert.ok(raw.includes('echo "capabilities=$CAPABILITIES"'), 'capabilities output not set in request_comment step');
-  assert.ok(raw.includes('echo "permitted_paths=$PERMITTED_PATHS"'), 'permitted_paths output not set in request_comment step');
+runTest('issue_comment orchestration context reads task_mode from execution descriptor (not comment-prefix shell variables)', () => {
+  assert.ok(raw.includes("jq -r '.task_mode' \"$DESCRIPTOR_FILE\""),
+    'orchestration_context_ic must read task_mode from descriptor file');
+  assert.ok(raw.includes("jq -r '.capabilities | join(\",\")' \"$DESCRIPTOR_FILE\""),
+    'orchestration_context_ic must read capabilities from descriptor file');
+  assert.ok(raw.includes("jq -r '.permitted_paths | join(\",\")' \"$DESCRIPTOR_FILE\""),
+    'orchestration_context_ic must read permitted_paths from descriptor file');
 });
 
-runTest('@gemini-cli plain issue_comment defaults to REVIEW (existing behavior preserved)', () => {
-  assert.ok(raw.includes('TASK_MODE=\"REVIEW\"'), 'REVIEW default must be set for plain @gemini-cli comments');
+runTest('issue_comment does NOT reconstruct authority from comment-prefix shell variables', () => {
+  assert.ok(!raw.includes('echo "task_mode=$TASK_MODE"'),
+    'issue_comment must not use $TASK_MODE shell variable (comment-prefix reconstruction)');
+  assert.ok(!raw.includes('echo "capabilities=$CAPABILITIES"'),
+    'issue_comment must not use $CAPABILITIES shell variable (comment-prefix reconstruction)');
+  assert.ok(!raw.includes('echo "permitted_paths=$PERMITTED_PATHS"'),
+    'issue_comment must not use $PERMITTED_PATHS shell variable (comment-prefix reconstruction)');
+});
+
+runTest('@gemini-cli plain issue_comment defaults to REVIEW (canonical descriptor is authoritative)', () => {
+  assert.ok(raw.includes('task_mode=REVIEW'),
+    'REVIEW default must be set for plain @gemini-cli comments in request_comment step');
+  assert.ok(raw.includes('capabilities=read_only'),
+    'read_only default must be set for plain @gemini-cli comments in request_comment step');
+  assert.ok(raw.includes('permitted_paths=poc/'),
+    'permitted_paths default must be set for plain @gemini-cli comments in request_comment step');
 });
 
 runTest('issue_comment trigger with types: [created] is present and intact', () => {
