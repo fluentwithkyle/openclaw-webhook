@@ -376,6 +376,90 @@ jobs:
             Distinguish observations from recommendations.
             Return a concrete, actionable response for the project.
 
+          - name: Commit and push Gemini changes (FAILOVER_EXECUTE only)
+            id: commit_push
+            if: always() && (steps.gemini_run.outcome == 'success' || steps.gemini_run.outcome == '') && (steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || 'REVIEW') == 'FAILOVER_EXECUTE'
+            shell: bash
+            env:
+              PERMITTED_PATHS: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths || 'poc/' }}
+              BASE_BRANCH: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch || github.ref_name }}
+            run: |
+              set -euo pipefail
+
+              git config user.name "Gemini"
+              git config user.email "gemini@users.noreply.github.com"
+              git config --global --add safe.directory '*'
+
+              COMMIT_SHA="null"
+              PUSH_STATUS="false"
+              HAS_CHANGES="false"
+              UNCOMMITTED_CHANGES="false"
+              PUSH_VERIFIED="false"
+
+              # Stage only files under PERMITTED_PATHS (space-separated, e.g. "poc/")
+              # to avoid capturing unrelated worktree changes.
+              for dir in $PERMITTED_PATHS; do
+                git add "$dir" 2>/dev/null || true
+              done
+
+              CHANGED_FILES=$(git diff --cached --name-only)
+              if [ -n "$CHANGED_FILES" ]; then
+                HAS_CHANGES="true"
+                git commit -m "FAILOVER_EXECUTE: Persist authorized implementation changes (request_id: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id || 'manual' }})" || {
+                  echo "::error::FAILOVER_EXECUTE commit failed"
+                  COMMIT_SHA="null"
+                  PUSH_STATUS="false"
+                  UNCOMMITTED_CHANGES="true"
+                  echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+                  echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+                  echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+                  echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+                  exit 1
+                }
+                COMMIT_SHA=$(git rev-parse HEAD)
+                echo "Committed: $COMMIT_SHA"
+                echo "$CHANGED_FILES"
+
+                # Push to the authorized base branch
+                git push "origin" "$BASE_BRANCH" || {
+                  echo "::error::FAILOVER_EXECUTE push to origin/$BASE_BRANCH failed"
+                  PUSH_STATUS="false"
+                  UNCOMMITTED_CHANGES="true"
+                  echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+                  echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+                  echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+                  echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+                  exit 1
+                }
+                PUSH_STATUS="true"
+                echo "Pushed to origin/$BASE_BRANCH"
+
+                # Verify the commit is present on the remote base branch
+                REMOTE_HEAD=$(git ls-remote "origin" "$BASE_BRANCH" | awk '{print $1}')
+                if [ -n "$REMOTE_HEAD" ] && [ "$COMMIT_SHA" = "$REMOTE_HEAD" ]; then
+                  PUSH_VERIFIED="true"
+                  echo "Verified commit on remote: $COMMIT_SHA"
+                else
+                  echo "::error::FAILOVER_EXECUTE push verification failed: remote HEAD ($REMOTE_HEAD) != local HEAD ($COMMIT_SHA)"
+                  PUSH_STATUS="false"
+                  UNCOMMITTED_CHANGES="true"
+                  echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+                  echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+                  echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+                  echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+                  echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
+                  exit 1
+                fi
+              else
+                echo "::warning::No changes to commit in FAILOVER_EXECUTE mode within permitted_paths: $PERMITTED_PATHS"
+              fi
+
+              echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+              echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+              echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+              echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+              echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
+
       - name: Determine Gemini execution result
         id: gemini_result
         if: always()
@@ -383,7 +467,7 @@ jobs:
           TASK_MODE_INPUT: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || '' }}
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
 
           # Determine task mode from server-derived descriptor if available
           DESCRIPTOR_FILE="execution-descriptor.json"
@@ -411,6 +495,33 @@ jobs:
             STATUS="failure"
             VERIFICATION_STATUS="FAIL"
             BLOCKER_MSG="Gemini workflow did not execute successfully (step outcome: ${GEMINI_OUTCOME:-none})"
+          fi
+
+          # FAILOVER_EXECUTE enforcement: Gemini CLI succeeded but implementation
+          # changes must be committed, pushed, and verified on the remote base
+          # branch. Fail closed if any persistence step fails.
+          if [ "$TASK_MODE" = "FAILOVER_EXECUTE" ] && [ "$GEMINI_OUTCOME" = "success" ]; then
+            UNCOMMITTED_CHANGES="${{ steps.commit_push.outputs.uncommitted_changes }}"
+            COMMIT_PUSH_OUTCOME="${{ steps.commit_push.outcome }}"
+            FAILOVER_COMMIT_SHA="${{ steps.commit_push.outputs.commit_sha || '' }}"
+            PUSH_VERIFIED="${{ steps.commit_push.outputs.push_verified }}"
+            if [ "$UNCOMMITTED_CHANGES" = "true" ]; then
+              STATUS="failure"
+              VERIFICATION_STATUS="FAIL"
+              BLOCKER_MSG="FAILOVER_EXECUTE mode: Gemini CLI succeeded but repository changes remain uncommitted/unpushed; task cannot report success with uncommitted changes"
+            elif [ "$COMMIT_PUSH_OUTCOME" = "failure" ]; then
+              STATUS="failure"
+              VERIFICATION_STATUS="FAIL"
+              BLOCKER_MSG="FAILOVER_EXECUTE mode: commit/push step failed; changes could not be persisted to main"
+            elif [ -z "$FAILOVER_COMMIT_SHA" ] || [ "$FAILOVER_COMMIT_SHA" = "null" ]; then
+              STATUS="failure"
+              VERIFICATION_STATUS="FAIL"
+              BLOCKER_MSG="FAILOVER_EXECUTE mode: Gemini CLI succeeded but no commit SHA was produced; changes may remain uncommitted in workspace"
+            elif [ "$PUSH_VERIFIED" != "true" ]; then
+              STATUS="failure"
+              VERIFICATION_STATUS="FAIL"
+              BLOCKER_MSG="FAILOVER_EXECUTE mode: commit/push succeeded but remote verification failed; commit not confirmed on remote base branch"
+            fi
           fi
 
           # Determine reconciliation status using the same contract as
@@ -477,7 +588,7 @@ jobs:
             exit 1
           fi
 
-          CURRENT_HEAD_SHA="${GITHUB_SHA}"
+          CURRENT_HEAD_SHA="${{ steps.commit_push.outputs.commit_sha || steps.gemini_result.outputs.current_head_sha || github.sha }}"
 
           # Capture Gemini output (stdout from run-gemini-cli).
           # Transported via env: (GEMINI_SUMMARY) to avoid shell-interpolation
@@ -491,6 +602,11 @@ jobs:
           VERIFICATION_STATUS="${{ steps.gemini_result.outputs.verification_status }}"
           BLOCKER_MSG="${{ steps.gemini_result.outputs.blocker_message }}"
           RECON_STATUS="${{ steps.gemini_result.outputs.recon_status }}"
+          FAILOVER_COMMIT_SHA="${{ steps.commit_push.outputs.commit_sha || 'null' }}"
+          FAILOVER_PUSH="${{ steps.commit_push.outputs.push_status || 'false' }}"
+
+          # Build changed_files list from git for FAILOVER_EXECUTE persistence tracking
+          CHANGED_FILES_JSON=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | jq -R -s -c 'split("\n") | map(select(length > 0))' || echo '[]')
 
           # Build blockers array from the actual execution result
           if [ "$STATUS" = "failure" ]; then
@@ -564,6 +680,9 @@ jobs:
             --arg carrier_identity "$CARRIER_IDENTITY" \
             --arg task_mode "$TASK_MODE" \
             --arg durable_research_record_path "$DURABLE_RESEARCH_RECORD_PATH" \
+            --argjson changed_files "$CHANGED_FILES_JSON" \
+            --arg failover_commit "$FAILOVER_COMMIT_SHA" \
+            --arg failover_push "$FAILOVER_PUSH" \
             '{
               request_id: (if $request_id == "" then null else $request_id end),
               agent: $agent,
@@ -573,11 +692,11 @@ jobs:
               repository: $repository,
               base_branch: $base_branch,
               current_head_sha: $current_head_sha,
-              changed_files: [],
+              changed_files: $changed_files,
               verification: ["advisory review completed"],
               result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id, carrier_identity: (if $carrier_identity == "" then null else $carrier_identity end), execution_claim_id: (if $execution_claim_id == "" then null else $execution_claim_id end) }, gemini_output: $gemini_output },
-              commit: null,
-              push: false,
+              commit: (if $failover_commit == "null" then null else $failover_commit end),
+              push: ($failover_push == "true"),
               blockers: $blockers,
               reconciliation: {
                 status: $recon_status,

@@ -29,6 +29,18 @@ function extractExpressions(text) {
   return out;
 }
 
+function extractPayloadStep(text) {
+  const marker = 'Prepare ACP report payload';
+  const idx = text.indexOf(marker);
+  if (idx === -1) return null;
+  const before = text.slice(0, idx).lastIndexOf('- name:');
+  if (before === -1) return null;
+  const stepSection = text.slice(before);
+  const nextStep = stepSection.indexOf('\n      - name:', 30);
+  if (nextStep === -1) return stepSection;
+  return stepSection.slice(0, nextStep);
+}
+
 function findModeExpression(text) {
   for (const expr of extractExpressions(text)) {
     if (expr.includes("== 'REVIEW'") && expr.includes('VERIFY_RECONCILE') && expr.includes('FAILOVER_EXECUTE')) {
@@ -421,4 +433,124 @@ runTest('Gemini Builder workflow has no bare + operators in expressions', () => 
     if (n > 0) offenders.push({ expr: e.slice(0, 80), plus: n });
   }
   assert.equal(offenders.length, 0, `found bare '+' operators in builder workflow: ${JSON.stringify(offenders)}`);
+});
+
+// --- FAILOVER_EXECUTE commit/push persistence enforcement tests ---
+
+runTest('main.yml has Commit and push Gemini changes step for FAILOVER_EXECUTE', () => {
+  assert.ok(raw.includes('Commit and push Gemini changes (FAILOVER_EXECUTE only)'),
+    'main.yml must have a commit/push step for FAILOVER_EXECUTE mode');
+});
+
+runTest('main.yml FAILOVER_EXECUTE commit step is gated on FAILOVER_EXECUTE task mode', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(/==\s*'FAILOVER_EXECUTE'/.test(section),
+    'commit/push step must be gated on FAILOVER_EXECUTE task mode');
+});
+
+runTest('main.yml FAILOVER_EXECUTE commit step runs git commit and git push', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('git commit'), 'commit/push step must run git commit');
+  assert.ok(section.includes('git push'), 'commit/push step must run git push');
+});
+
+runTest('main.yml FAILOVER_EXECUTE commit step stages only permitted_paths, not git add -A', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('git add "$dir"'),
+    'commit/push step must stage individual permitted path directories');
+  assert.ok(!/git add -A/.test(section),
+    'commit/push step must NOT use unrestricted git add -A');
+});
+
+runTest('main.yml FAILOVER_EXECUTE commit step verifies push on remote base branch', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('git ls-remote'),
+    'commit/push step must verify commit on remote base branch with git ls-remote');
+});
+
+runTest('main.yml FAILOVER_EXECUTE commit step outputs commit_sha, push_status, uncommitted_changes, push_verified', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('commit_sha='), 'must output commit_sha');
+  assert.ok(section.includes('push_status='), 'must output push_status');
+  assert.ok(section.includes('uncommitted_changes='), 'must output uncommitted_changes');
+  assert.ok(section.includes('push_verified='), 'must output push_verified');
+});
+
+runTest('main.yml FAILOVER_EXECUTE commit step fails closed on commit failure', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('exit 1'),
+    'commit/push step must exit 1 on failure (fail closed)');
+  assert.ok(section.includes('UNCOMMITTED_CHANGES="true"'),
+    'commit/push step must set UNCOMMITTED_CHANGES=true on failure');
+});
+
+runTest('main.yml Determine Gemini execution result enforces FAILOVER_EXECUTE persistence', () => {
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const resultSection = raw.slice(resultIdx, payloadIdx);
+  assert.ok(resultSection.includes('FAILOVER_EXECUTE'),
+    'gemini_result step must check FAILOVER_EXECUTE mode enforcement');
+  assert.ok(resultSection.includes('uncommitted_changes'),
+    'gemini_result step must check uncommitted_changes output');
+  assert.ok(resultSection.includes('commit_push'),
+    'gemini_result step must reference commit_push step outputs');
+  assert.ok(resultSection.includes('push_verified'),
+    'gemini_result step must check push_verified output');
+});
+
+runTest('main.yml FAILOVER_EXECUTE enforcement fails status on uncommitted changes', () => {
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const resultSection = raw.slice(resultIdx, payloadIdx);
+  assert.ok(resultSection.includes('STATUS="failure"'),
+    'gemini_result step must set STATUS="failure" when persistence check fails');
+  assert.ok(resultSection.includes('VERIFICATION_STATUS="FAIL"'),
+    'gemini_result step must set VERIFICATION_STATUS="FAIL" when persistence check fails');
+});
+
+runTest('main.yml callback payload uses actual commit/push from commit_push step', () => {
+  const payloadStep = extractPayloadStep(raw);
+  assert.ok(payloadStep, 'payload step not found');
+  assert.ok(payloadStep.includes('FAILOVER_COMMIT_SHA'),
+    'payload step must reference FAILOVER_COMMIT_SHA from commit_push step');
+  assert.ok(payloadStep.includes('FAILOVER_PUSH'),
+    'payload step must reference FAILOVER_PUSH from commit_push step');
+});
+
+runTest('main.yml callback payload does NOT hardcode commit: null / push: false', () => {
+  const payloadStep = extractPayloadStep(raw);
+  assert.ok(payloadStep, 'payload step not found');
+  assert.ok(payloadStep.includes('failover_commit'),
+    'jq payload must use failover_commit variable');
+  assert.ok(payloadStep.includes('failover_push'),
+    'jq payload must use failover_push variable');
+  assert.ok(!/commit: null,/.test(payloadStep),
+    'jq payload must NOT hardcode commit: null');
+  assert.ok(!/push: false,/.test(payloadStep),
+    'jq payload must NOT hardcode push: false');
+});
+
+runTest('main.yml callback payload includes changed_files in report', () => {
+  const payloadStep = extractPayloadStep(raw);
+  assert.ok(payloadStep, 'payload step not found');
+  assert.ok(payloadStep.includes('--argjson changed_files'),
+    'jq payload must pass changed_files as --argjson');
+  assert.ok(payloadStep.includes('changed_files: $changed_files'),
+    'jq payload JSON must include changed_files field from variable');
+});
+
+runTest('main.yml FAILOVER_EXECUTE commit step runs after Gemini CLI and before gemini_result', () => {
+  const commitIdx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+  const geminiIdx = raw.indexOf('Run Gemini in advisory mode');
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  assert.ok(commitIdx !== -1 && geminiIdx !== -1 && resultIdx !== -1,
+    'all steps must exist');
+  assert.ok(geminiIdx < commitIdx, 'Gemini CLI run must come before commit/push step');
+  assert.ok(commitIdx < resultIdx, 'commit/push step must come before gemini_result determination');
 });
