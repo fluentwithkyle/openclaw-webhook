@@ -6,7 +6,7 @@
 Designed for Kyle checking the project from a phone.
 
 **Last Updated**: 2026-10-08
-**Updated By**: Kilo — TASK-KILO-GEMINI-ACP-REPORT-DISCOVERY-CONTRACT-MACHINE-ENFORCEMENT-001
+**Updated By**: Kilo — TASK-KILO-GEMINI-ACP-REPORT-DISCOVERY-BULLETPROOF-REMEDIATION-001
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -82,7 +82,8 @@ Updated By | ChatGPT — TASK-CHATGPT-DEEPSEEK-PHASE-2-CONVERGENCE-DOCUMENTATION
 | Task | Status | Owner |
 | Gemini Builder transition documentation reconciliation | ACTIVE | Gemini | TASK-GEMINI-RECONCILE-BUILDER-TRANSITION-RESEARCH-PLAN-001 |
 |------|--------|-------|
-| TASK-KILO-GEMINI-ACP-REPORT-DISCOVERY-CONTRACT-MACHINE-ENFORCEMENT-001 | COMPLETED / IMPLEMENTED | Kilo | Enforced Gemini ACP report filing/retrieval contract as machine-readable and deterministic. Modified main.yml to expose filing fields; updated README.md and CHATGPT_PROJECT_OPERATING_PROTOCOL.md Section 5; added 39 machine-verification tests. |
+| TASK-KILO-GEMINI-ACP-REPORT-DISCOVERY-BULLETPROOF-REMEDIATION-001 | COMPLETED / IMPLEMENTED | Kilo | Removed misleading artifact_download_url (was run URL) and replaced with artifact_id (native upload-artifact output) + artifact_url. Added durable_research_record_path to gemini-acp-report.json for RESEARCH_DOCUMENT tasks with file-existence verification. 62/62 tests pass. Commit c720b92. |
+| TASK-KILO-GEMINI-ACP-REPORT-DISCOVERY-CONTRACT-MACHINE-ENFORCEMENT-001 | COMPLETED / IMPLEMENTED | Kilo | Enforced Gemini ACP report filing/retrieval contract as machine-readable and deterministic. Modified main.yml to expose filing fields; updated README.md and CHATGPT_PROJECT_OPERATING_PROTOCOL.md Section 5; added 39 machine-verification tests. Superseded by BULLETPROOF-REMEDIATION-001. |
 | TASK-KILO-GEMINI-RESEARCH-ONE-CLICK-ACTIVATION-VERIFY-RECONCILE-001 | VERIFIED / RECONCILED | Gemini | Independently verified the live end-to-end Gemini RESEARCH_DOCUMENT one-click activation path and reconciled the verified result into canonical durable project records (`docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, `docs/ai/CONTROL_CENTER.md`). Permitted paths strictly respected. |
 | External activation architecture resolution | COMPLETED (RESEARCH) | Kilo | Resolved canonical design for agent-independent external activation. 47a758a7 closes producer bypass but leaves double-dispatch gap requiring implementation. Research record: docs/ai/research/research-TASK-KILO-EXTERNAL-ACTIVATION-ARCHITECTURE-RESOLUTION-RESEARCH-001.md |
 | Persistent AI project state system | IMPLEMENTED | Kilo |

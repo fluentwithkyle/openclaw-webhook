@@ -441,6 +441,7 @@ jobs:
           EXECUTION_CLAIM_ID: ${{ steps.orchestration_context_wfd.outputs.execution_claim_id || steps.orchestration_context_ic.outputs.execution_claim_id }}
           CARRIER_IDENTITY: ${{ steps.orchestration_context_wfd.outputs.carrier_identity || steps.orchestration_context_ic.outputs.carrier_identity }}
           IS_REPLAY: ${{ steps.validate_activation.outputs.replay == 'true' || steps.validate_activation_wfd.outputs.replay == 'true' }}
+          TASK_MODE_INPUT: ${{ steps.orchestration_context_wfd.outputs.task_mode || steps.orchestration_context_ic.outputs.task_mode || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -464,6 +465,13 @@ jobs:
             TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
             BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
+            TASK_MODE="$(jq -r '.task_mode' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$TASK_MODE_INPUT")"
+          elif [ -n "$TASK_MODE_INPUT" ]; then
+            REQUEST_ID=""
+            TASK=""
+            REPOSITORY="${{ github.repository }}"
+            BASE_BRANCH="${{ github.ref_name }}"
+            TASK_MODE="$TASK_MODE_INPUT"
           else
             echo "::error::Execution descriptor file not found for ACP report payload"
             exit 1
@@ -503,6 +511,22 @@ jobs:
           INVOCATION_ID="gemini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           RUN_ID="${GITHUB_RUN_ID}"
 
+          # For RESEARCH_DOCUMENT tasks, extract task_name from the task JSON and
+          # verify the durable research record exists before binding it in the
+          # canonical report. Non-RESEARCH_DOCUMENT tasks get null.
+          DURABLE_RESEARCH_RECORD_PATH="null"
+          if [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ] && [ -n "$TASK" ]; then
+            TASK_NAME=$(echo "$TASK" | jq -r '.task_name // empty' 2>/dev/null || echo '')
+            if [ -n "$TASK_NAME" ]; then
+              RESEARCH_RECORD_FILE="docs/ai/research/research-${TASK_NAME}.md"
+              if [ -f "$RESEARCH_RECORD_FILE" ]; then
+                DURABLE_RESEARCH_RECORD_PATH="$RESEARCH_RECORD_FILE"
+              else
+                echo "::warning::RESEARCH_DOCUMENT task but research record $RESEARCH_RECORD_FILE does not exist; report will not bind durable_research_record_path"
+              fi
+            fi
+          fi
+
           jq -n \
             --arg request_id "$REQUEST_ID" \
             --arg agent "Gemini" \
@@ -520,11 +544,14 @@ jobs:
             --arg recon_commit_sha "$RECON_COMMIT_SHA" \
             --arg execution_claim_id "$EXECUTION_CLAIM_ID" \
             --arg carrier_identity "$CARRIER_IDENTITY" \
+            --arg task_mode "$TASK_MODE" \
+            --arg durable_research_record_path "$DURABLE_RESEARCH_RECORD_PATH" \
             '{
               request_id: (if $request_id == "" then null else $request_id end),
               agent: $agent,
               status: $status,
               task: $task,
+              task_mode: $task_mode,
               repository: $repository,
               base_branch: $base_branch,
               current_head_sha: $current_head_sha,
@@ -538,7 +565,8 @@ jobs:
                 status: $recon_status,
                 changed_files: $recon_changed_files,
                 commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
-              }
+              },
+              durable_research_record_path: (if $durable_research_record_path == "null" then null else $durable_research_record_path end)
             }' > callback_payload.json
 
           cp callback_payload.json gemini-acp-report.json
@@ -673,13 +701,15 @@ jobs:
           esac
 
           # Durable location fields for deterministic artifact retrieval.
-          # These are derived from GitHub-provided context values (GITHUB_REPOSITORY,
-          # GITHUB_RUN_ID, GITHUB_RUN_NUMBER) — never from secrets or tokens.
+          # These are derived from GitHub-provided context values and the
+          # native actions/upload-artifact@v4 output (artifact-id) — never
+          # from secrets or tokens.
           ARTIFACT_NAME="gemini-acp-report"
           ARTIFACT_FILE="gemini-acp-report.json"
           WORKFLOW_RUN_ID="${GITHUB_RUN_ID}"
           WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          ARTIFACT_DOWNLOAD_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          ARTIFACT_ID="${{ steps.upload_gemini_result.outputs.artifact-id }}"
+          ARTIFACT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           {
             echo "## Gemini ACP Report Artifact Filing Status"
@@ -688,9 +718,9 @@ jobs:
             echo ""
             echo "### Durable Retrieval Location"
             echo ""
-            echo "On successful artifact filing, the canonical durable source for Gemini's report is the \`gemini-acp-report\` GitHub Actions artifact produced by this workflow run. Inspect \`gemini-acp-report.json\` within that artifact. The workflow conclusion or upload status alone is not the report."
+            echo "On successful artifact filing, the canonical durable source for Gemini's report is the \`gemini-acp-report\` GitHub Actions artifact (artifact ID: \`${ARTIFACT_ID:-unavailable}\`) produced by this workflow run. The artifact is listed under the workflow run at the run URL. Inspect \`gemini-acp-report.json\` within that artifact. The workflow conclusion or upload status alone is not the report."
             echo ""
-            echo "**Retrieval-location fields:** \`filing_status\`, \`artifact_name\`, \`artifact_file\`, \`workflow_run_id\`, \`workflow_run_url\`."
+            echo "**Retrieval-location fields:** \`filing_status\`, \`artifact_name\`, \`artifact_file\`, \`artifact_id\`, \`workflow_run_id\`, \`workflow_run_url\`, \`artifact_url\`."
             echo ""
             echo "**Note:** \`filing_status: SUCCESS\` alone is not a retrieval location and is not evidence that the report itself has been inspected."
             echo ""
@@ -701,14 +731,16 @@ jobs:
             echo "| filing_status | \`${STATUS}\` |"
             echo "| artifact_name | \`${ARTIFACT_NAME}\` |"
             echo "| artifact_file | \`${ARTIFACT_FILE}\` |"
+            echo "| artifact_id | \`${ARTIFACT_ID:-unavailable}\` |"
             echo "| workflow_run_id | \`${WORKFLOW_RUN_ID}\` |"
             echo "| workflow_run_url | \`${WORKFLOW_RUN_URL}\` |"
-            echo "| artifact_download_url | \`${ARTIFACT_DOWNLOAD_URL}\` |"
+            echo "| artifact_url | \`${ARTIFACT_URL}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "filing_status=${STATUS}" >> "$GITHUB_OUTPUT"
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
           echo "artifact_file=${ARTIFACT_FILE}" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=${ARTIFACT_ID:-}" >> "$GITHUB_OUTPUT"
           echo "workflow_run_id=${WORKFLOW_RUN_ID}" >> "$GITHUB_OUTPUT"
           echo "workflow_run_url=${WORKFLOW_RUN_URL}" >> "$GITHUB_OUTPUT"
-          echo "artifact_download_url=${ARTIFACT_DOWNLOAD_URL}" >> "$GITHUB_OUTPUT"
+          echo "artifact_url=${ARTIFACT_URL}" >> "$GITHUB_OUTPUT"

@@ -43,6 +43,23 @@ function extractFilingStatusStep(raw) {
 const filingStep = extractFilingStatusStep(mainWfRaw);
 
 // =========================================================
+// Helper: locate the "Prepare ACP report payload" step
+// =========================================================
+function extractPayloadStep(raw) {
+    const marker = 'Prepare ACP report payload';
+    const idx = raw.indexOf(marker);
+    if (idx === -1) return null;
+    const before = raw.slice(0, idx).lastIndexOf('- name:');
+    if (before === -1) return null;
+    const stepSection = raw.slice(before);
+    const nextStep = stepSection.indexOf('\n      - name:', 30);
+    if (nextStep === -1) return stepSection;
+    return stepSection.slice(0, nextStep);
+}
+
+const payloadStep = extractPayloadStep(mainWfRaw);
+
+// =========================================================
 // 1. Required filing fields present in the workflow
 // =========================================================
 
@@ -80,11 +97,6 @@ runTest('Workflow - filing step exposes workflow_run_id output', () => {
 runTest('Workflow - filing step exposes workflow_run_url output', () => {
     assert.ok(mainWfRaw.includes('workflow_run_url='),
         'workflow must expose workflow_run_url as a GITHUB_OUTPUT');
-});
-
-runTest('Workflow - filing step exposes artifact_download_url output', () => {
-    assert.ok(mainWfRaw.includes('artifact_download_url='),
-        'workflow must expose artifact_download_url as a GITHUB_OUTPUT');
 });
 
 // =========================================================
@@ -208,12 +220,150 @@ runTest('Workflow - filing step warns that filing_status SUCCESS is not a retrie
 });
 
 // =========================================================
-// 6. Protocol retrieval instructions (docs/ai/README.md)
+// 6. Artifact location: real artifact_id from native upload-artifact output
+// =========================================================
+
+runTest('Workflow - filing step exposes artifact_id output', () => {
+    assert.ok(mainWfRaw.includes('artifact_id='),
+        'workflow must expose artifact_id as a GITHUB_OUTPUT');
+});
+
+runTest('Workflow - filing step exposes artifact_url output', () => {
+    assert.ok(mainWfRaw.includes('artifact_url='),
+        'workflow must expose artifact_url as a GITHUB_OUTPUT');
+});
+
+runTest('Workflow - artifact_id is derived from upload-artifact native output', () => {
+    assert.ok(filingStep, 'filing step not found');
+    assert.ok(/steps\.upload_gemini_result\.outputs\.artifact-id/i.test(filingStep),
+        'artifact_id must use the native actions/upload-artifact@v4 artifact-id output (not a constructed URL)');
+});
+
+runTest('Workflow - workflow_run_id and workflow_run_url are separate fields', () => {
+    assert.ok(filingStep, 'filing step not found');
+    assert.ok(/WORKFLOW_RUN_ID="\$\{GITHUB_RUN_ID\}"/i.test(filingStep),
+        'workflow_run_id must be set from GITHUB_RUN_ID');
+    assert.ok(/WORKFLOW_RUN_URL="\$\{GITHUB_SERVER_URL\}\/\$\{GITHUB_REPOSITORY\}\/actions\/runs\/\$\{GITHUB_RUN_ID\}"/i.test(filingStep),
+        'workflow_run_url must be set from GitHub context');
+    const runIdMatches = (filingStep.match(/workflow_run_id=/g) || []).length;
+    assert.ok(runIdMatches >= 1, 'workflow_run_id field must be present in outputs');
+});
+
+// =========================================================
+// 7. Regression guard: artifact_download_url must NOT exist
+// =========================================================
+
+runTest('Workflow - does NOT regress: artifact_download_url field is removed', () => {
+    assert.ok(!/ARTIFACT_DOWNLOAD_URL/.test(filingStep),
+        'Regression guard: ARTIFACT_DOWNLOAD_URL must not exist — it was misleading (was set to run URL)');
+    assert.ok(!/artifact_download_url=/.test(filingStep),
+        'Regression guard: artifact_download_url GITHUB_OUTPUT must not exist');
+    assert.ok(!/artifact_download_url/.test(mainWfRaw),
+        'Regression guard: artifact_download_url must not appear anywhere in main.yml');
+});
+
+// =========================================================
+// 8. Payload provenance: durable_research_record_path for RESEARCH_DOCUMENT
+// =========================================================
+
+runTest('Workflow - payload step includes task_mode in the report', () => {
+    assert.ok(payloadStep, 'payload step section could not be extracted');
+    assert.ok(/task_mode/.test(payloadStep),
+        'Prepare ACP report payload step must reference task_mode');
+});
+
+runTest('Workflow - payload step passes task_mode to jq', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/--arg task_mode "\$TASK_MODE"/.test(payloadStep),
+        'payload step must pass task_mode as a jq argument');
+});
+
+runTest('Workflow - payload includes task_mode field in JSON', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/task_mode: \$task_mode/.test(payloadStep),
+        'payload JSON must include task_mode field');
+});
+
+runTest('Workflow - payload step references durable_research_record_path', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/durable_research_record_path/.test(payloadStep),
+        'payload step must reference durable_research_record_path');
+});
+
+runTest('Workflow - payload step checks task_mode == RESEARCH_DOCUMENT', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/TASK_MODE.*RESEARCH_DOCUMENT/.test(payloadStep),
+        'payload step must check if TASK_MODE is RESEARCH_DOCUMENT before computing research record path');
+});
+
+runTest('Workflow - payload step extracts task_name from task JSON via jq', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/\.task_name/.test(payloadStep),
+        'payload step must extract task_name from the task JSON using jq');
+});
+
+runTest('Workflow - payload step verifies research record file exists before binding', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/RESEARCH_RECORD_FILE/.test(payloadStep) && /-f "\$RESEARCH_RECORD_FILE"/.test(payloadStep),
+        'payload step must verify the research record file exists before binding its path');
+});
+
+runTest('Workflow - research record path follows docs/ai/research/research-{task_name}.md convention', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/docs\/ai\/research\/research-\$\{TASK_NAME\}\.md/.test(payloadStep),
+        'payload step must construct research record path as docs/ai/research/research-{task_name}.md');
+});
+
+runTest('Workflow - payload step passes durable_research_record_path to jq as arg', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/--arg durable_research_record_path/.test(payloadStep),
+        'payload step must pass durable_research_record_path as a jq --arg');
+});
+
+runTest('Workflow - payload JSON includes durable_research_record_path field', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/durable_research_record_path:/.test(payloadStep),
+        'payload JSON must include durable_research_record_path field');
+});
+
+runTest('Workflow - payload JSON nulls durable_research_record_path when not verified', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/if \$durable_research_record_path == "null" then null else \$durable_research_record_path end/.test(payloadStep),
+        'payload JSON must null durable_research_record_path when value is "null"');
+});
+
+// =========================================================
+// 9. Sequencing: payload finalized before upload
+// =========================================================
+
+runTest('Workflow - Prepare ACP report payload step precedes Upload Gemini result artifact step', () => {
+    const payloadIdx = mainWfRaw.indexOf('Prepare ACP report payload');
+    const uploadIdx = mainWfRaw.indexOf('Upload Gemini result artifact');
+    assert.ok(payloadIdx !== -1 && uploadIdx !== -1, 'both steps must exist');
+    assert.ok(payloadIdx < uploadIdx,
+        'Prepare ACP report payload step must precede Upload Gemini result artifact step so report is finalized before upload');
+});
+
+runTest('Workflow - Report artifact filing status step succeeds Upload step', () => {
+    const uploadIdx = mainWfRaw.indexOf('Upload Gemini result artifact');
+    const reportIdx = mainWfRaw.indexOf('Report artifact filing status');
+    assert.ok(uploadIdx !== -1 && reportIdx !== -1, 'both steps must exist');
+    assert.ok(uploadIdx < reportIdx,
+        'Report artifact filing status step must follow Upload step (needs upload outcome)');
+});
+
+// =========================================================
+// 10. Protocol retrieval instructions (docs/ai/README.md)
 // =========================================================
 
 runTest('Protocol - README documents machine-readable filing fields table', () => {
     assert.ok(/filing_status.*artifact_name.*artifact_file.*workflow_run_id.*workflow_run_url/i.test(readmeRaw),
         'README must document all machine-readable filing fields');
+});
+
+runTest('Protocol - README includes artifact_id field', () => {
+    assert.ok(/artifact_id/.test(readmeRaw),
+        'README must document artifact_id field');
 });
 
 runTest('Protocol - README states filing_status SUCCESS is not a retrieval location', () => {
@@ -247,7 +397,7 @@ runTest('Protocol - README distinguishes canonical report from durable research 
 });
 
 runTest('Protocol - README states canonical report must reference durable research-record path', () => {
-    assert.ok(/canonical report must contain or expose the durable research-record path|navigate from the canonical Gemini report to the underlying persistent research/i.test(readmeRaw),
+    assert.ok(/canonical report must contain an explicit `durable_research_record_path` field|canonical report must contain or expose the durable research-record path|navigate from the canonical Gemini report to the underlying persistent research/i.test(readmeRaw),
         'README must state the canonical report must reference the durable research-record path');
 });
 
@@ -262,7 +412,21 @@ runTest('Protocol - README states filing failure (FAILED/UNKNOWN) must report NO
 });
 
 // =========================================================
-// 7. CHATGPT_PROJECT_OPERATING_PROTOCOL.md Section 5 deterministic retrieval
+// 11. README: artifact_id must be referenced in retrieval procedure
+// =========================================================
+
+runTest('Protocol - README retrieval procedure references artifact_id for exact artifact identification', () => {
+    assert.ok(/artifact_id/.test(readmeRaw),
+        'README must reference artifact_id so an agent can identify the exact uploaded artifact');
+});
+
+runTest('Protocol - README does NOT present artifact_url as a no-auth direct download link', () => {
+    assert.ok(/artifact_url.*not.*a no-auth download|not.*no-auth download.*artifact_url|not.*direct download URL/i.test(readmeRaw) || /artifact_url.*is.*not.*a secret-bearing.*download/i.test(readmeRaw),
+        'README must state artifact_url is not a no-auth direct download link');
+});
+
+// =========================================================
+// 12. CHATGPT_PROJECT_OPERATING_PROTOCOL.md Section 5 deterministic retrieval
 // =========================================================
 
 runTest('Protocol - Section 5 references machine-readable filing fields', () => {
@@ -277,6 +441,11 @@ runTest('Protocol - Section 5 lists filing_status, artifact_name, artifact_file,
     assert.ok(section5.includes('artifact_file'), 'Protocol must reference artifact_file');
     assert.ok(section5.includes('workflow_run_id'), 'Protocol must reference workflow_run_id');
     assert.ok(section5.includes('workflow_run_url'), 'Protocol must reference workflow_run_url');
+});
+
+runTest('Protocol - Section 5 references artifact_id', () => {
+    const section5 = protocolRaw.slice(protocolRaw.indexOf('### 5.1 Gemini Result Artifact Retrieval Rule'));
+    assert.ok(section5.includes('artifact_id'), 'Protocol Section 5 must reference artifact_id');
 });
 
 runTest('Protocol - Section 5 explicitly states filing_status SUCCESS alone is not a retrieval location', () => {
@@ -322,8 +491,14 @@ runTest('Protocol - Section 5.1.1 lists filing_status as first inspection step',
         'Protocol Section 5.1.1 must inspect filing status before identifying the workflow run');
 });
 
+runTest('Protocol - Section 5.1.2 references inspecting canonical report for research-record path', () => {
+    const section = protocolRaw.slice(protocolRaw.indexOf('### 5.1.2 Durable Gemini Evidence Retrieval Procedure'));
+    assert.ok(/inspect the.*durable research record|canonical report.*durable research-record path|report.*payload.*durable/i.test(section),
+        'Protocol Section 5.1.2 must require inspecting the canonical report payload for the durable research-record path');
+});
+
 // =========================================================
-// 8. Prohibited substitutes explicitly enumerated
+// 13. Prohibited substitutes explicitly enumerated
 // =========================================================
 
 runTest('Protocol - Section 5 lists filing_status SUCCESS as prohibited substitute', () => {
@@ -333,7 +508,16 @@ runTest('Protocol - Section 5 lists filing_status SUCCESS as prohibited substitu
 });
 
 // =========================================================
-// 9. Summary
+// 14. Regression guard: artifact_download_url must NOT appear in tests/docs
+// =========================================================
+
+runTest('Workflow - tests do NOT reference artifact_download_url as valid field', () => {
+    assert.ok(!/artifact_download_url.*valid|artifact_download_url.*retrieval location/.test(readmeRaw),
+        'README must not treat artifact_download_url as a valid retrieval location field');
+});
+
+// =========================================================
+// Summary
 // =========================================================
 
 console.log(`\n--- Summary: ${passCount} passed, ${failCount} failed ---`);

@@ -463,7 +463,7 @@ When Gemini is executed through the repository GitHub Actions workflow (`.github
 
 The project-wide interpretation of natural-language references such as "Gemini's report" or "Gemini's results" is defined in `docs/ai/README.md` — *Terminology and Artifact Retrieval*. This section provides the ChatGPT-specific rule that implements that project-wide definition; it does not establish a second or conflicting definition.
 
-The workflow's "Report artifact filing status" step exposes **machine-readable filing fields** that are the deterministic retrieval location: `filing_status`, `artifact_name`, `artifact_file`, `workflow_run_id`, `workflow_run_url`, and `artifact_download_url`. ChatGPT MUST use these fields as the primary retrieval location. `filing_status: SUCCESS` alone is **not** a retrieval location and is **not** evidence that the report itself has been inspected.
+The workflow's "Report artifact filing status" step exposes **machine-readable filing fields** that are the deterministic retrieval location: `filing_status`, `artifact_name`, `artifact_file`, `artifact_id`, `workflow_run_id`, `workflow_run_url`, and `artifact_url`. ChatGPT MUST use these fields as the primary retrieval location. `filing_status: SUCCESS` alone is **not** a retrieval location and is **not** evidence that the report itself has been inspected. The `artifact_id` is the GitHub-assigned numeric artifact ID (from the native `actions/upload-artifact@v4` output) that uniquely identifies the uploaded artifact; `artifact_url` is the browser run page where the artifact is listed (not a no-auth download link).
 
 After a completed Gemini run, ChatGPT MUST retrieve and inspect that artifact directly when verification or result access is required.
 
@@ -521,7 +521,7 @@ Gemini
 → GitHub Actions (`.github/workflows/main.yml`)
 → `steps.gemini_run.outputs.summary`
 → `gemini-acp-report.json` (the `artifact_file` field)
-→ `gemini-acp-report` GitHub Actions artifact (the `artifact_name` field)
+→ `gemini-acp-report` GitHub Actions artifact (the `artifact_name` field, `artifact_id` field)
 → ChatGPT retrieval / review
 ```
 
@@ -531,11 +531,11 @@ This chain is the documented, authoritative retrieval path. The procedure MUST b
 2. **Identify the exact `Gemini Architect and Reviewer` GitHub Actions workflow run** associated with the requested Gemini execution (via `.github/workflows/main.yml`). Use the machine-readable filing fields (`workflow_run_id`, `workflow_run_url`) as the primary retrieval location. If these are unavailable, discovery is deterministic and proceeds by correlating available durable identifiers in priority order: the orchestration `request_id`, then the issue number / issue-comment event, then the Kilo commit SHA, then the event type (`issue_comment` vs. `workflow_dispatch`), then the workflow run timestamp. ChatGPT MUST use whichever durable identifiers are available and MUST NOT invent missing identifiers.
 3. **If the first lookup** against the available identifiers does not locate the execution, continue through the documented GitHub discovery chain (issues, recent workflow runs, artifact listings, commit history) rather than concluding the artifact does not exist. A failed first lookup is NOT evidence that the execution or artifact is absent.
 4. **Inspect that workflow run's artifacts.**
-5. **Locate the artifact** named exactly `gemini-acp-report` (the `artifact_name` field).
+5. **Locate the artifact** named exactly `gemini-acp-report` (the `artifact_name` field) whose ID matches `artifact_id`. The `artifact_id` uniquely identifies the uploaded artifact among multiple artifacts in the run.
 6. **Download the artifact** and extract the file named exactly `gemini-acp-report.json` (the `artifact_file` field).
 7. **Read and review** `gemini-acp-report.json` as the authoritative Gemini result for the requested execution.
 8. **Use that retrieved report** as the authoritative Gemini result for the requested execution.
-9. **Navigate to the durable research record (when applicable).** For `RESEARCH_DOCUMENT` tasks, the canonical `gemini-acp-report.json` must contain or reference the durable Markdown research record path under `docs/ai/research/`. If present, inspect the linked research record for human-readable research analysis. If the report does not expose a research-record path, that linkage is NOT established and must not be assumed.
+9. **Navigate to the durable research record (when applicable).** For `RESEARCH_DOCUMENT` tasks, the canonical `gemini-acp-report.json` payload contains an explicit `durable_research_record_path` field binding the report to its durable Markdown research record under `docs/ai/research/`. ChatGPT MUST inspect the report's `durable_research_record_path` field — not infer the path from task naming or conversational context — and follow that reference to inspect the linked research record. If `durable_research_record_path` is absent or null, that linkage is NOT established and must not be assumed.
 10. **Only if** the documented artifact cannot be located after exhausting the discovery chain, cannot be downloaded, has expired, or the workflow did not produce the expected artifact should ChatGPT report the Gemini result as NOT YET VERIFIED.
 
 > **Mandatory retrieval behavior.** When Kyle says "find Gemini's report," "get Gemini's results," "retrieve Gemini's report," or equivalent wording (see the project-wide terminology mapping in `docs/ai/README.md` — *Terminology and Artifact Retrieval*), ChatGPT MUST interpret this as a GitHub Actions artifact retrieval task and MUST independently perform the documented retrieval procedure above. ChatGPT MUST NOT ask Kyle where Gemini stored the result or ask Kyle to copy/paste the result unless the documented retrieval procedure has already been independently attempted and is unavailable or blocked.
@@ -547,8 +547,8 @@ When prior Gemini execution or research evidence is needed, ChatGPT MUST use the
 The mandatory retrieval hierarchy is:
 
 1. Inspect `docs/ai/RESEARCH_INDEX.md` for the exact `task_name` and the linked research record.
-2. Search `docs/ai/reports/gemini-acp-report-*.json` using the exact `task_name` or `request_id` when available. The durable ACP report is the first place to inspect for the actual Gemini execution result. The canonical `gemini-acp-report.json` is the authoritative machine-readable report; `filing_status: SUCCESS` in the report is not sufficient — the report payload itself must be inspected.
-3. For human-readable research analysis, inspect the corresponding `docs/ai/research/research-*.md` record.
+2. Search `docs/ai/reports/gemini-acp-report-*.json` using the exact `task_name` or `request_id` when available. The durable ACP report is the first place to inspect for the actual Gemini execution result. The canonical `gemini-acp-report.json` is the authoritative machine-readable report; `filing_status: SUCCESS` in the report is not sufficient — the report payload itself must be inspected, including the `durable_research_record_path` field for RESEARCH_DOCUMENT tasks.
+3. For human-readable research analysis, inspect the corresponding `docs/ai/research/research-*.md` record referenced by the report's `durable_research_record_path`. Do NOT infer the research path from task naming or conversational context; follow the report's explicit `durable_research_record_path` reference.
 4. Use `docs/ai/TASK_LOG.md`, `docs/ai/STATE.md`, and `docs/ai/CONTROL_CENTER.md` for project-state and navigation context; they do not substitute for the underlying ACP report or research record.
 5. Repository evidence is authoritative over Gemini's natural-language completion summary. If the durable ACP report contradicts the agent's prose, report the repository evidence.
 6. ChatGPT MUST NOT conclude that a Gemini result or research artifact is missing until the durable report and applicable research locations have been checked.
