@@ -974,7 +974,7 @@ async function main() {
         const approval = await setupDirectorApproval('prereq-check-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
         cmd.authorization.approval_id = approval.approval.approval_id;
         const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
-        const check = taskRegistry.checkPrerequisites('prereq-check-test-1');
+        const check = await taskRegistry.checkPrerequisites('prereq-check-test-1');
         assertTrue(check.success, 'Should succeed when secret is present: ' + (check.error || ''));
         assertTrue(check.satisfied, 'Prerequisites should be satisfied');
         cleanup();
@@ -989,7 +989,7 @@ async function main() {
             const approval = await setupDirectorApproval('prereq-check-block-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
             cmd.authorization.approval_id = approval.approval.approval_id;
             await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
-            const check = taskRegistry.checkPrerequisites('prereq-check-block-test-1');
+            const check = await taskRegistry.checkPrerequisites('prereq-check-block-test-1');
             assertTrue(!check.success, 'Should block consequential task with unsatisfied prerequisites');
             assertEqual(check.error_code, 'PREREQUISITE_NOT_SATISFIED');
         } finally {
@@ -1066,6 +1066,168 @@ async function main() {
         assertTrue(schema.CONFIG_PREREQUISITE_STATES.includes('CONFIGURATION_SATISFIED'));
         assertTrue(schema.CONFIG_PREREQUISITE_STATES.includes('UNKNOWN'));
     });
+
+    await runTest('Config prerequisite - DIRECTOR_NOTIFIED persists durable notification record on task entry', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-notif-persist-1');
+            const approval = await setupDirectorApproval('prereq-notif-persist-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            assertTrue(!result.success, 'Should be blocked');
+            assertTrue(result.director_notified === true, 'director_notified should be true');
+            const task = taskRegistry.getTask('prereq-notif-persist-1');
+            assertTrue(task !== null, 'Task should be persisted in TaskRegistry');
+            assertTrue(task.director_notifications !== undefined, 'Task should have director_notifications array');
+            assertTrue(task.director_notifications.length > 0, 'Should have at least one notification');
+            const notif = task.director_notifications[0];
+            assertEqual(notif.config_key, 'DIRECTOR_ORIGIN_SECRET', 'Notification should identify DIRECTOR_ORIGIN_SECRET');
+            assertTrue(notif.notified_at !== null && notif.notified_at !== undefined, 'Notification should have notified_at timestamp');
+            assertTrue(notif.satisfies_prerequisite === false, 'Notification must not itself satisfy the prerequisite');
+            assertTrue(notif.acknowledged === false, 'Notification should start unacknowledged');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - blocked task has BLOCKED status and next_action director_notification', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-blocked-status-1');
+            const approval = await setupDirectorApproval('prereq-blocked-status-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            const task = taskRegistry.getTask('prereq-blocked-status-1');
+            assertEqual(task.status, 'BLOCKED', 'Task status should be BLOCKED');
+            assertEqual(task.next_action, 'director_notification', 'Next action should be director_notification');
+            assertEqual(task.block_reason, 'CONFIG_PREREQUISITE_UNSATISFIED', 'Block reason should be CONFIG_PREREQUISITE_UNSATISFIED');
+            assertTrue(task.block_details !== undefined, 'Should have block_details');
+            assertEqual(task.block_details.config_key, 'DIRECTOR_ORIGIN_SECRET');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - notification identifies required prerequisite and reason', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-notif-identity-1');
+            const approval = await setupDirectorApproval('prereq-notif-identity-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            assertTrue(result.director_notifications !== undefined, 'Should include director_notifications in response');
+            assertTrue(result.director_notifications.length > 0, 'Should have notifications');
+            const notif = result.director_notifications[0];
+            assertEqual(notif.config_key, 'DIRECTOR_ORIGIN_SECRET');
+            assertTrue(notif.reason.includes('DIRECTOR_ORIGIN_SECRET') || notif.reason.includes('consequential'), 'Reason should mention the prerequisite or consequential execution');
+            assertEqual(notif.satisfies_prerequisite, false, 'Notification must not satisfy prerequisite');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - DIRECTOR_NOTIFIED distinct from CONFIGURATION_SATISFIED', async () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('prereq-distinct-states-1');
+        const approval = await setupDirectorApproval('prereq-distinct-states-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed when secret present: ' + (result.error || ''));
+
+        const task = taskRegistry.getTask('prereq-distinct-states-1');
+        const prereqs = task.config_prerequisites || [];
+        const prereq = prereqs.find(p => p.config_key === 'DIRECTOR_ORIGIN_SECRET');
+        assertTrue(prereq !== undefined, 'Should have DIRECTOR_ORIGIN_SECRET prerequisite');
+        assertEqual(prereq.state, 'CONFIGURATION_SATISFIED', 'State should be CONFIGURATION_SATISFIED when secret present');
+        assertEqual(task.status, 'PENDING', 'Task should not be BLOCKED when satisfied');
+
+        cleanup();
+
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        const cmd2 = makeKiloFailoverCommand('prereq-distinct-states-2');
+        const approval2 = await setupDirectorApproval('prereq-distinct-states-2', 'Kilo', 'FAILOVER_EXECUTE', cmd2.authorization.capabilities, cmd2.constraints.permitted_paths);
+        cmd2.authorization.approval_id = approval2.approval.approval_id;
+        await canonicalExternalActivationIngress(cmd2, { director_approval_id: cmd2.authorization.approval_id });
+        const task2 = taskRegistry.getTask('prereq-distinct-states-2');
+        const prereqs2 = task2.config_prerequisites || [];
+        const prereq2 = prereqs2.find(p => p.config_key === 'DIRECTOR_ORIGIN_SECRET');
+        assertEqual(prereq2.state, 'DIRECTOR_NOTIFIED', 'State should be DIRECTOR_NOTIFIED when secret absent');
+        assertEqual(task2.status, 'BLOCKED', 'Task should be BLOCKED when unsatisfied');
+    });
+
+    await runTest('Config prerequisite - getDirectorNotifications returns persisted notifications', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-getnotif-1');
+            const approval = await setupDirectorApproval('prereq-getnotif-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            const notifs = taskRegistry.getDirectorNotifications('prereq-getnotif-1');
+            assertTrue(notifs.success, 'Should succeed');
+            assertTrue(notifs.count > 0, 'Should have notifications');
+            const hasNotif = taskRegistry.hasDirectorNotification('prereq-getnotif-1', 'DIRECTOR_ORIGIN_SECRET');
+            assertTrue(hasNotif === true, 'Should detect DIRECTOR_ORIGIN_SECRET notification');
+            const noNotif = taskRegistry.hasDirectorNotification('prereq-getnotif-1', 'OTHER_KEY');
+            assertTrue(noNotif === false, 'Should not detect OTHER_KEY notification');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - unknown/unverifiable config fails closed', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeBuilderCommand('prereq-unknown-fail-1');
+            const approval = await setupDirectorApproval('prereq-unknown-fail-1', 'Gemini Builder', 'BUILDER', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            assertTrue(!result.success, 'BUILDER without secret should fail closed');
+            assertEqual(result.status, 'BLOCKED');
+            assertEqual(result.config_state, 'DIRECTOR_NOTIFIED');
+            assertTrue(result.blocking_prerequisites[0].config_key === 'DIRECTOR_ORIGIN_SECRET');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - notification persisted across getTask reload', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-persist-reload-1');
+            const approval = await setupDirectorApproval('prereq-persist-reload-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+
+            taskRegistry.resetMemoryCache();
+            taskRegistry.loadFromFile();
+            const task = taskRegistry.getTask('prereq-persist-reload-1');
+            assertTrue(task !== null, 'Task should exist after reload');
+            assertTrue(task.director_notifications !== undefined, 'Notifications should persist across reload');
+            assertTrue(task.director_notifications.length > 0, 'Should have notifications after reload');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret; else process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+            cleanup();
+        }
+    });
+
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
 
     // =========================================================
     // One Control Plane Tests

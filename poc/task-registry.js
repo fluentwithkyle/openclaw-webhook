@@ -724,7 +724,7 @@ function evaluateAllPrerequisites(requestId) {
   };
 }
 
-function checkPrerequisites(requestId) {
+async function checkPrerequisites(requestId) {
   const entry = getTask(requestId);
   if (!entry) {
     return { success: false, error: 'Task not found', config_state: 'UNKNOWN' };
@@ -740,15 +740,38 @@ function checkPrerequisites(requestId) {
     var unsatisfied = requiredPrereqs.filter(function(p) { return p.state !== 'CONFIGURATION_SATISFIED'; });
 
     if (unsatisfied.length > 0 && isConsequentialCommand(entry)) {
+      var unsatisfiedCopy = unsatisfied.slice();
+      var notificationsPersisted = [];
+      for (var j = 0; j < unsatisfiedCopy.length; j++) {
+        var unsatisfiedPrereq = unsatisfiedCopy[j];
+        if (!hasDirectorNotification(requestId, unsatisfiedPrereq.config_key)) {
+          var notifResult = await recordDirectorNotification(requestId, unsatisfiedPrereq.config_key, unsatisfiedPrereq.reason, {
+            error_code: 'CONFIG_PREREQUISITE_UNSATISFIED'
+          });
+          if (notifResult.success) {
+            notificationsPersisted.push(notifResult.notification);
+          }
+        } else {
+          var existing = getDirectorNotifications(requestId);
+          var found = existing.notifications.find(function(n) { return n.config_key === unsatisfiedPrereq.config_key; });
+          if (found) {
+            notificationsPersisted.push(found);
+          }
+        }
+      }
+
+      const updatedEntry = getTask(requestId);
       return {
         success: false,
-        config_state: evaluation.config_state,
+        config_state: 'DIRECTOR_NOTIFIED',
         satisfied: false,
-        director_notified: evaluation.director_notified,
-        has_unknown: evaluation.has_unknown,
+        director_notified: true,
+        has_unknown: false,
         blocking_prerequisites: unsatisfied,
+        notifications: notificationsPersisted,
         error: 'Required external configuration prerequisite unsatisfied; consequential execution blocked (fail closed)',
-        error_code: 'PREREQUISITE_NOT_SATISFIED'
+        error_code: 'PREREQUISITE_NOT_SATISFIED',
+        task_entry: updatedEntry
       };
     }
   }
@@ -770,6 +793,67 @@ function getPrerequisiteState(requestId, configKey) {
   const prereq = prereqs.find(p => p.config_key === configKey);
   if (!prereq) return 'UNKNOWN';
   return prereq.state || 'UNKNOWN';
+}
+
+async function recordDirectorNotification(requestId, configKey, reason, errorInfo) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    const notification = {
+      notification_id: requestId + '-dirnotif-' + Date.now(),
+      config_key: configKey,
+      reason: reason || 'External configuration prerequisite unsatisfied; consequential execution blocked (fail closed)',
+      error_code: errorInfo ? errorInfo.error_code : 'CONFIG_PREREQUISITE_UNSATISFIED',
+      notified_at: new Date().toISOString(),
+      acknowledged: false,
+      satisfies_prerequisite: false
+    };
+
+    if (!entry.director_notifications) {
+      entry.director_notifications = [];
+    }
+    entry.director_notifications.push(notification);
+
+    if (!entry.status || entry.status === 'PENDING') {
+      entry.status = 'BLOCKED';
+      entry.block_reason = 'CONFIG_PREREQUISITE_UNSATISFIED';
+      entry.block_details = {
+        config_key: configKey,
+        reason: reason,
+        notified_at: notification.notified_at
+      };
+    }
+
+    entry.next_action = 'director_notification';
+    entry.updated_at = new Date().toISOString();
+
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, notification, entry };
+  });
+}
+
+function getDirectorNotifications(requestId) {
+  const entry = getTask(requestId);
+  if (!entry) return { success: false, error: 'Task not found', notifications: [] };
+  return {
+    success: true,
+    notifications: entry.director_notifications || [],
+    count: (entry.director_notifications || []).length
+  };
+}
+
+function hasDirectorNotification(requestId, configKey) {
+  const result = getDirectorNotifications(requestId);
+  if (!result.success) return false;
+  if (configKey) {
+    return result.notifications.some(n => n.config_key === configKey);
+  }
+  return result.count > 0;
 }
 
 async function supersedeTask(requestId, reason) {
@@ -1614,6 +1698,9 @@ module.exports = {
   evaluateAllPrerequisites,
   checkPrerequisites,
   getPrerequisiteState,
+  recordDirectorNotification,
+  getDirectorNotifications,
+  hasDirectorNotification,
   claimExecutionContext,
   releaseExecutionClaim,
   getExecutionClaim,

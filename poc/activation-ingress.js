@@ -283,8 +283,8 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
     );
   }
 
-  if (requiredPrerequisites.length > 0) {
-    const prerequisiteCheck = taskRegistry.checkPrerequisites(requestId);
+   if (requiredPrerequisites.length > 0) {
+    const prerequisiteCheck = await taskRegistry.checkPrerequisites(requestId);
     if (!prerequisiteCheck.success && isConsequential) {
       return {
         success: false,
@@ -300,6 +300,7 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
         director_notified: prerequisiteCheck.director_notified,
         has_unknown: prerequisiteCheck.has_unknown,
         blocking_prerequisites: prerequisiteCheck.blocking_prerequisites,
+        director_notifications: prerequisiteCheck.notifications,
         task_entry: taskRegistry.getTask(requestId),
         message: 'External configuration prerequisite unsatisfied; Director notified and consequential execution blocked (fail closed)'
       };
