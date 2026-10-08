@@ -154,18 +154,10 @@ function validateExternalActivation(params, callbackUrl, callbackSecret, directo
 function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch, approvalId) {
     const stripped = commentBody.replace('@gemini-cli', '').trim();
 
-    let taskMode = 'REVIEW';
-    let capabilities = 'read_only';
-    let permittedPaths = 'poc/';
-    let task = stripped;
-
-    const failoverMatch = stripped.match(/^FAILOVER_EXECUTE\s+(.*)/s);
-    if (failoverMatch) {
-        taskMode = 'FAILOVER_EXECUTE';
-        capabilities = 'read_only,modify_files,run_tests,commit,push';
-        permittedPaths = 'poc/';
-        task = failoverMatch[1].trim();
-    }
+    const taskMode = 'REVIEW';
+    const capabilities = 'read_only';
+    const permittedPaths = 'poc/';
+    const task = stripped;
 
     return {
         protocol_version: '0.1',
@@ -179,9 +171,7 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
         task_mode: taskMode,
         constraints: { permitted_paths: permittedPaths.split(',') },
         authorization: { capabilities: capabilities.split(','), ...(approvalId ? { approval_id: approvalId } : {}) },
-        verification: taskMode === 'FAILOVER_EXECUTE'
-            ? 'All changes must be within permitted_paths. Implement, test, commit, and push within scope.'
-            : 'Review the request and provide analysis, risk assessment, and implementation plans.',
+        verification: 'Review the request and provide analysis, risk assessment, and implementation plans.',
         reporting: 'json',
         originator: 'Kyle',
         activation_surface: 'github_issue_comment',

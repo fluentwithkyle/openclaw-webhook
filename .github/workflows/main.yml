@@ -78,39 +78,25 @@ jobs:
         if: github.event_name == 'issue_comment'
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
-          ACTOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         shell: bash
         run: |
           set -euo pipefail
 
+          # The @gemini-cli activation surface always resolves to REVIEW (read-only advisory).
+          # The effective Gemini task_mode, capabilities, and permitted_paths are derived
+          # from the canonical authorized ACP task/activation descriptor returned by the
+          # canonical activation ingress — NOT from how the triggering comment is prefixed
+          # or parsed. Task text from the comment is the candidate ACP request body only.
           REQUEST="${COMMENT_BODY#@gemini-cli}"
           REQUEST="${REQUEST# }"
-
-          # Detect explicit FAILOVER_EXECUTE activation: "@gemini-cli FAILOVER_EXECUTE <task>"
-          # Default to REVIEW for plain @gemini-cli comments.
-          TASK_MODE="REVIEW"
-          CAPABILITIES="read_only"
-          PERMITTED_PATHS="poc/"
-
-          if echo "$REQUEST" | grep -qiE '^FAILOVER_EXECUTE\b'; then
-            if [ "$ACTOR_ASSOCIATION" != "OWNER" ]; then
-              echo "::error::FAILOVER_EXECUTE activation requires repository-owner Director authorization"
-              exit 1
-            fi
-            TASK_MODE="FAILOVER_EXECUTE"
-            CAPABILITIES="read_only,modify_files,run_tests,commit,push"
-            # Strip the "FAILOVER_EXECUTE" keyword, leaving the task description
-            REQUEST="${REQUEST#FAILOVER_EXECUTE}"
-            REQUEST="${REQUEST# }"
-          fi
 
           {
             echo 'request<<EOF'
             printf '%s\n' "$REQUEST"
             echo 'EOF'
-            echo "task_mode=$TASK_MODE"
-            echo "capabilities=$CAPABILITIES"
-            echo "permitted_paths=$PERMITTED_PATHS"
+            echo "task_mode=REVIEW"
+            echo "capabilities=read_only"
+            echo "permitted_paths=poc/"
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate external activation through canonical ingress (issue_comment)
@@ -119,7 +105,6 @@ jobs:
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
-          DIRECTOR_ORIGIN_SECRET: ${{ steps.request_comment.outputs.task_mode == 'FAILOVER_EXECUTE' && secrets.DIRECTOR_ORIGIN_SECRET || '' }}
           COMMENT_ID: ${{ github.event.comment.id }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           REPOSITORY: ${{ github.repository }}
@@ -136,6 +121,9 @@ jobs:
 
           # Build the activation payload with jq so multiline/control characters in
           # the GitHub comment are JSON-escaped before canonical validation.
+          # The canonical ingress derives effective task_mode, capabilities, and
+          # permitted_paths from the server-side activation-policy authority, not
+          # from comment prefix parsing.
           ACTIVATION_JSON=$(jq -n \
             --arg comment_id "$COMMENT_ID" \
             --arg comment_body "$COMMENT_BODY" \

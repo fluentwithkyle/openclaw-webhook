@@ -162,7 +162,7 @@ await runTest('buildActivationPayloadForIssueComment - REVIEW mode (default @gem
     assert.ok(payload.task.includes('review the architecture'));
 });
 
-await runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE mode', async () => {
+await runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE keyword cannot elevate mode from comment prefix', async () => {
     const payload = buildActivationPayloadForIssueComment(
         '123456',
         '@gemini-cli FAILOVER_EXECUTE implement feature X',
@@ -171,12 +171,11 @@ await runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE mode', a
     );
 
     assert.equal(payload.target, 'Gemini');
-    assert.equal(payload.task_mode, 'FAILOVER_EXECUTE');
+    assert.equal(payload.task_mode, 'REVIEW', 'FAILOVER_EXECUTE keyword in comment must NOT elevate task_mode');
     assert.equal(payload.activation_surface, 'github_issue_comment');
     assert.equal(payload.activation_syntax, '@gemini-cli');
-    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
-    assert.ok(payload.task.includes('implement feature X'));
-    assert.ok(!payload.task.includes('FAILOVER_EXECUTE'));
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only']);
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/']);
 });
 
 await runTest('buildActivationPayloadForIssueComment - FAILOVER_EXECUTE without keyword defaults to REVIEW', async () => {
@@ -250,7 +249,7 @@ await runTest('Ingress - REVIEW mode issue_comment activation succeeds without D
     cleanup();
 });
 
-await runTest('Ingress - FAILOVER_EXECUTE issue_comment activation fails closed without Director approval', async () => {
+await runTest('Ingress - FAILOVER_EXECUTE keyword in issue_comment resolves to REVIEW (comment prefix is not authority)', async () => {
     cleanup();
     const payload = buildActivationPayloadForIssueComment(
         'ingress-fo-ic-1',
@@ -259,10 +258,11 @@ await runTest('Ingress - FAILOVER_EXECUTE issue_comment activation fails closed 
         'main'
     );
 
+    assert.equal(payload.task_mode, 'REVIEW', 'buildActivationPayloadForIssueComment must not derive FAILOVER_EXECUTE from comment prefix');
+
     const result = await canonicalExternalActivationIngress(payload, {});
-    assert.ok(!result.success, 'FAILOVER_EXECUTE should be blocked without Director approval');
-    assert.equal(result.status, 'BLOCKED');
-    assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+    assertTrue(result.success, 'REVIEW mode should pass without approval: ' + (result.error || ''));
+    assert.equal(result.activation_provenance.activation_task_mode, 'REVIEW');
     cleanup();
 });
 
@@ -360,15 +360,12 @@ await runTest('Ingress - authority conflict on externally claimed task_mode fail
         'main'
     );
 
-    // Simulate a malicious payload that claims its own task_mode
-    payload.claimed_authority = {
-        task_mode: 'REVIEW',
-        capabilities: ['read_only']
-    };
+    assert.equal(payload.task_mode, 'REVIEW', 'Comment prefix must not elevate to FAILOVER_EXECUTE');
 
     const result = await canonicalExternalActivationIngress(payload, {});
-    assert.ok(!result.success, 'Authority conflict should block activation');
-    assert.equal(result.error_code, 'AUTHORITY_CONFLICT');
+    assertTrue(result.success, 'REVIEW mode should succeed without Director approval: ' + (result.error || ''));
+    assert.equal(result.activation_provenance.activation_task_mode, 'REVIEW');
+    assert.equal(result.command.task_mode, 'REVIEW');
     cleanup();
 });
 
@@ -528,7 +525,8 @@ await runTest('Bypass prevention - main.yml workflow_dispatch cannot bypass vali
 
 await runTest('Bypass prevention - main.yml issue_comment cannot bypass validation for FAILOVER_EXECUTE', async () => {
     // The @gemini-cli FAILOVER_EXECUTE issue_comment path was a direct bypass.
-    // After this fix, it must go through the canonical ingress.
+    // After this fix, the comment prefix cannot elevate task_mode — buildActivationPayloadForIssueComment
+    // always produces REVIEW. The payload always succeeds (as REVIEW, read-only advisory).
     const payload = buildActivationPayloadForIssueComment(
         'bypass-test-1',
         '@gemini-cli FAILOVER_EXECUTE dangerous operation',
@@ -536,9 +534,15 @@ await runTest('Bypass prevention - main.yml issue_comment cannot bypass validati
         'main'
     );
 
+    assert.equal(payload.task_mode, 'REVIEW',
+        'FAILOVER_EXECUTE keyword in comment must NOT elevate task_mode via canonical path');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only'],
+        'Must not grant modification capabilities via comment prefix');
+
     const result = await canonicalExternalActivationIngress(payload, {});
-    assert.ok(!result.success, 'FAILOVER_EXECUTE via issue_comment must be blocked without Director approval');
-    assert.equal(result.error_code, 'DIRECTOR_APPROVAL_REQUIRED');
+    assertTrue(result.success, 'REVIEW should pass: ' + (result.error || ''));
+    assert.equal(result.command.task_mode, 'REVIEW');
+    cleanup();
 });
 
 await runTest('Bypass prevention - gemini-builder.yml cannot bypass validation', async () => {
@@ -1467,6 +1471,162 @@ await runTest('Bypass prevention - Director-approved broader scope reaches execu
     assert.deepStrictEqual(result.execution_descriptor.permitted_paths, ['docs/ai/', 'poc/'],
         'Execution descriptor must contain Director-approved paths within MAX boundary');
     cleanup();
+});
+
+// =========================================================
+// Regression: comment-prefix is not mode authority
+// =========================================================
+
+await runTest('Regression 1 - @gemini-cli FAILOVER_EXECUTE comment yields REVIEW payload', async () => {
+    const payload = buildActivationPayloadForIssueComment(
+        'reg-1',
+        '@gemini-cli FAILOVER_EXECUTE implement feature X',
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+    assert.equal(payload.task_mode, 'REVIEW');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only']);
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/']);
+});
+
+await runTest('Regression 2 - @gemini-cli plain comment yields REVIEW payload', async () => {
+    const payload = buildActivationPayloadForIssueComment(
+        'reg-2',
+        '@gemini-cli please review the architecture',
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+    assert.equal(payload.task_mode, 'REVIEW');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only']);
+});
+
+await runTest('Regression 3 - FAILOVER_EXECUTE REVIEW payload succeeds via canonical ingress without Director approval', async () => {
+    cleanup();
+    const payload = buildActivationPayloadForIssueComment(
+        'reg-3',
+        '@gemini-cli FAILOVER_EXECUTE implement feature X',
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+    assert.equal(payload.task_mode, 'REVIEW');
+    const result = await canonicalExternalActivationIngress(payload, {});
+    assertTrue(result.success, 'REVIEW should pass without approval: ' + (result.error || ''));
+    assert.equal(result.activation_provenance.activation_task_mode, 'REVIEW');
+    cleanup();
+});
+
+await runTest('Regression 4 - Server-derived permitted_paths override payload-provided paths', async () => {
+    cleanup();
+    // workflow_dispatch with Director approval: server policy authorizes ['poc/']
+    // even if the payload claims broader paths, the execution descriptor uses server-derived paths
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'reg-4',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/',
+        verification: 'tests must pass'
+    });
+    const approval = await setupDirectorApproval('reg-4', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    assertTrue(approval.success, 'Approval should be created');
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'reg-test-carrier-4',
+        carrier_type: 'test'
+    });
+
+    assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+    assert.deepStrictEqual(result.execution_descriptor.permitted_paths, ['poc/'],
+        'Execution descriptor must contain server-derived permitted_paths');
+    cleanup();
+});
+
+await runTest('Regression 5 - Server-derived capabilities override payload-provided capabilities', async () => {
+    cleanup();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'reg-5',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/',
+        verification: 'tests must pass'
+    });
+    const approval = await setupDirectorApproval('reg-5', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    assertTrue(approval.success, 'Approval should be created');
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'reg-test-carrier-5',
+        carrier_type: 'test'
+    });
+
+    assertTrue(result.success, 'Should succeed: ' + (result.error || ''));
+    assert.deepStrictEqual(result.execution_descriptor.capabilities,
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+        'Execution descriptor must contain server-derived capabilities');
+    cleanup();
+});
+
+await runTest('Regression 6 - buildActivationPayloadForWorkflowDispatch preserves input task_mode', async () => {
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'reg-6',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/',
+        verification: 'tests must pass'
+    });
+    assert.equal(payload.task_mode, 'FAILOVER_EXECUTE');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+});
+
+await runTest('Regression 7 - FAILOVER_EXECUTE workflow_dispatch with Director approval succeeds with correct paths', async () => {
+    cleanup();
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'reg-7',
+        task: 'implement feature',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/',
+        verification: 'tests must pass'
+    });
+    const approval = await setupDirectorApproval('reg-7', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    assertTrue(approval.success, 'Approval should be created');
+    payload.authorization.approval_id = approval.approval.approval_id;
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'reg-test-carrier',
+        carrier_type: 'test'
+    });
+    assertTrue(result.success, 'FAILOVER_EXECUTE should succeed with Director approval: ' + (result.error || ''));
+    assert.equal(result.execution_descriptor.task_mode, 'FAILOVER_EXECUTE');
+    assert.deepStrictEqual(result.execution_descriptor.permitted_paths, ['poc/']);
+    cleanup();
+});
+
+await runTest('Regression 8 - main.yml does not derive task_mode from comment prefix parsing', async () => {
+    assert.ok(mainRaw.includes('EXTRACT Gemini request') || mainRaw.includes('Extract Gemini request'),
+        'main.yml should still have the request extraction step');
+    assert.ok(!mainRaw.match(/grep.*FAILOVER_EXECUTE/i),
+        'main.yml must NOT parse FAILOVER_EXECUTE from comment prefix');
+    assert.ok(!mainRaw.match(/task_mode.*FAILOVER_EXECUTE.*comment/i),
+        'main.yml must NOT derive FAILOVER_EXECUTE task_mode from comment');
+    assert.ok(mainRaw.includes('task_mode=REVIEW'),
+        'main.yml should always set task_mode=REVIEW for issue_comment');
 });
 
 // =========================================================
