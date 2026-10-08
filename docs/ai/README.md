@@ -85,6 +85,49 @@ produced by the relevant completed Gemini workflow run.
 
 The `gemini-acp-report` artifact (containing `gemini-acp-report.json`) is the **canonical project-wide source** for Gemini-generated reports and all artifact-based Gemini output.
 
+### Machine-Readable Filing Fields (Workflow Completion Output)
+
+On workflow completion, the `gemini-acp-report` artifact filing status step (in `.github/workflows/main.yml`) exposes the following **machine-readable fields**. These fields are the deterministic retrieval location. `filing_status: SUCCESS` alone is **not** a retrieval location and is **not** evidence that the research itself has been inspected.
+
+| Field | Description |
+|---|---|
+| `filing_status` | `SUCCESS` when the `gemini-acp-report` artifact was successfully uploaded; `FAILED` when the upload step failed; `UNKNOWN` when the outcome is missing/skipped. |
+| `artifact_name` | The canonical GitHub Actions artifact name: `gemini-acp-report`. |
+| `artifact_file` | The canonical payload file inside the artifact: `gemini-acp-report.json`. |
+| `workflow_run_id` | The GitHub Actions `run_id` of the completed Gemini workflow run (integer). |
+| `workflow_run_url` | The GitHub Actions run URL: `https://github.com/<repository>/actions/runs/<workflow_run_id>`. |
+| `artifact_download_url` | The run page URL from which the artifact can be downloaded via the GitHub UI: `https://github.com/<repository>/actions/runs/<workflow_run_id>`. The artifact download itself requires an authenticated GitHub API token; the URL is **not** a no-auth download link and no secret is embedded. |
+
+On **failed or indeterminate** artifact filing (`filing_status: FAILED` or `filing_status: UNKNOWN`), the completion output reports FAILED or UNKNOWN rather than implying successful persistence. The Durable Completion Output must not treat Gemini's textual response, issue comment, workflow conclusion, Job Summary, or generic upload success as the research itself.
+
+### Deterministic Retrieval Procedure
+
+The retrieval chain is:
+
+```
+Gemini
+→ GitHub Actions (`.github/workflows/main.yml` — Gemini Architect and Reviewer workflow)
+→ gemini-acp-report.json
+→ gemini-acp-report GitHub Actions artifact
+→ Agent retrieval / review
+```
+
+To retrieve the canonical Gemini report deterministically, an agent MUST follow this exact procedure:
+
+1. **Obtain the workflow run identifier.** Use the machine-readable `filing_fields` exposed by the workflow's "Report artifact filing status" step. The authoritative fields are `filing_status`, `artifact_name`, `artifact_file`, `workflow_run_id`, and `workflow_run_url`. If these fields are unavailable in a prior run's output, resolve the relevant run deterministically from the immediately preceding Gemini execution context (see "Resolving the Relevant Run" below).
+2. **Inspect the filing status.** If `filing_status` is `FAILED` or `UNKNOWN`, the artifact was not successfully filed. Do **not** treat the workflow conclusion, Job Summary, or any textual response as proof of filing. Report the filing failure as NOT YET VERIFIED and stop — the canonical artifact was not produced.
+3. **Inspect the workflow run.** Using `workflow_run_id` or `workflow_run_url`, open the completed `Gemini Architect and Reviewer` workflow run in `.github/workflows/main.yml`.
+4. **Locate the artifact.** In that workflow run's "Artifacts" section, locate the artifact named exactly `gemini-acp-report` (the value of `artifact_name`).
+5. **Retrieve/inspect the payload.** Download the artifact and extract the file named exactly `gemini-acp-report.json` (the value of `artifact_file`).
+6. **Read the report.** Read and inspect `gemini-acp-report.json` as the authoritative Gemini result for that execution.
+7. **Navigate to durable research (when applicable).** If the task was a `RESEARCH_DOCUMENT` task, the canonical `gemini-acp-report.json` payload contains or references the durable Markdown research record under `docs/ai/research/`. Inspect that research record for the underlying persistent research. If no research-record path/reference is present in the report, that linkage is NOT established and must not be assumed.
+
+This procedure is repository retrieval procedure, not a new persistence mechanism, control plane, or authorization path. An agent MUST NOT guess the artifact name, payload file, run ID, or run URL; it MUST use the machine-readable filing fields or deterministically resolve the run as described.
+
+### Fail-Closed Verification Gate
+
+**Gemini execution is not independently verified until the `gemini-acp-report` artifact has been retrieved and `gemini-acp-report.json` has been inspected.** This is a mandatory, project-wide completion gate. If the canonical artifact has not been retrieved and `gemini-acp-report.json` has not been inspected, the result MUST be reported as **NOT YET VERIFIED** regardless of any secondary signal.
+
 ### Retrieval Path
 
 The retrieval chain is:
@@ -92,24 +135,35 @@ The retrieval chain is:
 ```
 Gemini
 → GitHub Actions (`.github/workflows/main.yml` — Gemini Architect and Reviewer workflow)
-→ `gemini-acp-report.json`
-→ `gemini-acp-report` GitHub Actions artifact
+→ `gemini-acp-report.json` (the `artifact_file` field)
+→ `gemini-acp-report` GitHub Actions artifact (the `artifact_name` field)
 → Agent retrieval / review
 ```
 
+The workflow run is identified by the machine-readable `workflow_run_id` and `workflow_run_url` fields exposed by the filing-status step.
+
 ### Resolving the Relevant Run
 
-When multiple completed Gemini workflow runs exist, the **relevant run** is resolved deterministically from the immediately preceding Gemini execution / task context — the Gemini workflow run associated with the most recent Gemini task, activation, or execution relevant to the current request. Correlation uses available durable identifiers in priority order: the orchestration `request_id`, then the issue number / issue-comment event, then the Kilo commit SHA, then the event type (`issue_comment` vs. `workflow_dispatch`), then the workflow run timestamp. Identifiers are never invented; only identifiers present in the durable GitHub state are used. If the first lookup does not locate the execution, the discovery chain must be continued rather than concluding the artifact does not exist. The relevant run is the run that yields the canonical `gemini-acp-report` artifact.
+When multiple completed Gemini workflow runs exist, the **relevant run** is resolved deterministically from the immediately preceding Gemini execution / task context — the Gemini workflow run associated with the most recent Gemini task, activation, or execution relevant to the current request. Correlation uses the machine-readable `filing_fields` (`workflow_run_id`, `workflow_run_url`) exposed by the filing-status step, and otherwise available durable identifiers in priority order: the orchestration `request_id`, then the issue number / issue-comment event, then the Kilo commit SHA, then the event type (`issue_comment` vs. `workflow_dispatch`), then the workflow run timestamp. Identifiers are never invented; only identifiers present in the durable GitHub state are used. If the first lookup does not locate the execution, the discovery chain must be continued rather than concluding the artifact does not exist. The relevant run is the run that yields the canonical `gemini-acp-report` artifact.
 
 ### Fail-Closed Verification Gate
 
 **Gemini execution is not independently verified until the `gemini-acp-report` artifact has been retrieved and `gemini-acp-report.json` has been inspected.** This is a mandatory, project-wide completion gate. If the canonical artifact has not been retrieved and `gemini-acp-report.json` has not been inspected, the result MUST be reported as **NOT YET VERIFIED** regardless of any secondary signal.
 
-The canonical `gemini-acp-report` artifact and `gemini-acp-report.json` payload are the sole authoritative source for Gemini-generated reports. The following are NOT substitutes for inspecting the canonical artifact: Gemini's chat/comment response; Gemini's completion report; GitHub issue comments; workflow conclusion; workflow annotations; Job Summary; artifact-upload status; or an assistant's prior memory of the execution. This rule is the single project-wide definition; the ChatGPT-specific procedural implementation lives in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 5). No second or competing retrieval mechanism is established.
+The canonical `gemini-acp-report` artifact and `gemini-acp-report.json` payload are the sole authoritative source for Gemini-generated reports. The following are NOT substitutes for inspecting the canonical artifact: Gemini's chat/comment response; Gemini's completion report; GitHub issue comments; workflow conclusion; workflow annotations; Job Summary; artifact-upload status; the `filing_status` field alone (SUCCESS is not a retrieval location); or an assistant's prior memory of the execution. This rule is the single project-wide definition; the ChatGPT-specific procedural implementation lives in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 5). No second or competing retrieval mechanism is established.
+
+### Canonical Report vs. Durable Research Record
+
+The canonical Gemini ACP report artifact (`gemini-acp-report` / `gemini-acp-report.json`) is **distinct from** the underlying durable Markdown research record under `docs/ai/research/`. When a Gemini task is a `RESEARCH_DOCUMENT` task:
+
+- The **canonical report** (`gemini-acp-report.json`) is the machine-readable execution report produced by the workflow. It is the authoritative machine-readable retrieval location.
+- The **durable research record** (`docs/ai/research/research-*.md`) is the human-readable persistent research record.
+
+The canonical report must contain or expose the durable research-record path/reference so an agent can navigate from the canonical Gemini report to the underlying persistent research without relying on Gemini's conversational response. The `filing_status` field alone is not a retrieval location and is not evidence that the research record has been inspected.
 
 ### ChatGPT Procedural Retrieval
 
-The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, Section 5.1.1 (Gemini Report Discovery Procedure), which implements this project-wide definition. This project-wide definition is the single authoritative mapping; local agent procedures must not create a second or conflicting definition.
+The ChatGPT-specific procedural retrieval instructions are preserved in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, Section 5.1.1 (Gemini Report Discovery Procedure), which implements this project-wide definition. This project-wide definition is the single authoritative mapping; local agent procedures must not create a second or conflicting definition. ChatGPT MUST use the machine-readable filing fields (`filing_status`, `artifact_name`, `artifact_file`, `workflow_run_id`, `workflow_run_url`) exposed by the workflow's filing-status step as the primary retrieval location, and MUST NOT present `filing_status: SUCCESS` as evidence that the report has been inspected.
 
 ## File Contents
 

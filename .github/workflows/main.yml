@@ -672,12 +672,43 @@ jobs:
               ;;
           esac
 
+          # Durable location fields for deterministic artifact retrieval.
+          # These are derived from GitHub-provided context values (GITHUB_REPOSITORY,
+          # GITHUB_RUN_ID, GITHUB_RUN_NUMBER) — never from secrets or tokens.
+          ARTIFACT_NAME="gemini-acp-report"
+          ARTIFACT_FILE="gemini-acp-report.json"
+          WORKFLOW_RUN_ID="${GITHUB_RUN_ID}"
+          WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          ARTIFACT_DOWNLOAD_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
           {
             echo "## Gemini ACP Report Artifact Filing Status"
             echo ""
             echo "The \`gemini-acp-report\` artifact upload step outcome was: \`${UPLOAD_OUTCOME:-unavailable}\`"
             echo ""
-            echo "filing_status: ${STATUS}"
+            echo "### Durable Retrieval Location"
+            echo ""
+            echo "On successful artifact filing, the canonical durable source for Gemini's report is the \`gemini-acp-report\` GitHub Actions artifact produced by this workflow run. Inspect \`gemini-acp-report.json\` within that artifact. The workflow conclusion or upload status alone is not the report."
+            echo ""
+            echo "**Retrieval-location fields:** \`filing_status\`, \`artifact_name\`, \`artifact_file\`, \`workflow_run_id\`, \`workflow_run_url\`."
+            echo ""
+            echo "**Note:** \`filing_status: SUCCESS\` alone is not a retrieval location and is not evidence that the report itself has been inspected."
+            echo ""
+            echo "On failed or indeterminate artifact filing (\`$STATUS\` is FAILED or UNKNOWN), the canonical artifact was not successfully produced. Do not treat the workflow conclusion, Job Summary, or any textual response as proof of filing."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| filing_status | \`${STATUS}\` |"
+            echo "| artifact_name | \`${ARTIFACT_NAME}\` |"
+            echo "| artifact_file | \`${ARTIFACT_FILE}\` |"
+            echo "| workflow_run_id | \`${WORKFLOW_RUN_ID}\` |"
+            echo "| workflow_run_url | \`${WORKFLOW_RUN_URL}\` |"
+            echo "| artifact_download_url | \`${ARTIFACT_DOWNLOAD_URL}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "filing_status=${STATUS}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "artifact_file=${ARTIFACT_FILE}" >> "$GITHUB_OUTPUT"
+          echo "workflow_run_id=${WORKFLOW_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "workflow_run_url=${WORKFLOW_RUN_URL}" >> "$GITHUB_OUTPUT"
+          echo "artifact_download_url=${ARTIFACT_DOWNLOAD_URL}" >> "$GITHUB_OUTPUT"
