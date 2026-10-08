@@ -176,11 +176,29 @@ function extractEmbeddedAcpDescriptor(commentBody) {
         return null;
     }
 
-    if (candidate.task_mode && VALID_TASK_MODES.includes(candidate.task_mode) && candidate.task_mode !== 'REVIEW') {
-        return candidate;
+    // The issue_comment body is NOT an authority source. This function extracts
+    // only non-authority-bearing candidate fields (target, task, verification).
+    // task_mode, capabilities, and permitted_paths are NEVER extracted from the
+    // comment — they are server-derived by the canonical activation ingress.
+    var hasTask = typeof candidate.task === 'string' && candidate.task.trim() !== '';
+    var hasTarget = typeof candidate.target === 'string' && candidate.target.trim() !== '';
+    var hasVerification = typeof candidate.verification === 'string' && candidate.verification.trim() !== '';
+
+    if (!hasTask && !hasTarget && !hasVerification) {
+        return null;
     }
 
-    return null;
+    var descriptor = {};
+    if (hasTarget) {
+        descriptor.target = candidate.target;
+    }
+    if (hasTask) {
+        descriptor.task = candidate.task;
+    }
+    if (hasVerification) {
+        descriptor.verification = candidate.verification;
+    }
+    return descriptor;
 }
 
 function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch, approvalId) {
@@ -188,60 +206,43 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
 
     var embeddedDescriptor = extractEmbeddedAcpDescriptor(commentBody);
 
+    var taskMode = 'REVIEW';
+    var capabilities = 'read_only';
+    var permittedPaths = 'poc/';
+    var target = 'Gemini';
+    var task = stripped;
+    var verification = 'Review the request and provide analysis, risk assessment, and implementation plans.';
+
     if (embeddedDescriptor) {
-        const taskMode = embeddedDescriptor.task_mode;
-        const capabilities = (embeddedDescriptor.capabilities && Array.isArray(embeddedDescriptor.capabilities))
-            ? embeddedDescriptor.capabilities.join(',')
-            : 'read_only';
-        const permittedPaths = (embeddedDescriptor.permitted_paths && Array.isArray(embeddedDescriptor.permitted_paths))
-            ? embeddedDescriptor.permitted_paths.join(',')
-            : 'poc/';
-        const task = (typeof embeddedDescriptor.task === 'string') ? embeddedDescriptor.task : stripped;
-        const verification = embeddedDescriptor.verification || 'Review the request and provide analysis, risk assessment, and implementation plans.';
-
-        return {
-            protocol_version: '0.1',
-            request_id: String(commentId),
-            source: 'GitHub issue_comment',
-            target: embeddedDescriptor.target || 'Gemini',
-            task_type: 'github_external_activation',
-            repository: repository,
-            base_branch: baseBranch,
-            task: task,
-            task_mode: taskMode,
-            constraints: { permitted_paths: permittedPaths.split(',') },
-            authorization: { capabilities: capabilities.split(','), ...(approvalId ? { approval_id: approvalId } : {}) },
-            verification: verification,
-            reporting: 'json',
-            originator: 'Kyle',
-            activation_surface: 'github_issue_comment',
-            activation_syntax: '@gemini-cli',
-            embedded_acp_descriptor: embeddedDescriptor
-        };
+        if (typeof embeddedDescriptor.target === 'string' && embeddedDescriptor.target.trim() !== '') {
+            target = embeddedDescriptor.target;
+        }
+        if (typeof embeddedDescriptor.task === 'string' && embeddedDescriptor.task.trim() !== '') {
+            task = embeddedDescriptor.task;
+        }
+        if (typeof embeddedDescriptor.verification === 'string' && embeddedDescriptor.verification.trim() !== '') {
+            verification = embeddedDescriptor.verification;
+        }
     }
-
-    const taskMode = 'REVIEW';
-    const capabilities = 'read_only';
-    const permittedPaths = 'poc/';
-    const task = stripped;
 
     return {
         protocol_version: '0.1',
         request_id: String(commentId),
         source: 'GitHub issue_comment',
-        target: 'Gemini',
+        target: target,
         task_type: 'github_external_activation',
         repository: repository,
         base_branch: baseBranch,
         task: task,
         task_mode: taskMode,
-        constraints: { permitted_paths: permittedPaths.split(',') },
-        authorization: { capabilities: capabilities.split(','), ...(approvalId ? { approval_id: approvalId } : {}) },
-        verification: 'Review the request and provide analysis, risk assessment, and implementation plans.',
+        constraints: { permitted_paths: permittedPaths.split(',').filter(Boolean) },
+        authorization: { capabilities: capabilities.split(',').filter(Boolean), ...(approvalId ? { approval_id: approvalId } : {}) },
+        verification: verification,
         reporting: 'json',
         originator: 'Kyle',
         activation_surface: 'github_issue_comment',
-        activation_syntax: '@gemini-cli'
+        activation_syntax: '@gemini-cli',
+        embedded_acp_descriptor: embeddedDescriptor || undefined
     };
 }
 

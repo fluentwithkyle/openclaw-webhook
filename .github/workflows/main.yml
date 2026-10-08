@@ -83,39 +83,22 @@ jobs:
           set -euo pipefail
 
           # The @gemini-cli activation surface resolves to REVIEW (read-only advisory)
-          # for plain untyped comments. However, an authorized ACP task may embed
-          # a canonical execution descriptor in the comment body (as a JSON object).
-          # When such an embedded descriptor is present with an authorized task_mode
-          # (e.g. RESEARCH_DOCUMENT, FAILOVER_EXECUTE), that task_mode is carried as
-          # the candidate task_mode. The canonical activation ingress will still
-          # server-derive the final capabilities and permitted_paths from the
-          # activation-policy authority — comment prefix syntax never overrides
-          # canonical authority. The effective task_mode, capabilities, and
-          # permitted_paths for Gemini execution are derived from the server-returned
-          # execution descriptor — NOT from comment prefix parsing.
+          # for all issue_comment activations. An embedded ACP descriptor in the
+          # comment body may carry candidate task text, but the task_mode,
+          # capabilities, and permitted_paths are NEVER derived from the comment.
+          # The canonical activation ingress server-derives these authority-bearing
+          # fields from the server-side activation-policy authority. The effective
+          # task_mode, capabilities, and permitted_paths for Gemini execution are
+          # derived from the server-returned execution descriptor — NOT from
+          # comment prefix parsing or embedded JSON.
 
           REQUEST="${COMMENT_BODY#@gemini-cli}"
           REQUEST="${REQUEST# }"
 
-          # Attempt to extract task_mode from an embedded ACP descriptor in the comment.
-          # The descriptor must be a JSON object containing a valid task_mode field
-          # that is not REVIEW (REVIEW is the default for plain comments).
+          # The issue_comment activation surface always resolves to REVIEW.
           CANDIDATE_TASK_MODE="REVIEW"
           CANDIDATE_CAPABILITIES="read_only"
           CANDIDATE_PERMITTED_PATHS="poc/"
-
-          # Search for a JSON object in the comment body matching {"task_mode":"..."} or {"task_mode":"...","target":"Gemini"}
-          EMBEDDED_JSON=$(echo "$REQUEST" | grep -o '{[^}]*}' | head -1 || true)
-          if [ -n "$EMBEDDED_JSON" ]; then
-            PARSED_TASK_MODE=$(echo "$EMBEDDED_JSON" | jq -r '.task_mode // empty' 2>/dev/null || echo '')
-            if [ -n "$PARSED_TASK_MODE" ] && [ "$PARSED_TASK_MODE" != "REVIEW" ]; then
-              CANDIDATE_TASK_MODE="$PARSED_TASK_MODE"
-              PARSED_CAPS=$(echo "$EMBEDDED_JSON" | jq -r '.capabilities | if type == "array" then join(",") else "read_only" end' 2>/dev/null || echo "read_only")
-              [ -n "$PARSED_CAPS" ] && CANDIDATE_CAPABILITIES="$PARSED_CAPS"
-              PARSED_PATHS=$(echo "$EMBEDDED_JSON" | jq -r '.permitted_paths | if type == "array" then join(",") else "poc/" end' 2>/dev/null || echo "poc/")
-              [ -n "$PARSED_PATHS" ] && CANDIDATE_PERMITTED_PATHS="$PARSED_PATHS"
-            fi
-          fi
 
           {
             echo 'request<<EOF'
