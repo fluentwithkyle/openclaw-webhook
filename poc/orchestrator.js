@@ -360,6 +360,7 @@ async function triggerGeminiBuilder(requestId, githubToken, builderApiKey) {
   const taskMode = task.task_mode || 'BUILDER';
   const capabilities = task.capabilities || BUILDER_CAPABILITIES;
   const permittedPaths = task.permitted_paths || [];
+  const executionClaimId = task.execution_claim && task.execution_claim.execution_claim_id;
 
   const dispatchResult = await geminiBuilderTrigger.dispatchGeminiBuilder(
     task.request_id,
@@ -371,7 +372,9 @@ async function triggerGeminiBuilder(requestId, githubToken, builderApiKey) {
     taskMode,
     capabilities,
     permittedPaths,
-    builderApiKey
+    builderApiKey,
+    undefined,
+    executionClaimId
   );
 
   if (!dispatchResult.success) {

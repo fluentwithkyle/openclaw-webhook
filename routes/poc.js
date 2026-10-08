@@ -7,6 +7,7 @@ const taskRegistry = require('../poc/task-registry');
 const gitWebhook = require('../poc/github-webhook');
 const { createDeepSeekRuntimeHandler } = require('../services/deepseek-runtime');
 const { canonicalExternalActivationIngress } = require('../poc/activation-ingress');
+const { verifyDirectorOriginAssertionAgainstTaskRegistry } = require('../poc/external-activation-validator');
 
 const router = express.Router();
 
@@ -1054,11 +1055,35 @@ router.post('/github/webhook', async (req, res) => {
 // fields are rejected. The carrier (GitHub Actions workflow) is responsible for
 // invoking the agent CLI using the server-derived descriptor; this route does NOT
 // dispatch the agent directly, preventing recursive ingress -> workflow -> ingress.
+// Director Origin Authentication — validates that the request originates from
+// an authenticated Director boundary (e.g., OWNER-initiated GitHub Actions).
+// This is distinct from the generic POC trigger secret: possession of the
+// generic secret alone does NOT confer Director authorization.
+// Only when this dedicated secret is presented is director_admission derived
+// server-side for consequential activations.
+function isValidDirectorOrigin(req) {
+    const secret = req.headers['x-director-origin-secret'];
+    if (!secret || !process.env.DIRECTOR_ORIGIN_SECRET) return false;
+    return secret === process.env.DIRECTOR_ORIGIN_SECRET;
+}
+
+function isValidDirectorOriginAssertion(req) {
+    const assertion = req.headers['x-director-origin-assertion'];
+    if (!assertion) return false;
+    const requestId = req.body && req.body.request_id;
+    return verifyDirectorOriginAssertionAgainstTaskRegistry(assertion, requestId, process.env.DIRECTOR_ORIGIN_SECRET);
+}
+
 router.post('/activation/ingress', authenticatePoc, async (req, res) => {
     const carrierIdentity = req.headers['x-carrier-identity'] || null;
+    const directorApprovalId = req.body && req.body.authorization && req.body.authorization.approval_id;
+    const directorAdmission = !directorApprovalId && (
+      isValidDirectorOrigin(req) || isValidDirectorOriginAssertion(req)
+    );
 
     const ingressResult = await canonicalExternalActivationIngress(req.body, {
-        director_approval_id: req.body && req.body.authorization && req.body.authorization.approval_id,
+        director_approval_id: directorApprovalId,
+        director_admission: directorAdmission,
         carrier_identity: carrierIdentity,
         carrier_type: carrierIdentity ? 'github_workflow' : 'external'
     });

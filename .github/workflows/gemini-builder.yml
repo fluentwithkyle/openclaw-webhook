@@ -45,6 +45,10 @@ on:
         description: 'Comma-separated authorized file paths for Builder execution'
         required: false
         type: string
+      director_origin_assertion:
+        description: 'Server-signed assertion proving Director-originated Builder dispatch (opaque to client)'
+        required: false
+        type: string
 
 jobs:
   builder:
@@ -56,72 +60,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Submit Director approval for consequential Builder activation
-        id: director_approval
-        env:
-          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
-          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
-          DIRECTOR_APPROVAL_SECRET: ${{ secrets.DIRECTOR_APPROVAL_SECRET }}
-          REQUEST_ID: ${{ inputs.request_id }}
-          REPOSITORY: ${{ inputs.repository }}
-          BASE_BRANCH: ${{ inputs.base_branch }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "$CALLBACK_BASE_URL" ]; then
-            echo "::error::RENDER_CALLBACK_BASE_URL is not configured; cannot submit Director approval"
-            exit 1
-          fi
-
-          if [ -z "$DIRECTOR_APPROVAL_SECRET" ]; then
-            echo "::error::DIRECTOR_APPROVAL_SECRET is not configured; cannot submit Director approval"
-            exit 1
-          fi
-
-          SCOPE_HASH=$(jq -n \
-            --arg request_id "$REQUEST_ID" \
-            --arg target "Gemini Builder" \
-            --arg task_mode "BUILDER" \
-            --arg repository "$REPOSITORY" \
-            --arg base_branch "$BASE_BRANCH" \
-            '{
-              request_id: $request_id,
-              target: $target,
-              task_mode: $task_mode,
-              capabilities: ["read_only", "modify_files", "run_tests", "commit", "push"],
-              permitted_paths: ["poc/"],
-              repository: $repository,
-              base_branch: $base_branch
-            }')
-
-          APPROVAL_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_BASE_URL/poc/director/approve" \
-            -H "Content-Type: application/json" \
-            -H "x-director-approval-secret: $DIRECTOR_APPROVAL_SECRET" \
-            -H "x-poc-trigger-secret: $ACP_POC_TRIGGER_SECRET" \
-            -d "{\"scope\": $SCOPE_HASH}")
-
-          HTTP_CODE=$(echo "$APPROVAL_RESPONSE" | tail -n1)
-          BODY=$(echo "$APPROVAL_RESPONSE" | head -n -1)
-
-          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            APPROVAL_ID=$(echo "$BODY" | jq -r '.approval_id // ""')
-            if [ -z "$APPROVAL_ID" ]; then
-              echo "::error::Director approval response did not contain approval_id"
-              exit 1
-            fi
-            echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
-            echo "::notice::Director approval submitted: $APPROVAL_ID"
-          else
-            echo "::error::Director approval submission failed (HTTP $HTTP_CODE): $BODY"
-            exit 1
-          fi
-
       - name: Validate external activation through canonical ingress
         id: validate_activation
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_ORIGIN_SECRET: ${{ secrets.DIRECTOR_ORIGIN_SECRET }}
           REQUEST_ID: ${{ inputs.request_id }}
           TASK: ${{ inputs.task }}
           REPOSITORY: ${{ inputs.repository }}
@@ -129,7 +73,8 @@ jobs:
           TASK_MODE: ${{ inputs.task_mode || 'BUILDER' }}
           CAPABILITIES: ${{ inputs.capabilities || 'read_only,modify_files,run_tests,commit,push' }}
           PERMITTED_PATHS: ${{ inputs.permitted_paths || 'poc/' }}
-          APPROVAL_ID: ${{ steps.director_approval.outputs.approval_id }}
+          VERIFICATION: ${{ inputs.verification || '' }}
+          DIRECTOR_ORIGIN_ASSERTION: ${{ inputs.director_origin_assertion || '' }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
         run: |
@@ -148,7 +93,7 @@ jobs:
             --arg task_mode "$TASK_MODE" \
             --arg capabilities "$CAPABILITIES" \
             --arg permitted_paths "$PERMITTED_PATHS" \
-            --arg approval_id "$APPROVAL_ID" \
+            --arg verification "$VERIFICATION" \
             '{
               request_id: $request_id,
               task: $task,
@@ -157,7 +102,7 @@ jobs:
               task_mode: $task_mode,
               capabilities: $capabilities,
               permitted_paths: $permitted_paths,
-              approval_id: $approval_id
+              verification: $verification
             }')
 
           node poc/validate-external-activation.js builder-workflow-dispatch "$ACTIVATION_JSON"

@@ -1,8 +1,74 @@
 const https = require('https');
+const crypto = require('crypto');
+const taskRegistry = require('./task-registry');
 
 const ACTIVATION_INGRESS_PATH = '/poc/activation/ingress';
 
-function validateExternalActivation(params, callbackUrl, callbackSecret) {
+function generateDirectorOriginAssertion(requestId, executionClaimId, directorOriginSecret) {
+    if (!directorOriginSecret || !requestId) return null;
+
+    const token = crypto
+        .createHmac('sha256', directorOriginSecret)
+        .update(requestId + ':' + (executionClaimId || ''))
+        .digest('hex');
+
+    return Buffer.from(JSON.stringify({ request_id: requestId, execution_claim_id: executionClaimId || null, token })).toString('base64');
+}
+
+function verifyDirectorOriginAssertion(assertion, requestId, directorOriginSecret) {
+    if (!assertion || typeof assertion !== 'string') return false;
+    if (!directorOriginSecret) return false;
+    if (!requestId) return false;
+
+    try {
+        const decoded = Buffer.from(assertion, 'base64').toString('utf8');
+        const parsed = JSON.parse(decoded);
+        if (parsed.request_id !== requestId) return false;
+        if (!parsed.execution_claim_id) return false;
+
+        const expected = crypto
+            .createHmac('sha256', directorOriginSecret)
+            .update(requestId + ':' + parsed.execution_claim_id)
+            .digest('hex');
+
+        return crypto.timingSafeEqual(Buffer.from(parsed.token, 'hex'), Buffer.from(expected, 'hex'));
+    } catch (err) {
+        return false;
+    }
+}
+
+function verifyDirectorOriginAssertionAgainstTaskRegistry(assertion, requestId, directorOriginSecret) {
+    if (!assertion || typeof assertion !== 'string') return false;
+    if (!directorOriginSecret) return false;
+    if (!requestId) return false;
+
+    try {
+        const decoded = Buffer.from(assertion, 'base64').toString('utf8');
+        const parsed = JSON.parse(decoded);
+        if (parsed.request_id !== requestId) return false;
+        if (!parsed.execution_claim_id) return false;
+
+        const expected = crypto
+            .createHmac('sha256', directorOriginSecret)
+            .update(requestId + ':' + parsed.execution_claim_id)
+            .digest('hex');
+
+        const tokenMatch = crypto.timingSafeEqual(Buffer.from(parsed.token, 'hex'), Buffer.from(expected, 'hex'));
+        if (!tokenMatch) return false;
+
+        const taskEntry = taskRegistry.getTask(requestId);
+        if (!taskEntry) return false;
+
+        const actualClaim = taskRegistry.getExecutionClaim(requestId);
+        if (!actualClaim || actualClaim.execution_claim_id !== parsed.execution_claim_id) return false;
+
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
+function validateExternalActivation(params, callbackUrl, callbackSecret, directorOriginSecret, directorOriginAssertion) {
     const payload = JSON.stringify(params);
 
     const parsedUrl = new URL(callbackUrl.replace(/\/+$/, '') + ACTIVATION_INGRESS_PATH);
@@ -19,6 +85,17 @@ function validateExternalActivation(params, callbackUrl, callbackSecret) {
 
     if (callbackSecret) {
         options.headers['x-poc-trigger-secret'] = callbackSecret;
+    }
+
+    const requestId = params && params.request_id;
+    const requiresAssertion = params && (params.target === 'Gemini Builder');
+
+    if (directorOriginAssertion) {
+        options.headers['x-director-origin-assertion'] = directorOriginAssertion;
+    }
+
+    if (directorOriginSecret && !requiresAssertion) {
+        options.headers['x-director-origin-secret'] = directorOriginSecret;
     }
 
     const carrierIdentity = process.env.GITHUB_RUN_ID
@@ -178,5 +255,8 @@ module.exports = {
     buildActivationPayloadForIssueComment,
     buildActivationPayloadForWorkflowDispatch,
     buildBuilderActivationPayload,
+    generateDirectorOriginAssertion,
+    verifyDirectorOriginAssertion,
+    verifyDirectorOriginAssertionAgainstTaskRegistry,
     ACTIVATION_INGRESS_PATH
 };

@@ -18,6 +18,8 @@ async function main() {
 
     const callbackUrl = process.env.CALLBACK_BASE_URL;
     const callbackSecret = process.env.ACP_POC_TRIGGER_SECRET;
+    const directorOriginSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+    const directorOriginAssertion = process.env.DIRECTOR_ORIGIN_ASSERTION;
 
     if (!callbackUrl) {
         console.error('::error::Callback URL not configured (CALLBACK_BASE_URL)');
@@ -49,7 +51,7 @@ async function main() {
 
     console.log(`::notice::Validating ${targetAgent} activation through canonical ingress...`);
 
-    const result = await validateExternalActivation(payload, callbackUrl, callbackSecret);
+    const result = await validateExternalActivation(payload, callbackUrl, callbackSecret, directorOriginSecret, directorOriginAssertion);
 
     if (!result.success) {
         console.error(`::error::BLOCKED: Activation rejected by canonical ingress: ${result.error} (${result.error_code || 'UNKNOWN'})`);
