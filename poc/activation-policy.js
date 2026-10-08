@@ -59,6 +59,32 @@ const ACTIVATION_SURFACE_NAMES = Object.freeze(
 
 const EXECUTION_TASK_MODES = Object.freeze(['FAILOVER_EXECUTE', 'BUILDER']);
 
+// Server-derived external configuration prerequisite gate.
+// Each entry declares an external configuration key that must be satisfied
+// (verified via runtime environment or TaskRegistry) before consequential
+// execution. Only the identity is recorded here; secret values are never
+// captured in TaskRegistry.
+const CONFIG_PREREQUISITE_GATE = Object.freeze({
+  'FAILOVER_EXECUTE': Object.freeze([
+    {
+      config_key: 'DIRECTOR_ORIGIN_SECRET',
+      reason: 'Required for consequential FAILOVER_EXECUTE admission via the canonical activation ingress. Absence means external configuration has not been provisioned and the Director has not been notified.',
+      mode: 'FAILOVER_EXECUTE',
+      required: true
+    }
+  ]),
+  'BUILDER': Object.freeze([
+    {
+      config_key: 'DIRECTOR_ORIGIN_SECRET',
+      reason: 'Required for consequential BUILDER admission via the canonical activation ingress. Absence means external configuration has not been provisioned and the Director has not been notified.',
+      mode: 'BUILDER',
+      required: true
+    }
+  ])
+});
+
+const READ_ONLY_TASK_MODES = Object.freeze(['REVIEW', 'VERIFY_RECONCILE', 'RESEARCH_DOCUMENT']);
+
 const ACTIVATION_POLICY = Object.freeze({
   'Kilo': Object.freeze({
     'REVIEW': Object.freeze({
@@ -374,7 +400,7 @@ function deriveServerAuthority(agent, taskMode) {
   };
 }
 
-function enforceServerDerivedAuthority(command) {
+  function enforceServerDerivedAuthority(command) {
   const agent = command.target;
   const taskMode = command.task_mode || DEFAULT_TASK_MODE;
 
@@ -396,14 +422,31 @@ function enforceServerDerivedAuthority(command) {
   };
 }
 
+function getRequiredConfigPrerequisites(taskMode) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+  if (READ_ONLY_TASK_MODES.includes(mode)) {
+    return [];
+  }
+  return CONFIG_PREREQUISITE_GATE[mode] || [];
+}
+
+function isConsequentialMode(taskMode) {
+  const mode = taskMode || DEFAULT_TASK_MODE;
+  return EXECUTION_TASK_MODES.includes(mode);
+}
+
 module.exports = {
   ACTIVATION_SURFACES,
   ACTIVATION_SURFACE_NAMES,
   ACTIVATION_POLICY,
+  CONFIG_PREREQUISITE_GATE,
+  READ_ONLY_TASK_MODES,
   SERVER_DERIVED_AUTHORITY_FIELDS,
   getPolicyEntry,
   getPermittedActivationSurfaces,
   getAuthorizedPathsForMode,
+  getRequiredConfigPrerequisites,
+  isConsequentialMode,
   requiresActivation,
   validateActivationSurface,
   validateActivationSyntax,

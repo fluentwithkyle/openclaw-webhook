@@ -272,6 +272,40 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
 
   await taskRegistry.persistCache();
 
+  const requiredPrerequisites = activationPolicy.getRequiredConfigPrerequisites(taskMode);
+  for (const prereqSpec of requiredPrerequisites) {
+    await taskRegistry.declareConfigPrerequisite(
+      requestId,
+      prereqSpec.config_key,
+      prereqSpec.reason,
+      prereqSpec.mode,
+      prereqSpec.required
+    );
+  }
+
+  if (requiredPrerequisites.length > 0) {
+    const prerequisiteCheck = taskRegistry.checkPrerequisites(requestId);
+    if (!prerequisiteCheck.success && isConsequential) {
+      return {
+        success: false,
+        status: 'BLOCKED',
+        stage: 'configuration prerequisite check',
+         error: prerequisiteCheck.error,
+         error_code: 'CONFIG_PREREQUISITE_UNSATISFIED',
+        request_id: requestId,
+        command: command,
+        activation_provenance: taskEntry.activation_provenance,
+        is_consequential: isConsequential,
+        config_state: prerequisiteCheck.config_state,
+        director_notified: prerequisiteCheck.director_notified,
+        has_unknown: prerequisiteCheck.has_unknown,
+        blocking_prerequisites: prerequisiteCheck.blocking_prerequisites,
+        task_entry: taskRegistry.getTask(requestId),
+        message: 'External configuration prerequisite unsatisfied; Director notified and consequential execution blocked (fail closed)'
+      };
+    }
+  }
+
   const carrierIdentity = dispatchContext && dispatchContext.carrier_identity;
   const carrierType = dispatchContext && dispatchContext.carrier_type;
 

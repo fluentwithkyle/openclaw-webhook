@@ -12,9 +12,12 @@ const {
   validateAgentEvidenceType,
   verifyConfiguration,
   isConfigurationAuthoritativelyVerified,
+  createConfigPrerequisite,
+  evaluatePrerequisite,
   EVIDENCE_TYPES,
   AGENT_EVIDENCE_TYPE,
   CONFIG_VERIFICATION_STATES,
+  CONFIG_PREREQUISITE_STATES,
   VALID_STATE_TRANSITIONS,
   validateDirectorApprovalScope,
   calculateDirectorScopeHash,
@@ -586,6 +589,187 @@ function verifyConfig(requestId, configKey, options) {
     recordConfigVerification(requestId, configKey, result, claimed);
   }
   return result;
+}
+
+async function declareConfigPrerequisite(requestId, configKey, reason, mode, required) {
+  return withRegistryLock(async () => {
+    const cache = getCache();
+    const entry = cache.get(requestId);
+    if (!entry) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    var creation = createConfigPrerequisite(configKey, reason, mode, required);
+    if (creation.error) {
+      return { success: false, error: creation.error };
+    }
+
+    const prereq = creation;
+    if (entry.config_prerequisites) {
+      const existing = entry.config_prerequisites.find(p => p.config_key === configKey);
+      if (existing) {
+        Object.assign(existing, prereq);
+      } else {
+        entry.config_prerequisites.push(prereq);
+      }
+    } else {
+      entry.config_prerequisites = [prereq];
+    }
+    entry.updated_at = new Date().toISOString();
+    cache.set(requestId, entry);
+    await persistCache();
+    return { success: true, entry, prerequisite: entry.config_prerequisites[entry.config_prerequisites.length - 1] };
+  });
+}
+
+function evaluateConfigPrerequisite(requestId, configKey) {
+  const entry = getTask(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found', config_state: 'UNKNOWN' };
+  }
+
+  const prereqs = entry.config_prerequisites || [];
+  const prereq = prereqs.find(p => p.config_key === configKey);
+  if (!prereq) {
+    return { success: false, error: 'Prerequisite not declared', config_state: 'UNKNOWN' };
+  }
+
+  var runtimeEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
+  const evaluation = evaluatePrerequisite(prereq, entry, runtimeEnv);
+
+  prereq.state = evaluation.state;
+  prereq.satisfied = evaluation.satisfied;
+  prereq.notified_at = evaluation.notified_at;
+  prereq.last_verified = new Date().toISOString();
+  entry.updated_at = new Date().toISOString();
+  persistCache();
+
+  return {
+    success: true,
+    config_key: configKey,
+    config_state: evaluation.state,
+    satisfied: evaluation.satisfied,
+    verification_result: evaluation.verification_result
+  };
+}
+
+function evaluateAllPrerequisites(requestId) {
+  const entry = getTask(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found', config_state: 'UNKNOWN' };
+  }
+
+  const prereqs = (entry.config_prerequisites || []).slice();
+  if (prereqs.length === 0) {
+    return { success: true, config_state: 'CONFIGURATION_SATISFIED', satisfied: true, prerequisites: [] };
+  }
+
+  var runtimeEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
+  const evaluations = prereqs.map(function(p) { return evaluatePrerequisite(p, entry, runtimeEnv); });
+
+  var allSatisfied = true;
+  var hasUnknown = false;
+  var hasNotified = false;
+
+  for (var i = 0; i < evaluations.length; i++) {
+    var ev = evaluations[i];
+    prereqs[i].state = ev.state;
+    prereqs[i].satisfied = ev.satisfied;
+    prereqs[i].notified_at = ev.notified_at;
+    prereqs[i].last_verified = new Date().toISOString();
+    if (ev.state === 'CONFIGURATION_SATISFIED') {
+      /* satisfied */
+    } else if (ev.state === 'DIRECTOR_NOTIFIED') {
+      allSatisfied = false;
+      hasNotified = true;
+      if (prereqs[i].required !== false) {
+        prereqs[i].state = 'DIRECTOR_NOTIFIED';
+        prereqs[i].notified_at = prereqs[i].notified_at || new Date().toISOString();
+        ev.state = 'DIRECTOR_NOTIFIED';
+        hasNotified = true;
+      }
+    } else {
+      allSatisfied = false;
+      if (prereqs[i].required !== false) {
+        prereqs[i].state = 'DIRECTOR_NOTIFIED';
+        prereqs[i].notified_at = new Date().toISOString();
+        ev.state = 'DIRECTOR_NOTIFIED';
+        hasNotified = true;
+      } else {
+        hasUnknown = true;
+      }
+    }
+  }
+
+  entry.config_prerequisites = prereqs;
+  entry.updated_at = new Date().toISOString();
+  persistCache();
+
+  var aggregateState;
+  if (allSatisfied) {
+    aggregateState = 'CONFIGURATION_SATISFIED';
+  } else if (hasUnknown) {
+    aggregateState = 'UNKNOWN';
+  } else {
+    aggregateState = 'DIRECTOR_NOTIFIED';
+  }
+
+  return {
+    success: true,
+    config_state: aggregateState,
+    satisfied: allSatisfied,
+    prerequisites: evaluations,
+    director_notified: hasNotified,
+    has_unknown: hasUnknown
+  };
+}
+
+function checkPrerequisites(requestId) {
+  const entry = getTask(requestId);
+  if (!entry) {
+    return { success: false, error: 'Task not found', config_state: 'UNKNOWN' };
+  }
+
+  const evaluation = evaluateAllPrerequisites(requestId);
+  if (!evaluation.success) {
+    return evaluation;
+  }
+
+  if (!evaluation.satisfied) {
+    var requiredPrereqs = (entry.config_prerequisites || []).filter(function(p) { return p.required !== false; });
+    var unsatisfied = requiredPrereqs.filter(function(p) { return p.state !== 'CONFIGURATION_SATISFIED'; });
+
+    if (unsatisfied.length > 0 && isConsequentialCommand(entry)) {
+      return {
+        success: false,
+        config_state: evaluation.config_state,
+        satisfied: false,
+        director_notified: evaluation.director_notified,
+        has_unknown: evaluation.has_unknown,
+        blocking_prerequisites: unsatisfied,
+        error: 'Required external configuration prerequisite unsatisfied; consequential execution blocked (fail closed)',
+        error_code: 'PREREQUISITE_NOT_SATISFIED'
+      };
+    }
+  }
+
+  return {
+    success: true,
+    config_state: evaluation.config_state,
+    satisfied: evaluation.satisfied,
+    director_notified: evaluation.director_notified,
+    has_unknown: evaluation.has_unknown,
+    prerequisites: evaluation.prerequisites
+  };
+}
+
+function getPrerequisiteState(requestId, configKey) {
+  const entry = getTask(requestId);
+  if (!entry) return 'UNKNOWN';
+  const prereqs = entry.config_prerequisites || [];
+  const prereq = prereqs.find(p => p.config_key === configKey);
+  if (!prereq) return 'UNKNOWN';
+  return prereq.state || 'UNKNOWN';
 }
 
 async function supersedeTask(requestId, reason) {
@@ -1425,6 +1609,11 @@ module.exports = {
   getConfigVerificationState,
   requireConfigVerified,
   verifyConfig,
+  declareConfigPrerequisite,
+  evaluateConfigPrerequisite,
+  evaluateAllPrerequisites,
+  checkPrerequisites,
+  getPrerequisiteState,
   claimExecutionContext,
   releaseExecutionClaim,
   getExecutionClaim,
@@ -1433,5 +1622,6 @@ module.exports = {
   transitionToExecuting,
   CLAIMS_DIR,
   CLAIM_STALE_MS,
-  isClaimStale
+  isClaimStale,
+  CONFIG_PREREQUISITE_STATES
 };

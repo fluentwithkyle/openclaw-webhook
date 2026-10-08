@@ -87,6 +87,37 @@ const STATE_TRANSITION_EVIDENCE = {
 
 const CONFIG_VERIFICATION_STATES = ['VERIFIED', 'UNVERIFIED', 'PROPOSED', 'UNKNOWN'];
 
+// External configuration prerequisite contract.
+// A prerequisite is an external configuration value that must be declared and
+// validated before consequential task execution. Each prerequisite carries:
+//  - config_key: the configuration identity (e.g. an environment variable name).
+//    Only the identity is recorded; secret values are never captured.
+//  - reason: short human-readable explanation of why the prerequisite is required.
+//  - required: boolean — true for prerequisites that block consequential execution.
+//  - mode: the execution mode that requires this prerequisite (e.g. 'FAILOVER_EXECUTE').
+const CONFIG_PREREQUISITE_STATES = Object.freeze(['DIRECTOR_NOTIFIED', 'CONFIGURATION_SATISFIED', 'UNKNOWN']);
+
+const PREREQUISITE_EVALUATION_STATES = {
+  DIRECTOR_NOTIFIED: 'DIRECTOR_NOTIFIED',
+  CONFIGURATION_SATISFIED: 'CONFIGURATION_SATISFIED',
+  UNKNOWN: 'UNKNOWN'
+};
+
+function createConfigPrerequisite(configKey, reason, mode, required) {
+  if (!configKey || typeof configKey !== 'string') {
+    return { error: 'config_key is required and must be a non-empty string' };
+  }
+  return {
+    config_key: configKey,
+    reason: reason || 'External configuration required for execution',
+    mode: mode || null,
+    required: required !== false,
+    state: 'UNKNOWN',
+    satisfied: false,
+    notified_at: null
+  };
+}
+
 // Activation syntax is matched EXACTLY (case-sensitive). No regex flags that
 // would normalize case, because the repository protocol requires the exact
 // lowercase forms "@kilo" and "@gemini-cli".
@@ -591,6 +622,43 @@ function createInitialTaskRegistryEntry(requestId, command) {
     return Boolean(result) && result.state === 'VERIFIED' && result.verified === true;
   }
 
+  function evaluatePrerequisite(prerequisite, taskEntry, runtimeEnv) {
+    var env = runtimeEnv || (typeof process !== 'undefined' && process.env) || {};
+    var configKey = prerequisite.config_key;
+    var verificationResult;
+
+    if (typeof verifyConfiguration === 'function') {
+      verificationResult = verifyConfiguration(configKey, {
+        env: env,
+        task: taskEntry,
+        claimed: prerequisite.claimed || null
+      });
+    } else {
+      if (Object.prototype.hasOwnProperty.call(env, configKey)) {
+        verificationResult = { state: 'VERIFIED', verified: true, source: 'runtime_env', key: configKey };
+      } else {
+        verificationResult = { state: 'UNKNOWN', verified: false, source: null, key: configKey };
+      }
+    }
+
+    var state;
+    if (isConfigurationAuthoritativelyVerified(verificationResult)) {
+      state = 'CONFIGURATION_SATISFIED';
+    } else if (verificationResult.state === 'PROPOSED') {
+      state = 'DIRECTOR_NOTIFIED';
+    } else {
+      state = 'UNKNOWN';
+    }
+
+    return {
+      config_key: configKey,
+      state: state,
+      satisfied: state === 'CONFIGURATION_SATISFIED',
+      verification_result: verificationResult,
+      notified_at: state === 'DIRECTOR_NOTIFIED' ? (prerequisite.notified_at || new Date().toISOString()) : prerequisite.notified_at || null
+    };
+  }
+
   function validateEvidenceRecord(evidence) {
    if (!evidence || typeof evidence !== 'object') {
      return { valid: false, error: 'Evidence must be an object' };
@@ -815,7 +883,9 @@ module.exports = {
   LIFECYCLE_EVIDENCE_SEMANTICS,
   STATE_TRANSITION_EVIDENCE,
   CONFIG_VERIFICATION_STATES,
-  KILO_ACTIVATION_PATTERN,
+   CONFIG_PREREQUISITE_STATES,
+   PREREQUISITE_EVALUATION_STATES,
+   KILO_ACTIVATION_PATTERN,
   GEMINI_CLI_ACTIVATION_PATTERN,
   GEMINI_BARE_PATTERN,
   ARBITRARY_MENTION_PATTERN,
@@ -865,5 +935,7 @@ module.exports = {
     createInitialTaskRegistryEntry,
     verifyConfiguration,
     isConfigurationAuthoritativelyVerified,
+    createConfigPrerequisite,
+    evaluatePrerequisite,
     activationPolicy
 };

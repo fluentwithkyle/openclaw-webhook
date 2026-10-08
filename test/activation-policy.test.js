@@ -127,6 +127,7 @@ function makeBuilderCommand(requestId, overrides) {
 
 async function main() {
     process.env.ACP_POC_TRIGGER_SECRET = 'test-secret';
+    process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
 
     // =========================================================
     // Policy Matrix Tests
@@ -827,6 +828,243 @@ async function main() {
         assertTrue(second.success, 'Second REVIEW replay should succeed: ' + (second.error || ''));
         assertEqual(second.replay, true);
         cleanup();
+    });
+
+    // =========================================================
+    // Config Prerequisite Gate Tests
+    // =========================================================
+
+    await runTest('Config prerequisite - getRequiredConfigPrerequisites returns DIRECTOR_ORIGIN_SECRET for FAILOVER_EXECUTE', () => {
+        const prereqs = activationPolicy.getRequiredConfigPrerequisites('FAILOVER_EXECUTE');
+        assertTrue(prereqs.length > 0, 'FAILOVER_EXECUTE should have config prerequisites');
+        const keys = prereqs.map(p => p.config_key);
+        assertTrue(keys.includes('DIRECTOR_ORIGIN_SECRET'), 'Should require DIRECTOR_ORIGIN_SECRET');
+    });
+
+    await runTest('Config prerequisite - getRequiredConfigPrerequisites returns DIRECTOR_ORIGIN_SECRET for BUILDER', () => {
+        const prereqs = activationPolicy.getRequiredConfigPrerequisites('BUILDER');
+        assertTrue(prereqs.length > 0, 'BUILDER should have config prerequisites');
+        const keys = prereqs.map(p => p.config_key);
+        assertTrue(keys.includes('DIRECTOR_ORIGIN_SECRET'), 'Should require DIRECTOR_ORIGIN_SECRET');
+    });
+
+    await runTest('Config prerequisite - read-only modes have no config prerequisites', () => {
+        const reviewPrereqs = activationPolicy.getRequiredConfigPrerequisites('REVIEW');
+        assertEqual(reviewPrereqs.length, 0, 'REVIEW should have no prerequisites');
+        const researchPrereqs = activationPolicy.getRequiredConfigPrerequisites('RESEARCH_DOCUMENT');
+        assertEqual(researchPrereqs.length, 0, 'RESEARCH_DOCUMENT should have no prerequisites');
+    });
+
+    await runTest('Config prerequisite - isConsequentialMode returns true for FAILOVER_EXECUTE and BUILDER', () => {
+        assertTrue(activationPolicy.isConsequentialMode('FAILOVER_EXECUTE'), 'FAILOVER_EXECUTE is consequential');
+        assertTrue(activationPolicy.isConsequentialMode('BUILDER'), 'BUILDER is consequential');
+        assertTrue(!activationPolicy.isConsequentialMode('REVIEW'), 'REVIEW is not consequential');
+        assertTrue(!activationPolicy.isConsequentialMode('RESEARCH_DOCUMENT'), 'RESEARCH_DOCUMENT is not consequential');
+    });
+
+    await runTest('Config prerequisite - consequential execution blocked when DIRECTOR_ORIGIN_SECRET is absent', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-block-test-1');
+            const approval = await setupDirectorApproval('prereq-block-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            assertTrue(approval.success);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            assertTrue(!result.success, 'Should be blocked when DIRECTOR_ORIGIN_SECRET is absent');
+            assertEqual(result.status, 'BLOCKED');
+            assertEqual(result.error_code, 'CONFIG_PREREQUISITE_UNSATISFIED');
+            assertTrue(result.director_notified, 'Director should be notified');
+            assertTrue(result.blocking_prerequisites !== undefined, 'Should report blocking prerequisites');
+            assertTrue(result.blocking_prerequisites.length > 0, 'Should have blocking prerequisites');
+            assertTrue(result.blocking_prerequisites[0].config_key === 'DIRECTOR_ORIGIN_SECRET', 'Should identify DIRECTOR_ORIGIN_SECRET as blocking');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - consequential execution succeeds when DIRECTOR_ORIGIN_SECRET is present', async () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('prereq-success-test-1');
+        const approval = await setupDirectorApproval('prereq-success-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        assertTrue(approval.success);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        assertTrue(result.success, 'Should succeed when DIRECTOR_ORIGIN_SECRET is set: ' + (result.error || ''));
+        assertTrue(result.config_state === 'CONFIGURATION_SATISFIED' || result.config_state === undefined, 'Config state should be satisfied or undefined (no prereqs declared for non-carrier path)');
+        cleanup();
+    });
+
+    await runTest('Config prerequisite - fail-closed: read-only REVIEW mode does not block on missing secret', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = {
+                protocol_version: '0.1',
+                request_id: 'prereq-review-test-1',
+                source: 'DeepSeek Coordinator',
+                target: 'Kilo',
+                task_type: 'implementation',
+                repository: 'fluentwithkyle/openclaw-webhook',
+                base_branch: 'main',
+                task: 'test-review-task',
+                task_mode: 'REVIEW',
+                constraints: { permitted_paths: ['poc/'] },
+                authorization: { capabilities: ['read_only'] },
+                verification: 'review the code',
+                reporting: 'json',
+                originator: 'Kyle'
+            };
+            const result = await canonicalExternalActivationIngress(cmd, {});
+            assertTrue(result.success, 'REVIEW mode should not block on missing secret: ' + (result.error || ''));
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - prerequisite record stored in task entry', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-record-test-1');
+            const approval = await setupDirectorApproval('prereq-record-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            assertTrue(approval.success);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            const task = taskRegistry.getTask('prereq-record-test-1');
+            assertTrue(task !== null, 'Task should be registered');
+            assertTrue(task.config_prerequisites !== undefined, 'Task should have config_prerequisites');
+            assertTrue(task.config_prerequisites.length > 0, 'Should have at least one prerequisite');
+            const prereq = task.config_prerequisites.find(p => p.config_key === 'DIRECTOR_ORIGIN_SECRET');
+            assertTrue(prereq !== undefined, 'Should have DIRECTOR_ORIGIN_SECRET prerequisite');
+            assertTrue(prereq.required === true, 'Prerequisite should be required');
+            assertTrue(prereq.mode === 'FAILOVER_EXECUTE', 'Prerequisite should record the mode');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - director_notified state when secret absent', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-notified-test-1');
+            const approval = await setupDirectorApproval('prereq-notified-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            assertTrue(!result.success);
+            assertEqual(result.config_state, 'DIRECTOR_NOTIFIED');
+            assertTrue(result.director_notified, 'director_notified should be true');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - checkPrerequisites returns success for satisfied prerequisites', async () => {
+        cleanup();
+        const cmd = makeKiloFailoverCommand('prereq-check-test-1');
+        const approval = await setupDirectorApproval('prereq-check-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+        cmd.authorization.approval_id = approval.approval.approval_id;
+        const result = await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+        const check = taskRegistry.checkPrerequisites('prereq-check-test-1');
+        assertTrue(check.success, 'Should succeed when secret is present: ' + (check.error || ''));
+        assertTrue(check.satisfied, 'Prerequisites should be satisfied');
+        cleanup();
+    });
+
+    await runTest('Config prerequisite - checkPrerequisites blocks when unsatisfied for consequential task', async () => {
+        const savedSecret = process.env.DIRECTOR_ORIGIN_SECRET;
+        delete process.env.DIRECTOR_ORIGIN_SECRET;
+        cleanup();
+        try {
+            const cmd = makeKiloFailoverCommand('prereq-check-block-test-1');
+            const approval = await setupDirectorApproval('prereq-check-block-test-1', 'Kilo', 'FAILOVER_EXECUTE', cmd.authorization.capabilities, cmd.constraints.permitted_paths);
+            cmd.authorization.approval_id = approval.approval.approval_id;
+            await canonicalExternalActivationIngress(cmd, { director_approval_id: cmd.authorization.approval_id });
+            const check = taskRegistry.checkPrerequisites('prereq-check-block-test-1');
+            assertTrue(!check.success, 'Should block consequential task with unsatisfied prerequisites');
+            assertEqual(check.error_code, 'PREREQUISITE_NOT_SATISFIED');
+        } finally {
+            if (savedSecret !== undefined) process.env.DIRECTOR_ORIGIN_SECRET = savedSecret;
+            cleanup();
+        }
+    });
+
+    await runTest('Config prerequisite - getPrerequisiteState returns UNKNOWN for undeclared prerequisite', () => {
+        cleanup();
+        const state = taskRegistry.getPrerequisiteState('nonexistent-task', 'DIRECTOR_ORIGIN_SECRET');
+        assertEqual(state, 'UNKNOWN');
+    });
+
+    await runTest('Config prerequisite - createConfigPrerequisite validates input', () => {
+        const { createConfigPrerequisite } = require('../poc/schemas/acp-schema');
+        const invalid = createConfigPrerequisite('', 'no key', 'REVIEW', true);
+        assertTrue(invalid.error !== undefined, 'Should error on empty config_key');
+        const valid = createConfigPrerequisite('TEST_KEY', 'test reason', 'REVIEW', true);
+        assertEqual(valid.config_key, 'TEST_KEY');
+        assertEqual(valid.reason, 'test reason');
+        assertEqual(valid.mode, 'REVIEW');
+        assertTrue(valid.required === true);
+        assertEqual(valid.state, 'UNKNOWN');
+    });
+
+    await runTest('Config prerequisite - evaluatePrerequisite returns CONFIGURATION_SATISFIED when env var present', () => {
+        const { createConfigPrerequisite, evaluatePrerequisite } = require('../poc/schemas/acp-schema');
+        const savedSecret = process.env.TEST_CONFIG_KEY;
+        process.env.TEST_CONFIG_KEY = 'test-value';
+        try {
+            const prereq = createConfigPrerequisite('TEST_CONFIG_KEY', 'test', 'REVIEW', true);
+            const result = evaluatePrerequisite(prereq, {}, process.env);
+            assertEqual(result.state, 'CONFIGURATION_SATISFIED');
+            assertTrue(result.satisfied === true);
+        } finally {
+            if (savedSecret !== undefined) process.env.TEST_CONFIG_KEY = savedSecret; else delete process.env.TEST_CONFIG_KEY;
+        }
+    });
+
+    await runTest('Config prerequisite - evaluatePrerequisite returns DIRECTOR_NOTIFIED when env var absent but claim present', () => {
+        const { createConfigPrerequisite, evaluatePrerequisite } = require('../poc/schemas/acp-schema');
+        const savedSecret = process.env.TEST_UNDECLARED_KEY;
+        delete process.env.TEST_UNDECLARED_KEY;
+        try {
+            const prereq = createConfigPrerequisite('TEST_UNDECLARED_KEY', 'test', 'REVIEW', true);
+            prereq.claimed = 'some-claim-value';
+            const result = evaluatePrerequisite(prereq, {}, process.env);
+            assertEqual(result.state, 'DIRECTOR_NOTIFIED');
+            assertTrue(result.satisfied === false);
+        } finally {
+            if (savedSecret !== undefined) process.env.TEST_UNDECLARED_KEY = savedSecret;
+        }
+    });
+
+    await runTest('Config prerequisite - evaluatePrerequisite returns UNKNOWN when env var absent and no claim', () => {
+        const { createConfigPrerequisite, evaluatePrerequisite } = require('../poc/schemas/acp-schema');
+        const savedSecret = process.env.TEST_UNKNOWN_KEY;
+        delete process.env.TEST_UNKNOWN_KEY;
+        try {
+            const prereq = createConfigPrerequisite('TEST_UNKNOWN_KEY', 'test', 'REVIEW', true);
+            const result = evaluatePrerequisite(prereq, {}, process.env);
+            assertEqual(result.state, 'UNKNOWN');
+            assertTrue(result.satisfied === false);
+        } finally {
+            if (savedSecret !== undefined) process.env.TEST_UNKNOWN_KEY = savedSecret;
+        }
+    });
+
+    await runTest('Config prerequisite - CONFIG_PREREQUISITE_STATES exported correctly', () => {
+        const schema = require('../poc/schemas/acp-schema');
+        assertTrue(schema.CONFIG_PREREQUISITE_STATES !== undefined);
+        assertTrue(schema.CONFIG_PREREQUISITE_STATES.includes('DIRECTOR_NOTIFIED'));
+        assertTrue(schema.CONFIG_PREREQUISITE_STATES.includes('CONFIGURATION_SATISFIED'));
+        assertTrue(schema.CONFIG_PREREQUISITE_STATES.includes('UNKNOWN'));
     });
 
     // =========================================================
