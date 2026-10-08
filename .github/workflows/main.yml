@@ -512,18 +512,36 @@ jobs:
           RUN_ID="${GITHUB_RUN_ID}"
 
           # For RESEARCH_DOCUMENT tasks, extract task_name from the task JSON and
-          # verify the durable research record exists before binding it in the
-          # canonical report. Non-RESEARCH_DOCUMENT tasks get null.
+          # verify the durable research record exists AND belongs to the current task.
+          # Fail-closed: if the record is missing, malformed, or cannot be verified,
+          # the report status is forced to "failure" with a machine-readable blocker.
+          # Non-RESEARCH_DOCUMENT tasks get null (no research record required).
           DURABLE_RESEARCH_RECORD_PATH="null"
           if [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ] && [ -n "$TASK" ]; then
             TASK_NAME=$(echo "$TASK" | jq -r '.task_name // empty' 2>/dev/null || echo '')
             if [ -n "$TASK_NAME" ]; then
               RESEARCH_RECORD_FILE="docs/ai/research/research-${TASK_NAME}.md"
               if [ -f "$RESEARCH_RECORD_FILE" ]; then
-                DURABLE_RESEARCH_RECORD_PATH="$RESEARCH_RECORD_FILE"
+                # Verify the research record belongs to the current task by checking
+                # that the task_name is referenced in the record header.
+                if grep -q "$TASK_NAME" "$RESEARCH_RECORD_FILE" 2>/dev/null; then
+                  DURABLE_RESEARCH_RECORD_PATH="$RESEARCH_RECORD_FILE"
+                else
+                  STATUS="failure"
+                  RESEARCH_BLOCKER="RESEARCH_DOCUMENT task $(printf '%s' "$TASK_NAME") but research record $RESEARCH_RECORD_FILE does not reference the task_name; record may belong to a different task"
+                  BLOCKERS=$(jq -n --arg msg "$RESEARCH_BLOCKER" '$blockers + [$msg]' --argjson blockers "$BLOCKERS" 'if $blockers then $blockers + [$msg] else [$msg] end')
+                fi
               else
-                echo "::warning::RESEARCH_DOCUMENT task but research record $RESEARCH_RECORD_FILE does not exist; report will not bind durable_research_record_path"
+                # Fail-closed: missing research record for RESEARCH_DOCUMENT task
+                STATUS="failure"
+                RESEARCH_BLOCKER="RESEARCH_DOCUMENT task requires durable research record $RESEARCH_RECORD_FILE but it does not exist; report cannot represent a successful completed research task"
+                BLOCKERS=$(jq -n --arg msg "$RESEARCH_BLOCKER" '[$msg]')
               fi
+            else
+              # Fail-closed: task_name missing from task JSON for RESEARCH_DOCUMENT task
+              STATUS="failure"
+              RESEARCH_BLOCKER="RESEARCH_DOCUMENT task is missing task_name in task JSON; cannot verify durable research record path"
+              BLOCKERS=$(jq -n --arg msg "$RESEARCH_BLOCKER" '[$msg]')
             fi
           fi
 

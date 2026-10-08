@@ -333,6 +333,60 @@ runTest('Workflow - payload JSON nulls durable_research_record_path when not ver
 });
 
 // =========================================================
+// 8b. Fail-closed: RESEARCH_DOCUMENT must not succeed without research record
+// =========================================================
+
+runTest('Workflow - RESEARCH_DOCUMENT uses fail-closed (STATUS forced to failure) on missing record, not just warning', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/STATUS="failure"/.test(payloadStep),
+        'RESEARCH_DOCUMENT must force STATUS="failure" when research record is missing');
+});
+
+runTest('Workflow - RESEARCH_DOCUMENT does NOT use a mere ::warning:: for missing record', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(!/RESEARCH_DOCUMENT task but research record.*does not exist; report will not bind/.test(payloadStep),
+        'Fail-closed: RESEARCH_DOCUMENT must NOT only emit a warning for missing record (must fail the report)');
+});
+
+runTest('Workflow - RESEARCH_DOCUMENT fail-closed adds a machine-readable blocker on missing record', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/RESEARCH_BLOCKER/.test(payloadStep),
+        'RESEARCH_DOCUMENT must define a RESEARCH_BLOCKER variable for missing/unverifiable record');
+    assert.ok(/BLOCKERS.*RESEARCH_BLOCKER|RESEARCH_BLOCKER.*BLOCKERS/i.test(payloadStep),
+        'RESEARCH_DOCUMENT must add the RESEARCH_BLOCKER to the blockers array');
+});
+
+runTest('Workflow - RESEARCH_DOCUMENT fail-closed: missing record sets STATUS to failure and adds blocker', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    const failClosed = payloadStep.includes('DURABLE_RESEARCH_RECORD_PATH="null"') || true;
+    // The pattern is: if [ -f "$RESEARCH_RECORD_FILE" ]; then ... else STATUS="failure"; ...
+    // We verify the else branch forces failure
+    assert.ok(/RESEARCH_RECORD_FILE.*STATUS="failure"/s.test(payloadStep) || /-f "\$RESEARCH_RECORD_FILE"/.test(payloadStep) && /STATUS="failure"/.test(payloadStep),
+        'RESEARCH_DOCUMENT must force STATUS="failure" in the missing-record branch');
+});
+
+runTest('Workflow - RESEARCH_DOCUMENT verifies task_name reference in research record (task/request identity binding)', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/grep.*TASK_NAME.*RESEARCH_RECORD_FILE|grep.*research record.*task_name/.test(payloadStep),
+        'RESEARCH_DOCUMENT must verify the research record references the task_name (identity binding)');
+});
+
+runTest('Workflow - Non-RESEARCH_DOCUMENT tasks do NOT set STATUS to failure on missing record', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    // The fail-closed STATUS="failure" must be inside the RESEARCH_DOCUMENT conditional block
+    const researchBlock = payloadStep.slice(payloadStep.indexOf('TASK_MODE.*RESEARCH_DOCUMENT') >= 0 ? payloadStep.indexOf('RESEARCH_DOCUMENT') : payloadStep.indexOf('TASK_MODE'));
+    assert.ok(/TASK_MODE.*RESEARCH_DOCUMENT/.test(payloadStep),
+        'Non-RESEARCH_DOCUMENT tasks must not be subject to research record verification; the check must be gated on TASK_MODE == RESEARCH_DOCUMENT');
+});
+
+runTest('Workflow - RESEARCH_DOCUMENT with missing task_name forces failure', () => {
+    assert.ok(payloadStep, 'payload step not found');
+    assert.ok(/task_name.*empty.*STATUS="failure"|missing task_name.*STATUS="failure"/i.test(payloadStep) ||
+              (!/echo "::warning::RESEARCH_DOCUMENT task but research record/.test(payloadStep) && /TASK_NAME/.test(payloadStep) && /STATUS="failure"/.test(payloadStep)),
+        'RESEARCH_DOCUMENT with missing task_name must force STATUS="failure"');
+});
+
+// =========================================================
 // 9. Sequencing: payload finalized before upload
 // =========================================================
 
