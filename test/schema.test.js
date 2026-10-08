@@ -437,6 +437,58 @@ test('validatePermittedPathsForMode - RESEARCH_DOCUMENT rejects index.js', () =>
   assert(result.error.includes('Unauthorized path'));
 });
 
+test('MAX_AUTHORIZED_PATHS - is exported from schema and matches activation-policy', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const activationPolicy = require('../poc/activation-policy');
+  assertEqual(JSON.stringify(schema.MAX_AUTHORIZED_PATHS), JSON.stringify(activationPolicy.MAX_AUTHORIZED_PATHS));
+  assertDeepEqual(schema.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/']);
+});
+
+test('validatePermittedPathsForMode - FAILOVER_EXECUTE accepts paths within MAX boundary', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('FAILOVER_EXECUTE', ['docs/ai/', 'test/foo.js', 'poc/']);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - FAILOVER_EXECUTE rejects index.js (outside boundary)', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('FAILOVER_EXECUTE', ['index.js']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('maximum authorization boundary'));
+});
+
+test('validatePermittedPathsForMode - FAILOVER_EXECUTE rejects AGENTS.md (outside boundary)', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('FAILOVER_EXECUTE', ['AGENTS.md']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('maximum authorization boundary'));
+});
+
+test('validatePermittedPathsForMode - BUILDER accepts paths within MAX boundary', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('BUILDER', ['docs/ai/', 'poc/']);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - BUILDER rejects services/ (outside boundary)', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('BUILDER', ['services/']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('maximum authorization boundary'));
+});
+
+test('validatePermittedPathsForMode - REVIEW mode is not affected by MAX boundary', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('REVIEW', ['poc/']);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - RESEARCH_DOCUMENT mode is not affected by MAX boundary', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('RESEARCH_DOCUMENT', ['docs/ai/research/']);
+  assertEqual(result.valid, true);
+});
+
 test('validateAuthorization - RESEARCH_DOCUMENT valid command', () => {
   const schema = require('../poc/schemas/acp-schema');
   const result = schema.validateAuthorization({

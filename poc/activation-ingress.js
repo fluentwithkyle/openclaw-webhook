@@ -124,6 +124,38 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
       : rawRequest.constraints
   });
 
+  const directorApprovalId = dispatchContext && dispatchContext.director_approval_id;
+  const directorAdmission = dispatchContext && dispatchContext.director_admission;
+  if ((directorApprovalId || directorAdmission) && isConsequentialCommand(command)) {
+    const rawPermittedPaths = rawRequest.constraints && rawRequest.constraints.permitted_paths;
+    if (directorApprovalId) {
+      const directorApproval = taskRegistry.getDirectorApproval(directorApprovalId);
+      const approvalStatus = directorApproval && directorApproval.status;
+      const isPreApproved = approvalStatus === 'PENDING' || approvalStatus === 'CONSUMED';
+      if (directorApproval && isPreApproved &&
+          Date.parse(directorApproval.expiry) > Date.now() &&
+          directorApproval.scope_hash) {
+        if (Array.isArray(rawPermittedPaths) && rawPermittedPaths.length > 0) {
+          const candidateScope = Object.assign({}, getDirectorScope(command), { permitted_paths: rawPermittedPaths });
+          const candidateHash = calculateDirectorScopeHash(candidateScope);
+          if (candidateHash === directorApproval.scope_hash) {
+            const approvedPaths = activationPolicy.intersectPathsWithMaxBoundary(rawPermittedPaths);
+            if (approvedPaths.length > 0) {
+              command.constraints = Object.assign({}, command.constraints || {}, { permitted_paths: approvedPaths });
+            }
+          }
+        }
+      }
+    } else {
+      if (Array.isArray(rawPermittedPaths) && rawPermittedPaths.length > 0) {
+        const approvedPaths = activationPolicy.intersectPathsWithMaxBoundary(rawPermittedPaths);
+        if (approvedPaths.length > 0) {
+          command.constraints = Object.assign({}, command.constraints || {}, { permitted_paths: approvedPaths });
+        }
+      }
+    }
+  }
+
   command.activation_surface = canonical.activation_surface;
   command.activation_syntax = canonical.activation_syntax;
   command.activation_source = canonical.activation_source;
