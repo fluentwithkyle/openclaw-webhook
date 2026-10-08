@@ -78,7 +78,7 @@ mandatory regardless of whether you believe you already know the content.
 5. **`docs/ai/TASK_STANDARD.md`** — Canonical AI task request standard. Defines the
    mandatory task-request envelope (originator, target_agent, repository, base_branch,
    task_mode, capabilities, objective, scope, verification, constraints,
-   conflict_handling) and persistence requirements for EXECUTE tasks.
+    conflict_handling) and persistence requirements for FAILOVER_EXECUTE (the runtime equivalent of EXECUTE) tasks.
 6. **`docs/ai/STATE.md`** — Authoritative current project state. Read before planning
    work to avoid duplicating completed or active work.
 7. **`docs/ai/CONTROL_CENTER.md`** — Derived human-facing dashboard with concise

@@ -21,7 +21,7 @@ All task requests must be structured with the following fields:
 - `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Gemini Builder", "Kilo").
 - `repository`: (Required) The repository the task applies to.
 - `base_branch`: (Required) The branch the task is based on and intended to integrate with.
-- `task_mode`: (Required) The execution mode. One of: "RESEARCH_DOCUMENT", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions.
+- `task_mode`: (Required) The execution mode. One of: "RESEARCH_DOCUMENT", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions. The runtime enforces `task_mode` against the server-defined `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js`.
 - `capabilities`: (Required) Explicit list of capabilities required (e.g., "inspect", "modify_files", "commit", "push").
 - `objective`: (Required) A concise statement of the goal.
 - `scope`: (Required) Clear definition of the files, directories, or architectural boundaries impacted.
@@ -177,7 +177,7 @@ This standard provides the human-readable envelope for task delegation. The Agen
 
 ## 5. Persistence Expectations for Implementation Tasks
 
-This section defines the mandatory persistence requirements for implementation tasks (task_mode: EXECUTE) targeting Gemini Builder, Kilo (when explicitly targeted), or any execution agent. These requirements ensure that implementation work is durably recorded in GitHub within the same authorized execution.
+This section defines the mandatory persistence requirements for implementation tasks (task_mode: EXECUTE → runtime FAILOVER_EXECUTE or BUILDER) targeting Gemini Builder, Kilo (when explicitly targeted), or any execution agent. These requirements ensure that implementation work is durably recorded in GitHub within the same authorized execution.
 
 ### 5.1 Same-Execution Persistence Requirement
 
@@ -276,7 +276,7 @@ The execution agent refreshes CONTROL_CENTER.md as part of the task verification
   "target_agent": "Kilo",
   "repository": "fluentwithkyle/openclaw-webhook",
   "base_branch": "main",
-  "task_mode": "EXECUTE",
+  "task_mode": "FAILOVER_EXECUTE",
   "capabilities": ["inspect", "modify_files", "run_tests", "commit"],
   "objective": "Fix bug in abandoned booking trigger.",
   "scope": {
@@ -390,9 +390,21 @@ The capabilities field must contain exactly these four capabilities. Selecting R
 
 The agent produces a structured implementation plan — affected files, steps, risks, validation requirements, and acceptance criteria. No repository changes are made.
 
+`PLAN` is a Director-facing planning classification that has no runtime task_mode authority. The runtime `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js` does not include `PLAN`. Planning is performed within `REVIEW` scope (read-only, `poc/`): the agent inspects the repository and produces a plan, but the plan does not trigger execution. An implementation task is activated as `FAILOVER_EXECUTE` (for Gemini or Kilo execution) or `BUILDER` (for the Gemini Builder lane), each of which requires explicit Director authorization.
+
+**Not a runtime mode:** Submitting `task_mode: "PLAN"` to the canonical activation ingress results in `INVALID_TASK_MODE`. Planning must be expressed as a `REVIEW`-mode task or an `EXECUTE`-mode task via its runtime equivalent (`FAILOVER_EXECUTE` or `BUILDER`).
+
 ### 9.3 EXECUTE
 
 The agent implements the authorized task within the permitted scope, validates, and persists results. May include `modify_files`, and when explicitly authorized, `commit` and `push`. See Section 5 for persistence expectations.
+
+`EXECUTE` is the Director-facing conceptual execution mode. At runtime, the execution task_mode is **`FAILOVER_EXECUTE`** — this is the accepted canonical `task_mode` for execution tasks. The runtime `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js` does not include the literal string `EXECUTE`; it includes `FAILOVER_EXECUTE` (for Gemini/Kilo execution) and `BUILDER` (for the Gemini Builder lane). An ACP task artifact declaring `task_mode: "EXECUTE"` is mapped to `FAILOVER_EXECUTE` by the director-facing coordinator before submission to the canonical activation ingress.
+
+**Not a runtime mode:** Submitting `task_mode: "EXECUTE"` directly to the canonical activation ingress results in `INVALID_TASK_MODE`. The runtime-accepted canonical execution modes are `FAILOVER_EXECUTE` and `BUILDER`.
+
+**Runtime capabilities:** `FAILOVER_EXECUTE` requires exactly `['read_only', 'modify_files', 'run_tests', 'commit', 'push']` (the fixed set). `BUILDER` requires the same fixed set. Both require Director authorization via `DIRECTOR_ORIGIN_SECRET` (see `poc/activation-policy.js` `CONFIG_PREREQUISITE_GATE`).
+
+**Not RESEARCH:** The old `EXECUTE` terminology is preserved as the conceptual name; the runtime implements it as `FAILOVER_EXECUTE` (when Gemini or Kilo is the target agent) or `BUILDER` (when the Gemini Builder lane is the target agent). The runtime does not accept `EXECUTE` as a literal `task_mode` value — use `FAILOVER_EXECUTE` or `BUILDER`.
 
 ### 9.4 VERIFY_RECONCILE
 

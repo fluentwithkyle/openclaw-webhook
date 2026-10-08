@@ -677,8 +677,9 @@ complete canonical task envelope defined by `docs/ai/TASK_STANDARD.md`:
 - `repository` — the repository the task applies to (`fluentwithkyle/openclaw-webhook`).
 - `base_branch` — the branch the task is based on and intended to integrate with
   (`main`).
-- `task_mode` — one of `RESEARCH_DOCUMENT`, `PLAN`, `EXECUTE`, or
-  `VERIFY_RECONCILE`.
+ - `task_mode` — one of `RESEARCH_DOCUMENT`, `PLAN`, `EXECUTE`, or
+   `VERIFY_RECONCILE` (mapped to the runtime-accepted `FAILOVER_EXECUTE` for
+   execution tasks; see `docs/ai/TASK_STANDARD.md` Section 9).
 - `capabilities` — explicit list of required capabilities; must appear immediately
   before `objective`.
 - `objective` — a concise statement of the goal.
@@ -762,7 +763,7 @@ If an applicable requirement cannot be verified against the completed ACP artifa
 - [ ] **Runtime ACP schema compatibility**: Task structure is compatible with `poc/schemas/acp-schema.js`.
 - [ ] **Explicit capabilities**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`) are explicitly listed.
 - [ ] **Explicit permitted paths**: `permitted_paths` are explicitly defined and within authorized bounds.
-- [ ] **Task-mode semantics**: Correct `task_mode` (RESEARCH_DOCUMENT, PLAN, EXECUTE, VERIFY_RECONCILE) applied.
+  - [ ] **Task-mode semantics**: Correct `task_mode` from the canonical set (RESEARCH_DOCUMENT, PLAN, EXECUTE, VERIFY_RECONCILE) mapped to the runtime-accepted value (REVIEW, RESEARCH_DOCUMENT, FAILOVER_EXECUTE, BUILDER, VERIFY_RECONCILE) per `docs/ai/TASK_STANDARD.md` Section 9.
 - [ ] **Intrinsic completion requirements**: Defined completion criteria are present in `verification`.
 - [ ] **Executable verification requirements**: Verification criteria are executable and verifiable.
 - [ ] **Explicit persistence requirements**: Persistence expectations are explicit per `docs/ai/TASK_STANDARD.md`.
