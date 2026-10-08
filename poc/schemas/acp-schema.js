@@ -144,6 +144,8 @@ const VALID_WORKFLOW_STAGES = Object.freeze(['review', 'implementation', 'verifi
 
 const VALID_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push', 'run_tests'];
 
+const MAX_AUTHORIZED_PATHS = activationPolicy.MAX_AUTHORIZED_PATHS;
+
 const REVIEW_CAPABILITIES = ['read_only'];
 const VERIFY_RECONCILE_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push'];
 const FAILOVER_EXECUTE_CAPABILITIES = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
@@ -253,6 +255,19 @@ function validatePermittedPathsForMode(taskMode, permittedPaths) {
 
   if (!Array.isArray(permittedPaths)) {
     return { valid: false, error: 'constraints.permitted_paths must be an array' };
+  }
+
+  if (EXECUTION_TASK_MODES.includes(mode)) {
+    for (const p of permittedPaths) {
+      const withinBoundary = MAX_AUTHORIZED_PATHS.some(maxPath => p === maxPath || p.startsWith(maxPath));
+      if (!withinBoundary) {
+        return { valid: false, error: 'Path outside server-defined maximum authorization boundary (' + MAX_AUTHORIZED_PATHS.join(', ') + '): ' + p };
+      }
+    }
+    if (permittedPaths.length === 0) {
+      return { valid: false, error: 'constraints.permitted_paths must not be empty' };
+    }
+    return { valid: true };
   }
 
   if (authorizedPaths === null) {
@@ -895,13 +910,14 @@ module.exports = {
    EXECUTION_TASK_MODES,
    DEFAULT_TASK_MODE,
    VALID_WORKFLOW_STAGES,
-  VALID_CAPABILITIES,
-  REVIEW_CAPABILITIES,
-  VERIFY_RECONCILE_CAPABILITIES,
-   FAILOVER_EXECUTE_CAPABILITIES,
-   BUILDER_CAPABILITIES,
-   RESEARCH_DOCUMENT_CAPABILITIES,
-   VERIFY_RECONCILE_PATHS,
+   VALID_CAPABILITIES,
+   REVIEW_CAPABILITIES,
+   VERIFY_RECONCILE_CAPABILITIES,
+    FAILOVER_EXECUTE_CAPABILITIES,
+    BUILDER_CAPABILITIES,
+    RESEARCH_DOCUMENT_CAPABILITIES,
+    MAX_AUTHORIZED_PATHS,
+    VERIFY_RECONCILE_PATHS,
    RESEARCH_DOCUMENT_PATHS,
   VALID_RECONCILIATION_STATUSES,
   getRequiredCapabilitiesForMode,

@@ -59,6 +59,19 @@ const ACTIVATION_SURFACE_NAMES = Object.freeze(
 
 const EXECUTION_TASK_MODES = Object.freeze(['FAILOVER_EXECUTE', 'BUILDER']);
 
+const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/']);
+
+function isPathWithinMaxBoundary(permittedPath) {
+  return MAX_AUTHORIZED_PATHS.some(maxPath =>
+    permittedPath === maxPath || permittedPath.startsWith(maxPath)
+  );
+}
+
+function intersectPathsWithMaxBoundary(paths) {
+  if (!Array.isArray(paths)) return [];
+  return paths.filter(p => isPathWithinMaxBoundary(p));
+}
+
 // Server-derived external configuration prerequisite gate.
 // Each entry declares an external configuration key that must be satisfied
 // (verified via runtime environment or TaskRegistry) before consequential
@@ -441,6 +454,7 @@ module.exports = {
   ACTIVATION_POLICY,
   CONFIG_PREREQUISITE_GATE,
   READ_ONLY_TASK_MODES,
+  MAX_AUTHORIZED_PATHS,
   SERVER_DERIVED_AUTHORITY_FIELDS,
   getPolicyEntry,
   getPermittedActivationSurfaces,
@@ -451,6 +465,8 @@ module.exports = {
   validateActivationSurface,
   validateActivationSyntax,
   isAuthorityConflict,
+  isPathWithinMaxBoundary,
+  intersectPathsWithMaxBoundary,
   canonicalizeExternalActivation,
   evaluateActivation,
   deriveServerAuthority,
