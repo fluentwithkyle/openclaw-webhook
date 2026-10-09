@@ -382,7 +382,7 @@ function rawRequest(port, headers, body) {
         const badEvidenceId = 'deepseek-runtime-bad-evidence';
         assert.equal((await taskRegistry.createTask({ request_id: badEvidenceId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Claims implementation in task text', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'BUILDER', workflow_stage: 'implementation', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle' })).success, true);
         taskRegistry.getTask(badEvidenceId).status = 'COMPLETE';
-        taskRegistry.persistCache();
+        (await taskRegistry.persistCache());
         assert.match(evaluateWorkflowStepPolicy(badEvidenceId, 'verification', 'deepseek-runtime-verification-child-3', new Map([[badEvidenceId, { eligible_for_next_decision: true }]])).error, /INDEPENDENT_VERIFICATION/);
 
         const wrongScopeId = 'deepseek-runtime-wrong-scope';
@@ -403,10 +403,10 @@ function rawRequest(port, headers, body) {
         const observed = new Set(['deepseek-runtime-missing-parent']);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-missing-parent', 'deepseek-runtime-child', observed).error, /does not exist/);
         await createDeepSeekReviewTask('deepseek-runtime-cancelled-parent');
-        taskRegistry.cancelTask('deepseek-runtime-cancelled-parent', 'cancelled');
+        (await taskRegistry.cancelTask('deepseek-runtime-cancelled-parent', 'cancelled'));
         assert.match(evaluateContinuationPolicy('deepseek-runtime-cancelled-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-cancelled-parent'])).error, /cancelled/);
         await createDeepSeekReviewTask('deepseek-runtime-superseded-parent');
-        assert.equal(taskRegistry.supersedeTask('deepseek-runtime-superseded-parent', 'replacement required').success, true);
+        assert.equal((await taskRegistry.supersedeTask('deepseek-runtime-superseded-parent', 'replacement required')).success, true);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-superseded-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-superseded-parent'])).error, /superseded/);
         await createDeepSeekReviewTask('deepseek-runtime-failed-parent');
         for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal((await taskRegistry.updateTaskStatus('deepseek-runtime-failed-parent', status)).success, true);
@@ -435,7 +435,7 @@ function rawRequest(port, headers, body) {
         const observed = new Map([['deepseek-runtime-result-complete', eligible]]);
         assert.equal(evaluateContinuationPolicy('deepseek-runtime-result-complete', 'deepseek-runtime-result-child', observed).valid, true);
         taskRegistry.getTask('deepseek-runtime-result-complete').status = 'FAILED';
-        taskRegistry.persistCache();
+        (await taskRegistry.persistCache());
         assert.match(evaluateContinuationPolicy('deepseek-runtime-result-complete', 'deepseek-runtime-result-child', observed).error, /FAILED/);
         taskRegistry.resetRegistry();
     });
@@ -444,7 +444,7 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-context-parent';
         await completeDeepSeekReviewTask(parentRequestId);
-        assert.deepEqual(taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        assert.deepEqual((await taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS)).success, true);
         const client = { post: async () => providerResponse({ role: 'assistant', content: 'Validated coordination state.' }) };
         const first = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId });
         assert.equal(first.message.content, 'Validated coordination state.');
@@ -489,7 +489,7 @@ function rawRequest(port, headers, body) {
                 const observation = body.messages.find(message => message.role === 'system' && message.content.includes('Server-derived coordination observation'));
                 assert(observation, 'the next autonomous turn must receive a server-derived observation');
                 assert.match(observation.content, /only server-authorized next workflow step is implementation/);
-                return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Implement coordinator workflow sequencing', parent_request_id: submitted[0].request_id, workflow_step: 'implementation' }) } }] });
+                return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Implement Phase 4 cross-task lineage navigation', parent_request_id: submitted[0].request_id, workflow_step: 'implementation' }) } }] });
             }
             if (modelCalls === 4) {
                 const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
@@ -497,7 +497,7 @@ function rawRequest(port, headers, body) {
                 assert.equal(context.current_request_id, submitted[1].request_id);
                 return providerResponse({ role: 'assistant', content: 'First continuation completed.' });
             }
-            if (modelCalls === 5) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'second-follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Verify coordinator workflow sequencing', parent_request_id: submitted[1].request_id, workflow_step: 'verification' }) } }] });
+            if (modelCalls === 5) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'second-follow-up', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Verify Phase 4 cross-task lineage navigation', parent_request_id: submitted[1].request_id, workflow_step: 'verification' }) } }] });
             if (modelCalls === 6) {
                 const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
                 assert.equal(context.autonomous_turns, 2);
@@ -531,7 +531,7 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-sequence-authority';
         await completeDeepSeekReviewTask(parentRequestId);
-        assert.equal(taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        assert.equal((await taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS)).success, true);
         const client = { post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'wrong-step', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation', parent_request_id: parentRequestId, workflow_step: 'review' }) } }] }) };
         await assert.rejects(
             runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId }),
@@ -571,13 +571,13 @@ function rawRequest(port, headers, body) {
         const failedId = 'deepseek-runtime-context-failed';
         await createDeepSeekReviewTask(failedId);
         for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal((await taskRegistry.updateTaskStatus(failedId, status)).success, true);
-        assert.equal(taskRegistry.createCoordinationContext(failedId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        assert.equal((await taskRegistry.createCoordinationContext(failedId, MAX_AUTONOMOUS_COORDINATION_TURNS)).success, true);
         assert.deepEqual(resolveCoordinationContext(failedId).terminal_outcome, {
             terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_ESCALATION_REQUIRED', reason: 'Workflow is failed'
         });
         const parentId = 'deepseek-runtime-context-lineage';
         await completeDeepSeekReviewTask(parentId);
-        assert.equal(taskRegistry.createCoordinationContext(parentId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
+        assert.equal((await taskRegistry.createCoordinationContext(parentId, MAX_AUTONOMOUS_COORDINATION_TURNS)).success, true);
         assert.equal((await taskRegistry.createTask({ request_id: 'deepseek-runtime-context-active-child', source: 'DeepSeek Runtime', target: 'Gemini', task: 'Child', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle', parent_request_id: parentId })).success, true);
         assert.throws(() => resolveCoordinationContext(parentId), /active child task/);
         taskRegistry.resetRegistry();
@@ -593,8 +593,8 @@ function rawRequest(port, headers, body) {
         await completeWorkflowTask(implementationId, 'implementation', 'BUILDER', reviewId);
         await completeWorkflowTask(verificationId, 'verification', 'VERIFY_RECONCILE', implementationId);
         await completeWorkflowTask(reconciliationId, 'reconciliation', 'VERIFY_RECONCILE', verificationId);
-        assert.equal(taskRegistry.createCoordinationContext(reviewId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
-        assert.equal(taskRegistry.setCoordinationContextCurrent(reviewId, reconciliationId).success, true);
+        assert.equal((await taskRegistry.createCoordinationContext(reviewId, MAX_AUTONOMOUS_COORDINATION_TURNS)).success, true);
+        assert.equal((await taskRegistry.setCoordinationContextCurrent(reviewId, reconciliationId)).success, true);
         const context = resolveCoordinationContext(reviewId);
         assert.equal(context.terminal_outcome.status, 'COMPLETE');
         const result = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'The model says complete.' }], env: env(), coordinationContextId: reviewId });
@@ -602,7 +602,7 @@ function rawRequest(port, headers, body) {
         assert.equal(result.iterations, 0, 'the model cannot declare or drive terminal completion');
 
         taskRegistry.getTask(reconciliationId).evidence = [];
-        taskRegistry.persistCache();
+        (await taskRegistry.persistCache());
         assert.equal(evaluateCoordinationTerminalOutcome(taskRegistry.getTask(reviewId).coordination_context, taskRegistry.getTask(reconciliationId)).status, 'HUMAN_REVIEW');
         taskRegistry.resetRegistry();
     });
@@ -1326,7 +1326,7 @@ function rawRequest(port, headers, body) {
         })).success, true);
         taskRegistry.getTask(childIds[3]).lineage.cancelled = true;
         taskRegistry.getTask(childIds[4]).lineage.superseded_by = 'deepseek-runtime-lineage-replacement';
-        taskRegistry.persistCache();
+        (await taskRegistry.persistCache());
 
         let observation;
         let calls = 0;
