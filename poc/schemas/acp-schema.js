@@ -144,6 +144,29 @@ const VALID_WORKFLOW_STAGES = Object.freeze(['review', 'implementation', 'verifi
 
 const VALID_CAPABILITIES = ['read_only', 'modify_files', 'commit', 'push', 'run_tests'];
 
+const CONCEPTUAL_TASK_MODES = ['PLAN', 'EXECUTE'];
+
+const SMART_QUOTE_CHARS = ['\u2018', '\u2019', '\u201A', '\u201B', '\u201C', '\u201D', '\u201E', '\u201F'];
+
+const CANONICAL_TASK_ARTIFACT_FIELD_ORDER = [
+  'task_name',
+  'originator',
+  'target_agent',
+  'repository',
+  'base_branch',
+  'task_mode',
+  'capabilities',
+  'objective',
+  'scope',
+  'verification',
+  'constraints',
+  'conflict_handling'
+];
+
+const CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS = CANONICAL_TASK_ARTIFACT_FIELD_ORDER;
+
+const NON_RUNTIME_TASK_MODES = ['PLAN', 'EXECUTE'];
+
 const MAX_AUTHORIZED_PATHS = activationPolicy.MAX_AUTHORIZED_PATHS;
 
 const REVIEW_CAPABILITIES = ['read_only'];
@@ -885,6 +908,240 @@ function validateACPCompliance(command) {
     return { valid: true, task_mode: taskMode };
   }
 
+function validateAcpTaskArtifactSyntax(artifactText) {
+  if (typeof artifactText !== 'string' || artifactText.trim().length === 0) {
+    return { valid: false, error: 'ACP task artifact must be a non-empty string', error_code: 'EMPTY_ARTIFACT' };
+  }
+
+  for (const char of SMART_QUOTE_CHARS) {
+    if (artifactText.indexOf(char) !== -1) {
+      const idx = artifactText.indexOf(char);
+      const contextStart = Math.max(0, idx - 10);
+      const contextEnd = Math.min(artifactText.length, idx + 10);
+      const context = artifactText.substring(contextStart, contextEnd).replace(/\n/g, '\\n');
+      return {
+        valid: false,
+        error: 'Malformed JSON: smart/curly quotation mark (U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0') + ') used as JSON delimiter; JSON requires standard double-quote (U+0022). Context: ...' + context + '...',
+        error_code: 'MALFORMED_JSON_SMART_QUOTE',
+        char_code: 'U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'),
+        location: idx
+      };
+    }
+  }
+
+  try {
+    JSON.parse(artifactText);
+  } catch (e) {
+    const match = e.message.match(/position (\d+)/i);
+    const position = match ? parseInt(match[1], 10) : -1;
+    let detail = e.message.replace(/^.*[Jj]son\.parse: /, '').replace(/^.*[Jj]SON: /, '');
+    if (detail.length > 200) detail = detail.substring(0, 200) + '...';
+    return {
+      valid: false,
+      error: 'Malformed JSON: ' + detail,
+      error_code: 'MALFORMED_JSON',
+      json_parse_error: e.message,
+      ...(position >= 0 ? { location: position } : {})
+    };
+  }
+
+  return { valid: true };
+}
+
+function validateCanonicalFieldOrder(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return { valid: false, error: 'Canonical artifact must be a JSON object', error_code: 'INVALID_OBJECT' };
+  }
+
+  const keys = Object.keys(obj);
+  const presentKeys = keys.filter(k => CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS.includes(k));
+
+  for (let i = 0; i < presentKeys.length; i++) {
+    const currentField = presentKeys[i];
+    const currentIdx = CANONICAL_TASK_ARTIFACT_FIELD_ORDER.indexOf(currentField);
+    for (let j = i + 1; j < presentKeys.length; j++) {
+      const nextField = presentKeys[j];
+      const nextIdx = CANONICAL_TASK_ARTIFACT_FIELD_ORDER.indexOf(nextField);
+      if (currentIdx > nextIdx) {
+        return {
+          valid: false,
+          error: 'Canonical field ordering violation: "' + currentField + '" must appear before "' + nextField + '" (canonical order: task_name, originator, target_agent, repository, base_branch, task_mode, capabilities, objective, scope, verification, constraints, conflict_handling)',
+          error_code: 'FIELD_ORDER_VIOLATION',
+          field_order_violation: { found: [currentField, nextField], required_order: [nextField, currentField] }
+        };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
+function validateAcpTaskArtifact(artifactText) {
+  const syntaxValidation = validateAcpTaskArtifactSyntax(artifactText);
+  if (!syntaxValidation.valid) {
+    return { valid: false, ...syntaxValidation };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(artifactText);
+  } catch (e) {
+    return { valid: false, error: 'JSON parse failed after syntax validation: ' + e.message, error_code: 'JSON_PARSE_FAILED' };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { valid: false, error: 'ACP task artifact must be a JSON object', error_code: 'INVALID_OBJECT' };
+  }
+
+  const missingFields = [];
+  for (const field of CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(parsed, field)) {
+      missingFields.push(field);
+    }
+  }
+
+  if (missingFields.length > 0) {
+    return {
+      valid: false,
+      error: 'Missing required ACP task artifact field(s): ' + missingFields.join(', '),
+      error_code: 'MISSING_REQUIRED_FIELDS',
+      missing_fields: missingFields
+    };
+  }
+
+  const fieldOrderValidation = validateCanonicalFieldOrder(parsed);
+  if (!fieldOrderValidation.valid) {
+    return { valid: false, ...fieldOrderValidation };
+  }
+
+  const taskMode = parsed.task_mode;
+  if (NON_RUNTIME_TASK_MODES.includes(taskMode)) {
+    return {
+      valid: false,
+      error: 'task_mode "' + taskMode + '" is a conceptual Director-facing mode, not a runtime task_mode. Runtime-accepted values are: ' + VALID_TASK_MODES.join(', ') + '. See TASK_STANDARD.md Section 9 for conceptual-to-runtime mode mapping.',
+      error_code: 'NON_RUNTIME_TASK_MODE',
+      invalid_task_mode: taskMode,
+      valid_runtime_modes: VALID_TASK_MODES
+    };
+  }
+
+  if (!VALID_TASK_MODES.includes(taskMode)) {
+    return {
+      valid: false,
+      error: 'Invalid task_mode: "' + taskMode + '". Must be one of: ' + VALID_TASK_MODES.join(', '),
+      error_code: 'INVALID_TASK_MODE',
+      invalid_task_mode: taskMode,
+      valid_runtime_modes: VALID_TASK_MODES
+    };
+  }
+
+  if (taskMode === 'FAILOVER_EXECUTE' || taskMode === 'BUILDER') {
+    if (!parsed.target_agent || !VALID_AGENTS.includes(parsed.target_agent)) {
+      return { valid: false, error: 'FAILOVER_EXECUTE and BUILDER task modes require a valid target_agent. Got: ' + (parsed.target_agent || '(missing)'), error_code: 'MISSING_TARGET_AGENT' };
+    }
+    if (!Array.isArray(parsed.capabilities) || parsed.capabilities.length === 0) {
+      return { valid: false, error: 'FAILOVER_EXECUTE and BUILDER task modes require non-empty capabilities array', error_code: 'MISSING_CAPABILITIES' };
+    }
+  }
+
+  const capabilities = Array.isArray(parsed.capabilities) ? parsed.capabilities : [];
+  for (const cap of capabilities) {
+    if (!VALID_CAPABILITIES.includes(cap)) {
+      return { valid: false, error: 'Invalid capability: "' + cap + '". Must be one of: ' + VALID_CAPABILITIES.join(', '), error_code: 'INVALID_CAPABILITY', invalid_capability: cap };
+    }
+  }
+
+  if (taskMode === 'REVIEW') {
+    if (capabilities.length !== 1 || capabilities[0] !== 'read_only') {
+      return { valid: false, error: 'REVIEW mode requires exactly ["read_only"] capability', error_code: 'INVALID_CAPABILITIES_FOR_MODE' };
+    }
+  }
+
+  if (taskMode === 'RESEARCH_DOCUMENT') {
+    if (!parsed.scope || typeof parsed.scope !== 'object' || !Array.isArray(parsed.scope.permitted_paths) || parsed.scope.permitted_paths.length === 0) {
+      return { valid: false, error: 'RESEARCH_DOCUMENT mode requires scope.permitted_paths to be a non-empty array', error_code: 'MISSING_PERMITTED_PATHS' };
+    }
+    const requiredResearchCaps = ['read_only', 'modify_files', 'commit', 'push'];
+    if (JSON.stringify(capabilities.sort()) !== JSON.stringify(requiredResearchCaps.sort())) {
+      return { valid: false, error: 'RESEARCH_DOCUMENT mode requires exactly ["read_only", "modify_files", "commit", "push"] capabilities (server-derived), got: ' + JSON.stringify(capabilities), error_code: 'INVALID_CAPABILITIES_FOR_MODE' };
+    }
+    for (const p of parsed.scope.permitted_paths) {
+      const isAuthorized = RESEARCH_DOCUMENT_PATHS.some(authPath => p === authPath || (authPath.endsWith('/') && p.startsWith(authPath)));
+      if (!isAuthorized) {
+        return { valid: false, error: 'Unauthorized RESEARCH_DOCUMENT path: ' + p + '. Authorized paths: ' + RESEARCH_DOCUMENT_PATHS.join(', '), error_code: 'UNAUTHORIZED_RESEARCH_PATH', offending_path: p };
+      }
+    }
+  }
+
+  if (!parsed.scope || typeof parsed.scope !== 'object') {
+    return { valid: false, error: 'scope must be an object', error_code: 'INVALID_SCOPE' };
+  }
+  if (!Array.isArray(parsed.scope.permitted_paths)) {
+    return { valid: false, error: 'scope.permitted_paths must be an array', error_code: 'INVALID_PERMITTED_PATHS' };
+  }
+
+  const isExecutionMode = taskMode === 'FAILOVER_EXECUTE' || taskMode === 'BUILDER';
+  if (isExecutionMode) {
+    if (parsed.scope.permitted_paths.length === 0) {
+      return { valid: false, error: 'FAILOVER_EXECUTE and BUILDER modes require at least one permitted_path', error_code: 'EMPTY_PERMITTED_PATHS' };
+    }
+    for (const p of parsed.scope.permitted_paths) {
+      const withinBoundary = MAX_AUTHORIZED_PATHS.some(maxPath => p === maxPath || p.startsWith(maxPath));
+      if (!withinBoundary) {
+        return { valid: false, error: 'Path outside server-defined maximum authorization boundary (' + MAX_AUTHORIZED_PATHS.join(', ') + '): ' + p, error_code: 'PATH_OUTSIDE_MAX_BOUNDARY', offending_path: p };
+      }
+    }
+  }
+
+  if (capabilities.includes('push') && !capabilities.includes('commit')) {
+    return { valid: false, error: 'push capability requires commit capability (contradictory authorization)', error_code: 'CONTRADICTORY_CAPABILITIES' };
+  }
+  if (capabilities.includes('commit') && !capabilities.includes('modify_files')) {
+    return { valid: false, error: 'commit capability requires modify_files capability (contradictory authorization)', error_code: 'CONTRADICTORY_CAPABILITIES' };
+  }
+  if (capabilities.includes('run_tests') && !capabilities.includes('modify_files')) {
+    return { valid: false, error: 'run_tests capability requires modify_files capability (contradictory authorization)', error_code: 'CONTRADICTORY_CAPABILITIES' };
+  }
+
+  const authorityFields = ['task_mode', 'authorization', 'constraints', 'repository', 'base_branch', 'target', 'workflow_stage'];
+  const descriptorFields = ['capabilities', 'permitted_paths', 'repository', 'base_branch', 'task_mode', 'target_agent'];
+  const untrustedOverrideWarnings = [];
+
+  if (parsed.authorization && (parsed.authorization.capabilities !== undefined)) {
+    untrustedOverrideWarnings.push('authorization.capabilities is server-derived; task-supplied value is ignored at runtime. Use scope.permitted_paths and the server-derived execution descriptor.');
+  } else {
+    untrustedOverrideWarnings.push('authorization is server-derived; capabilities declared in the artifact are informational only and do not grant runtime authority.');
+  }
+  if (parsed.constraints && (parsed.constraints.permitted_paths !== undefined)) {
+    untrustedOverrideWarnings.push('constraints.permitted_paths in the artifact is informational; the server derives permitted_paths from activation-policy. Task-supplied values do not grant authority.');
+  }
+  if (parsed.target_agent !== undefined && parsed.target !== undefined && parsed.target_agent !== parsed.target) {
+    return { valid: false, error: 'Contradictory authority: target_agent ("' + parsed.target_agent + '") does not match target ("' + parsed.target + '"). Authority-bearing fields are server-derived.', error_code: 'AUTHORITY_FIELD_CONFLICT', conflicting_fields: ['target_agent', 'target'] };
+  }
+
+  const result = { valid: true, task_mode: taskMode, warnings: untrustedOverrideWarnings };
+  return result;
+}
+
+function isNonRuntimeTaskMode(mode) {
+  return NON_RUNTIME_TASK_MODES.includes(mode);
+}
+
+function isConceptuallyMappedTaskMode(mode) {
+  return CONCEPTUAL_TASK_MODES.includes(mode);
+}
+
+function getRuntimeTaskModeForConceptual(conceptualMode, defaultMode) {
+  const map = {
+    'PLAN': (defaultMode === 'REVIEW' ? 'REVIEW' : 'REVIEW'),
+    'EXECUTE': defaultMode || 'FAILOVER_EXECUTE'
+  };
+  if (conceptualMode === 'PLAN') return 'REVIEW';
+  if (conceptualMode === 'EXECUTE') return defaultMode || 'FAILOVER_EXECUTE';
+  return defaultMode || DEFAULT_TASK_MODE;
+}
+
+
 module.exports = {
   ACP_COMMAND_REQUIRED_FIELDS,
   EXECUTION_REPORT_REQUIRED_FIELDS,
@@ -949,6 +1206,17 @@ module.exports = {
     taskModeRequiresActivation,
     validateACPCompliance,
     createInitialTaskRegistryEntry,
+    validateAcpTaskArtifactSyntax,
+    validateCanonicalFieldOrder,
+    validateAcpTaskArtifact,
+    isNonRuntimeTaskMode,
+    isConceptuallyMappedTaskMode,
+    getRuntimeTaskModeForConceptual,
+    CANONICAL_TASK_ARTIFACT_FIELD_ORDER,
+    CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS,
+    NON_RUNTIME_TASK_MODES,
+    CONCEPTUAL_TASK_MODES,
+    SMART_QUOTE_CHARS,
     verifyConfiguration,
     isConfigurationAuthoritativelyVerified,
     createConfigPrerequisite,

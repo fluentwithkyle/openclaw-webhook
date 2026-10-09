@@ -677,9 +677,7 @@ complete canonical task envelope defined by `docs/ai/TASK_STANDARD.md`:
 - `repository` — the repository the task applies to (`fluentwithkyle/openclaw-webhook`).
 - `base_branch` — the branch the task is based on and intended to integrate with
   (`main`).
- - `task_mode` — one of `RESEARCH_DOCUMENT`, `PLAN`, `EXECUTE`, or
-   `VERIFY_RECONCILE` (mapped to the runtime-accepted `FAILOVER_EXECUTE` for
-   execution tasks; see `docs/ai/TASK_STANDARD.md` Section 9).
+  - `task_mode` — one of `REVIEW`, `VERIFY_RECONCILE`, `FAILOVER_EXECUTE`, `BUILDER`, or `RESEARCH_DOCUMENT` (the runtime-accepted values from `poc/schemas/acp-schema.js`); `PLAN` and `EXECUTE` are Director-facing conceptual classifications mapped to runtime modes per `docs/ai/TASK_STANDARD.md` Section 9, and submitting them as literal `task_mode` values results in `NON_RUNTIME_TASK_MODE` rejection.
 - `capabilities` — explicit list of required capabilities; must appear immediately
   before `objective`.
 - `objective` — a concise statement of the goal.
@@ -754,23 +752,25 @@ If an applicable requirement cannot be verified against the completed ACP artifa
 - [ ] **Current protocol review**: Confirmed review of the repository version of `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`.
 - [ ] **Repository/State verification**: Confirmed consistency with `docs/ai/STATE.md` and repository reality.
 - [ ] **Complete task title, task identifier, and task_name**: The `task_name` field is explicitly included inside the ACP artifact and matches the task's actual identifier/name. Both task title and task identifier are also explicitly included.
+- [ ] **JSON syntax and copy/paste safety**: The artifact is valid JSON using standard double-quote (U+0022) delimiters only — no smart/curly quotes, no comments, no trailing commas, no single-quoted strings, no unquoted keys. `validateAcpTaskArtifactSyntax()` returns `{ valid: true }`.
 - [ ] **Required initiation syntax**: Task includes all required agent trigger markers (e.g., `@kilo` at start of issue body) per configured integration.
 - [ ] **Complete ACP envelope**: All required ACP fields present (`task_name`, `request_id`, `originator`,
   `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`,
   `scope`, `verification`, `constraints`, `conflict_handling`). Omission of `task_name`
   is an ACP compliance failure requiring correction before authorization.
-- [ ] **Canonical field ordering**: `capabilities` immediately precedes `objective`.
-- [ ] **Runtime ACP schema compatibility**: Task structure is compatible with `poc/schemas/acp-schema.js`.
-- [ ] **Explicit capabilities**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`) are explicitly listed.
-- [ ] **Explicit permitted paths**: `permitted_paths` are explicitly defined and within authorized bounds.
-  - [ ] **Task-mode semantics**: Correct `task_mode` from the canonical set (RESEARCH_DOCUMENT, PLAN, EXECUTE, VERIFY_RECONCILE) mapped to the runtime-accepted value (REVIEW, RESEARCH_DOCUMENT, FAILOVER_EXECUTE, BUILDER, VERIFY_RECONCILE) per `docs/ai/TASK_STANDARD.md` Section 9.
+- [ ] **Canonical field ordering**: `task_name` appears first; `capabilities` immediately precedes `objective`. `validateCanonicalFieldOrder()` returns `{ valid: true }`.
+- [ ] **Runtime ACP schema compatibility**: Task structure is compatible with `poc/schemas/acp-schema.js`. The exact final artifact passes `validateAcpTaskArtifact(artifactText)` with `{ valid: true }`.
+- [ ] **Explicit capabilities**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`) are explicitly listed. `read_only` is the runtime capability for read-only inspection — `inspect` is not a valid runtime capability.
+- [ ] **Explicit permitted paths**: `permitted_paths` are explicitly defined and within authorized bounds. Task-supplied `permitted_paths` are informational only; the server derives actual authority from the activation policy.
+  - [ ] **Task-mode semantics**: Correct `task_mode` from the runtime-accepted set (REVIEW, VERIFY_RECONCILE, FAILOVER_EXECUTE, BUILDER, RESEARCH_DOCUMENT) — NOT `PLAN` or `EXECUTE`, which are conceptual Director-facing classifications that result in `NON_RUNTIME_TASK_MODE` rejection when submitted as literal runtime values. See `docs/ai/TASK_STANDARD.md` Section 9.
+- [ ] **Server-derived permissions**: Capabilities and permitted_paths are verified against `poc/activation-policy.js` `ACTIVATION_POLICY`. Task-supplied authority fields are checked for conflicts; the server does not grant authority from untrusted descriptor fields.
 - [ ] **Intrinsic completion requirements**: Defined completion criteria are present in `verification`.
 - [ ] **Executable verification requirements**: Verification criteria are executable and verifiable.
 - [ ] **Explicit persistence requirements**: Persistence expectations are explicit per `docs/ai/TASK_STANDARD.md`.
 - [ ] **Conflict handling**: Explicit instructions for rule conflicts are included.
 - [ ] **Agent-ready/self-contained construction**: Task is executable as-is without follow-up comments.
 - [ ] **Absence of contradictory instructions**: Protocol and task instructions are mutually consistent.
-- [ ] **Absence of unauthorized scope expansion**: Task adheres strictly to `permitted_paths` and granted `capabilities`.
+- [ ] **Absence of unauthorized scope expansion**: Task adheres strictly to `permitted_paths` and granted `capabilities`. Task-supplied capabilities/permitted_paths do not grant authority.
 - [ ] **Actual final-artifact compliance verification**: Checklist items were applied to the final artifact, not a draft.
 - [ ] **Correction of failed checklist items**: Any failed compliance item was corrected, and a new compliance check was performed before authorization.
 - [ ] **Preservation of the authorization boundary**: Compliance is distinct from authorization.

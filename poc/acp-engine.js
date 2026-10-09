@@ -121,5 +121,13 @@ module.exports = {
   validateActivationSyntax,
   validateActivationSurface,
   requiresActivation: activationPolicy.requiresActivation,
-  getRequiredEvidenceForTransition
+  getRequiredEvidenceForTransition,
+  validateAcpTaskArtifact: schema.validateAcpTaskArtifact,
+  validateAcpTaskArtifactSyntax: schema.validateAcpTaskArtifactSyntax,
+  validateCanonicalFieldOrder: schema.validateCanonicalFieldOrder,
+  isNonRuntimeTaskMode: schema.isNonRuntimeTaskMode,
+  isConceptuallyMappedTaskMode: schema.isConceptuallyMappedTaskMode,
+  getRuntimeTaskModeForConceptual: schema.getRuntimeTaskModeForConceptual,
+  VALID_TASK_MODES: schema.VALID_TASK_MODES,
+  DEFAULT_TASK_MODE: schema.DEFAULT_TASK_MODE
 };
