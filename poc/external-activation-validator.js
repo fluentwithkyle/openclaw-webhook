@@ -90,12 +90,15 @@ function validateExternalActivation(params, callbackUrl, callbackSecret, directo
     const requestId = params && params.request_id;
     const requiresAssertion = params && (params.target === 'Gemini Builder');
 
-    if (directorOriginAssertion) {
-        options.headers['x-director-origin-assertion'] = directorOriginAssertion;
+    var resolvedDirectorOriginAssertion = directorOriginAssertion || params && params.director_origin_assertion;
+    var resolvedDirectorOriginSecret = directorOriginSecret || params && params.director_origin_secret;
+
+    if (resolvedDirectorOriginAssertion) {
+        options.headers['x-director-origin-assertion'] = resolvedDirectorOriginAssertion;
     }
 
-    if (directorOriginSecret && !requiresAssertion) {
-        options.headers['x-director-origin-secret'] = directorOriginSecret;
+    if (resolvedDirectorOriginSecret && !requiresAssertion) {
+        options.headers['x-director-origin-secret'] = resolvedDirectorOriginSecret;
     }
 
     const carrierIdentity = process.env.GITHUB_RUN_ID
@@ -177,14 +180,19 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     }
 
     // The issue_comment body is NOT an authority source. This function extracts
-    // only non-authority-bearing candidate fields (target, task, verification).
-    // task_mode, capabilities, and permitted_paths are NEVER extracted from the
-    // comment — they are server-derived by the canonical activation ingress.
+    // only candidate fields (target, task, verification, task_mode) that may be
+    // used when the comment author is Director-authorized via a valid Director
+    // origin assertion/secret. task_mode is extracted here only as a candidate;
+    // it is only honored when Director authorization is established at the
+    // canonical activation ingress. capabilities and permitted_paths are NEVER
+    // extracted from the comment — they are server-derived by the canonical
+    // activation ingress from the server-side activation-policy authority.
     var hasTask = typeof candidate.task === 'string' && candidate.task.trim() !== '';
     var hasTarget = typeof candidate.target === 'string' && candidate.target.trim() !== '';
     var hasVerification = typeof candidate.verification === 'string' && candidate.verification.trim() !== '';
+    var hasTaskMode = typeof candidate.task_mode === 'string' && candidate.task_mode.trim() !== '' && VALID_TASK_MODES.includes(candidate.task_mode);
 
-    if (!hasTask && !hasTarget && !hasVerification) {
+    if (!hasTask && !hasTarget && !hasVerification && !hasTaskMode) {
         return null;
     }
 
@@ -198,10 +206,13 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     if (hasVerification) {
         descriptor.verification = candidate.verification;
     }
+    if (hasTaskMode) {
+        descriptor.task_mode = candidate.task_mode;
+    }
     return descriptor;
 }
 
-function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch, approvalId) {
+function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch, approvalId, directorOriginSecret, directorOriginAssertion) {
     const stripped = commentBody.replace('@gemini-cli', '').trim();
 
     var embeddedDescriptor = extractEmbeddedAcpDescriptor(commentBody);
@@ -213,6 +224,11 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
     var task = stripped;
     var verification = 'Review the request and provide analysis, risk assessment, and implementation plans.';
 
+    var directorAuthorized = false;
+    if ((directorOriginSecret && directorOriginSecret.trim() !== '') || (directorOriginAssertion && directorOriginAssertion.trim() !== '')) {
+        directorAuthorized = true;
+    }
+
     if (embeddedDescriptor) {
         if (typeof embeddedDescriptor.target === 'string' && embeddedDescriptor.target.trim() !== '') {
             target = embeddedDescriptor.target;
@@ -223,6 +239,10 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
         if (typeof embeddedDescriptor.verification === 'string' && embeddedDescriptor.verification.trim() !== '') {
             verification = embeddedDescriptor.verification;
         }
+    }
+
+    if (directorAuthorized && embeddedDescriptor && VALID_TASK_MODES.includes(embeddedDescriptor.task_mode)) {
+        taskMode = embeddedDescriptor.task_mode;
     }
 
     return {
@@ -242,7 +262,8 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
         originator: 'Kyle',
         activation_surface: 'github_issue_comment',
         activation_syntax: '@gemini-cli',
-        embedded_acp_descriptor: embeddedDescriptor || undefined
+        embedded_acp_descriptor: embeddedDescriptor || undefined,
+        director_authorized: directorAuthorized
     };
 }
 

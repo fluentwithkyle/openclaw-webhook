@@ -59,7 +59,7 @@ const ACTIVATION_SURFACE_NAMES = Object.freeze(
 
 const EXECUTION_TASK_MODES = Object.freeze(['FAILOVER_EXECUTE', 'BUILDER']);
 
-const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/']);
+const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml']);
 
 function isPathWithinMaxBoundary(permittedPath) {
   return MAX_AUTHORIZED_PATHS.some(maxPath =>

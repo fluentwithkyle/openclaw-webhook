@@ -115,6 +115,7 @@ jobs:
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_ORIGIN_SECRET: ${{ (contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) && secrets.DIRECTOR_ORIGIN_SECRET || '') }}
           COMMENT_ID: ${{ github.event.comment.id }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           REPOSITORY: ${{ github.repository }}
@@ -131,9 +132,12 @@ jobs:
 
           # Build the activation payload with jq so multiline/control characters in
           # the GitHub comment are JSON-escaped before canonical validation.
-          # The canonical ingress derives effective task_mode, capabilities, and
-          # permitted_paths from the server-side activation-policy authority, not
-          # from comment prefix parsing.
+          # The canonical ingress derives effective capabilities and permitted_paths
+          # from the server-side activation-policy authority, not from comment text.
+          # When the comment author is Director-authorized (OWNER/MEMBER/COLLABORATOR)
+          # and the embedded ACP descriptor declares a consequential task_mode
+          # (FAILOVER_EXECUTE), the Director origin secret is passed so the canonical
+          # ingress treats the activation as Director-admitted.
           ACTIVATION_JSON=$(jq -n \
             --arg comment_id "$COMMENT_ID" \
             --arg comment_body "$COMMENT_BODY" \

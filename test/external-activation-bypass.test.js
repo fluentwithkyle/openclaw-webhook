@@ -2143,8 +2143,294 @@ await runTest('Verification 10 - main.yml Gemini prompt consumes execution descr
     const icSection = mainRaw.slice(mainRaw.indexOf('Prepare orchestration context (issue_comment)'));
     assertTrue(icSection.includes('task_mode<<EOF') && icSection.includes('execution-descriptor.json'),
         'issue_comment orchestration must read task_mode from descriptor file');
-    assertTrue(!icSection.includes('request_comment.outputs.task_mode'),
+     assertTrue(!icSection.includes('request_comment.outputs.task_mode'),
         'issue_comment orchestration must NOT fall back to request_comment task_mode output');
+});
+
+// =========================================================
+// Director-asserted task_mode via issue_comment
+// (TASK-KILO-DIRECTOR-COMMENT-TASK-MODE-AUTHORIZATION-RESTORE-001)
+// =========================================================
+
+await runTest('Director-asserted task_mode - FAILOVER_EXECUTE preserved when directorOriginSecret provided', async () => {
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement the failover execution feature","target":"Gemini","verification":"All tests must pass"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-1',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'director-origin-test-secret'
+    );
+
+    assert.equal(payload.task_mode, 'FAILOVER_EXECUTE',
+        'Director-authorized comment should preserve task_mode from embedded descriptor');
+    assert.equal(payload.activation_surface, 'github_issue_comment',
+        'Activation surface must remain github_issue_comment');
+    assert.equal(payload.target, 'Gemini',
+        'Target must be Gemini');
+    assertTrue(payload.director_authorized,
+        'Payload must flag director_authorized when secret is provided');
+    assertTrue(payload.embedded_acp_descriptor !== undefined,
+        'Embedded descriptor must be preserved for candidate extraction');
+});
+
+await runTest('Director-asserted task_mode - REVIEW remains default without directorOriginSecret', async () => {
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement feature","target":"Gemini"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-2',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'Without Director authorization, task_mode must default to REVIEW');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only'],
+        'Without Director authorization, capabilities must be read_only');
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/'],
+        'Without Director authorization, permitted_paths must be poc/');
+    assertTrue(!payload.director_authorized,
+        'Payload must not flag director_authorized when no secret provided');
+});
+
+await runTest('Director-asserted task_mode - arbitrary comment prefix cannot elevate mode even with secret', async () => {
+    const commentBody = '@gemini-cli FAILOVER_EXECUTE implement feature X';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-3',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'director-origin-test-secret'
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'FAILOVER_EXECUTE keyword in comment prefix must NOT elevate task_mode even with Director secret (no embedded descriptor)');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only'],
+        'Without embedded descriptor task_mode, capabilities must be read_only');
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/'],
+        'Without embedded descriptor task_mode, permitted_paths must be poc/');
+});
+
+await runTest('Director-asserted task_mode - RESEARCH_DOCUMENT preserved via issue_comment with Director admission', async () => {
+    cleanup();
+    const commentBody = '@gemini-cli {"task_mode":"RESEARCH_DOCUMENT","task":"Research and document the activation path","target":"Gemini","verification":"Research findings persisted"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-4',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'director-origin-test-secret'
+    );
+
+    assert.equal(payload.task_mode, 'RESEARCH_DOCUMENT',
+        'Director-authorized comment should preserve RESEARCH_DOCUMENT task_mode');
+
+    const result = await canonicalExternalActivationIngress(payload, { director_admission: true });
+    assertTrue(result.success, 'RESEARCH_DOCUMENT via issue_comment with Director admission should succeed: ' + (result.error || ''));
+    assert.equal(result.command.task_mode, 'RESEARCH_DOCUMENT',
+        'Command must preserve RESEARCH_DOCUMENT task_mode');
+    assert.equal(result.activation_provenance.activation_task_mode, 'RESEARCH_DOCUMENT',
+        'Activation provenance must record RESEARCH_DOCUMENT');
+
+    const descriptor = taskRegistry.buildExecutionDescriptor(
+        'director-comment-4',
+        taskRegistry.getTask('director-comment-4'),
+        null
+    );
+    assert.equal(descriptor.task_mode, 'RESEARCH_DOCUMENT',
+        'Execution descriptor must contain RESEARCH_DOCUMENT task_mode');
+    const policyEntry = activationPolicy.getPolicyEntry('Gemini', 'RESEARCH_DOCUMENT');
+    assert.deepStrictEqual(descriptor.capabilities, policyEntry.required_capabilities,
+        'Execution descriptor must contain server-derived capabilities');
+    assert.deepStrictEqual(descriptor.permitted_paths, policyEntry.permitted_paths,
+        'Execution descriptor must contain server-derived permitted_paths');
+    cleanup();
+});
+
+await runTest('Director-asserted task_mode - FAILOVER_EXECUTE via issue_comment with Director admission succeeds', async () => {
+    cleanup();
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement the failover execution feature","target":"Gemini","verification":"All tests must pass"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-5',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'director-origin-test-secret'
+    );
+
+    assert.equal(payload.task_mode, 'FAILOVER_EXECUTE',
+        'Director-authorized comment should preserve FAILOVER_EXECUTE task_mode');
+
+    const result = await canonicalExternalActivationIngress(payload, { director_admission: true });
+    assertTrue(result.success, 'FAILOVER_EXECUTE via issue_comment with Director admission should succeed: ' + (result.error || ''));
+    assert.equal(result.command.task_mode, 'FAILOVER_EXECUTE',
+        'Command must preserve FAILOVER_EXECUTE task_mode');
+    assert.equal(result.activation_provenance.activation_task_mode, 'FAILOVER_EXECUTE',
+        'Activation provenance must record FAILOVER_EXECUTE');
+    assert.equal(result.is_consequential, true,
+        'FAILOVER_EXECUTE must be consequential');
+
+    const descriptor = taskRegistry.buildExecutionDescriptor(
+        'director-comment-5',
+        taskRegistry.getTask('director-comment-5'),
+        null
+    );
+    assert.equal(descriptor.task_mode, 'FAILOVER_EXECUTE',
+        'Execution descriptor must contain FAILOVER_EXECUTE task_mode');
+
+    const policyEntry = activationPolicy.getPolicyEntry('Gemini', 'FAILOVER_EXECUTE');
+    assert.deepStrictEqual(descriptor.capabilities, policyEntry.required_capabilities,
+        'Execution descriptor must contain server-derived FAILOVER_EXECUTE capabilities');
+    assert.deepStrictEqual(descriptor.permitted_paths, policyEntry.permitted_paths || ['poc/'],
+        'Execution descriptor must contain server-derived permitted_paths');
+    cleanup();
+});
+
+await runTest('Director-asserted task_mode - FAILOVER_EXECUTE via issue_comment without Director admission fails closed', async () => {
+    cleanup();
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement feature","target":"Gemini"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-6',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'Without Director authorization, task_mode must default to REVIEW');
+
+    const result = await canonicalExternalActivationIngress(payload, {});
+    assertTrue(result.success, 'REVIEW should succeed without Director admission');
+    assert.equal(result.command.task_mode, 'REVIEW',
+        'Command must be REVIEW for plain issue_comment without Director authorization');
+    cleanup();
+});
+
+await runTest('Director-asserted task_mode - VERIFY_RECONCILE preserved via issue_comment with Director admission', async () => {
+    cleanup();
+    const commentBody = '@gemini-cli {"task_mode":"VERIFY_RECONCILE","task":"Verify and reconcile the activation path","target":"Gemini","verification":"Verification criteria must pass"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-7',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'director-origin-test-secret'
+    );
+
+    assert.equal(payload.task_mode, 'VERIFY_RECONCILE',
+        'Director-authorized comment should preserve VERIFY_RECONCILE task_mode');
+
+    const result = await canonicalExternalActivationIngress(payload, { director_admission: true });
+    assertTrue(result.success, 'VERIFY_RECONCILE via issue_comment with Director admission should succeed: ' + (result.error || ''));
+    assert.equal(result.command.task_mode, 'VERIFY_RECONCILE',
+        'Command must preserve VERIFY_RECONCILE task_mode');
+    assert.equal(result.activation_provenance.activation_task_mode, 'VERIFY_RECONCILE',
+        'Activation provenance must record VERIFY_RECONCILE');
+
+    const descriptor = taskRegistry.buildExecutionDescriptor(
+        'director-comment-7',
+        taskRegistry.getTask('director-comment-7'),
+        null
+    );
+    assert.equal(descriptor.task_mode, 'VERIFY_RECONCILE',
+        'Execution descriptor must contain VERIFY_RECONCILE task_mode');
+    assert.equal(result.is_consequential, false,
+        'VERIFY_RECONCILE is not a consequential execution mode');
+    cleanup();
+});
+
+await runTest('Director-asserted task_mode - server-derived authority overrides payload capabilities/paths for FAILOVER_EXECUTE issue_comment', async () => {
+    cleanup();
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement feature","target":"Gemini","verification":"tests pass","capabilities":["read_only","modify_files","commit","push"],"permitted_paths":["index.js","AGENTS.md"]}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-8',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'director-origin-test-secret'
+    );
+
+    assert.equal(payload.task_mode, 'FAILOVER_EXECUTE',
+        'Director-authorized comment should preserve FAILOVER_EXECUTE');
+
+    const result = await canonicalExternalActivationIngress(payload, { director_admission: true });
+    assertTrue(result.success, 'FAILOVER_EXECUTE with Director admission should succeed: ' + (result.error || ''));
+
+    const policyEntry = activationPolicy.getPolicyEntry('Gemini', 'FAILOVER_EXECUTE');
+    assert.deepStrictEqual(result.command.authorization.capabilities, policyEntry.required_capabilities,
+        'Server-derived capabilities must override any embedded descriptor capabilities');
+    assert.deepStrictEqual(result.command.constraints.permitted_paths, policyEntry.permitted_paths || ['poc/'],
+        'Server-derived permitted_paths must override any embedded descriptor paths');
+    cleanup();
+});
+
+await runTest('Director-asserted task_mode - invalid task_mode in embedded descriptor defaults to REVIEW even with secret', async () => {
+    const commentBody = '@gemini-cli {"task_mode":"INVALID_MODE","task":"Do something","target":"Gemini"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-9',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'director-origin-test-secret'
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'Invalid task_mode in embedded descriptor must default to REVIEW even with Director secret');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only'],
+        'Invalid task_mode must result in read_only capabilities');
+    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/'],
+        'Invalid task_mode must result in poc/ permitted_paths');
+});
+
+await runTest('Director-asserted task_mode - director_origin_assertion also establishes director_authorized', async () => {
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement feature","target":"Gemini"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-10',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        '',
+        'some-assertion-string'
+    );
+
+    assert.equal(payload.task_mode, 'FAILOVER_EXECUTE',
+        'Director authorization via assertion should preserve task_mode');
+    assertTrue(payload.director_authorized,
+        'Payload must flag director_authorized when assertion is provided');
+});
+
+await runTest('Director-asserted task_mode - empty directorOriginSecret does not establish director_authorized', async () => {
+    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement feature","target":"Gemini"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'director-comment-11',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        '',
+        ''
+    );
+
+    assert.equal(payload.task_mode, 'REVIEW',
+        'Empty directorOriginSecret must not establish director_authorized');
+    assertTrue(!payload.director_authorized,
+        'Empty secret must not flag director_authorized');
+});
+
+await runTest('Director-asserted task_mode - main.yml passes DIRECTOR_ORIGIN_SECRET for issue_comment path', async () => {
+    assertTrue(mainRaw.includes('DIRECTOR_ORIGIN_SECRET'),
+        'main.yml must reference DIRECTOR_ORIGIN_SECRET env var');
+    const icSection = mainRaw.slice(mainRaw.indexOf('Validate external activation through canonical ingress (issue_comment)'));
+    assertTrue(icSection.includes('secrets.DIRECTOR_ORIGIN_SECRET'),
+        'issue_comment validation step must reference DIRECTOR_ORIGIN_SECRET secret');
 });
 
 // =========================================================

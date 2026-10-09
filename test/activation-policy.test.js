@@ -1264,10 +1264,10 @@ async function main() {
     // Server-Derived MAX_AUTHORIZED_PATHS Boundary Tests
     // =========================================================
 
-    await runTest('MAX_AUTHORIZED_PATHS - is frozen and contains docs/, test/, poc/', async () => {
+    await runTest('MAX_AUTHORIZED_PATHS - is frozen and contains docs/, test/, poc/, .github/workflows/', async () => {
         assertTrue(activationPolicy.MAX_AUTHORIZED_PATHS !== undefined, 'MAX_AUTHORIZED_PATHS should be defined');
         assertTrue(Object.isFrozen(activationPolicy.MAX_AUTHORIZED_PATHS), 'MAX_AUTHORIZED_PATHS should be frozen');
-        assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/']);
+        assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml']);
     });
 
     await runTest('intersectPathsWithMaxBoundary - filters out paths outside boundary', async () => {
