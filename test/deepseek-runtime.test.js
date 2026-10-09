@@ -58,34 +58,34 @@ function providerResponse(message) {
     return { data: { choices: [{ message }] } };
 }
 
-function createDeepSeekReviewTask(requestId) {
-    assert.equal(taskRegistry.createTask({
+async function createDeepSeekReviewTask(requestId) {
+    assert.equal((await taskRegistry.createTask({
         request_id: requestId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Parent review',
         repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', constraints: { permitted_paths: ['poc/'] },
         authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle'
-    }).success, true);
+    })).success, true);
 }
 
-function completeDeepSeekReviewTask(requestId) {
-    createDeepSeekReviewTask(requestId);
-    for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus(requestId, status).success, true);
-    assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
-    assert.equal(taskRegistry.updateTaskStatus(requestId, 'VERIFIED').success, true);
-    assert.equal(taskRegistry.updateTaskStatus(requestId, 'COMPLETE').success, true);
+async function completeDeepSeekReviewTask(requestId) {
+    await createDeepSeekReviewTask(requestId);
+    for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal((await taskRegistry.updateTaskStatus(requestId, status)).success, true);
+    assert.equal((await taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' })).success, true);
+    assert.equal((await taskRegistry.updateTaskStatus(requestId, 'VERIFIED')).success, true);
+    assert.equal((await taskRegistry.updateTaskStatus(requestId, 'COMPLETE')).success, true);
 }
 
-function completeWorkflowTask(requestId, workflowStage, taskMode, parentRequestId, repository = 'fluentwithkyle/openclaw-webhook', baseBranch = 'main') {
-    assert.equal(taskRegistry.createTask({
+async function completeWorkflowTask(requestId, workflowStage, taskMode, parentRequestId, repository = 'fluentwithkyle/openclaw-webhook', baseBranch = 'main') {
+    assert.equal((await taskRegistry.createTask({
         request_id: requestId, source: 'DeepSeek Runtime', target: taskMode === 'BUILDER' ? 'Gemini Builder' : 'Gemini', task: 'Untrusted task text may claim any workflow stage',
         repository, base_branch: baseBranch, task_mode: taskMode, workflow_stage: workflowStage,
         constraints: { permitted_paths: taskMode === 'BUILDER' ? ['poc/'] : ['docs/ai/STATE.md'] },
         authorization: { capabilities: taskMode === 'BUILDER' ? ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] : ['read_only', 'modify_files', 'commit', 'push'] },
         verification: 'Review', reporting: 'structured-json', originator: 'Kyle', parent_request_id: parentRequestId
-    }).success, true);
-    for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus(requestId, status).success, true);
-    assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
-    assert.equal(taskRegistry.updateTaskStatus(requestId, 'VERIFIED').success, true);
-    assert.equal(taskRegistry.updateTaskStatus(requestId, 'COMPLETE').success, true);
+    })).success, true);
+    for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal((await taskRegistry.updateTaskStatus(requestId, status)).success, true);
+    assert.equal((await taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' })).success, true);
+    assert.equal((await taskRegistry.updateTaskStatus(requestId, 'VERIFIED')).success, true);
+    assert.equal((await taskRegistry.updateTaskStatus(requestId, 'COMPLETE')).success, true);
 }
 
 function coordinatorFailureClient(status, data) {
@@ -97,7 +97,7 @@ function coordinatorFailureClient(status, data) {
                 return providerResponse({ role: 'assistant', tool_calls: [{
                     id: 'call-1',
                     type: 'function',
-                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) }
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' }) }
                 }] });
             }
             const error = new Error('sensitive coordinator detail');
@@ -169,7 +169,7 @@ function rawRequest(port, headers, body) {
         const calls = [];
         const client = { post: async (url, body, options) => {
             calls.push({ url, body, options });
-            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
+            if (calls.length === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' }) } }] });
             if (calls.length === 2) return { data: { status: 'Task registered and dispatched', request_id: body.request_id } };
             return providerResponse({ role: 'assistant', content: 'Review requested.' });
         } };
@@ -205,18 +205,18 @@ function rawRequest(port, headers, body) {
         let automaticObservation;
         const client = { post: async (url, body) => {
             if (url === env().DEEPSEEK_COORDINATOR_URL) {
-                assert.equal(taskRegistry.createTask(body).success, true);
-                for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus(body.request_id, status).success, true);
-                assert.equal(taskRegistry.addEvidence(body.request_id, 'INDEPENDENT_VERIFICATION', 'Gemini', { summary: 'verified', token: 'hidden' }).success, true);
-                assert.equal(taskRegistry.updateTaskStatus(body.request_id, 'VERIFIED').success, true);
-                assert.equal(taskRegistry.updateTaskStatus(body.request_id, 'COMPLETE').success, true);
+                assert.equal((await taskRegistry.createTask(body)).success, true);
+                for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal((await taskRegistry.updateTaskStatus(body.request_id, status)).success, true);
+                assert.equal((await taskRegistry.addEvidence(body.request_id, 'INDEPENDENT_VERIFICATION', 'Gemini', { summary: 'verified', token: 'hidden' })).success, true);
+                assert.equal((await taskRegistry.updateTaskStatus(body.request_id, 'VERIFIED')).success, true);
+                assert.equal((await taskRegistry.updateTaskStatus(body.request_id, 'COMPLETE')).success, true);
                 return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
             }
             modelCallCount++;
             if (modelCallCount === 1) {
                 return providerResponse({ role: 'assistant', content: null, tool_calls: [{
                     id: 'call-1', type: 'function',
-                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) }
+                    function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' }) }
                 }] });
             }
             automaticObservation = JSON.parse(body.messages.find(message => message.role === 'tool').content);
@@ -271,7 +271,7 @@ function rawRequest(port, headers, body) {
     await test('observed independently verified task creates a bounded read-only continuation child', async () => {
         const parentRequestId = 'deepseek-runtime-phase3-parent';
         taskRegistry.resetRegistry();
-        completeDeepSeekReviewTask(parentRequestId);
+        await completeDeepSeekReviewTask(parentRequestId);
 
         let childCommand;
         let observedResult;
@@ -281,7 +281,7 @@ function rawRequest(port, headers, body) {
             httpClient: { post: async (url, body) => {
                 if (url === env().DEEPSEEK_COORDINATOR_URL) {
                     childCommand = body;
-                    assert.equal(taskRegistry.createTask(body).success, true);
+                    assert.equal((await taskRegistry.createTask(body)).success, true);
                     return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
                 }
                 modelCallCount++;
@@ -289,7 +289,7 @@ function rawRequest(port, headers, body) {
                 if (modelCallCount === 2) {
                     const toolMessage = body.messages.find(message => message.role === 'tool');
                     observedResult = JSON.parse(toolMessage.content);
-                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: parentRequestId }) } }] });
+                    return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'call-2', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation', parent_request_id: parentRequestId }) } }] });
                 }
                 return providerResponse({ role: 'assistant', content: 'Follow-up requested.' });
             }}
@@ -311,7 +311,7 @@ function rawRequest(port, headers, body) {
     await test('server-authoritative workflow policy permits a completed independently verified review step', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-workflow-parent';
-        completeDeepSeekReviewTask(parentRequestId);
+        await completeDeepSeekReviewTask(parentRequestId);
         const observed = new Map([[parentRequestId, classifyTaskResultForContinuation(taskRegistry.getTask(parentRequestId))]]);
         const result = evaluateWorkflowStepPolicy(parentRequestId, 'review', 'deepseek-runtime-workflow-child', observed);
         assert.deepEqual(result, { valid: true, authorization_required: false });
@@ -325,14 +325,14 @@ function rawRequest(port, headers, body) {
         const observed = new Set(['deepseek-runtime-workflow-missing']);
         assert.match(evaluateWorkflowStepPolicy('deepseek-runtime-workflow-missing', 'review', 'deepseek-runtime-workflow-child', observed).error, /does not exist/);
 
-        createDeepSeekReviewTask('deepseek-runtime-workflow-executing');
-        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-workflow-executing', status).success, true);
-        assert.equal(taskRegistry.addEvidence('deepseek-runtime-workflow-executing', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' }).success, true);
+        await createDeepSeekReviewTask('deepseek-runtime-workflow-executing');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal((await taskRegistry.updateTaskStatus('deepseek-runtime-workflow-executing', status)).success, true);
+        assert.equal((await taskRegistry.addEvidence('deepseek-runtime-workflow-executing', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' })).success, true);
         assert.match(evaluateWorkflowStepPolicy('deepseek-runtime-workflow-executing', 'review', 'deepseek-runtime-workflow-child', new Set(['deepseek-runtime-workflow-executing'])).error, /COMPLETE/);
 
         for (const [requestId, status] of [['deepseek-runtime-workflow-failed', 'FAILED'], ['deepseek-runtime-workflow-blocked', 'BLOCKED']]) {
-            createDeepSeekReviewTask(requestId);
-            for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal(taskRegistry.updateTaskStatus(requestId, transition).success, true);
+            await createDeepSeekReviewTask(requestId);
+            for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal((await taskRegistry.updateTaskStatus(requestId, transition)).success, true);
             assert.match(evaluateWorkflowStepPolicy(requestId, 'review', 'deepseek-runtime-workflow-child', new Set([requestId])).error, new RegExp(status));
         }
         taskRegistry.resetRegistry();
@@ -341,7 +341,7 @@ function rawRequest(port, headers, body) {
     await test('workflow implementation step remains server-derived and requires Director authorization at the ACP boundary', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-workflow-implementation-parent';
-        completeDeepSeekReviewTask(parentRequestId);
+        await completeDeepSeekReviewTask(parentRequestId);
         const observed = new Map([[parentRequestId, classifyTaskResultForContinuation(taskRegistry.getTask(parentRequestId))]]);
         assert.deepEqual(evaluateWorkflowStepPolicy(parentRequestId, 'implementation', 'deepseek-runtime-workflow-implementation-child', observed), { valid: true, authorization_required: true });
         assert.equal(WORKFLOW_STEP_POLICY.implementation.target, 'Gemini Builder');
@@ -354,12 +354,12 @@ function rawRequest(port, headers, body) {
     await test('verification and reconciliation workflow stages require authoritative staged predecessors', async () => {
         taskRegistry.resetRegistry();
         const implementationId = 'deepseek-runtime-authoritative-implementation';
-        completeWorkflowTask(implementationId, 'implementation', 'BUILDER');
+        await completeWorkflowTask(implementationId, 'implementation', 'BUILDER');
         const implementationObserved = new Map([[implementationId, classifyTaskResultForContinuation(taskRegistry.getTask(implementationId))]]);
         assert.deepEqual(evaluateWorkflowStepPolicy(implementationId, 'verification', 'deepseek-runtime-verification', implementationObserved), { valid: true, authorization_required: true });
 
         const verificationId = 'deepseek-runtime-authoritative-verification';
-        completeWorkflowTask(verificationId, 'verification', 'VERIFY_RECONCILE', implementationId);
+        await completeWorkflowTask(verificationId, 'verification', 'VERIFY_RECONCILE', implementationId);
         const verificationObserved = new Map([[verificationId, classifyTaskResultForContinuation(taskRegistry.getTask(verificationId))]]);
         assert.deepEqual(evaluateWorkflowStepPolicy(verificationId, 'reconciliation', 'deepseek-runtime-reconciliation', verificationObserved), { valid: true, authorization_required: true });
         assert.equal(WORKFLOW_STEP_POLICY.verification.predecessor_workflow_stage, 'implementation');
@@ -370,28 +370,28 @@ function rawRequest(port, headers, body) {
     await test('workflow stage identity fails closed for missing, untrusted, unverified, and out-of-scope predecessors', async () => {
         taskRegistry.resetRegistry();
         const missingStageId = 'deepseek-runtime-missing-stage';
-        completeWorkflowTask(missingStageId, null, 'BUILDER');
+        await completeWorkflowTask(missingStageId, null, 'BUILDER');
         const missingObserved = new Map([[missingStageId, classifyTaskResultForContinuation(taskRegistry.getTask(missingStageId))]]);
         assert.match(evaluateWorkflowStepPolicy(missingStageId, 'verification', 'deepseek-runtime-verification-child', missingObserved).error, /authoritative implementation predecessor workflow stage/);
 
         const wrongStageId = 'deepseek-runtime-wrong-stage';
-        completeWorkflowTask(wrongStageId, 'verification', 'BUILDER');
+        await completeWorkflowTask(wrongStageId, 'verification', 'BUILDER');
         const wrongObserved = new Map([[wrongStageId, classifyTaskResultForContinuation(taskRegistry.getTask(wrongStageId))]]);
         assert.match(evaluateWorkflowStepPolicy(wrongStageId, 'verification', 'deepseek-runtime-verification-child-2', wrongObserved).error, /authoritative implementation predecessor workflow stage/);
 
         const badEvidenceId = 'deepseek-runtime-bad-evidence';
-        assert.equal(taskRegistry.createTask({ request_id: badEvidenceId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Claims implementation in task text', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'BUILDER', workflow_stage: 'implementation', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle' }).success, true);
+        assert.equal((await taskRegistry.createTask({ request_id: badEvidenceId, source: 'DeepSeek Runtime', target: 'Gemini Builder', task: 'Claims implementation in task text', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'BUILDER', workflow_stage: 'implementation', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle' })).success, true);
         taskRegistry.getTask(badEvidenceId).status = 'COMPLETE';
         taskRegistry.persistCache();
         assert.match(evaluateWorkflowStepPolicy(badEvidenceId, 'verification', 'deepseek-runtime-verification-child-3', new Map([[badEvidenceId, { eligible_for_next_decision: true }]])).error, /INDEPENDENT_VERIFICATION/);
 
         const wrongScopeId = 'deepseek-runtime-wrong-scope';
-        completeWorkflowTask(wrongScopeId, 'implementation', 'BUILDER', undefined, 'other/repository');
+        await completeWorkflowTask(wrongScopeId, 'implementation', 'BUILDER', undefined, 'other/repository');
         const wrongScopeObserved = new Map([[wrongScopeId, classifyTaskResultForContinuation(taskRegistry.getTask(wrongScopeId))]]);
         assert.match(evaluateWorkflowStepPolicy(wrongScopeId, 'verification', 'deepseek-runtime-verification-child-4', wrongScopeObserved).error, /repository scope/);
 
         const wrongBranchId = 'deepseek-runtime-wrong-branch';
-        completeWorkflowTask(wrongBranchId, 'implementation', 'BUILDER', undefined, 'fluentwithkyle/openclaw-webhook', 'release');
+        await completeWorkflowTask(wrongBranchId, 'implementation', 'BUILDER', undefined, 'fluentwithkyle/openclaw-webhook', 'release');
         const wrongBranchObserved = new Map([[wrongBranchId, classifyTaskResultForContinuation(taskRegistry.getTask(wrongBranchId))]]);
         assert.match(evaluateWorkflowStepPolicy(wrongBranchId, 'verification', 'deepseek-runtime-verification-child-5', wrongBranchObserved).error, /repository scope/);
         assert.throws(() => buildControlPlaneCommand({ operation: 'request_task', objective: 'x', parent_request_id: 'deepseek-runtime-stage-override-parent', workflow_step: 'verification', workflow_stage: 'reconciliation' }), /not permitted/);
@@ -402,21 +402,21 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
         const observed = new Set(['deepseek-runtime-missing-parent']);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-missing-parent', 'deepseek-runtime-child', observed).error, /does not exist/);
-        createDeepSeekReviewTask('deepseek-runtime-cancelled-parent');
+        await createDeepSeekReviewTask('deepseek-runtime-cancelled-parent');
         taskRegistry.cancelTask('deepseek-runtime-cancelled-parent', 'cancelled');
         assert.match(evaluateContinuationPolicy('deepseek-runtime-cancelled-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-cancelled-parent'])).error, /cancelled/);
-        createDeepSeekReviewTask('deepseek-runtime-superseded-parent');
+        await createDeepSeekReviewTask('deepseek-runtime-superseded-parent');
         assert.equal(taskRegistry.supersedeTask('deepseek-runtime-superseded-parent', 'replacement required').success, true);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-superseded-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-superseded-parent'])).error, /superseded/);
-        createDeepSeekReviewTask('deepseek-runtime-failed-parent');
-        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-failed-parent', status).success, true);
+        await createDeepSeekReviewTask('deepseek-runtime-failed-parent');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal((await taskRegistry.updateTaskStatus('deepseek-runtime-failed-parent', status)).success, true);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-failed-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-failed-parent'])).error, /FAILED/);
-        createDeepSeekReviewTask('deepseek-runtime-blocked-parent');
-        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'BLOCKED']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-blocked-parent', status).success, true);
+        await createDeepSeekReviewTask('deepseek-runtime-blocked-parent');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'BLOCKED']) assert.equal((await taskRegistry.updateTaskStatus('deepseek-runtime-blocked-parent', status)).success, true);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-blocked-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-blocked-parent'])).error, /BLOCKED/);
-        createDeepSeekReviewTask('deepseek-runtime-agent-report-parent');
-        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal(taskRegistry.updateTaskStatus('deepseek-runtime-agent-report-parent', status).success, true);
-        assert.equal(taskRegistry.addEvidence('deepseek-runtime-agent-report-parent', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' }).success, true);
+        await createDeepSeekReviewTask('deepseek-runtime-agent-report-parent');
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING']) assert.equal((await taskRegistry.updateTaskStatus('deepseek-runtime-agent-report-parent', status)).success, true);
+        assert.equal((await taskRegistry.addEvidence('deepseek-runtime-agent-report-parent', 'AGENT_REPORT', 'Gemini Builder', { status: 'success' })).success, true);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-agent-report-parent', 'deepseek-runtime-child', new Set(['deepseek-runtime-agent-report-parent'])).error, /COMPLETE/);
         assert.match(evaluateContinuationPolicy('deepseek-runtime-agent-report-parent', 'deepseek-runtime-child', new Set()).error, /prior get_task/);
         taskRegistry.resetRegistry();
@@ -427,9 +427,9 @@ function rawRequest(port, headers, body) {
         assert.deepEqual(classifyTaskResultForContinuation(null), {
             classification: 'invalid', eligible_for_next_decision: false, reason: 'Task result is invalid; continuation cannot proceed'
         });
-        createDeepSeekReviewTask('deepseek-runtime-result-incomplete');
+        await createDeepSeekReviewTask('deepseek-runtime-result-incomplete');
         assert.equal(classifyTaskResultForContinuation(taskRegistry.getTask('deepseek-runtime-result-incomplete')).classification, 'incomplete');
-        completeDeepSeekReviewTask('deepseek-runtime-result-complete');
+        await completeDeepSeekReviewTask('deepseek-runtime-result-complete');
         const eligible = classifyTaskResultForContinuation(taskRegistry.getTask('deepseek-runtime-result-complete'));
         assert.deepEqual(eligible, { classification: 'eligible', eligible_for_next_decision: true, reason: null });
         const observed = new Map([['deepseek-runtime-result-complete', eligible]]);
@@ -443,7 +443,7 @@ function rawRequest(port, headers, body) {
     await test('coordination context resolution does not consume a turn without a dispatched continuation', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-context-parent';
-        completeDeepSeekReviewTask(parentRequestId);
+        await completeDeepSeekReviewTask(parentRequestId);
         assert.deepEqual(taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
         const client = { post: async () => providerResponse({ role: 'assistant', content: 'Validated coordination state.' }) };
         const first = await runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId });
@@ -456,13 +456,13 @@ function rawRequest(port, headers, body) {
 
     await test('automatic workflow sequencing is derived from authoritative completed workflow state', async () => {
         taskRegistry.resetRegistry();
-        completeDeepSeekReviewTask('deepseek-runtime-sequence-review');
+        await completeDeepSeekReviewTask('deepseek-runtime-sequence-review');
         assert.deepEqual(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-review')), { valid: true, workflow_step: 'implementation' });
-        completeWorkflowTask('deepseek-runtime-sequence-implementation', 'implementation', 'BUILDER', 'deepseek-runtime-sequence-review');
+        await completeWorkflowTask('deepseek-runtime-sequence-implementation', 'implementation', 'BUILDER', 'deepseek-runtime-sequence-review');
         assert.deepEqual(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-implementation')), { valid: true, workflow_step: 'verification' });
-        completeWorkflowTask('deepseek-runtime-sequence-verification', 'verification', 'VERIFY_RECONCILE', 'deepseek-runtime-sequence-implementation');
+        await completeWorkflowTask('deepseek-runtime-sequence-verification', 'verification', 'VERIFY_RECONCILE', 'deepseek-runtime-sequence-implementation');
         assert.deepEqual(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-verification')), { valid: true, workflow_step: 'reconciliation' });
-        completeWorkflowTask('deepseek-runtime-sequence-reconciliation', 'reconciliation', 'VERIFY_RECONCILE', 'deepseek-runtime-sequence-verification');
+        await completeWorkflowTask('deepseek-runtime-sequence-reconciliation', 'reconciliation', 'VERIFY_RECONCILE', 'deepseek-runtime-sequence-verification');
         assert.equal(deriveNextWorkflowStep(taskRegistry.getTask('deepseek-runtime-sequence-reconciliation')).terminal, true);
         taskRegistry.resetRegistry();
     });
@@ -474,11 +474,11 @@ function rawRequest(port, headers, body) {
         const client = { post: async (url, body) => {
             if (url === env().DEEPSEEK_COORDINATOR_URL) {
                 submitted.push(body);
-                completeWorkflowTask(body.request_id, body.workflow_stage || null, body.task_mode, body.parent_request_id);
+                await completeWorkflowTask(body.request_id, body.workflow_stage || null, body.task_mode, body.parent_request_id);
                 return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
             }
             modelCalls++;
-            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'root', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
+            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'root', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' }) } }] });
             if (modelCalls === 2) {
                 const context = taskRegistry.getTask(submitted[0].request_id).coordination_context;
                 assert.equal(context.autonomous_turns, 0);
@@ -530,9 +530,9 @@ function rawRequest(port, headers, body) {
     await test('a model cannot advance autonomous workflow sequencing with a policy-valid but non-derived step', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-sequence-authority';
-        completeDeepSeekReviewTask(parentRequestId);
+        await completeDeepSeekReviewTask(parentRequestId);
         assert.equal(taskRegistry.createCoordinationContext(parentRequestId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
-        const client = { post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'wrong-step', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract', parent_request_id: parentRequestId, workflow_step: 'review' }) } }] }) };
+        const client = { post: async () => providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'wrong-step', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation', parent_request_id: parentRequestId, workflow_step: 'review' }) } }] }) };
         await assert.rejects(
             runDeepSeekConversation({ messages: [{ role: 'user', content: 'Continue.' }], env: env(), httpClient: client, coordinationContextId: parentRequestId }),
             error => error.code === 'CONTINUATION_POLICY_REJECTED' && /server-derived next workflow step/.test(error.message)
@@ -547,11 +547,11 @@ function rawRequest(port, headers, body) {
         let modelCalls = 0;
         const client = { post: async (url, body) => {
             if (url === env().DEEPSEEK_COORDINATOR_URL) {
-                assert.equal(taskRegistry.createTask(body).success, true);
+                assert.equal((await taskRegistry.createTask(body)).success, true);
                 return { data: { request_id: body.request_id, status: 'Task registered and dispatched' } };
             }
             modelCalls++;
-            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'root', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
+            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'root', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' }) } }] });
             return providerResponse({ role: 'assistant', content: 'Awaiting independently verified evidence.' });
         }};
         const result = await runDeepSeekConversation({
@@ -569,16 +569,16 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
         assert.throws(() => resolveCoordinationContext('deepseek-runtime-no-context'), /missing or invalid/);
         const failedId = 'deepseek-runtime-context-failed';
-        createDeepSeekReviewTask(failedId);
-        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus(failedId, status).success, true);
+        await createDeepSeekReviewTask(failedId);
+        for (const status of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal((await taskRegistry.updateTaskStatus(failedId, status)).success, true);
         assert.equal(taskRegistry.createCoordinationContext(failedId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
         assert.deepEqual(resolveCoordinationContext(failedId).terminal_outcome, {
             terminal: true, status: 'HUMAN_REVIEW', code: 'COORDINATION_ESCALATION_REQUIRED', reason: 'Workflow is failed'
         });
         const parentId = 'deepseek-runtime-context-lineage';
-        completeDeepSeekReviewTask(parentId);
+        await completeDeepSeekReviewTask(parentId);
         assert.equal(taskRegistry.createCoordinationContext(parentId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
-        assert.equal(taskRegistry.createTask({ request_id: 'deepseek-runtime-context-active-child', source: 'DeepSeek Runtime', target: 'Gemini', task: 'Child', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle', parent_request_id: parentId }).success, true);
+        assert.equal((await taskRegistry.createTask({ request_id: 'deepseek-runtime-context-active-child', source: 'DeepSeek Runtime', target: 'Gemini', task: 'Child', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', reporting: 'structured-json', originator: 'Kyle', parent_request_id: parentId })).success, true);
         assert.throws(() => resolveCoordinationContext(parentId), /active child task/);
         taskRegistry.resetRegistry();
     });
@@ -589,10 +589,10 @@ function rawRequest(port, headers, body) {
         const implementationId = 'deepseek-runtime-terminal-implementation';
         const verificationId = 'deepseek-runtime-terminal-verification';
         const reconciliationId = 'deepseek-runtime-terminal-reconciliation';
-        completeDeepSeekReviewTask(reviewId);
-        completeWorkflowTask(implementationId, 'implementation', 'BUILDER', reviewId);
-        completeWorkflowTask(verificationId, 'verification', 'VERIFY_RECONCILE', implementationId);
-        completeWorkflowTask(reconciliationId, 'reconciliation', 'VERIFY_RECONCILE', verificationId);
+        await completeDeepSeekReviewTask(reviewId);
+        await completeWorkflowTask(implementationId, 'implementation', 'BUILDER', reviewId);
+        await completeWorkflowTask(verificationId, 'verification', 'VERIFY_RECONCILE', implementationId);
+        await completeWorkflowTask(reconciliationId, 'reconciliation', 'VERIFY_RECONCILE', verificationId);
         assert.equal(taskRegistry.createCoordinationContext(reviewId, MAX_AUTONOMOUS_COORDINATION_TURNS).success, true);
         assert.equal(taskRegistry.setCoordinationContextCurrent(reviewId, reconciliationId).success, true);
         const context = resolveCoordinationContext(reviewId);
@@ -614,12 +614,12 @@ function rawRequest(port, headers, body) {
         const client = { post: async (url, body) => {
             if (url === env().DEEPSEEK_COORDINATOR_URL) {
                 requestId = body.request_id;
-                const created = taskRegistry.createTask(body);
+                const created = (await taskRegistry.createTask(body));
                 assert.equal(created.success, true);
                 return { data: { request_id: requestId, status: 'Task registered and dispatched' } };
             }
             modelCalls++;
-            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'request', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' }) } }] });
+            if (modelCalls === 1) return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'request', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' }) } }] });
             if (modelCalls === 2) {
                 return providerResponse({ role: 'assistant', content: null, tool_calls: [{ id: 'observe', type: 'function', function: { name: 'control_plane', arguments: JSON.stringify({ operation: 'get_task', request_id: requestId }) } }] });
             }
@@ -1056,7 +1056,7 @@ function rawRequest(port, headers, body) {
 
     await test('get_task operation retrieves task metadata and status when task exists in taskRegistry', async () => {
         const requestId = 'deepseek-runtime-test-1';
-        taskRegistry.createTask({
+        (await taskRegistry.createTask({
             request_id: requestId,
             source: 'DeepSeek',
             target: 'Gemini Builder',
@@ -1067,7 +1067,7 @@ function rawRequest(port, headers, body) {
             constraints: { permitted_paths: ['poc/'] },
             authorization: { capabilities: ['read_only'] },
             verification: 'verify'
-        });
+        }));
 
         let coordinatorCalled = false;
         const client = {
@@ -1090,13 +1090,13 @@ function rawRequest(port, headers, body) {
     await test('child-task summary aggregates all authoritative lifecycle states without exposing child data', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-child-summary-parent';
-        createDeepSeekReviewTask(parentRequestId);
+        await createDeepSeekReviewTask(parentRequestId);
         const statuses = ['PENDING', 'SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE', 'FAILED', 'BLOCKED'];
         const childIds = [];
         for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS + statuses.length; index++) {
             const requestId = `deepseek-runtime-child-summary-${index}`;
             childIds.push(requestId);
-            createDeepSeekReviewTask(requestId);
+            await createDeepSeekReviewTask(requestId);
             taskRegistry.getTask(requestId).parent_request_id = parentRequestId;
             const status = statuses[index % statuses.length];
             const transitions = {
@@ -1108,11 +1108,11 @@ function rawRequest(port, headers, body) {
                 BLOCKED: ['SELECTED', 'PLANNED', 'EXECUTING', 'BLOCKED']
             };
             if (status === 'VERIFIED' || status === 'COMPLETE') {
-                assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+                assert.equal((await taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' })).success, true);
             }
-            for (const transition of transitions[status]) assert.equal(taskRegistry.updateTaskStatus(requestId, transition).success, true);
+            for (const transition of transitions[status]) assert.equal((await taskRegistry.updateTaskStatus(requestId, transition)).success, true);
         }
-        createDeepSeekReviewTask('deepseek-runtime-child-summary-unrelated');
+        await createDeepSeekReviewTask('deepseek-runtime-child-summary-unrelated');
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
         const summary = observation.task.child_tasks_summary;
 
@@ -1128,7 +1128,7 @@ function rawRequest(port, headers, body) {
     await test('parent tasks without children omit the child-task summary', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-child-summary-empty-parent';
-        createDeepSeekReviewTask(parentRequestId);
+        await createDeepSeekReviewTask(parentRequestId);
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
         assert.equal(observation.task.child_tasks, undefined);
         assert.equal(observation.task.child_tasks_summary, undefined);
@@ -1140,21 +1140,21 @@ function rawRequest(port, headers, body) {
     await test('child diagnostic summary aggregates all children with bounded sanitized status-scoped highlights', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-child-diagnostics-parent';
-        createDeepSeekReviewTask(parentRequestId);
+        await createDeepSeekReviewTask(parentRequestId);
         const createChild = (requestId, status, report) => {
-            createDeepSeekReviewTask(requestId);
+            await createDeepSeekReviewTask(requestId);
             taskRegistry.getTask(requestId).parent_request_id = parentRequestId;
-            if (report) assert.equal(taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
+            if (report) assert.equal((await taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
                 status: status === 'FAILED' ? 'failure' : 'blocked', execution_id: `${requestId}-execution`, report
-            }).success, true);
+            })).success, true);
             const transitions = status === 'FAILED' || status === 'BLOCKED'
                 ? ['SELECTED', 'PLANNED', 'EXECUTING', status]
                 : status === 'VERIFIED' ? ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED']
                     : status === 'COMPLETE' ? ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE'] : [];
             if (status === 'VERIFIED' || status === 'COMPLETE') {
-                assert.equal(taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
+                assert.equal((await taskRegistry.addEvidence(requestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' })).success, true);
             }
-            for (const transition of transitions) assert.equal(taskRegistry.updateTaskStatus(requestId, transition).success, true);
+            for (const transition of transitions) assert.equal((await taskRegistry.updateTaskStatus(requestId, transition)).success, true);
         };
         for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS; index++) createChild(`deepseek-runtime-child-diagnostics-normal-${index}`, 'PENDING');
         createChild('deepseek-runtime-child-diagnostics-verified', 'VERIFIED');
@@ -1169,12 +1169,12 @@ function rawRequest(port, headers, body) {
                 summary: `Blocked ${index}: credential blocked-credential-${index}`, blockers: [`blocker ${index}`], permitted_paths: ['hidden']
             });
         }
-        createDeepSeekReviewTask('deepseek-runtime-child-diagnostics-unrelated');
+        await createDeepSeekReviewTask('deepseek-runtime-child-diagnostics-unrelated');
         const unrelated = taskRegistry.getTask('deepseek-runtime-child-diagnostics-unrelated');
-        assert.equal(taskRegistry.updateAgentResult(unrelated.request_id, 'Gemini Builder', {
+        assert.equal((await taskRegistry.updateAgentResult(unrelated.request_id, 'Gemini Builder', {
             status: 'failure', execution_id: 'unrelated-execution', report: { summary: 'Unrelated failure' }
-        }).success, true);
-        for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus(unrelated.request_id, transition).success, true);
+        })).success, true);
+        for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal((await taskRegistry.updateTaskStatus(unrelated.request_id, transition)).success, true);
 
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
         const diagnostics = observation.task.child_diagnostics_summary;
@@ -1197,8 +1197,8 @@ function rawRequest(port, headers, body) {
     await test('parents with non-diagnostic children omit child diagnostic summary', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-child-diagnostics-non-terminal-parent';
-        createDeepSeekReviewTask(parentRequestId);
-        createDeepSeekReviewTask('deepseek-runtime-child-diagnostics-pending');
+        await createDeepSeekReviewTask(parentRequestId);
+        await createDeepSeekReviewTask('deepseek-runtime-child-diagnostics-pending');
         taskRegistry.getTask('deepseek-runtime-child-diagnostics-pending').parent_request_id = parentRequestId;
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
         assert(observation.task.child_tasks_summary);
@@ -1210,16 +1210,16 @@ function rawRequest(port, headers, body) {
     await test('workflow completion summary reports all-success terminal workflows with bounded sanitized highlights', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-workflow-success-parent';
-        createDeepSeekReviewTask(parentRequestId);
+        await createDeepSeekReviewTask(parentRequestId);
         for (let index = 0; index < MAX_REPORT_HIGHLIGHTS + 1; index++) {
             const childRequestId = `deepseek-runtime-workflow-success-${index}`;
-            completeDeepSeekReviewTask(childRequestId);
+            await completeDeepSeekReviewTask(childRequestId);
             const child = taskRegistry.getTask(childRequestId);
             child.parent_request_id = parentRequestId;
-            assert.equal(taskRegistry.updateAgentResult(childRequestId, 'Gemini Builder', {
+            assert.equal((await taskRegistry.updateAgentResult(childRequestId, 'Gemini Builder', {
                 status: 'success', execution_id: `${childRequestId}-execution`,
                 report: { summary: `Completed ${index}: token completion-token-${index}`, authorization: 'Bearer hidden' }
-            }).success, true);
+            })).success, true);
         }
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
         const summary = observation.task.workflow_completion_summary;
@@ -1237,21 +1237,21 @@ function rawRequest(port, headers, body) {
         const observeTerminalWorkflow = (suffix, statuses) => {
             taskRegistry.resetRegistry();
             const parentRequestId = `deepseek-runtime-workflow-${suffix}-parent`;
-            createDeepSeekReviewTask(parentRequestId);
+            await createDeepSeekReviewTask(parentRequestId);
             for (const [index, status] of statuses.entries()) {
                 const childRequestId = `deepseek-runtime-workflow-${suffix}-${index}`;
-                createDeepSeekReviewTask(childRequestId);
+                await createDeepSeekReviewTask(childRequestId);
                 const child = taskRegistry.getTask(childRequestId);
                 child.parent_request_id = parentRequestId;
                 if (status === 'COMPLETE') {
-                    assert.equal(taskRegistry.addEvidence(childRequestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
-                    for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE']) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+                    assert.equal((await taskRegistry.addEvidence(childRequestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' })).success, true);
+                    for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE']) assert.equal((await taskRegistry.updateTaskStatus(childRequestId, state)).success, true);
                 } else if (status === 'CANCELLED') {
                     child.lineage.cancelled = true;
                 } else if (status === 'SUPERSEDED') {
                     child.lineage.superseded_by = `${childRequestId}-replacement`;
                 } else {
-                    for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+                    for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal((await taskRegistry.updateTaskStatus(childRequestId, state)).success, true);
                 }
             }
             return observeTaskForDeepSeek(parentRequestId, new Set(), new Map()).task.workflow_completion_summary;
@@ -1270,17 +1270,17 @@ function rawRequest(port, headers, body) {
     await test('workflow completion summary aggregates terminal children beyond the detailed observation cap', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-workflow-cap-parent';
-        createDeepSeekReviewTask(parentRequestId);
+        await createDeepSeekReviewTask(parentRequestId);
         for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS + 1; index++) {
             const childRequestId = `deepseek-runtime-workflow-cap-${index}`;
-            createDeepSeekReviewTask(childRequestId);
+            await createDeepSeekReviewTask(childRequestId);
             taskRegistry.getTask(childRequestId).parent_request_id = parentRequestId;
             const status = index === MAX_CHILD_TASK_OBSERVATIONS ? 'FAILED' : 'COMPLETE';
             if (status === 'COMPLETE') {
-                assert.equal(taskRegistry.addEvidence(childRequestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' }).success, true);
-                for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE']) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+                assert.equal((await taskRegistry.addEvidence(childRequestId, 'INDEPENDENT_VERIFICATION', 'Gemini', { status: 'success' })).success, true);
+                for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'VERIFIED', 'COMPLETE']) assert.equal((await taskRegistry.updateTaskStatus(childRequestId, state)).success, true);
             } else {
-                for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal(taskRegistry.updateTaskStatus(childRequestId, state).success, true);
+                for (const state of ['SELECTED', 'PLANNED', 'EXECUTING', 'FAILED']) assert.equal((await taskRegistry.updateTaskStatus(childRequestId, state)).success, true);
             }
         }
         const observation = observeTaskForDeepSeek(parentRequestId, new Set(), new Map());
@@ -1293,37 +1293,37 @@ function rawRequest(port, headers, body) {
     await test('get_task includes bounded sanitized child observations without changing continuation authority', async () => {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-lineage-parent';
-        createDeepSeekReviewTask(parentRequestId);
+        await createDeepSeekReviewTask(parentRequestId);
         const childIds = [];
         for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS + 1; index++) {
             const requestId = `deepseek-runtime-lineage-child-${index}`;
             childIds.push(requestId);
-            assert.equal(taskRegistry.createTask({
+            assert.equal((await taskRegistry.createTask({
                 request_id: requestId, source: 'DeepSeek Runtime', target: 'Gemini', task: `Child review ${index}`,
                 repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW',
                 constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review',
                 originator: 'Kyle'
-            }).success, true);
+            })).success, true);
             taskRegistry.getTask(requestId).parent_request_id = parentRequestId;
         }
-        assert.equal(taskRegistry.createTask({
+        assert.equal((await taskRegistry.createTask({
             request_id: 'deepseek-runtime-unrelated-task', source: 'DeepSeek Runtime', target: 'Gemini', task: 'Unrelated review',
             repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task_mode: 'REVIEW',
             constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only'] }, verification: 'Review', originator: 'Kyle'
-        }).success, true);
-        assert.equal(taskRegistry.updateAgentResult(childIds[0], 'Gemini', {
+        })).success, true);
+        assert.equal((await taskRegistry.updateAgentResult(childIds[0], 'Gemini', {
             status: 'success', execution_id: 'child-execution', report: { summary: 'verified', token: 'hidden', authorization: 'Bearer hidden' }
-        }).success, true);
-        assert.equal(taskRegistry.addEvidence(childIds[0], 'INDEPENDENT_VERIFICATION', 'Gemini', { summary: 'verified', secret: 'hidden' }).success, true);
+        })).success, true);
+        assert.equal((await taskRegistry.addEvidence(childIds[0], 'INDEPENDENT_VERIFICATION', 'Gemini', { summary: 'verified', secret: 'hidden' })).success, true);
         for (const [index, status] of ['FAILED', 'BLOCKED'].entries()) {
-            for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal(taskRegistry.updateTaskStatus(childIds[index + 1], transition).success, true);
+            for (const transition of ['SELECTED', 'PLANNED', 'EXECUTING', status]) assert.equal((await taskRegistry.updateTaskStatus(childIds[index + 1], transition)).success, true);
         }
-        assert.equal(taskRegistry.updateAgentResult(childIds[1], 'Gemini Builder', {
+        assert.equal((await taskRegistry.updateAgentResult(childIds[1], 'Gemini Builder', {
             status: 'failure', execution_id: 'child-failure', report: { summary: 'Child failure token child-token', blockers: ['Child failure blocker'] }
-        }).success, true);
-        assert.equal(taskRegistry.updateAgentResult(childIds[2], 'Gemini Builder', {
+        })).success, true);
+        assert.equal((await taskRegistry.updateAgentResult(childIds[2], 'Gemini Builder', {
             status: 'blocked', execution_id: 'child-blocked', report: { summary: 'Child blocked', blockers: ['Child blocker'] }
-        }).success, true);
+        })).success, true);
         taskRegistry.getTask(childIds[3]).lineage.cancelled = true;
         taskRegistry.getTask(childIds[4]).lineage.superseded_by = 'deepseek-runtime-lineage-replacement';
         taskRegistry.persistCache();
@@ -1381,7 +1381,7 @@ function rawRequest(port, headers, body) {
                             type: 'function',
                             function: {
                                 name: 'control_plane',
-                                arguments: JSON.stringify({ operation: 'request_task', objective: 'Review coordinator contract' })
+                                arguments: JSON.stringify({ operation: 'request_task', objective: 'Research Phase 4 design and cross-task lineage navigation' })
                             }
                         }]
                     });
@@ -1426,7 +1426,7 @@ function rawRequest(port, headers, body) {
 
     await test('get_task operation returns allowlisted sanitized projection excluding secrets and internal fields', async () => {
         const requestId = 'deepseek-runtime-sec-test-1';
-        taskRegistry.createTask({
+        (await taskRegistry.createTask({
             request_id: requestId,
             source: 'DeepSeek',
             target: 'Gemini Builder',
@@ -1437,9 +1437,9 @@ function rawRequest(port, headers, body) {
             constraints: { permitted_paths: ['poc/'] },
             authorization: { capabilities: ['read_only'] },
             verification: 'verify'
-        });
+        }));
 
-        taskRegistry.updateAgentResult(requestId, 'Gemini', {
+        (await taskRegistry.updateAgentResult(requestId, 'Gemini', {
             status: 'success',
             execution_id: 'gemini-exec-1',
             report: {
@@ -1450,7 +1450,7 @@ function rawRequest(port, headers, body) {
                     secret_password: 'bad-password'
                 }
             }
-        });
+        }));
 
         let toolContent = null;
         let openRouterCalls = 0;
