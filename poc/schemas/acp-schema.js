@@ -929,7 +929,7 @@ function validateAcpTaskArtifactSyntax(artifactText) {
     }
   }
 
-   try {
+  try {
     JSON.parse(artifactText);
   } catch (e) {
     const match = e.message.match(/position (\d+)/i);
@@ -945,16 +945,7 @@ function validateAcpTaskArtifactSyntax(artifactText) {
     };
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(artifactText);
-  } catch (e) {
-  }
-
-  const parsedKeys = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed) : [];
-  const hasAllCanonicalFields = CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS.every(f => parsedKeys.includes(f));
-
-  return { valid: true, is_canonical_artifact: hasAllCanonicalFields };
+  return { valid: true };
 }
 
 function validateCanonicalFieldOrder(obj) {
