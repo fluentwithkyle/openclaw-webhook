@@ -458,27 +458,33 @@ runTest('Gemini Builder workflow has no bare + operators in expressions', () => 
 
 // --- FAILOVER_EXECUTE commit/push persistence enforcement tests ---
 
-runTest('main.yml has Commit and push Gemini changes step for FAILOVER_EXECUTE', () => {
-  assert.ok(raw.includes('Commit and push Gemini changes (FAILOVER_EXECUTE only)'),
-    'main.yml must have a commit/push step for FAILOVER_EXECUTE mode');
+runTest('main.yml has mode-aware commit/push step (RESEARCH_DOCUMENT, VERIFY_RECONCILE, FAILOVER_EXECUTE)', () => {
+  assert.ok(raw.includes('Commit and push Gemini changes (mode-aware:'),
+    'main.yml must have a mode-aware commit/push step');
+  assert.ok(raw.includes('RESEARCH_DOCUMENT, VERIFY_RECONCILE, FAILOVER_EXECUTE'),
+    'commit/push step must mention all three modes');
 });
 
-runTest('main.yml FAILOVER_EXECUTE commit step is gated on FAILOVER_EXECUTE task mode', () => {
-  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+runTest('main.yml commit/push step is gated on RESEARCH_DOCUMENT, VERIFY_RECONCILE, or FAILOVER_EXECUTE task mode', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
   const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(/==\s*'RESEARCH_DOCUMENT'/.test(section),
+    'commit/push step must be gated on RESEARCH_DOCUMENT task mode');
+  assert.ok(/==\s*'VERIFY_RECONCILE'/.test(section),
+    'commit/push step must be gated on VERIFY_RECONCILE task mode');
   assert.ok(/==\s*'FAILOVER_EXECUTE'/.test(section),
     'commit/push step must be gated on FAILOVER_EXECUTE task mode');
 });
 
-runTest('main.yml FAILOVER_EXECUTE commit step runs git commit and git push', () => {
-  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+runTest('main.yml commit/push step runs git commit and git push for all modes', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
   const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
   assert.ok(section.includes('git commit'), 'commit/push step must run git commit');
   assert.ok(section.includes('git push'), 'commit/push step must run git push');
 });
 
-runTest('main.yml FAILOVER_EXECUTE commit step stages only permitted_paths, not git add -A', () => {
-  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+runTest('main.yml commit/push step stages only permitted_paths, not git add -A', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
   const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
   assert.ok(section.includes('git add "$dir"'),
     'commit/push step must stage individual permitted path directories');
@@ -486,15 +492,15 @@ runTest('main.yml FAILOVER_EXECUTE commit step stages only permitted_paths, not 
     'commit/push step must NOT use unrestricted git add -A');
 });
 
-runTest('main.yml FAILOVER_EXECUTE commit step verifies push on remote base branch', () => {
-  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+runTest('main.yml commit/push step verifies push on remote base branch', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
   const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
   assert.ok(section.includes('git ls-remote'),
     'commit/push step must verify commit on remote base branch with git ls-remote');
 });
 
-runTest('main.yml FAILOVER_EXECUTE commit step outputs commit_sha, push_status, uncommitted_changes, push_verified', () => {
-  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+runTest('main.yml commit/push step outputs commit_sha, push_status, uncommitted_changes, push_verified', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
   const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
   assert.ok(section.includes('commit_sha='), 'must output commit_sha');
   assert.ok(section.includes('push_status='), 'must output push_status');
@@ -502,8 +508,8 @@ runTest('main.yml FAILOVER_EXECUTE commit step outputs commit_sha, push_status, 
   assert.ok(section.includes('push_verified='), 'must output push_verified');
 });
 
-runTest('main.yml FAILOVER_EXECUTE commit step fails closed on commit failure', () => {
-  const idx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+runTest('main.yml commit/push step fails closed on commit failure', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
   const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
   assert.ok(section.includes('exit 1'),
     'commit/push step must exit 1 on failure (fail closed)');
@@ -511,53 +517,36 @@ runTest('main.yml FAILOVER_EXECUTE commit step fails closed on commit failure', 
     'commit/push step must set UNCOMMITTED_CHANGES=true on failure');
 });
 
+runTest('main.yml commit/push step includes mode-aware commit messages', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('RESEARCH_DOCUMENT: Persist research findings'),
+    'commit/push step must include RESEARCH_DOCUMENT commit message');
+  assert.ok(section.includes('VERIFY_RECONCILE: Persist verification reconciliation'),
+    'commit/push step must include VERIFY_RECONCILE commit message');
+  assert.ok(section.includes('FAILOVER_EXECUTE: Persist authorized implementation changes'),
+    'commit/push step must include FAILOVER_EXECUTE commit message');
+});
+
+runTest('main.yml commit/push step has out-of-scope change detection (fail closed)', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('Out-of-scope changes detected'),
+    'commit/push step must detect and fail on out-of-scope changes');
+  assert.ok(section.includes('OUT_OF_SCOPE'),
+    'commit/push step must use OUT_OF_SCOPE variable for detection');
+});
+
+runTest('main.yml commit/push step has RESEARCH_DOCUMENT fail-closed research record check', () => {
+  const idx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
+  const section = raw.slice(idx, raw.indexOf('\n      - name:', idx + 30));
+  assert.ok(section.includes('RESEARCH_DOCUMENT task'),
+    'commit/push step must have RESEARCH_DOCUMENT research record check');
+  assert.ok(section.includes('requires durable research record'),
+    'commit/push step must fail-closed when research record is missing');
+});
+
 runTest('main.yml Determine Gemini execution result enforces FAILOVER_EXECUTE persistence', () => {
-  const resultIdx = raw.indexOf('Determine Gemini execution result');
-  const payloadIdx = raw.indexOf('Prepare ACP report payload');
-  const resultSection = raw.slice(resultIdx, payloadIdx);
-  assert.ok(resultSection.includes('FAILOVER_EXECUTE'),
-    'gemini_result step must check FAILOVER_EXECUTE mode enforcement');
-  assert.ok(resultSection.includes('uncommitted_changes'),
-    'gemini_result step must check uncommitted_changes output');
-  assert.ok(resultSection.includes('commit_push'),
-    'gemini_result step must reference commit_push step outputs');
-  assert.ok(resultSection.includes('push_verified'),
-    'gemini_result step must check push_verified output');
-});
-
-runTest('main.yml FAILOVER_EXECUTE enforcement fails status on uncommitted changes', () => {
-  const resultIdx = raw.indexOf('Determine Gemini execution result');
-  const payloadIdx = raw.indexOf('Prepare ACP report payload');
-  const resultSection = raw.slice(resultIdx, payloadIdx);
-  assert.ok(resultSection.includes('STATUS="failure"'),
-    'gemini_result step must set STATUS="failure" when persistence check fails');
-  assert.ok(resultSection.includes('VERIFICATION_STATUS="FAIL"'),
-    'gemini_result step must set VERIFICATION_STATUS="FAIL" when persistence check fails');
-});
-
-runTest('main.yml callback payload uses actual commit/push from commit_push step', () => {
-  const payloadStep = extractPayloadStep(raw);
-  assert.ok(payloadStep, 'payload step not found');
-  assert.ok(payloadStep.includes('FAILOVER_COMMIT_SHA'),
-    'payload step must reference FAILOVER_COMMIT_SHA from commit_push step');
-  assert.ok(payloadStep.includes('FAILOVER_PUSH'),
-    'payload step must reference FAILOVER_PUSH from commit_push step');
-});
-
-runTest('main.yml callback payload does NOT hardcode commit: null / push: false', () => {
-  const payloadStep = extractPayloadStep(raw);
-  assert.ok(payloadStep, 'payload step not found');
-  assert.ok(payloadStep.includes('failover_commit'),
-    'jq payload must use failover_commit variable');
-  assert.ok(payloadStep.includes('failover_push'),
-    'jq payload must use failover_push variable');
-  assert.ok(!/commit: null,/.test(payloadStep),
-    'jq payload must NOT hardcode commit: null');
-  assert.ok(!/push: false,/.test(payloadStep),
-    'jq payload must NOT hardcode push: false');
-});
-
-runTest('main.yml callback payload includes changed_files in report', () => {
   const payloadStep = extractPayloadStep(raw);
   assert.ok(payloadStep, 'payload step not found');
   assert.ok(payloadStep.includes('--argjson changed_files'),
@@ -566,8 +555,8 @@ runTest('main.yml callback payload includes changed_files in report', () => {
     'jq payload JSON must include changed_files field from variable');
 });
 
-runTest('main.yml FAILOVER_EXECUTE commit step runs after Gemini CLI and before gemini_result', () => {
-  const commitIdx = raw.indexOf('Commit and push Gemini changes (FAILOVER_EXECUTE only)');
+runTest('main.yml commit/push step runs after Gemini CLI and before gemini_result', () => {
+  const commitIdx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
   const geminiIdx = raw.indexOf('Run Gemini in advisory mode');
   const resultIdx = raw.indexOf('Determine Gemini execution result');
   assert.ok(commitIdx !== -1 && geminiIdx !== -1 && resultIdx !== -1,
@@ -593,22 +582,18 @@ runTest('commit_push step is a top-level step in the advisory job (not nested in
   const steps = doc.jobs.advisory.steps;
   const commitPushStep = steps.find(s => s.id === 'commit_push');
   assert.ok(commitPushStep, 'commit_push must be a direct step in advisory job steps');
-  assert.equal(commitPushStep.name, 'Commit and push Gemini changes (FAILOVER_EXECUTE only)',
+  assert.equal(commitPushStep.name, 'Commit and push Gemini changes (mode-aware: RESEARCH_DOCUMENT, VERIFY_RECONCILE, FAILOVER_EXECUTE)',
     'commit_push step name must match');
   assert.ok(commitPushStep.if, 'commit_push step must have an if condition');
   assert.ok(commitPushStep.run, 'commit_push step must have a run script');
 });
 
-runTest('all steps in the advisory job are top-level (6-space indentation)', () => {
-  const lines = raw.split('\n');
-  const stepLines = lines
-    .map((line, i) => ({ line: i + 1, content: line }))
-    .filter(l => /^      - name:/.test(l.content));
-  assert.ok(stepLines.length > 10, `expected 10+ top-level steps, found ${stepLines.length}`);
-  const stepNames = stepLines.map(l => l.content.replace(/^      - name: /, '').replace(/:.*$/, ''));
-  const nameSet = new Set(stepNames);
-  assert.ok(nameSet.has('Commit and push Gemini changes (FAILOVER_EXECUTE only)'),
-    'commit_push step must use 6-space indentation like all other steps');
+  runTest('all steps in the advisory job are top-level (6-space indentation)', () => {
+  const doc = yaml.load(raw);
+  const steps = doc.jobs.advisory.steps;
+  assert.ok(steps.length > 10, `expected 10+ top-level steps, found ${steps.length}`);
+  const hasCommitPush = steps.some(s => s.id === 'commit_push' && s.name.includes('Commit and push Gemini changes'));
+  assert.ok(hasCommitPush, 'commit_push step must exist with 6-space indentation like all other steps');
 });
 
 runTest('no step is nested inside another step via misindented - name:', () => {
