@@ -61,7 +61,7 @@ jobs:
       (
         github.event_name == 'issue_comment' &&
         startsWith(github.event.comment.body, '@gemini-cli') &&
-        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+        github.event.comment.user.login == 'fluentwithkyle'
       )
     runs-on: ubuntu-latest
     permissions:
@@ -115,7 +115,8 @@ jobs:
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
-          DIRECTOR_ORIGIN_SECRET: ${{ (contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) && secrets.DIRECTOR_ORIGIN_SECRET || '') }}
+          COMMENT_USER_LOGIN: ${{ github.event.comment.user.login }}
+          DIRECTOR_ORIGIN_SECRET: ${{ (github.event.comment.user.login == 'fluentwithkyle') && secrets.DIRECTOR_ORIGIN_SECRET || '' }}
           COMMENT_ID: ${{ github.event.comment.id }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           REPOSITORY: ${{ github.repository }}
@@ -134,10 +135,11 @@ jobs:
           # the GitHub comment are JSON-escaped before canonical validation.
           # The canonical ingress derives effective capabilities and permitted_paths
           # from the server-side activation-policy authority, not from comment text.
-          # When the comment author is Director-authorized (OWNER/MEMBER/COLLABORATOR)
-          # and the embedded ACP descriptor declares a consequential task_mode
-          # (FAILOVER_EXECUTE), the Director origin secret is passed so the canonical
-          # ingress treats the activation as Director-admitted.
+          # When the comment author matches the explicit trusted Director identity
+          # (github.event.comment.user.login == 'fluentwithkyle') and the embedded
+          # ACP descriptor declares a consequential task_mode (FAILOVER_EXECUTE), the
+          # Director origin secret is passed so the canonical ingress treats the
+          # activation as Director-admitted.
           ACTIVATION_JSON=$(jq -n \
             --arg comment_id "$COMMENT_ID" \
             --arg comment_body "$COMMENT_BODY" \

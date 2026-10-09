@@ -2510,6 +2510,44 @@ await runTest('Security - issue_comment BUILDER task_mode without Director autho
 });
 
 // =========================================================
+// director-identity regression tests - author_association must NOT
+// grant Director authority; explicit trusted Director identity required
+// =========================================================
+
+await runTest('Security - main.yml does not use author_association for Director identity', async () => {
+    assert.ok(!mainRaw.includes('author_association'),
+        'main.yml must NOT use author_association for Director identity verification');
+});
+
+await runTest('Security - main.yml does not use author_association for DIRECTOR_ORIGIN_SECRET', async () => {
+    assert.ok(!mainRaw.includes('github.event.comment.author_association'),
+        'main.yml must NOT reference github.event.comment.author_association');
+});
+
+await runTest('Security - main.yml uses explicit comment author login for Director identity', async () => {
+    assert.ok(mainRaw.includes("github.event.comment.user.login == 'fluentwithkyle'"),
+        'main.yml must verify Director identity via explicit comment author login match');
+});
+
+await runTest('Security - main.yml job if-condition uses explicit login, not author_association', async () => {
+    const jobIfIdx = mainRaw.indexOf('advisory:');
+    const jobIfSection = mainRaw.slice(jobIfIdx, jobIfIdx + 300);
+    assert.ok(jobIfSection.includes("github.event.comment.user.login == 'fluentwithkyle'"),
+        'advisory job if-condition must use explicit comment author login');
+    assert.ok(!jobIfSection.includes('author_association'),
+        'advisory job if-condition must NOT use author_association');
+});
+
+await runTest('Security - main.yml DIRECTOR_ORIGIN_SECRET conditional uses explicit login', async () => {
+    const secretIdx = mainRaw.indexOf('DIRECTOR_ORIGIN_SECRET:');
+    const secretSection = mainRaw.slice(secretIdx, secretIdx + 200);
+    assert.ok(secretSection.includes("github.event.comment.user.login == 'fluentwithkyle'"),
+        'DIRECTOR_ORIGIN_SECRET conditional must use explicit comment author login');
+    assert.ok(!secretSection.includes('author_association'),
+        'DIRECTOR_ORIGIN_SECRET conditional must NOT reference author_association');
+});
+
+// =========================================================
 // Summary
 // =========================================================
 
