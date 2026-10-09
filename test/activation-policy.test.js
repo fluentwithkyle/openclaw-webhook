@@ -149,11 +149,11 @@ async function main() {
         assertTrue(!surfaces.includes('github_push_event'), 'Should NOT include github_push_event for Gemini');
     });
 
-    await runTest('Policy - Gemini Builder BUILDER permits github_issue_comment and workflow_dispatch', async () => {
+    await runTest('Policy - Gemini Builder BUILDER does not permit github_issue_comment (only workflow_dispatch)', async () => {
         cleanup();
         const surfaces = activationPolicy.getPermittedActivationSurfaces('Gemini Builder', 'BUILDER');
-        assertTrue(surfaces.includes('github_issue_comment'), 'Should include github_issue_comment');
         assertTrue(surfaces.includes('workflow_dispatch'), 'Should include workflow_dispatch');
+        assertTrue(!surfaces.includes('github_issue_comment'), 'Should NOT include github_issue_comment (gemini-builder.yml only triggers on workflow_dispatch)');
     });
 
     await runTest('Policy - REVIEW mode does not require activation', async () => {

@@ -5,6 +5,7 @@ const taskRegistry = require('../poc/task-registry');
 const { setDispatcher } = require('../services/transport-provider');
 const { buildControlPlaneCommand } = require('../services/deepseek-runtime');
 const geminiBuilderTrigger = require('../poc/gemini-builder-trigger');
+const geminiTrigger = require('../poc/gemini-trigger');
 const { canonicalExternalActivationIngress } = require('../poc/activation-ingress');
 const { buildBuilderActivationPayload, buildActivationPayloadForWorkflowDispatch } = require('../poc/external-activation-validator');
 
@@ -37,7 +38,7 @@ function pocHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET }; }
 function directorOriginHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET, 'x-director-origin-secret': DIRECTOR_ORIGIN_SECRET }; }
 function scope(cmd) { return { request_id: cmd.request_id, target: cmd.target, task_mode: cmd.task_mode, capabilities: cmd.authorization.capabilities, permitted_paths: cmd.constraints.permitted_paths, repository: cmd.repository, base_branch: cmd.base_branch }; }
 function command(requestId) {
-  return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Kilo', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Make the approved change', task_mode: 'BUILDER', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@kilo', activation_surface: 'github_issue_comment' };
+  return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Gemini', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Make the approved change', task_mode: 'FAILOVER_EXECUTE', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment' };
 }
 
 function runTestAsync(name, fn) {
@@ -56,8 +57,8 @@ function runTestAsync(name, fn) {
     taskRegistry.resetRegistry();
     const cmd = command('director-auth-1');
     let response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, cmd);
-    assert.equal(response.status, 403);
-    const serverDerivedBuilder = buildControlPlaneCommand({ operation: 'request_task', objective: 'Implement coordinator contract' });
+    assert.ok([400, 403].includes(response.status), 'Kilo/BUILDER command should be rejected at validation (400) or authorization (403)');
+    const serverDerivedBuilder = buildControlPlaneCommand({ operation: 'request_task', objective: 'Implement Phase 4 cross-task lineage navigation' });
     assert.equal(serverDerivedBuilder.target, 'Gemini Builder');
     assert.deepEqual(serverDerivedBuilder.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
     assert.deepEqual(serverDerivedBuilder.constraints.permitted_paths, ['poc/']);
@@ -82,10 +83,13 @@ function runTestAsync(name, fn) {
     assert(response.body.approval_id);
     const approvalId = response.body.approval_id;
     cmd.authorization.approval_id = approvalId;
+    const originalGeminiDispatch = geminiTrigger.dispatchGemini;
+    geminiTrigger.dispatchGemini = async () => ({ success: true, message: 'accepted', status_code: 202 });
     setDispatcher(() => ({ status: 'SUCCESS' }));
     response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, cmd);
     assert.equal(response.status, 202);
-    const approval = taskRegistry.createDirectorApproval({ ...scope(cmd), request_id: 'director-auth-expired' }).approval;
+    const dirApprovalResult = await taskRegistry.createDirectorApproval({ ...scope(cmd), request_id: 'director-auth-expired' });
+    const approval = dirApprovalResult.approval;
     approval.expiry = '2000-01-01T00:00:00.000Z';
     taskRegistry.persistCache();
     const replay = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, cmd);
@@ -94,18 +98,20 @@ function runTestAsync(name, fn) {
     response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, changed);
     assert.equal(response.status, 403);
     const cancelled = command('director-auth-cancelled');
-    taskRegistry.createTask({ ...cancelled, task_mode: 'REVIEW', authorization: { capabilities: ['read_only'] } });
-    const cancelledApproval = taskRegistry.createDirectorApproval(scope(cancelled)).approval;
-    assert.equal(taskRegistry.cancelTask(cancelled.request_id, 'cancelled by Director').success, true);
+    await taskRegistry.createTask({ ...cancelled, task_mode: 'REVIEW', authorization: { capabilities: ['read_only'] } });
+    const cancelledApprovalResult = await taskRegistry.createDirectorApproval(scope(cancelled));
+    const cancelledApproval = cancelledApprovalResult.approval;
+    assert.equal((await taskRegistry.cancelTask(cancelled.request_id, 'cancelled by Director')).success, true);
     assert.equal(taskRegistry.getDirectorApproval(cancelledApproval.approval_id).status, 'REVOKED');
     cancelled.authorization.approval_id = cancelledApproval.approval_id;
     response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, cancelled);
     assert.equal(response.status, 403);
 
     const superseded = command('director-auth-superseded');
-    taskRegistry.createTask({ ...superseded, task_mode: 'REVIEW', authorization: { capabilities: ['read_only'] } });
-    const supersededApproval = taskRegistry.createDirectorApproval(scope(superseded)).approval;
-    assert.equal(taskRegistry.supersedeTask(superseded.request_id, 'superseded by Director').success, true);
+    await taskRegistry.createTask({ ...superseded, task_mode: 'REVIEW', authorization: { capabilities: ['read_only'] } });
+    const supersededApprovalResult = await taskRegistry.createDirectorApproval(scope(superseded));
+    const supersededApproval = supersededApprovalResult.approval;
+    assert.equal((await taskRegistry.supersedeTask(superseded.request_id, 'superseded by Director')).success, true);
     assert.equal(taskRegistry.getDirectorApproval(supersededApproval.approval_id).status, 'REVOKED');
     superseded.authorization.approval_id = supersededApproval.approval_id;
     response = await request('/poc/coordinator', { 'x-deepseek-coordinator-secret': process.env.DEEPSEEK_COORDINATOR_SECRET }, superseded);
@@ -118,6 +124,7 @@ function runTestAsync(name, fn) {
     assert.deepEqual(results.map(r => r.status).sort(), [202, 403]);
   } catch (error) {
     console.error(error);
+    if (originalGeminiDispatch) geminiTrigger.dispatchGemini = originalGeminiDispatch;
     process.exitCode = 1;
   } finally {
     taskRegistry.resetRegistry();

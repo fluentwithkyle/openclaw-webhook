@@ -151,10 +151,10 @@ const ACTIVATION_POLICY = Object.freeze({
       permitted_paths: getAuthorizedPathsForMode('FAILOVER_EXECUTE') || ['poc/']
     })
   }),
-  'Gemini Builder': Object.freeze({
+   'Gemini Builder': Object.freeze({
     'BUILDER': Object.freeze({
       requires_activation: true,
-      permitted_surfaces: ['github_issue_comment', 'workflow_dispatch'],
+      permitted_surfaces: ['workflow_dispatch'],
       required_capabilities: getRequiredCapabilitiesForMode('BUILDER'),
       permitted_paths: getAuthorizedPathsForMode('BUILDER') || ['poc/']
     })

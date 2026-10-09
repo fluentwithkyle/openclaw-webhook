@@ -230,9 +230,6 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
     }
 
     if (embeddedDescriptor) {
-        if (typeof embeddedDescriptor.target === 'string' && embeddedDescriptor.target.trim() !== '') {
-            target = embeddedDescriptor.target;
-        }
         if (typeof embeddedDescriptor.task === 'string' && embeddedDescriptor.task.trim() !== '') {
             task = embeddedDescriptor.task;
         }
