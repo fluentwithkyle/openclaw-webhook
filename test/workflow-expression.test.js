@@ -270,8 +270,8 @@ runTest('@gemini-cli activation prefix is required', () => {
   assert.ok(raw.includes("startsWith(github.event.comment.body, '@gemini-cli')"), '@gemini-cli prefix gate missing');
 });
 
-runTest('OWNER/MEMBER/COLLABORATOR authorization condition is present and intact', () => {
-  assert.ok(raw.includes("contains(fromJSON('[\"OWNER\", \"MEMBER\", \"COLLABORATOR\"]'), github.event.comment.author_association)"), 'authorization condition missing/changed');
+runTest('trusted Director username authorization condition is present and intact', () => {
+  assert.ok(raw.includes("github.event.comment.user.login == 'fluentwithkyle'"), 'trusted Director username authorization condition missing/changed');
 });
 
 runTest('gemini-acp-report.json artifact is published', () => {
