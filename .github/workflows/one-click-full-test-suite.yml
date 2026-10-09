@@ -42,6 +42,7 @@ jobs:
       - name: Run every test file and collect all failures
         shell: bash
         run: |
+          set +e
           failed=0
           for test_file in test/*.test.js; do
             echo "===== RUNNING: $test_file ====="
