@@ -86,7 +86,7 @@ async function main() {
     cleanup();
 
     // 1. Create task (PENDING)
-    let result = taskRegistry.createTask(validCommand);
+    let result = (await taskRegistry.createTask(validCommand));
     assertEqual(result.success, true);
     let task = taskRegistry.getTask('integration-test-1');
     assertEqual(task.status, 'PENDING');
@@ -94,19 +94,19 @@ async function main() {
     assertEqual(task.next_agent, 'Gemini');
 
     // 2. Transition to SELECTED
-    result = taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED');
+    result = (await taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED'));
     assertEqual(result.success, true);
     task = taskRegistry.getTask('integration-test-1');
     assertEqual(task.status, 'SELECTED');
 
     // 3. Transition to PLANNED
-    result = taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED');
+    result = (await taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED'));
     assertEqual(result.success, true);
     task = taskRegistry.getTask('integration-test-1');
     assertEqual(task.status, 'PLANNED');
 
     // 4. Transition to EXECUTING
-    result = taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING');
+    result = (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
     assertEqual(result.success, true);
     task = taskRegistry.getTask('integration-test-1');
     assertEqual(task.status, 'EXECUTING');
@@ -159,7 +159,7 @@ async function main() {
     assertEqual(task.current_agent, null);
 
     // 10. Final transition to COMPLETE
-    result = taskRegistry.updateTaskStatus('integration-test-1', 'COMPLETE');
+    result = (await taskRegistry.updateTaskStatus('integration-test-1', 'COMPLETE'));
     assertEqual(result.success, true);
     task = taskRegistry.getTask('integration-test-1');
     assertEqual(task.status, 'COMPLETE');
@@ -170,10 +170,10 @@ async function main() {
   await test('Orchestration with Kilo failure -> FAILED -> human_review', async () => {
     cleanup();
 
-    taskRegistry.createTask(validCommand);
-    taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING');
+    (await taskRegistry.createTask(validCommand));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
 
     const failureReport = { ...kiloReport, status: 'failure' };
     let result = orchestrator.handleKiloCompletion('integration-test-1', failureReport);
@@ -191,10 +191,10 @@ async function main() {
   await test('Orchestration with Kilo blocked -> BLOCKED -> human_review', async () => {
     cleanup();
 
-    taskRegistry.createTask(validCommand);
-    taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING');
+    (await taskRegistry.createTask(validCommand));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
 
     const blockedReport = { ...kiloReport, status: 'blocked', blockers: ['Missing authorization'] };
     let result = orchestrator.handleKiloCompletion('integration-test-1', blockedReport);
@@ -212,11 +212,11 @@ async function main() {
   await test('Orchestration with Gemini failure -> FAILED -> human_review', async () => {
     cleanup();
 
-    taskRegistry.createTask(validCommand);
-    taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING');
-    taskRegistry.updateAgentResult('integration-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+    (await taskRegistry.createTask(validCommand));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
+    (await taskRegistry.updateAgentResult('integration-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} }));
 
     const failureReport = { ...geminiReport, status: 'failure', blockers: ['Architecture concerns'] };
     let result = orchestrator.handleGeminiCompletion('integration-test-1', failureReport);
@@ -233,11 +233,11 @@ async function main() {
   await test('Orchestration with Gemini blocked -> BLOCKED -> human_review', async () => {
     cleanup();
 
-    taskRegistry.createTask(validCommand);
-    taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING');
-    taskRegistry.updateAgentResult('integration-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+    (await taskRegistry.createTask(validCommand));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
+    (await taskRegistry.updateAgentResult('integration-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} }));
 
     const blockedReport = { ...geminiReport, status: 'blocked', blockers: ['Needs human decision'] };
     let result = orchestrator.handleGeminiCompletion('integration-test-1', blockedReport);
@@ -255,17 +255,17 @@ async function main() {
     cleanup();
 
     const parentCommand = { ...validCommand, request_id: 'parent-123' };
-    assertEqual(taskRegistry.createTask(parentCommand).success, true);
-    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'SELECTED').success, true);
-    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'PLANNED').success, true);
-    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'EXECUTING').success, true);
-    assertEqual(taskRegistry.updateTaskStatus('parent-123', 'FAILED').success, true);
+    assertEqual((await taskRegistry.createTask(parentCommand)).success, true);
+    assertEqual((await taskRegistry.updateTaskStatus('parent-123', 'SELECTED')).success, true);
+    assertEqual((await taskRegistry.updateTaskStatus('parent-123', 'PLANNED')).success, true);
+    assertEqual((await taskRegistry.updateTaskStatus('parent-123', 'EXECUTING')).success, true);
+    assertEqual((await taskRegistry.updateTaskStatus('parent-123', 'FAILED')).success, true);
 
     const customCommand = { ...validCommand, request_id: 'correlation-test-42', parent_request_id: 'parent-123' };
-    assertEqual(taskRegistry.createTask(customCommand).success, true);
-    taskRegistry.updateTaskStatus('correlation-test-42', 'SELECTED');
-    taskRegistry.updateTaskStatus('correlation-test-42', 'PLANNED');
-    taskRegistry.updateTaskStatus('correlation-test-42', 'EXECUTING');
+    assertEqual((await taskRegistry.createTask(customCommand)).success, true);
+    (await taskRegistry.updateTaskStatus('correlation-test-42', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('correlation-test-42', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('correlation-test-42', 'EXECUTING'));
 
     orchestrator.handleKiloCompletion('correlation-test-42', { ...kiloReport, request_id: 'correlation-test-42' });
     orchestrator.handleGeminiCompletion('correlation-test-42', { ...geminiReport, request_id: 'correlation-test-42' });
@@ -282,10 +282,10 @@ async function main() {
   await test('Malformed report rejected safely', async () => {
     cleanup();
 
-    taskRegistry.createTask(validCommand);
-    taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING');
+    (await taskRegistry.createTask(validCommand));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
 
     const malformedReport = { request_id: 'integration-test-1' }; // missing required fields
     let result = orchestrator.handleKiloCompletion('integration-test-1', malformedReport);
@@ -316,9 +316,9 @@ async function main() {
   await test('Invalid state transition rejected', async () => {
     cleanup();
 
-    taskRegistry.createTask(validCommand);
+    (await taskRegistry.createTask(validCommand));
     // Try to go from PENDING directly to COMPLETE
-    let result = taskRegistry.updateTaskStatus('integration-test-1', 'COMPLETE');
+    let result = (await taskRegistry.updateTaskStatus('integration-test-1', 'COMPLETE'));
     assertEqual(result.success, false);
     assert(result.error.includes('Invalid state transition'));
 
@@ -328,10 +328,10 @@ async function main() {
   await test('Authorization boundary preserved - reports are evidence not authorization', async () => {
     cleanup();
 
-    taskRegistry.createTask(validCommand);
-    taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING');
+    (await taskRegistry.createTask(validCommand));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
 
     // Report with commit/push=true but no authorization in ACP command for it
     const reportWithPush = { ...kiloReport, commit: 'new-commit', push: true };
@@ -354,10 +354,10 @@ async function main() {
 
     // Create command with the correct request_id
     const cmd = { ...validCommand, request_id: 'auto-trigger-1' };
-    taskRegistry.createTask(cmd);
-    taskRegistry.updateTaskStatus('auto-trigger-1', 'SELECTED');
-    taskRegistry.updateTaskStatus('auto-trigger-1', 'PLANNED');
-    taskRegistry.updateTaskStatus('auto-trigger-1', 'EXECUTING');
+    (await taskRegistry.createTask(cmd));
+    (await taskRegistry.updateTaskStatus('auto-trigger-1', 'SELECTED'));
+    (await taskRegistry.updateTaskStatus('auto-trigger-1', 'PLANNED'));
+    (await taskRegistry.updateTaskStatus('auto-trigger-1', 'EXECUTING'));
 
     // Handle Kilo completion - this sets next_action to 'trigger_builder'
     const kiloResult = orchestrator.handleKiloCompletion('auto-trigger-1', { ...kiloReport, request_id: 'auto-trigger-1' });

@@ -55,12 +55,12 @@ const validCommand = {
     originator: 'Kyle'
 };
 
-function setupTask(requestId) {
+async function setupTask(requestId) {
     cleanup();
-    taskRegistry.createTask({ ...validCommand, request_id: requestId });
-    taskRegistry.updateTaskStatus(requestId, 'SELECTED');
-    taskRegistry.updateTaskStatus(requestId, 'PLANNED');
-    taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+    (await taskRegistry.createTask({ ...validCommand, request_id: requestId }));
+    (await taskRegistry.updateTaskStatus(requestId, 'SELECTED'));
+    (await taskRegistry.updateTaskStatus(requestId, 'PLANNED'));
+    (await taskRegistry.updateTaskStatus(requestId, 'EXECUTING'));
 }
 
 async function main() {
@@ -76,8 +76,8 @@ async function main() {
     await runTest('pollKiloCompletion - returns terminal success when Kilo already completed', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-2');
-        taskRegistry.updateAgentResult('poll-test-2', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} });
+        await setupTask('poll-test-2');
+        (await taskRegistry.updateAgentResult('poll-test-2', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} }));
         const result = await kiloPolling.pollKiloCompletion('poll-test-2');
         assertEqual(result.success, true);
         assertEqual(result.terminal, true);
@@ -87,7 +87,7 @@ async function main() {
     await runTest('pollKiloCompletion - returns error when no provider client', async () => {
         cleanup();
         kiloPolling.setProviderClient(null);
-        setupTask('poll-test-3');
+        await setupTask('poll-test-3');
         const result = await kiloPolling.pollKiloCompletion('poll-test-3');
         assertEqual(result.success, false);
         assert(result.error.includes('No provider client configured'));
@@ -96,7 +96,7 @@ async function main() {
     await runTest('pollKiloCompletion - returns in_progress when provider returns in_progress', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-4');
+        await setupTask('poll-test-4');
         mockKiloProvider.setMockStatus('poll-test-4', 'in_progress');
         const result = await kiloPolling.pollKiloCompletion('poll-test-4');
         assertEqual(result.success, true);
@@ -106,7 +106,7 @@ async function main() {
     await runTest('pollAndProcess - processes success completion', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-5');
+        await setupTask('poll-test-5');
         mockKiloProvider.setMockStatus('poll-test-5', 'success', {
             task: 'poll-test-task',
             changed_files: ['file1.js'],
@@ -127,7 +127,7 @@ async function main() {
     await runTest('pollAndProcess - processes failure completion', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-6');
+        await setupTask('poll-test-6');
         mockKiloProvider.setMockStatus('poll-test-6', 'failure', {
             task: 'poll-test-task',
             changed_files: [],
@@ -149,7 +149,7 @@ async function main() {
     await runTest('pollAndProcess - processes blocked completion', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-7');
+        await setupTask('poll-test-7');
         mockKiloProvider.setMockStatus('poll-test-7', 'blocked', {
             task: 'poll-test-task',
             changed_files: [],
@@ -171,7 +171,7 @@ async function main() {
     await runTest('pollAndProcess - idempotency returns same result for duplicate calls', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-8');
+        await setupTask('poll-test-8');
         mockKiloProvider.setMockStatus('poll-test-8', 'success', {
             task: 'poll-test-task',
             changed_files: ['file1.js'],
@@ -193,12 +193,12 @@ async function main() {
     await runTest('pollAndProcess - uses provider identifiers from task registry', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-9');
+        await setupTask('poll-test-9');
         const task = taskRegistry.getTask('poll-test-9');
         task.kilo.provider_session_id = 'session-123';
         task.kilo.provider_message_id = 'message-456';
         task.kilo.provider_invocation_id = 'invocation-789';
-        taskRegistry.persistCache();
+        (await taskRegistry.persistCache());
 
         mockKiloProvider.setMockStatus('poll-test-9', 'success', {
             task: 'poll-test-task',
@@ -219,7 +219,7 @@ async function main() {
     await runTest('startPolling - starts and stops correctly', async () => {
         cleanup();
         kiloPolling.setProviderClient(mockKiloProvider);
-        setupTask('poll-test-10');
+        await setupTask('poll-test-10');
         mockKiloProvider.setMockStatus('poll-test-10', 'success', {
             task: 'poll-test-task',
             changed_files: ['file1.js'],
