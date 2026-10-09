@@ -40,7 +40,7 @@ on:
         required: false
         type: string
       task_mode:
-        description: 'Operating mode: REVIEW (read-only), VERIFY_RECONCILE (bounded commit/push), RESEARCH_DOCUMENT (research + documentation persistence), or FAILOVER_EXECUTE (full execution)'
+        description: 'Operating mode: REVIEW (read-only), VERIFY_RECONCILE (bounded commit/push), RESEARCH_DOCUMENT (research + documentation persistence), or FAILOVER_EXECUTE (full execution). PLAN and EXECUTE are conceptual Director-facing modes, not runtime values — rejected at the canonical ingress.'
         required: false
         type: string
         default: 'REVIEW'

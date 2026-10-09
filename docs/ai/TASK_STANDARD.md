@@ -10,7 +10,7 @@ A **canonical ACP task artifact** is a structured task request conforming to the
 
 A **prose task description** uses narrative headings such as "Objective", "Procedure", "Execution Requirements", and "Completion Criteria" without the canonical envelope fields. **Headings such as Objective, Procedure, Execution Requirements, and Completion Criteria do not, by themselves, constitute ACP compliance.** A generic prose task specification is not a substitute for the canonical ACP artifact. The complete canonical task envelope defined below is required.
 
-This distinction and the fail-closed artifact-verification rule are enforced in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 8, ACP Task-Protocol Hardening) and must be applied to the final artifact that will actually be posted/sent.
+This distinction and the fail-closed artifact-verification rule are enforced in `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md` (Section 8, ACP Task-Protocol Hardening) and must be applied to the final artifact that will actually be posted/sent. Machine validation is performed by `validateAcpTaskArtifact()` in `poc/schemas/acp-schema.js` (Section 10).
 
 ## 1. Task Request Envelope
 
@@ -21,8 +21,8 @@ All task requests must be structured with the following fields:
 - `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Gemini Builder", "Kilo").
 - `repository`: (Required) The repository the task applies to.
 - `base_branch`: (Required) The branch the task is based on and intended to integrate with.
-- `task_mode`: (Required) The execution mode. One of: "RESEARCH_DOCUMENT", "PLAN", "EXECUTE", or "VERIFY_RECONCILE". See Section 9 for task mode definitions. The runtime enforces `task_mode` against the server-defined `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js`.
-- `capabilities`: (Required) Explicit list of capabilities required (e.g., "inspect", "modify_files", "commit", "push").
+ - `task_mode`: (Required) The execution mode. One of the runtime-accepted values: "REVIEW", "VERIFY_RECONCILE", "FAILOVER_EXECUTE", "BUILDER", or "RESEARCH_DOCUMENT". The runtime enforces `task_mode` against the server-defined `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js`. "PLAN" and "EXECUTE" are Director-facing conceptual classifications, not literal runtime `task_mode` values; see Section 9 for the conceptual-to-runtime mapping. Submitting `task_mode: "PLAN"` or `task_mode: "EXECUTE"` to the canonical activation ingress results in `INVALID_TASK_MODE` — these are never silently downgraded.
+ - `capabilities`: (Required) Explicit list of capabilities required (e.g., "read_only", "modify_files", "commit", "push", "run_tests"). Runtime-valid capabilities are defined by `VALID_CAPABILITIES` in `poc/schemas/acp-schema.js`. "inspect" is not a valid runtime capability; read-only inspection is granted by the `read_only` capability.
 - `objective`: (Required) A concise statement of the goal.
 - `scope`: (Required) Clear definition of the files, directories, or architectural boundaries impacted.
 - `verification`: (Required) Specific criteria for verifying the task completion.
@@ -277,7 +277,7 @@ The execution agent refreshes CONTROL_CENTER.md as part of the task verification
   "repository": "fluentwithkyle/openclaw-webhook",
   "base_branch": "main",
   "task_mode": "FAILOVER_EXECUTE",
-  "capabilities": ["inspect", "modify_files", "run_tests", "commit"],
+  "capabilities": ["read_only", "modify_files", "run_tests", "commit"],
   "objective": "Fix bug in abandoned booking trigger.",
   "scope": {
     "permitted_paths": ["workflows/abandonedBooking.js"]
@@ -454,3 +454,47 @@ A VERIFY_RECONCILE task cannot be considered complete until:
 #### 9.4.3 Authorization Boundary Preserved
 
 Reconciliation being mandatory within the task does not bypass existing authorization gates. The mandatory nature of reconciliation is a task-internal procedural requirement, not an authorization grant. Authorization remains governed by the ACP command envelope: explicit capabilities are never implied, `modify_files` does not authorize `commit`, `commit` does not authorize `push`, and every capability must be explicitly granted. Only explicitly authorized paths may be modified. The fact that reconciliation is mandatory within a VERIFY_RECONCILE task does not authorize repository changes outside the explicitly authorized `permitted_paths` or capabilities.
+
+## 10. Canonical ACP Artifact JSON Syntax Contract
+
+A canonical ACP task artifact embedded in an issue body, comment, or workflow input MUST be valid JSON conforming to the standard double-quote (U+0022) JSON dialect. The following rules are machine-enforced by `validateAcpTaskArtifactSyntax()` in `poc/schemas/acp-schema.js` and `extractEmbeddedAcpDescriptor()` in `poc/external-activation-validator.js`:
+
+### 10.1 Required JSON Syntax
+
+- **Double-quote delimiters**: All strings, keys, and string values MUST use standard double quotes (`"`, U+0022). Smart/curly quotes (U+2018 `'`, U+2019 `'`, U+201C `"`, U+201D `"`) are **rejected** as JSON delimiters with error code `MALFORMED_JSON_SMART_QUOTE`.
+- **Quoted keys**: All object keys MUST be enclosed in double quotes. Unquoted keys are invalid JSON.
+- **Valid JSON values**: Strings (double-quoted), numbers, booleans, null, arrays, and objects are permitted. Unicode text within string values is allowed; the restriction applies to JSON syntax, not character content.
+- **No comments**: `//` line comments and `/* */` block comments are not permitted.
+- **No trailing commas**: A comma after the last element of an object or array is invalid JSON.
+- **No single-quoted strings**: Single quotes (`'`) as string delimiters are invalid JSON.
+- **Control character escaping**: Control characters (U+0000–U+001F) inside strings MUST be escaped. Unescaped backslashes and quotes inside string values MUST be properly escaped with `\`.
+
+### 10.2 Machine-Enforced Validation
+
+The exact final artifact can be passed through `validateAcpTaskArtifact(artifactText)` in `poc/schemas/acp-schema.js` (exported via `poc/acp-engine.js`). This function:
+
+1. Validates JSON syntax (returns `MALFORMED_JSON_SMART_QUOTE` for curved quotes, `MALFORMED_JSON` for other parse errors, with the offending location when determinable).
+2. Validates the canonical task envelope: all required fields present (`task_name` first, `capabilities` immediately before `objective`).
+3. Validates field ordering against `CANONICAL_TASK_ARTIFACT_FIELD_ORDER`.
+4. Validates `task_mode` against `VALID_TASK_MODES` (rejects `PLAN` and `EXECUTE` as `NON_RUNTIME_TASK_MODE`, never silently downgrading).
+5. Validates capabilities against `VALID_CAPABILITIES` and mode-specific capability sets.
+6. Validates `permitted_paths` against `MAX_AUTHORIZED_PATHS`.
+7. Validates authority boundaries: no untrusted field grants server-derived authority.
+
+### 10.3 Pre-Send ACP Compliance Checklist
+
+Before presenting an ACP artifact for authorization, verify ALL of the following against the **exact final artifact that will be posted/sent**:
+
+- [ ] **JSON syntax**: The artifact is valid JSON with standard double-quote (U+0022) delimiters. Run `validateAcpTaskArtifactSyntax()` — it must return `{ valid: true }`.
+- [ ] **Copy/paste safety**: The artifact contains no smart/curly quotes, no comments, no trailing commas, no single-quoted strings, no unquoted keys.
+- [ ] **Complete ACP envelope**: All required fields present: `task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`. Omission of `task_name` is an ACP compliance failure.
+- [ ] **Canonical field ordering**: `task_name` appears first; `capabilities` appears immediately before `objective`. Run `validateCanonicalFieldOrder()` — it must return `{ valid: true }`.
+- [ ] **Task identity**: `task_name` matches the task's actual identifier/name, verified against the task's title and identifier.
+- [ ] **Runtime-mode compatibility**: `task_mode` is one of the runtime-accepted values (`REVIEW`, `VERIFY_RECONCILE`, `FAILOVER_EXECUTE`, `BUILDER`, `RESEARCH_DOCUMENT`). `PLAN` and `EXECUTE` are NOT runtime modes and are rejected, never silently downgraded.
+- [ ] **Server-derived permissions**: Capabilities and permitted_paths are derived from the server-side activation-policy authority, not from task-supplied values. Task-supplied `authorization.capabilities` and `constraints.permitted_paths` do NOT grant authority.
+- [ ] **Mode-specific rules**: REVIEW requires exactly `["read_only"]`; RESEARCH_DOCUMENT requires exactly `["read_only", "modify_files", "commit", "push"]`; FAILOVER_EXECUTE/BUILDER require the full execution capability set and Director authorization.
+- [ ] **Initiation syntax**: Required protocol markers (e.g., `@kilo`) are present and exact (case-sensitive).
+- [ ] **Full machine validation**: `validateAcpTaskArtifact(artifactText)` on the final artifact returns `{ valid: true }`. A human checklist alone does not satisfy this requirement.
+- [ ] **Identical artifact**: The artifact to be sent is byte-for-byte identical to the validated artifact. No post-validation edits.
+
+**A task is NOT READY — ACP COMPLIANCE INCOMPLETE if validation cannot be established.** Do not proceed to authorization until the exact final artifact passes machine validation.

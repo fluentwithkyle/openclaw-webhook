@@ -155,6 +155,8 @@ function validateExternalActivation(params, callbackUrl, callbackSecret, directo
 }
 
 const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE', 'BUILDER', 'RESEARCH_DOCUMENT'];
+const NON_RUNTIME_TASK_MODES = ['PLAN', 'EXECUTE'];
+const SMART_QUOTE_CHARS = ['\u2018', '\u2019', '\u201A', '\u201B', '\u201C', '\u201D', '\u201E', '\u201F'];
 
 var ACP_DESCRIPTOR_FIELDS = ['task_mode', 'task', 'target', 'verification', 'capabilities', 'permitted_paths', 'task_name', 'request_id'];
 
@@ -166,6 +168,17 @@ function looksLikeAcpDescriptor(text) {
         }
     }
     return false;
+}
+
+function detectSmartQuote(jsonText) {
+    if (typeof jsonText !== 'string') return null;
+    for (var i = 0; i < SMART_QUOTE_CHARS.length; i++) {
+        var idx = jsonText.indexOf(SMART_QUOTE_CHARS[i]);
+        if (idx !== -1) {
+            return { char: SMART_QUOTE_CHARS[i], code: 'U+' + SMART_QUOTE_CHARS[i].codePointAt(0).toString(16).toUpperCase().padStart(4, '0'), location: idx };
+        }
+    }
+    return null;
 }
 
 function extractEmbeddedAcpDescriptor(commentBody) {
@@ -197,6 +210,16 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     } catch (e) {
         if (!looksLikeAcpDescriptor(match[0])) {
             return null;
+        }
+        var smartQuoteDetection = detectSmartQuote(match[0]);
+        if (smartQuoteDetection) {
+            return {
+                _malformed_json: true,
+                _json_parse_error: 'Malformed JSON: smart/curly quotation mark (' + smartQuoteDetection.code + ') used as JSON delimiter; JSON requires standard double-quote (U+0022)',
+                _malformed_json_error_code: 'MALFORMED_JSON_SMART_QUOTE',
+                _smart_quote: smartQuoteDetection,
+                _raw_match: match[0]
+            };
         }
         return {
             _malformed_json: true,
@@ -327,7 +350,27 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
 }
 
 function buildActivationPayloadForWorkflowDispatch(inputs) {
-    const taskMode = inputs.task_mode || 'REVIEW';
+    const rawTaskMode = inputs.task_mode || 'REVIEW';
+    const taskMode = rawTaskMode;
+
+    if (NON_RUNTIME_TASK_MODES.includes(rawTaskMode)) {
+        return {
+            error: 'task_mode "' + rawTaskMode + '" is a conceptual Director-facing mode, not a runtime task_mode. Runtime-accepted values are: ' + VALID_TASK_MODES.join(', ') + '. See TASK_STANDARD.md Section 9.',
+            error_code: 'NON_RUNTIME_TASK_MODE',
+            invalid_task_mode: rawTaskMode,
+            valid_runtime_modes: VALID_TASK_MODES
+        };
+    }
+
+    if (!VALID_TASK_MODES.includes(rawTaskMode)) {
+        return {
+            error: 'Invalid task_mode: "' + rawTaskMode + '". Must be one of: ' + VALID_TASK_MODES.join(', '),
+            error_code: 'INVALID_TASK_MODE',
+            invalid_task_mode: rawTaskMode,
+            valid_runtime_modes: VALID_TASK_MODES
+        };
+    }
+
     const capabilities = inputs.capabilities || 'read_only';
     const permittedPaths = inputs.permitted_paths || 'poc/';
 
@@ -357,7 +400,27 @@ function buildActivationPayloadForWorkflowDispatch(inputs) {
 }
 
 function buildBuilderActivationPayload(inputs) {
-    const taskMode = inputs.task_mode || 'BUILDER';
+    const rawTaskMode = inputs.task_mode || 'BUILDER';
+    const taskMode = rawTaskMode;
+
+    if (NON_RUNTIME_TASK_MODES.includes(rawTaskMode)) {
+        return {
+            error: 'task_mode "' + rawTaskMode + '" is a conceptual Director-facing mode, not a runtime task_mode. Runtime-accepted values are: ' + VALID_TASK_MODES.join(', ') + '. See TASK_STANDARD.md Section 9.',
+            error_code: 'NON_RUNTIME_TASK_MODE',
+            invalid_task_mode: rawTaskMode,
+            valid_runtime_modes: VALID_TASK_MODES
+        };
+    }
+
+    if (!VALID_TASK_MODES.includes(rawTaskMode)) {
+        return {
+            error: 'Invalid task_mode: "' + rawTaskMode + '". Must be one of: ' + VALID_TASK_MODES.join(', '),
+            error_code: 'INVALID_TASK_MODE',
+            invalid_task_mode: rawTaskMode,
+            valid_runtime_modes: VALID_TASK_MODES
+        };
+    }
+
     const capabilities = inputs.capabilities || 'read_only,modify_files,run_tests,commit,push';
     const permittedPaths = inputs.permitted_paths || 'poc/';
 
@@ -396,5 +459,10 @@ module.exports = {
     verifyDirectorOriginAssertion,
     verifyDirectorOriginAssertionAgainstTaskRegistry,
     extractEmbeddedAcpDescriptor,
-    ACTIVATION_INGRESS_PATH
+    detectSmartQuote,
+    looksLikeAcpDescriptor,
+    ACTIVATION_INGRESS_PATH,
+    VALID_TASK_MODES,
+    NON_RUNTIME_TASK_MODES,
+    SMART_QUOTE_CHARS
 };
