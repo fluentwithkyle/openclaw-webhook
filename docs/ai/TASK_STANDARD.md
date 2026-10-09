@@ -21,13 +21,13 @@ All task requests must be structured with the following fields:
 - `target_agent`: (Required) The agent to perform the task (e.g., "Gemini", "Gemini Builder", "Kilo").
 - `repository`: (Required) The repository the task applies to.
 - `base_branch`: (Required) The branch the task is based on and intended to integrate with.
- - `task_mode`: (Required) The execution mode. One of the runtime-accepted values: "REVIEW", "VERIFY_RECONCILE", "FAILOVER_EXECUTE", "BUILDER", or "RESEARCH_DOCUMENT". The runtime enforces `task_mode` against the server-defined `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js`. "PLAN" and "EXECUTE" are Director-facing conceptual classifications, not literal runtime `task_mode` values; see Section 9 for the conceptual-to-runtime mapping. Submitting `task_mode: "PLAN"` or `task_mode: "EXECUTE"` to the canonical activation ingress results in `INVALID_TASK_MODE` — these are never silently downgraded.
+ - `task_mode`: (Required) The execution mode. One of the runtime-accepted values: "REVIEW", "VERIFY_RECONCILE", "FAILOVER_EXECUTE", "BUILDER", or "RESEARCH_DOCUMENT". The runtime enforces `task_mode` against the server-defined `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js`. "PLAN" and "EXECUTE" are Director-facing conceptual classifications, not literal runtime `task_mode` values; see Section 9 for the conceptual-to-runtime mapping. The canonical artifact validator rejects literal `PLAN` and `EXECUTE` values with `NON_RUNTIME_TASK_MODE`; the canonical activation ingress rejects them with `INVALID_TASK_MODE`. Neither stage silently downgrades these values.
  - `capabilities`: (Required) Explicit list of capabilities required (e.g., "read_only", "modify_files", "commit", "push", "run_tests"). Runtime-valid capabilities are defined by `VALID_CAPABILITIES` in `poc/schemas/acp-schema.js`. "inspect" is not a valid runtime capability; read-only inspection is granted by the `read_only` capability.
 - `objective`: (Required) A concise statement of the goal.
 - `scope`: (Required) Clear definition of the files, directories, or architectural boundaries impacted.
 - `verification`: (Required) Specific criteria for verifying the task completion.
-- `constraints`: (Optional) Operational limits or rules (e.g., "no-new-dependencies").
-- `conflict_handling`: (Optional) Instructions for handling rule conflicts.
+- `constraints`: (Required) Operational limits or rules (e.g., "no-new-dependencies"). If no additional constraints apply, keep the field present and state that explicitly.
+- `conflict_handling`: (Required) Instructions for handling rule conflicts; state how conflicts must be resolved rather than omitting the field.
 
 The canonical field ordering is: `task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`. The `task_name` field must appear first so the task's exact identifier is immediately visible. The `capabilities` field must appear immediately before `objective` so that the task's authorized capabilities are immediately visible to the Director before the objective is reviewed or the task is authorized.
 
@@ -392,7 +392,7 @@ The agent produces a structured implementation plan — affected files, steps, r
 
 `PLAN` is a Director-facing planning classification that has no runtime task_mode authority. The runtime `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js` does not include `PLAN`. Planning is performed within `REVIEW` scope (read-only, `poc/`): the agent inspects the repository and produces a plan, but the plan does not trigger execution. An implementation task is activated as `FAILOVER_EXECUTE` (for Gemini or Kilo execution) or `BUILDER` (for the Gemini Builder lane), each of which requires explicit Director authorization.
 
-**Not a runtime mode:** Submitting `task_mode: "PLAN"` to the canonical activation ingress results in `INVALID_TASK_MODE`. Planning must be expressed as a `REVIEW`-mode task or an `EXECUTE`-mode task via its runtime equivalent (`FAILOVER_EXECUTE` or `BUILDER`).
+**Not a runtime mode:** The canonical artifact validator rejects literal `task_mode: "PLAN"` with `NON_RUNTIME_TASK_MODE`; submitting it to the canonical activation ingress results in `INVALID_TASK_MODE`. Planning must be expressed as a `REVIEW`-mode task or an execution task using its runtime equivalent (`FAILOVER_EXECUTE` or `BUILDER`).
 
 ### 9.3 EXECUTE
 
@@ -400,7 +400,7 @@ The agent implements the authorized task within the permitted scope, validates, 
 
 `EXECUTE` is the Director-facing conceptual execution mode. At runtime, the execution task_mode is **`FAILOVER_EXECUTE`** — this is the accepted canonical `task_mode` for execution tasks. The runtime `VALID_TASK_MODES` in `poc/schemas/acp-schema.js` and `poc/activation-policy.js` does not include the literal string `EXECUTE`; it includes `FAILOVER_EXECUTE` (for Gemini/Kilo execution) and `BUILDER` (for the Gemini Builder lane). An ACP task artifact declaring `task_mode: "EXECUTE"` is mapped to `FAILOVER_EXECUTE` by the director-facing coordinator before submission to the canonical activation ingress.
 
-**Not a runtime mode:** Submitting `task_mode: "EXECUTE"` directly to the canonical activation ingress results in `INVALID_TASK_MODE`. The runtime-accepted canonical execution modes are `FAILOVER_EXECUTE` and `BUILDER`.
+**Not a runtime mode:** The canonical artifact validator rejects literal `task_mode: "EXECUTE"` with `NON_RUNTIME_TASK_MODE`; submitting it directly to the canonical activation ingress results in `INVALID_TASK_MODE`. The runtime-accepted canonical execution modes are `FAILOVER_EXECUTE` and `BUILDER`.
 
 **Runtime capabilities:** `FAILOVER_EXECUTE` requires exactly `['read_only', 'modify_files', 'run_tests', 'commit', 'push']` (the fixed set). `BUILDER` requires the same fixed set. Both require Director authorization via `DIRECTOR_ORIGIN_SECRET` (see `poc/activation-policy.js` `CONFIG_PREREQUISITE_GATE`).
 

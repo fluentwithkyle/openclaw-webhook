@@ -622,7 +622,7 @@ docs/ai/TASK_STANDARD.md
 An ACP task should identify, as applicable:
 
 * task_name
-* request_id
+* `request_id` when required by the activation/orchestration surface; it is not a required field in the canonical task-artifact JSON envelope.
 * originator
 * target_agent
 * repository
@@ -754,15 +754,13 @@ If an applicable requirement cannot be verified against the completed ACP artifa
 - [ ] **Complete task title, task identifier, and task_name**: The `task_name` field is explicitly included inside the ACP artifact and matches the task's actual identifier/name. Both task title and task identifier are also explicitly included.
 - [ ] **JSON syntax and copy/paste safety**: The artifact is valid JSON using standard double-quote (U+0022) delimiters only — no smart/curly quotes, no comments, no trailing commas, no single-quoted strings, no unquoted keys. `validateAcpTaskArtifactSyntax()` returns `{ valid: true }`.
 - [ ] **Required initiation syntax**: Task includes all required agent trigger markers (e.g., `@kilo` at start of issue body) per configured integration.
-- [ ] **Complete ACP envelope**: All required ACP fields present (`task_name`, `request_id`, `originator`,
-  `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`,
-  `scope`, `verification`, `constraints`, `conflict_handling`). Omission of `task_name`
-  is an ACP compliance failure requiring correction before authorization.
+- [ ] **Complete ACP envelope**: All canonical task-artifact fields required by `validateAcpTaskArtifact()` are present (`task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`). Omission of any required field is an ACP compliance failure requiring correction before authorization.
+- [ ] **Activation correlation identifier (when applicable)**: `request_id` is not a required field of the canonical task-artifact JSON envelope. Include and validate it separately wherever the selected activation/orchestration surface requires it; the external activation ingress requires a non-empty `request_id`.
 - [ ] **Canonical field ordering**: `task_name` appears first; `capabilities` immediately precedes `objective`. `validateCanonicalFieldOrder()` returns `{ valid: true }`.
 - [ ] **Runtime ACP schema compatibility**: Task structure is compatible with `poc/schemas/acp-schema.js`. The exact final artifact passes `validateAcpTaskArtifact(artifactText)` with `{ valid: true }`.
 - [ ] **Explicit capabilities**: Capabilities requiring explicit authorization (`modify_files`, `commit`, `push`, `deploy`, `external_communication`) are explicitly listed. `read_only` is the runtime capability for read-only inspection — `inspect` is not a valid runtime capability.
 - [ ] **Explicit permitted paths**: `permitted_paths` are explicitly defined and within authorized bounds. Task-supplied `permitted_paths` are informational only; the server derives actual authority from the activation policy.
-  - [ ] **Task-mode semantics**: Correct `task_mode` from the runtime-accepted set (REVIEW, VERIFY_RECONCILE, FAILOVER_EXECUTE, BUILDER, RESEARCH_DOCUMENT) — NOT `PLAN` or `EXECUTE`, which are conceptual Director-facing classifications that result in `NON_RUNTIME_TASK_MODE` rejection when submitted as literal runtime values. See `docs/ai/TASK_STANDARD.md` Section 9.
+  - [ ] **Task-mode semantics**: `task_mode` must be one of the runtime-accepted values (REVIEW, VERIFY_RECONCILE, FAILOVER_EXECUTE, BUILDER, RESEARCH_DOCUMENT). `PLAN` and `EXECUTE` are conceptual Director-facing classifications, not runtime values: `validateAcpTaskArtifact()` rejects them as `NON_RUNTIME_TASK_MODE`, while the canonical activation ingress rejects literal values as `INVALID_TASK_MODE`. Neither stage silently downgrades them. See `docs/ai/TASK_STANDARD.md` Section 9.
 - [ ] **Server-derived permissions**: Capabilities and permitted_paths are verified against `poc/activation-policy.js` `ACTIVATION_POLICY`. Task-supplied authority fields are checked for conflicts; the server does not grant authority from untrusted descriptor fields.
 - [ ] **Intrinsic completion requirements**: Defined completion criteria are present in `verification`.
 - [ ] **Executable verification requirements**: Verification criteria are executable and verifiable.
