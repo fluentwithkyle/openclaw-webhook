@@ -1,7 +1,7 @@
 const https = require('https');
 const crypto = require('crypto');
 const taskRegistry = require('./task-registry');
-const { validateAcpTaskArtifact } = require('./schemas/acp-schema');
+const { validateAcpTaskArtifact, validateAcpTaskArtifactSyntax } = require('./schemas/acp-schema');
 
 const ACTIVATION_INGRESS_PATH = '/poc/activation/ingress';
 
@@ -305,10 +305,10 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
      }
 
      if (embeddedDescriptor && embeddedDescriptor._raw_match) {
-         var artifactValidation = validateAcpTaskArtifact(embeddedDescriptor._raw_match);
+         var artifactValidation = validateAcpTaskArtifactSyntax(embeddedDescriptor._raw_match);
          if (!artifactValidation.valid) {
              return {
-                 error: 'Embedded ACP descriptor failed canonical artifact validation: ' + artifactValidation.error,
+                 error: 'Embedded ACP descriptor failed artifact syntax validation: ' + artifactValidation.error,
                  error_code: 'ARTIFACT_VALIDATION_FAILED',
                  validation_error_code: artifactValidation.error_code,
                  validation_details: artifactValidation

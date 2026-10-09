@@ -14,7 +14,7 @@ const review = routeSpecialistIntent('Research the current coordinator behavior'
 assert.deepEqual({ lane: review.lane, target: review.target, task_mode: review.task_mode, capabilities: review.capabilities }, {
     lane: 'Gemini Reviewer', target: 'Gemini', task_mode: 'REVIEW', capabilities: ['read_only']
 });
-assert.equal(request('Review coordinator contract').target, 'Gemini');
+assert.equal(request('Review phase 4 cross-task coordinator contract').target, 'Gemini');
 
 const security = routeSpecialistIntent('Audit authentication and credential handling');
 assert.equal(security.lane, 'Security Specialist');
@@ -33,7 +33,7 @@ assert.throws(() => request('Format the README documentation'), error => error.c
 const builder = routeSpecialistIntent('Implement a code change');
 assert.equal(builder.lane, 'Gemini Builder');
 assert.equal(builder.authorization_required, true);
-const builderCommand = request('Implement coordinator contract');
+const builderCommand = request('Implement phase 4 cross-task coordinator contract');
 assert.equal(builderCommand.target, 'Gemini Builder');
 assert.equal(builderCommand.task_mode, 'BUILDER');
 assert.deepEqual(builderCommand.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
@@ -48,7 +48,7 @@ assert.equal(explicitKilo.lane, 'Kilo');
 assert.equal(explicitKilo.authorization_required, true);
 
 assert.throws(() => request('Do something'), error => error.code === 'STRATEGIC_ALIGNMENT_BLOCKED');
-assert.throws(() => request('Review coordinator contract', { parent_request_id: 'deepseek-runtime-parent', target: 'Kilo' }), /not permitted/);
+assert.throws(() => request('Review phase 4 cross-task coordinator contract', { parent_request_id: 'deepseek-runtime-parent', target: 'Kilo' }), /not permitted/);
 for (const forbidden of ['target', 'capabilities', 'task_mode', 'permitted_paths', 'repository', 'base_branch', 'authorization']) {
     assert.equal(CONTROL_PLANE_TOOL.function.parameters.properties[forbidden], undefined);
 }

@@ -443,7 +443,7 @@ async function recoverTaskFromGitHub(requestId, githubToken) {
       };
     }
 
-    var rehydrateResult = taskRegistry.rehydrateTask(command);
+    const rehydrateResult = await taskRegistry.rehydrateTask(command);
     if (!rehydrateResult.success) {
       return {
         success: false,
@@ -682,7 +682,7 @@ async function processSignalFile(signalFile, headCommit, config, token) {
 
   let orchestratorResult;
   try {
-    orchestratorResult = orchestrator.handleKiloCompletion(requestId, report);
+    orchestratorResult = await orchestrator.handleKiloCompletion(requestId, report);
   } catch (err) {
     return {
       status: 'failed',

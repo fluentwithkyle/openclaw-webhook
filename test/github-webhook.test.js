@@ -63,17 +63,17 @@ function makeValidCommand(requestId) {
   };
 }
 
-function setupTask(requestId) {
-  const command = makeValidCommand(requestId);
-  const result = taskRegistry.createTask(command);
-  assert.ok(result.success, 'Task creation failed: ' + result.error);
+async function setupTask(requestId) {
+    const command = makeValidCommand(requestId);
+    const result = await taskRegistry.createTask(command);
+    assert.ok(result.success, 'Task creation failed: ' + result.error);
 
-  const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
-  for (const status of transitions) {
-    const r = taskRegistry.updateTaskStatus(requestId, status);
-    assert.ok(r.success, 'Transition to ' + status + ' failed: ' + r.error);
-  }
-  return command;
+    const transitions = ['SELECTED', 'PLANNED', 'EXECUTING'];
+    for (const status of transitions) {
+        const r = await taskRegistry.updateTaskStatus(requestId, status);
+        assert.ok(r.success, 'Transition to ' + status + ' failed: ' + r.error);
+    }
+    return command;
 }
 
 function makeValidSignal(requestId, commitSha, overrides) {
@@ -504,22 +504,6 @@ test('extractRequestIdFromPath: Gemini reconciliation docs are not signal files'
   );
 });
 
-test('handleKiloCompletion: rejects duplicate via orchestrator idempotency', () => {
-  setup();
-  setupTask('req-dup');
-  const signal = makeValidSignal('req-dup', COMMIT);
-  const report = gitWebhook.buildCompletionReport(signal);
-
-  const result1 = orchestrator.handleKiloCompletion('req-dup', report);
-  assert.ok(result1.success);
-  assert.strictEqual(result1.next_action, 'trigger_builder');
-
-  const result2 = orchestrator.handleKiloCompletion('req-dup', report);
-  assert.ok(!result2.success);
-  assert.strictEqual(result2.stage, 'idempotency');
-  assert.strictEqual(result2.duplicate, true);
-});
-
 // --- Existing behavior preservation ---
 test('kilo-polling module: still exports expected interface', () => {
   const polling = require('../poc/kilo-polling');
@@ -667,6 +651,23 @@ test('parseACPCommandFromIssueBody: empty body uses defaults and requestId fallb
 // ========================================================================
 
 async function runAsyncTests() {
+  // Test idempotency of orchestrator handleKiloCompletion
+  await testAsync('handleKiloCompletion: rejects duplicate via orchestrator idempotency', async () => {
+    setup();
+    await setupTask('req-dup');
+    const signal = makeValidSignal('req-dup', COMMIT);
+    const report = gitWebhook.buildCompletionReport(signal);
+
+    const result1 = await orchestrator.handleKiloCompletion('req-dup', report);
+    assert.ok(result1.success);
+    assert.strictEqual(result1.next_action, 'trigger_builder');
+
+    const result2 = await orchestrator.handleKiloCompletion('req-dup', report);
+    assert.ok(!result2.success);
+    assert.strictEqual(result2.stage, 'idempotency');
+    assert.strictEqual(result2.duplicate, true);
+  });
+
   // TEST 3: Wrong repository is rejected
   await testAsync('processPushEvent: wrong repository is rejected', async () => {
     setup();
@@ -718,7 +719,7 @@ async function runAsyncTests() {
   // TEST 6: Missing/invalid request_id is rejected
   await testAsync('processPushEvent: signal with mismatched request_id vs filename is rejected', async () => {
     setup();
-    setupTask('req-filename');
+    await setupTask('req-filename');
     const payload = makePushPayload('req-filename', COMMIT);
     const signal = makeValidSignal('different-id', COMMIT, { request_id: 'different-id' });
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-filename': signal }));
@@ -748,7 +749,7 @@ async function runAsyncTests() {
   // TEST 8: Malformed completion signal is rejected
   await testAsync('processPushEvent: malformed signal (missing status) is rejected', async () => {
     setup();
-    setupTask('req-1');
+    await setupTask('req-1');
     const payload = makePushPayload('req-1', COMMIT);
     const signal = makeValidSignal('req-1', COMMIT);
     delete signal.status;
@@ -762,7 +763,7 @@ async function runAsyncTests() {
 
   await testAsync('processPushEvent: malformed signal (invalid status value) is rejected', async () => {
     setup();
-    setupTask('req-1');
+    await setupTask('req-1');
     const payload = makePushPayload('req-1', COMMIT);
     const signal = makeValidSignal('req-1', COMMIT, { status: 'completed' });
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-1': signal }));
@@ -774,7 +775,7 @@ async function runAsyncTests() {
 
   await testAsync('processPushEvent: malformed signal (missing signal_id) is rejected', async () => {
     setup();
-    setupTask('req-1');
+    await setupTask('req-1');
     const payload = makePushPayload('req-1', COMMIT);
     const signal = makeValidSignal('req-1', COMMIT);
     delete signal.signal_id;
@@ -787,7 +788,7 @@ async function runAsyncTests() {
 
   await testAsync('processPushEvent: malformed signal (missing result.execution_metadata) is rejected', async () => {
     setup();
-    setupTask('req-1');
+    await setupTask('req-1');
     const payload = makePushPayload('req-1', COMMIT);
     const signal = makeValidSignal('req-1', COMMIT);
     delete signal.result;
@@ -801,7 +802,7 @@ async function runAsyncTests() {
   // TEST 9: Duplicate/replayed delivery is idempotent
   await testAsync('processPushEvent: duplicate delivery ID is idempotent', async () => {
     setup();
-    setupTask('req-1');
+    await setupTask('req-1');
     const payload = makePushPayload('req-1', COMMIT);
     const signal = makeValidSignal('req-1', COMMIT);
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-1': signal }));
@@ -822,7 +823,7 @@ async function runAsyncTests() {
 
   await testAsync('processPushEvent: same request_id re-delivered (new delivery ID) is idempotent via orchestrator', async () => {
     setup();
-    setupTask('req-1');
+    await setupTask('req-1');
     const payload = makePushPayload('req-1', COMMIT);
     const signal = makeValidSignal('req-1', COMMIT);
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-1': signal }));
@@ -844,8 +845,8 @@ async function runAsyncTests() {
   // TEST 10: Concurrent request-specific signals do not overwrite one another
   await testAsync('processPushEvent: concurrent signals for different requests are independent', async () => {
     setup();
-    setupTask('req-1');
-    setupTask('req-2');
+    await setupTask('req-1');
+    await setupTask('req-2');
 
     const commit1 = 'a'.repeat(40);
     const signal1 = makeValidSignal('req-1', commit1);
@@ -935,7 +936,7 @@ async function runAsyncTests() {
   // TEST 12b: Valid signal without commit_sha (self-reference-safe) reaches orchestrator
   await testAsync('processPushEvent: signal with no commit_sha (self-reference-safe) completes with head_commit.id', async () => {
     setup();
-    setupTask('req-nocommit');
+    await setupTask('req-nocommit');
     const payload = makePushPayload('req-nocommit', COMMIT);
     const signal = makeValidSignal('req-nocommit', COMMIT);
     delete signal.commit_sha;
@@ -956,7 +957,7 @@ async function runAsyncTests() {
   // TEST 12: Valid completion reaches the existing completion/orchestration path
   await testAsync('processPushEvent: valid completion reaches existing orchestrator path', async () => {
     setup();
-    setupTask('req-orch');
+    await setupTask('req-orch');
     const payload = makePushPayload('req-orch', COMMIT);
     const signal = makeValidSignal('req-orch', COMMIT);
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-orch': signal }));
@@ -981,7 +982,7 @@ async function runAsyncTests() {
 
   await testAsync('processPushEvent: failed Kilo completion does not trigger Gemini', async () => {
     setup();
-    setupTask('req-fail');
+    await setupTask('req-fail');
     const payload = makePushPayload('req-fail', COMMIT);
     const signal = makeValidSignal('req-fail', COMMIT, { status: 'failure' });
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ 'req-fail': signal }));
@@ -1000,7 +1001,7 @@ async function runAsyncTests() {
   // TEST 2 (async): Signature enforcement in processPushEvent
   await testAsync('processPushEvent: invalid signature is rejected (blocked)', async () => {
     setup();
-    setupTask('req-sig');
+    await setupTask('req-sig');
     const payload = makePushPayload('req-sig', COMMIT);
     const rawBody = Buffer.from(JSON.stringify(payload));
     const signature = signPayload(rawBody, 'wrong-secret');
@@ -1016,7 +1017,7 @@ async function runAsyncTests() {
 
   await testAsync('processPushEvent: valid signature passes and continues processing', async () => {
     setup();
-    setupTask('req-sig-ok');
+    await setupTask('req-sig-ok');
     const payload = makePushPayload('req-sig-ok', COMMIT);
     const rawBody = Buffer.from(JSON.stringify(payload));
     const signature = signPayload(rawBody, WEBHOOK_SECRET);
@@ -1035,7 +1036,7 @@ async function runAsyncTests() {
   // TEST 14: Existing Kilo → Builder orchestration remains intact
   await testAsync('gitWebhook module: reuses existing orchestrator.triggerGeminiBuilder for Builder dispatch', async () => {
     setup();
-    setupTask('req-gemini');
+    await setupTask('req-gemini');
     const payload = makePushPayload('req-gemini', COMMIT);
     const signal = makeValidSignal('req-gemini', COMMIT);
 
@@ -1330,7 +1331,7 @@ async function runAsyncTests() {
     const payload = makePushPayload(requestId, COMMIT);
     const signal = makeValidSignal(requestId, COMMIT);
 
-    setupTask(requestId);
+    await setupTask(requestId);
 
     gitWebhook.setFetchSignalArtifact(createMockFetcher({ [requestId]: signal }));
 
