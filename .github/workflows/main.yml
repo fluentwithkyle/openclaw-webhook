@@ -82,20 +82,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The @gemini-cli activation surface resolves to REVIEW (read-only advisory)
-          # for all issue_comment activations. An embedded ACP descriptor in the
+          # The @gemini-cli issue_comment activation surface resolves to REVIEW
+          # (read-only advisory) by default. An embedded ACP descriptor in the
           # comment body may carry candidate task text, but the task_mode,
-          # capabilities, and permitted_paths are NEVER derived from the comment.
-          # The canonical activation ingress server-derives these authority-bearing
+          # capabilities, and permitted_paths are NEVER derived from the comment
+          # unless the comment author is the explicitly trusted Director identity
+          # (fluentwithkyle) and the DIRECTOR_ORIGIN_SECRET is provided. The
+          # canonical activation ingress server-derives these authority-bearing
           # fields from the server-side activation-policy authority. The effective
           # task_mode, capabilities, and permitted_paths for Gemini execution are
           # derived from the server-returned execution descriptor — NOT from
-          # comment prefix parsing or embedded JSON.
+          # comment prefix parsing or embedded JSON alone.
 
           REQUEST="${COMMENT_BODY#@gemini-cli}"
           REQUEST="${REQUEST# }"
 
-          # The issue_comment activation surface always resolves to REVIEW.
+          # Default candidate values for non-Director issue comments: REVIEW (read-only).
+          # Director-authorized comments with valid embedded descriptors preserve
+          # their task_mode through the canonical activation ingress.
           CANDIDATE_TASK_MODE="REVIEW"
           CANDIDATE_CAPABILITIES="read_only"
           CANDIDATE_PERMITTED_PATHS="poc/"

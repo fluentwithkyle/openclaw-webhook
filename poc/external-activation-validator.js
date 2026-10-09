@@ -156,6 +156,18 @@ function validateExternalActivation(params, callbackUrl, callbackSecret, directo
 
 const VALID_TASK_MODES = ['REVIEW', 'VERIFY_RECONCILE', 'FAILOVER_EXECUTE', 'BUILDER', 'RESEARCH_DOCUMENT'];
 
+var ACP_DESCRIPTOR_FIELDS = ['task_mode', 'task', 'target', 'verification', 'capabilities', 'permitted_paths', 'task_name', 'request_id'];
+
+function looksLikeAcpDescriptor(text) {
+    if (typeof text !== 'string' || text.trim() === '') return false;
+    for (var i = 0; i < ACP_DESCRIPTOR_FIELDS.length; i++) {
+        if (text.indexOf(ACP_DESCRIPTOR_FIELDS[i]) !== -1) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function extractEmbeddedAcpDescriptor(commentBody) {
     if (typeof commentBody !== 'string' || commentBody.trim() === '') {
         return null;
@@ -165,6 +177,17 @@ function extractEmbeddedAcpDescriptor(commentBody) {
 
     var match = stripped.match(/\{[\s\S]*\}/);
     if (!match) {
+        var openBraceIdx = stripped.indexOf('{');
+        if (openBraceIdx !== -1) {
+            var afterBrace = stripped.substring(openBraceIdx + 1).trim();
+            if (afterBrace.length > 0 && /["']?[\w_]+["']?\s*:/.test(afterBrace)) {
+                return {
+                    _malformed_json: true,
+                    _json_parse_error: 'JSON descriptor is missing a closing brace ("}")',
+                    _raw_match: stripped.substring(openBraceIdx)
+                };
+            }
+        }
         return null;
     }
 
@@ -172,6 +195,9 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     try {
         candidate = JSON.parse(match[0]);
     } catch (e) {
+        if (!looksLikeAcpDescriptor(match[0])) {
+            return null;
+        }
         return {
             _malformed_json: true,
             _json_parse_error: e.message,
@@ -180,6 +206,9 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     }
 
     if (!candidate || typeof candidate !== 'object') {
+        if (!looksLikeAcpDescriptor(match[0])) {
+            return null;
+        }
         return {
             _malformed_json: true,
             _json_parse_error: 'Parsed JSON is not an object',

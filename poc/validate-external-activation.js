@@ -51,6 +51,11 @@ async function main() {
         process.exit(2);
     }
 
+    if (payload && payload.error) {
+        console.error(`::error::BLOCKED: ${payload.error} (${payload.error_code || 'UNKNOWN'})`);
+        process.exit(1);
+    }
+
     console.log(`::notice::Validating ${targetAgent} activation through canonical ingress...`);
 
     const result = await validateExternalActivation(payload, callbackUrl, callbackSecret, directorOriginSecret, directorOriginAssertion);
