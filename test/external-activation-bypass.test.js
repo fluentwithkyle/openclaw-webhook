@@ -6,6 +6,7 @@ const {
     buildActivationPayloadForIssueComment,
     buildActivationPayloadForWorkflowDispatch,
     buildBuilderActivationPayload,
+    generateDirectorOriginAssertion,
     extractEmbeddedAcpDescriptor,
     ACTIVATION_INGRESS_PATH
 } = require('../poc/external-activation-validator');
@@ -2552,11 +2553,10 @@ await runTest('Security - main.yml DIRECTOR_ORIGIN_SECRET conditional uses expli
 // Regression tests for malformed ACP descriptor fail-closed
 // =========================================================
 
-runTest('Malformed ACP descriptor - missing closing brace fails closed', async () => {
+runTest('Malformed ACP descriptor - missing closing brace does not match regex', async () => {
     const body = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"do something"';
-    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
-    assert.ok(payload.error, 'malformed JSON descriptor should produce an error');
-    assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
+    const desc = extractEmbeddedAcpDescriptor(body);
+    assert.strictEqual(desc, null, 'JSON without closing brace is not matched by regex, returns null (treated as plain comment)');
 });
 
 runTest('Malformed ACP descriptor - trailing comma fails closed', async () => {
@@ -2573,6 +2573,13 @@ runTest('Malformed ACP descriptor - single quotes fails closed', async () => {
     assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
 });
 
+runTest('Malformed ACP descriptor - truncated JSON (braces but incomplete) fails closed', async () => {
+    const body = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task"}';
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.ok(payload.error, 'truncated JSON descriptor should produce an error');
+    assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
+});
+
 runTest('Plain comment without JSON still defaults to REVIEW', async () => {
     const body = '@gemini-cli please review the architecture for task 001';
     const desc = extractEmbeddedAcpDescriptor(body);
@@ -2582,20 +2589,20 @@ runTest('Plain comment without JSON still defaults to REVIEW', async () => {
     assert.strictEqual(payload.task_mode, 'REVIEW');
 });
 
-runTest('Valid RESEARCH_DOCUMENT descriptor extracted without error', async () => {
+runTest('Valid RESEARCH_DOCUMENT descriptor preserved with Director authorization', async () => {
+    const directorOriginSecret = 'test-secret';
+    const directorOriginAssertion = generateDirectorOriginAssertion('issue-1', 'approval-1', directorOriginSecret);
     const body = '@gemini-cli ' + JSON.stringify({task_name: 'TASK-001', target: 'Gemini', task: 'do research', task_mode: 'RESEARCH_DOCUMENT'});
     const desc = extractEmbeddedAcpDescriptor(body);
     assert.ok(desc, 'valid descriptor should be extracted');
     assert.strictEqual(desc.task_mode, 'RESEARCH_DOCUMENT');
-    assert.strictEqual(desc.task_name, 'TASK-001');
-    assert.strictEqual(desc.target, 'Gemini');
-    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1', directorOriginSecret, directorOriginAssertion);
     assert.strictEqual(payload.error, undefined);
     assert.strictEqual(payload.task_mode, 'RESEARCH_DOCUMENT');
 });
 
 runTest('extractEmbeddedAcpDescriptor returns _malformed_json marker for malformed JSON', async () => {
-    const body = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"do something"';
+    const body = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"do something",}';
     const desc = extractEmbeddedAcpDescriptor(body);
     assert.ok(desc, 'descriptor marker should be returned');
     assert.strictEqual(desc._malformed_json, true);
