@@ -1141,7 +1141,7 @@ function rawRequest(port, headers, body) {
         taskRegistry.resetRegistry();
         const parentRequestId = 'deepseek-runtime-child-diagnostics-parent';
         await createDeepSeekReviewTask(parentRequestId);
-        const createChild = (requestId, status, report) => {
+        const createChild = async (requestId, status, report) => {
             await createDeepSeekReviewTask(requestId);
             taskRegistry.getTask(requestId).parent_request_id = parentRequestId;
             if (report) assert.equal((await taskRegistry.updateAgentResult(requestId, 'Gemini Builder', {
@@ -1156,11 +1156,11 @@ function rawRequest(port, headers, body) {
             }
             for (const transition of transitions) assert.equal((await taskRegistry.updateTaskStatus(requestId, transition)).success, true);
         };
-        for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS; index++) createChild(`deepseek-runtime-child-diagnostics-normal-${index}`, 'PENDING');
-        createChild('deepseek-runtime-child-diagnostics-verified', 'VERIFIED');
-        createChild('deepseek-runtime-child-diagnostics-complete', 'COMPLETE');
+        for (let index = 0; index < MAX_CHILD_TASK_OBSERVATIONS; index++) await createChild(`deepseek-runtime-child-diagnostics-normal-${index}`, 'PENDING');
+        await createChild('deepseek-runtime-child-diagnostics-verified', 'VERIFIED');
+        await createChild('deepseek-runtime-child-diagnostics-complete', 'COMPLETE');
         for (let index = 0; index < MAX_REPORT_HIGHLIGHTS + 1; index++) {
-            createChild(`deepseek-runtime-child-diagnostics-failed-${index}`, 'FAILED', {
+            await createChild(`deepseek-runtime-child-diagnostics-failed-${index}`, 'FAILED', {
                 summary: `Failure ${index}: token failure-token-${index}`, blockers: [`failure blocker ${index}`], authorization: 'Bearer hidden'
             });
         }
@@ -1234,7 +1234,7 @@ function rawRequest(port, headers, body) {
     });
 
     await test('workflow completion summary distinguishes mixed, failed, blocked, and cancelled registry outcomes', async () => {
-        const observeTerminalWorkflow = (suffix, statuses) => {
+        const observeTerminalWorkflow = async (suffix, statuses) => {
             taskRegistry.resetRegistry();
             const parentRequestId = `deepseek-runtime-workflow-${suffix}-parent`;
             await createDeepSeekReviewTask(parentRequestId);
@@ -1256,12 +1256,12 @@ function rawRequest(port, headers, body) {
             }
             return observeTaskForDeepSeek(parentRequestId, new Set(), new Map()).task.workflow_completion_summary;
         };
-        const mixed = observeTerminalWorkflow('mixed', ['COMPLETE', 'FAILED', 'BLOCKED']);
+        const mixed = await observeTerminalWorkflow('mixed', ['COMPLETE', 'FAILED', 'BLOCKED']);
         assert.equal(mixed.outcome, 'PARTIAL_SUCCESS');
         assert.deepEqual(mixed.terminal_state_counts, { complete: 1, failed: 1, blocked: 1, cancelled: 0, superseded: 0 });
-        assert.equal(observeTerminalWorkflow('failed', ['FAILED']).outcome, 'FAILED');
-        assert.equal(observeTerminalWorkflow('blocked', ['BLOCKED']).outcome, 'BLOCKED');
-        const cancelled = observeTerminalWorkflow('cancelled', ['CANCELLED', 'SUPERSEDED']);
+        assert.equal((await observeTerminalWorkflow('failed', ['FAILED'])).outcome, 'FAILED');
+        assert.equal((await observeTerminalWorkflow('blocked', ['BLOCKED'])).outcome, 'BLOCKED');
+        const cancelled = await observeTerminalWorkflow('cancelled', ['CANCELLED', 'SUPERSEDED']);
         assert.equal(cancelled.outcome, 'MIXED_TERMINAL');
         assert.deepEqual(cancelled.terminal_state_counts, { complete: 0, failed: 0, blocked: 0, cancelled: 1, superseded: 1 });
         taskRegistry.resetRegistry();
