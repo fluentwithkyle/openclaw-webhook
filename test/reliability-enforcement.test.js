@@ -25,9 +25,9 @@ const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
 let passCount = 0;
 let failCount = 0;
 
-function runTest(name, fn) {
+async function runTest(name, fn) {
   try {
-    fn();
+    await fn();
     console.log(`PASS: ${name}`);
     return true;
   } catch (err) {
@@ -118,9 +118,12 @@ async function setupTask() {
   await taskRegistry.updateTaskStatus(rid, 'EXECUTING');
 }
 
+let testQueue = Promise.resolve();
 function test(name, fn) {
-  const result = runTest(name, fn);
-  if (result) passCount++; else failCount++;
+  testQueue = testQueue.then(async () => {
+    const result = await runTest(name, fn);
+    if (result) passCount++; else failCount++;
+  });
 }
 
 // === Evidence-gated state transitions (fail closed) ===
@@ -926,7 +929,9 @@ test('F4: config verification records state but never records raw secret values'
   cleanup();
 });
 
+testQueue.then(() => {
 console.log(`\n=== Reliability Enforcement Tests: ${passCount} passed, ${failCount} failed ===`);
 testQueue.then(() => {
 if (failCount > 0) process.exit(1);
+});
 });

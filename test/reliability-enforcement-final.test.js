@@ -75,7 +75,7 @@ async function setupPending(id) {
   return id;
 }
 
-function setupActive(id) {
+async function setupActive(id) {
   cleanup();
   (await taskRegistry.createTask(execCommand({ request_id: id })));
   (await taskRegistry.updateTaskStatus(id, 'SELECTED'));
@@ -84,7 +84,7 @@ function setupActive(id) {
   return id;
 }
 
-function setupCompleted(id) {
+async function setupCompleted(id) {
   cleanup();
   (await taskRegistry.createTask(execCommand({ request_id: id })));
   (await taskRegistry.updateTaskStatus(id, 'SELECTED'));
