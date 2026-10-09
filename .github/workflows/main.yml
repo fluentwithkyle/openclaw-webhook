@@ -701,8 +701,17 @@ jobs:
           PERSIST_COMMIT_SHA="${{ steps.commit_push.outputs.commit_sha || 'null' }}"
           PERSIST_PUSH="${{ steps.commit_push.outputs.push_status || 'false' }}"
 
-          # Build changed_files list from git for FAILOVER_EXECUTE persistence tracking
-          CHANGED_FILES_JSON=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | jq -R -s -c 'split("\n") | map(select(length > 0))' || echo '[]')
+          # Build changed_files list from git for persistence tracking.
+          # Must always produce exactly one valid JSON array, even when:
+          # - shallow checkout (HEAD~1 does not exist)
+          # - no changes (empty diff)
+          # - git diff fails for any reason
+          CHANGED_FILES_JSON='[]'
+          git diff --name-only HEAD~1 HEAD 2>/dev/null | jq -R -s -c 'split("\n") | map(select(length > 0))' > /tmp/_changed_files_$$ 2>/dev/null || true
+          if jq empty /tmp/_changed_files_$$ 2>/dev/null; then
+            CHANGED_FILES_JSON=$(cat /tmp/_changed_files_$$)
+          fi
+          rm -f /tmp/_changed_files_$$ 2>/dev/null || true
 
           # Build blockers array from the actual execution result
           if [ "$STATUS" = "failure" ]; then

@@ -609,3 +609,22 @@ runTest('no step is nested inside another step via misindented - name:', () => {
     }
   }
 });
+
+// --- Shallow-checkout / failed-diff JSON fallback regression tests ---
+
+runTest('main.yml changed_files JSON uses safe fallback (not direct pipe to jq)', () => {
+  assert.ok(raw.includes('CHANGED_FILES_JSON='),
+    'callback payload step must define CHANGED_FILES_JSON');
+  assert.ok(!raw.includes("CHANGED_FILES_JSON=$(git diff") || raw.includes('&& true'),
+    'CHANGED_FILES_JSON must not use a bare $(git diff | jq) subshell that can produce invalid JSON on failure');
+});
+
+runTest('main.yml changed_files JSON validates output before passing to jq --argjson', () => {
+  assert.ok(raw.includes('jq empty'),
+    'callback payload step must validate JSON with jq empty before using it');
+});
+
+runTest('main.yml changed_files JSON defaults to [] on diff failure', () => {
+  assert.ok(raw.includes("CHANGED_FILES_JSON='[]'"),
+    'callback payload step must initialize CHANGED_FILES_JSON to empty array []');
+});
