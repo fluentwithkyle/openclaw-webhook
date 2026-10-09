@@ -109,7 +109,7 @@ test('L1: exact duplicate request_id is rejected', async () => {
 });
 
 test('L2: unrelated active root task is creatable (no parent needed)', async () => {
-  setupActive('active-root-1');
+  await setupActive('active-root-1');
   const result = (await taskRegistry.createTask(execCommand({ request_id: 'unrelated-root' })));
   assertEqual(result.success, true);
   assertEqual(result.entry.request_id, 'unrelated-root');
@@ -118,7 +118,7 @@ test('L2: unrelated active root task is creatable (no parent needed)', async () 
 });
 
 test('L3: legitimate explicit child of completed parent is accepted', async () => {
-  setupCompleted('completed-parent');
+  await setupCompleted('completed-parent');
   const result = (await taskRegistry.createTask(
     execCommand({ request_id: 'legit-child', parent_request_id: 'completed-parent' })
   ));
@@ -128,7 +128,7 @@ test('L3: legitimate explicit child of completed parent is accepted', async () =
 });
 
 test('L4: silent replacement with fake parent_request_id is blocked', async () => {
-  setupActive('active-task-1');
+  await setupActive('active-task-1');
   const result = (await taskRegistry.createTask(
     execCommand({
       request_id: 'shadow-task',
@@ -141,7 +141,7 @@ test('L4: silent replacement with fake parent_request_id is blocked', async () =
 });
 
 test('L5: legitimate supersession creates replacement with proper lineage', async () => {
-  setupActive('supersede-target');
+  await setupActive('supersede-target');
   const result = (await taskRegistry.supersedeTask('supersede-target', 'needs re-run'));
   assertEqual(result.success, true);
   assert(result.new_request_id);
@@ -154,7 +154,7 @@ test('L5: legitimate supersession creates replacement with proper lineage', asyn
 });
 
 test('L6: multi-generation supersession resolves through full chain', async () => {
-  setupActive('gen-a');
+  await setupActive('gen-a');
   const sup1 = (await taskRegistry.supersedeTask('gen-a', 'first supersede'));
   assertEqual(sup1.success, true);
   const sup2 = (await taskRegistry.supersedeTask(sup1.new_request_id, 'second supersede'));
@@ -167,7 +167,7 @@ test('L6: multi-generation supersession resolves through full chain', async () =
 });
 
 test('L7: recovery through supersession redirects to final replacement', async () => {
-  setupActive('gen-a-2');
+  await setupActive('gen-a-2');
   const sup1 = (await taskRegistry.supersedeTask('gen-a-2', 'first supersede'));
   const sup2 = (await taskRegistry.supersedeTask(sup1.new_request_id, 'second supersede'));
 
@@ -183,7 +183,7 @@ test('L7: recovery through supersession redirects to final replacement', async (
 });
 
 test('L8: cancelled-task recovery is rejected', async () => {
-  setupActive('cancelled-task-1');
+  await setupActive('cancelled-task-1');
   (await taskRegistry.cancelTask('cancelled-task-1', 'manual cancel'));
   const result = (await taskRegistry.rehydrateTask(execCommand({ request_id: 'cancelled-task-1' })));
   assertEqual(result.success, false);
@@ -192,7 +192,7 @@ test('L8: cancelled-task recovery is rejected', async () => {
 });
 
 test('L9: conflicting active lineage (second active child) fails closed', async () => {
-  setupCompleted('shared-parent-1');
+  await setupCompleted('shared-parent-1');
   const first = (await taskRegistry.createTask(
     execCommand({ request_id: 'child-a-1', parent_request_id: 'shared-parent-1' })
   ));
