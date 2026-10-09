@@ -6,6 +6,7 @@ const {
     buildActivationPayloadForIssueComment,
     buildActivationPayloadForWorkflowDispatch,
     buildBuilderActivationPayload,
+    extractEmbeddedAcpDescriptor,
     ACTIVATION_INGRESS_PATH
 } = require('../poc/external-activation-validator');
 const { canonicalExternalActivationIngress } = require('../poc/activation-ingress');
@@ -2545,6 +2546,104 @@ await runTest('Security - main.yml DIRECTOR_ORIGIN_SECRET conditional uses expli
         'DIRECTOR_ORIGIN_SECRET conditional must use explicit comment author login');
     assert.ok(!secretSection.includes('author_association'),
         'DIRECTOR_ORIGIN_SECRET conditional must NOT reference author_association');
+});
+
+// =========================================================
+// Regression tests for malformed ACP descriptor fail-closed
+// =========================================================
+
+runTest('Malformed ACP descriptor - missing closing brace fails closed', async () => {
+    const body = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"do something"';
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.ok(payload.error, 'malformed JSON descriptor should produce an error');
+    assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
+});
+
+runTest('Malformed ACP descriptor - trailing comma fails closed', async () => {
+    const body = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"do something",}';
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.ok(payload.error, 'malformed JSON descriptor should produce an error');
+    assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
+});
+
+runTest('Malformed ACP descriptor - single quotes fails closed', async () => {
+    const body = "@gemini-cli {'task_mode': 'FAILOVER_EXECUTE', 'task': 'do something'}";
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.ok(payload.error, 'malformed JSON descriptor should produce an error');
+    assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
+});
+
+runTest('Plain comment without JSON still defaults to REVIEW', async () => {
+    const body = '@gemini-cli please review the architecture for task 001';
+    const desc = extractEmbeddedAcpDescriptor(body);
+    assert.strictEqual(desc, null, 'no JSON found should return null');
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.strictEqual(payload.error, undefined, 'plain comment should not error');
+    assert.strictEqual(payload.task_mode, 'REVIEW');
+});
+
+runTest('Valid RESEARCH_DOCUMENT descriptor extracted without error', async () => {
+    const body = '@gemini-cli ' + JSON.stringify({task_name: 'TASK-001', target: 'Gemini', task: 'do research', task_mode: 'RESEARCH_DOCUMENT'});
+    const desc = extractEmbeddedAcpDescriptor(body);
+    assert.ok(desc, 'valid descriptor should be extracted');
+    assert.strictEqual(desc.task_mode, 'RESEARCH_DOCUMENT');
+    assert.strictEqual(desc.task_name, 'TASK-001');
+    assert.strictEqual(desc.target, 'Gemini');
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.strictEqual(payload.error, undefined);
+    assert.strictEqual(payload.task_mode, 'RESEARCH_DOCUMENT');
+});
+
+runTest('extractEmbeddedAcpDescriptor returns _malformed_json marker for malformed JSON', async () => {
+    const body = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"do something"';
+    const desc = extractEmbeddedAcpDescriptor(body);
+    assert.ok(desc, 'descriptor marker should be returned');
+    assert.strictEqual(desc._malformed_json, true);
+    assert.ok(desc._json_parse_error, 'should include parse error message');
+});
+
+runTest('extractEmbeddedAcpDescriptor returns null for plain comment', async () => {
+    const body = '@gemini-cli please do a quick review';
+    const desc = extractEmbeddedAcpDescriptor(body);
+    assert.strictEqual(desc, null, 'plain comment with no JSON braces should return null');
+});
+
+runTest('Invalid task_mode fails closed with INVALID_TASK_MODE', async () => {
+    const body = '@gemini-cli {"task_mode":"INVALID_MODE","task":"do something"}';
+    const payload = buildActivationPayloadForIssueComment('issue-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.ok(payload.error, 'invalid task_mode should produce an error');
+    assert.strictEqual(payload.error_code, 'INVALID_TASK_MODE');
+});
+
+// =========================================================
+// Regression tests for jq --argjson report payload generation
+// =========================================================
+
+runTest('main.yml report payload step validates JSON before artifact upload', async () => {
+    const payloadIdx = mainRaw.indexOf('Prepare ACP report payload');
+    const uploadIdx = mainRaw.indexOf('Upload Gemini result artifact');
+    const payloadToUpload = mainRaw.slice(payloadIdx, uploadIdx);
+    assert.ok(/jq empty callback_payload\.json/.test(payloadToUpload),
+        'report payload step must validate callback_payload.json with jq empty before uploading');
+});
+
+runTest('main.yml report payload step fails closed on invalid JSON', async () => {
+    const payloadIdx = mainRaw.indexOf('Prepare ACP report payload');
+    const uploadIdx = mainRaw.indexOf('Upload Gemini result artifact');
+    const payloadToUpload = mainRaw.slice(payloadIdx, uploadIdx);
+    assert.ok(/::error::/.test(payloadToUpload),
+        'report payload step must emit a GitHub Actions error when JSON is invalid');
+    assert.ok(/exit 1/.test(payloadToUpload),
+        'report payload step must exit with code 1 when JSON is invalid');
+});
+
+runTest('main.yml line 652 uses single unambiguous jq filter with --argjson before filter', async () => {
+    const blockersIdx = mainRaw.indexOf('BLOCKERS=$(jq -n --arg msg "$RESEARCH_BLOCKER" --argjson blockers "$BLOCKERS"');
+    assert.ok(blockersIdx !== -1,
+        'line 652 must use single jq filter with --argjson blockers before the filter expression');
+    const section = mainRaw.slice(blockersIdx, blockersIdx + 200);
+    assert.ok(!/\$blockers \+ \[\$msg\]' --argjson blockers/.test(section),
+        'line 652 must not have duplicate filter before --argjson blockers');
 });
 
 // =========================================================

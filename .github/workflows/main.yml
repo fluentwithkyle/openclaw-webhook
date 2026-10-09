@@ -649,7 +649,7 @@ jobs:
                 else
                   STATUS="failure"
                   RESEARCH_BLOCKER="RESEARCH_DOCUMENT task $(printf '%s' "$TASK_NAME") but research record $RESEARCH_RECORD_FILE does not reference the task_name; record may belong to a different task"
-                  BLOCKERS=$(jq -n --arg msg "$RESEARCH_BLOCKER" '$blockers + [$msg]' --argjson blockers "$BLOCKERS" 'if $blockers then $blockers + [$msg] else [$msg] end')
+                  BLOCKERS=$(jq -n --arg msg "$RESEARCH_BLOCKER" --argjson blockers "$BLOCKERS" '($blockers + [$msg])')
                 fi
               else
                 # Fail-closed: missing research record for RESEARCH_DOCUMENT task
@@ -708,9 +708,14 @@ jobs:
                 commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
               },
               durable_research_record_path: (if $durable_research_record_path == "null" then null else $durable_research_record_path end)
-            }' > callback_payload.json
+             }' > callback_payload.json
 
-          cp callback_payload.json gemini-acp-report.json
+           if ! jq empty callback_payload.json 2>/dev/null; then
+             echo "::error::generated callback_payload.json is not valid JSON; report generation failed"
+             exit 1
+           fi
+
+           cp callback_payload.json gemini-acp-report.json
 
           cat callback_payload.json
 

@@ -172,11 +172,19 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     try {
         candidate = JSON.parse(match[0]);
     } catch (e) {
-        return null;
+        return {
+            _malformed_json: true,
+            _json_parse_error: e.message,
+            _raw_match: match[0]
+        };
     }
 
     if (!candidate || typeof candidate !== 'object') {
-        return null;
+        return {
+            _malformed_json: true,
+            _json_parse_error: 'Parsed JSON is not an object',
+            _raw_match: match[0]
+        };
     }
 
     // The issue_comment body is NOT an authority source. This function extracts
@@ -194,6 +202,12 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     var explicitTaskMode = Object.prototype.hasOwnProperty.call(candidate, 'task_mode') && !hasTaskMode;
 
     if (!hasTask && !hasTarget && !hasVerification && !hasTaskMode) {
+        if (explicitTaskMode) {
+            var descriptor = {};
+            descriptor._explicit_task_mode = true;
+            descriptor._invalid_task_mode = candidate.task_mode;
+            return descriptor;
+        }
         return null;
     }
 
@@ -218,9 +232,16 @@ function extractEmbeddedAcpDescriptor(commentBody) {
 }
 
 function buildActivationPayloadForIssueComment(commentId, commentBody, repository, baseBranch, approvalId, directorOriginSecret, directorOriginAssertion) {
-    const stripped = commentBody.replace('@gemini-cli', '').trim();
+    var stripped = commentBody.replace('@gemini-cli', '').trim();
 
     var embeddedDescriptor = extractEmbeddedAcpDescriptor(commentBody);
+
+    if (embeddedDescriptor && embeddedDescriptor._malformed_json) {
+        return {
+            error: 'Malformed JSON descriptor in comment: ' + embeddedDescriptor._json_parse_error,
+            error_code: 'MALFORMED_ACP_DESCRIPTOR'
+        };
+    }
 
     if (embeddedDescriptor && embeddedDescriptor._explicit_task_mode && embeddedDescriptor._invalid_task_mode) {
         return {
