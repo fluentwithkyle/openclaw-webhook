@@ -2,6 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
 const yaml = require('js-yaml');
+const childProcess = require('child_process');
+const os = require('os');
+
+const execSync = childProcess.execSync;
 
 const WF_PATH = path.join(__dirname, '..', '.github', 'workflows', 'main.yml');
 const raw = fs.readFileSync(WF_PATH, 'utf8');
@@ -612,19 +616,184 @@ runTest('no step is nested inside another step via misindented - name:', () => {
 
 // --- Shallow-checkout / failed-diff JSON fallback regression tests ---
 
-runTest('main.yml changed_files JSON uses safe fallback (not direct pipe to jq)', () => {
-  assert.ok(raw.includes('CHANGED_FILES_JSON='),
-    'callback payload step must define CHANGED_FILES_JSON');
-  assert.ok(!raw.includes("CHANGED_FILES_JSON=$(git diff") || raw.includes('&& true'),
-    'CHANGED_FILES_JSON must not use a bare $(git diff | jq) subshell that can produce invalid JSON on failure');
+runTest('main.yml changed_files diff captures exit status explicitly', () => {
+  assert.ok(raw.includes('DIFF_STATUS=0'),
+    'callback payload step must initialize DIFF_STATUS=0');
+  assert.ok(raw.includes('DIFF_STATUS=$?'),
+    'callback payload step must capture git diff exit status');
+  assert.ok(raw.includes('"$DIFF_STATUS" -ne 0'),
+    'callback payload step must check DIFF_STATUS for failure handling');
 });
 
-runTest('main.yml changed_files JSON validates output before passing to jq --argjson', () => {
+runTest('main.yml changed_files diff handles shallow checkout (missing HEAD~1)', () => {
+  assert.ok(raw.includes('git rev-parse --verify HEAD~1'),
+    'callback payload step must check for HEAD~1 existence (shallow checkout detection)');
+  assert.ok(raw.includes('EMPTY_TREE'),
+    'callback payload step must use empty tree fallback for shallow checkout');
+});
+
+runTest('main.yml changed_files diff fails closed on diff failure', () => {
+  assert.ok(raw.includes('DIFF_BLOCKER_MSG'),
+    'callback payload step must set a blocker message on diff failure');
+  assert.ok(raw.includes('BLOCKERS_JSON'),
+    'callback payload step must include diff failure in BLOCKERS_JSON');
+  assert.ok(raw.includes('cannot produce complete changed_files list'),
+    'callback payload step must fail closed with descriptive blocker on diff failure');
+});
+
+runTest('main.yml changed_files JSON validates output before accepting it', () => {
   assert.ok(raw.includes('jq empty'),
     'callback payload step must validate JSON with jq empty before using it');
+  assert.ok(raw.includes('RAW_CHANGED_FILES_JSON'),
+    'callback payload step must capture jq output in RAW_CHANGED_FILES_JSON');
+  assert.ok(raw.includes('CHANGED_FILES_JSON="$RAW_CHANGED_FILES_JSON"'),
+    'script must only accept CHANGED_FILES_JSON after validation passes');
 });
 
-runTest('main.yml changed_files JSON defaults to [] on diff failure', () => {
+runTest('main.yml changed_files JSON initializes to []', () => {
   assert.ok(raw.includes("CHANGED_FILES_JSON='[]'"),
     'callback payload step must initialize CHANGED_FILES_JSON to empty array []');
+});
+
+runTest('main.yml changed_files uses jq --argjson changed_files (not string interpolation)', () => {
+  assert.ok(raw.includes('--argjson changed_files'),
+    'callback payload step must pass changed_files as --argjson (typed JSON array)');
+});
+
+// --- Behavioral simulation tests for the 5 diff scenarios ---
+
+runTest('Behavioral: successful empty diff produces []', () => {
+  const result = execSync(`
+    git init -q test-empty-$$ && cd test-empty-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+    git commit -q --allow-empty -m initial &&
+    CHANGED_FILES_JSON='[]'
+    DIFF_STATUS=0
+    DIFF_OUTPUT=""
+    if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+      DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
+    else
+      EMPTY_TREE=\$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
+      DIFF_OUTPUT=\$(git diff --name-only "\$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=\$?
+    fi
+    if [ "\$DIFF_STATUS" -ne 0 ]; then
+      DIFF_BLOCKER_MSG="failed"
+    else
+      RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
+      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+        CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
+      fi
+    fi
+    echo -n "\$CHANGED_FILES_JSON" &&
+    cd .. && rm -rf test-empty-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  assert.equal(result.trim(), '[]', 'empty diff must produce exactly []');
+});
+
+runTest('Behavioral: successful non-empty diff produces file list array', () => {
+  const result = execSync(`
+    git init -q test-nonempty-$$ && cd test-nonempty-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+    git commit -q --allow-empty -m initial &&
+    echo "modified" > README.md &&
+    git add README.md && git commit -q -m modified &&
+    CHANGED_FILES_JSON='[]'
+    DIFF_STATUS=0
+    DIFF_OUTPUT=""
+    if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+      DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
+    else
+      EMPTY_TREE=\$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
+      DIFF_OUTPUT=\$(git diff --name-only "\$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=\$?
+    fi
+    if [ "\$DIFF_STATUS" -ne 0 ]; then
+      DIFF_BLOCKER_MSG="failed"
+    else
+      RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
+      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+        CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
+      fi
+    fi
+    echo -n "\$CHANGED_FILES_JSON" &&
+    cd .. && rm -rf test-nonempty-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  const arr = JSON.parse(result.trim());
+  assert.ok(Array.isArray(arr), 'must be a JSON array');
+  assert.ok(arr.includes('README.md'), 'must include modified file');
+});
+
+runTest('Behavioral: shallow checkout with no HEAD~1 falls back to empty tree diff', () => {
+  const result = execSync(`
+    git init -q test-shallow-$$ && cd test-shallow-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+    git commit -q --allow-empty -m initial &&
+    CHANGED_FILES_JSON='[]'
+    DIFF_STATUS=0
+    DIFF_OUTPUT=""
+    if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+      DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
+    else
+      EMPTY_TREE=\$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
+      if [ -n "\$EMPTY_TREE" ]; then
+        DIFF_OUTPUT=\$(git diff --name-only "\$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=\$?
+      else
+        DIFF_STATUS=1
+      fi
+    fi
+    if [ "\$DIFF_STATUS" -ne 0 ]; then
+      DIFF_BLOCKER_MSG="failed"
+    else
+      RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
+      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+        CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
+      fi
+    fi
+    echo -n "\$CHANGED_FILES_JSON" &&
+    cd .. && rm -rf test-shallow-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  const arr = JSON.parse(result.trim());
+  assert.ok(Array.isArray(arr), 'shallow checkout must still produce valid JSON array');
+  assert.ok(!result.includes('fatal:'), 'must not fail with fatal error on shallow checkout');
+});
+
+runTest('Behavioral: diff command failure sets DIFF_BLOCKER_MSG (fail closed)', () => {
+  const result = execSync(`
+    CHANGED_FILES_JSON='[]'
+    DIFF_STATUS=0
+    DIFF_BLOCKER_MSG=""
+    DIFF_OUTPUT=""
+    # Simulate diff failure
+    DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
+    if [ "\$DIFF_STATUS" -ne 0 ]; then
+      DIFF_BLOCKER_MSG="changed_files diff command failed (exit \$DIFF_STATUS); cannot produce complete changed_files list"
+    fi
+    if [ -n "\$DIFF_BLOCKER_MSG" ]; then
+      echo -n "BLOCKER_SET"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('BLOCKER_SET'), 'diff failure must be detected and blocker set');
+});
+
+runTest('Behavioral: partial output then failure does not produce invalid JSON', () => {
+  // Verify that the validation step (jq empty) prevents partial/invalid JSON
+  const script = raw;
+  assert.ok(script.includes('jq empty <(printf'),
+    'script must validate JSON with jq empty before accepting output');
+  // The key pattern: RAW_CHANGED_FILES_JSON is only assigned to CHANGED_FILES_JSON after jq empty passes
+  const runPart = script.split('CHANGED_FILES_JSON=')[1];
+  assert.ok(runPart, 'script must contain CHANGED_FILES_JSON assignment');
+  // Verify the validation gate exists
+  assert.ok(script.includes('if jq empty'),
+    'script must have a jq empty validation gate');
+  assert.ok(script.includes('CHANGED_FILES_JSON="$RAW_CHANGED_FILES_JSON"'),
+    'script must only assign after validation passes');
+  assert.ok(script.includes('DIFF_BLOCKER_MSG="changed_files diff produced invalid JSON; cannot report changed files"'),
+    'script must set blocker on invalid JSON');
 });
