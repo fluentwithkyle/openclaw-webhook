@@ -112,7 +112,7 @@ async function main() {
     assertEqual(task.status, 'EXECUTING');
 
     // 5. Kilo completion -> triggers Builder
-    result = orchestrator.handleKiloCompletion('integration-test-1', kiloReport);
+    result = await orchestrator.handleKiloCompletion('integration-test-1', kiloReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'trigger_builder');
     task = taskRegistry.getTask('integration-test-1');
@@ -138,7 +138,7 @@ async function main() {
       push: true,
       blockers: []
     };
-    result = orchestrator.handleGeminiBuilderCompletion('integration-test-1', builderReport);
+    result = await orchestrator.handleGeminiBuilderCompletion('integration-test-1', builderReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'trigger_gemini');
     task = taskRegistry.getTask('integration-test-1');
@@ -150,7 +150,7 @@ async function main() {
     assertEqual(canTrigger.canTrigger, true);
 
     // 9. Gemini completion -> VERIFIED
-    result = orchestrator.handleGeminiCompletion('integration-test-1', geminiReport);
+    result = await orchestrator.handleGeminiCompletion('integration-test-1', geminiReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'complete');
     task = taskRegistry.getTask('integration-test-1');
@@ -176,7 +176,7 @@ async function main() {
     (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
 
     const failureReport = { ...kiloReport, status: 'failure' };
-    let result = orchestrator.handleKiloCompletion('integration-test-1', failureReport);
+    let result = await orchestrator.handleKiloCompletion('integration-test-1', failureReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'human_review');
 
@@ -197,7 +197,7 @@ async function main() {
     (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
 
     const blockedReport = { ...kiloReport, status: 'blocked', blockers: ['Missing authorization'] };
-    let result = orchestrator.handleKiloCompletion('integration-test-1', blockedReport);
+    let result = await orchestrator.handleKiloCompletion('integration-test-1', blockedReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'human_review');
 
@@ -219,7 +219,7 @@ async function main() {
     (await taskRegistry.updateAgentResult('integration-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} }));
 
     const failureReport = { ...geminiReport, status: 'failure', blockers: ['Architecture concerns'] };
-    let result = orchestrator.handleGeminiCompletion('integration-test-1', failureReport);
+    let result = await orchestrator.handleGeminiCompletion('integration-test-1', failureReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'human_review');
 
@@ -240,7 +240,7 @@ async function main() {
     (await taskRegistry.updateAgentResult('integration-test-1', 'Kilo', { status: 'success', execution_id: 'exec-1', report: {} }));
 
     const blockedReport = { ...geminiReport, status: 'blocked', blockers: ['Needs human decision'] };
-    let result = orchestrator.handleGeminiCompletion('integration-test-1', blockedReport);
+    let result = await orchestrator.handleGeminiCompletion('integration-test-1', blockedReport);
     assertEqual(result.success, true);
     assertEqual(result.next_action, 'human_review');
 
@@ -267,8 +267,8 @@ async function main() {
     (await taskRegistry.updateTaskStatus('correlation-test-42', 'PLANNED'));
     (await taskRegistry.updateTaskStatus('correlation-test-42', 'EXECUTING'));
 
-    orchestrator.handleKiloCompletion('correlation-test-42', { ...kiloReport, request_id: 'correlation-test-42' });
-    orchestrator.handleGeminiCompletion('correlation-test-42', { ...geminiReport, request_id: 'correlation-test-42' });
+    await orchestrator.handleKiloCompletion('correlation-test-42', { ...kiloReport, request_id: 'correlation-test-42' });
+    await orchestrator.handleGeminiCompletion('correlation-test-42', { ...geminiReport, request_id: 'correlation-test-42' });
 
     let task = taskRegistry.getTask('correlation-test-42');
     assertEqual(task.request_id, 'correlation-test-42');
@@ -288,7 +288,7 @@ async function main() {
     (await taskRegistry.updateTaskStatus('integration-test-1', 'EXECUTING'));
 
     const malformedReport = { request_id: 'integration-test-1' }; // missing required fields
-    let result = orchestrator.handleKiloCompletion('integration-test-1', malformedReport);
+    let result = await orchestrator.handleKiloCompletion('integration-test-1', malformedReport);
     assertEqual(result.success, false);
     assert(result.error.includes('Invalid execution report'));
 
@@ -302,11 +302,11 @@ async function main() {
   await test('Unknown request_id rejected', async () => {
     cleanup();
 
-    let result = orchestrator.handleKiloCompletion('unknown-request', kiloReport);
+    let result = await orchestrator.handleKiloCompletion('unknown-request', kiloReport);
     assertEqual(result.success, false);
     assert(result.error.includes('not found'));
 
-    result = orchestrator.handleGeminiCompletion('unknown-request', geminiReport);
+    result = await orchestrator.handleGeminiCompletion('unknown-request', geminiReport);
     assertEqual(result.success, false);
     assert(result.error.includes('not found'));
 
@@ -335,7 +335,7 @@ async function main() {
 
     // Report with commit/push=true but no authorization in ACP command for it
     const reportWithPush = { ...kiloReport, commit: 'new-commit', push: true };
-    let result = orchestrator.handleKiloCompletion('integration-test-1', reportWithPush);
+    let result = await orchestrator.handleKiloCompletion('integration-test-1', reportWithPush);
     assertEqual(result.success, true);
 
     // The orchestrator records the report but does NOT grant commit/push authority
@@ -360,7 +360,7 @@ async function main() {
     (await taskRegistry.updateTaskStatus('auto-trigger-1', 'EXECUTING'));
 
     // Handle Kilo completion - this sets next_action to 'trigger_builder'
-    const kiloResult = orchestrator.handleKiloCompletion('auto-trigger-1', { ...kiloReport, request_id: 'auto-trigger-1' });
+    const kiloResult = await orchestrator.handleKiloCompletion('auto-trigger-1', { ...kiloReport, request_id: 'auto-trigger-1' });
     assertEqual(kiloResult.success, true);
     assertEqual(kiloResult.next_action, 'trigger_builder');
 

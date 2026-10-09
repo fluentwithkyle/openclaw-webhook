@@ -112,13 +112,13 @@ function makeBuilderReport(requestId, task = 'test-task', status = 'success', ex
   return report;
 }
 
-function setupTask(requestId, task = 'test-task') {
-  cleanup();
-  taskRegistry.createTask(makeCommand(requestId, task));
-  taskRegistry.updateTaskStatus(requestId, 'SELECTED');
-  taskRegistry.updateTaskStatus(requestId, 'PLANNED');
-  taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
-  orchestrator.handleKiloCompletion(requestId, makeKiloReport(requestId, task));
+async function setupTask(requestId, task = 'test-task') {
+    cleanup();
+    await taskRegistry.createTask(makeCommand(requestId, task));
+    await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+    await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+    await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+    await orchestrator.handleKiloCompletion(requestId, makeKiloReport(requestId, task));
 }
 
 async function makeRequest(options, data = {}) {
@@ -215,7 +215,7 @@ async function main() {
 
   // Test 6: Valid auth but wrong agent
   await runTest('Callback - wrong agent (Kilo) returns 400', async () => {
-    setupTask('test-agent-1');
+    await setupTask('test-agent-1');
     const report = { ...makeGeminiReport('test-agent-1'), agent: 'Kilo' };
     const res = await makeRequest({
       hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
@@ -228,7 +228,7 @@ async function main() {
 
   // Test 7: Valid auth but repository mismatch
   await runTest('Callback - repository mismatch returns 400', async () => {
-    setupTask('test-repo-1');
+    await setupTask('test-repo-1');
     const report = { ...makeGeminiReport('test-repo-1'), repository: 'other/repo' };
     const res = await makeRequest({
       hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
@@ -241,7 +241,7 @@ async function main() {
 
   // Test 8: Valid auth but base_branch mismatch
   await runTest('Callback - base_branch mismatch returns 400', async () => {
-    setupTask('test-branch-1');
+    await setupTask('test-branch-1');
     const report = { ...makeGeminiReport('test-branch-1'), base_branch: 'develop' };
     const res = await makeRequest({
       hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
@@ -254,7 +254,7 @@ async function main() {
 
   // Test 9: Gemini success callback
   await runTest('Callback - Gemini success transitions to VERIFIED', async () => {
-    setupTask('test-success-1');
+    await setupTask('test-success-1');
     const report = makeGeminiReport('test-success-1', 'test-task', 'success');
     const res = await makeRequest({
       hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
@@ -274,7 +274,7 @@ async function main() {
 
   // Test 10: Gemini failure callback
   await runTest('Callback - Gemini failure transitions to FAILED', async () => {
-    setupTask('test-failure-1');
+    await setupTask('test-failure-1');
     const report = makeGeminiReport('test-failure-1', 'test-task', 'failure');
     const res = await makeRequest({
       hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
@@ -293,7 +293,7 @@ async function main() {
 
   // Test 11: Gemini blocked callback
   await runTest('Callback - Gemini blocked transitions to BLOCKED', async () => {
-    setupTask('test-blocked-1');
+    await setupTask('test-blocked-1');
     const report = makeGeminiReport('test-blocked-1', 'test-task', 'blocked');
     const res = await makeRequest({
       hostname: 'localhost', port: 3002, path: '/poc/gemini/callback', method: 'POST',
@@ -313,7 +313,7 @@ async function main() {
 
   // Test 12: Duplicate callback (idempotency)
   await runTest('Callback - duplicate returns 409', async () => {
-    setupTask('test-duplicate-1');
+    await setupTask('test-duplicate-1');
     const report = makeGeminiReport('test-duplicate-1', 'test-task', 'success');
 
     // First callback
@@ -472,7 +472,7 @@ async function main() {
 
   await runTest('Builder callback: success report updates task status', async () => {
     const requestId = 'builder-success-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
     await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'success'));
 
@@ -485,7 +485,7 @@ async function main() {
 
   await runTest('Builder callback: failure report sets blockers', async () => {
     const requestId = 'builder-failure-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
     await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'failure'));
 
@@ -497,7 +497,7 @@ async function main() {
 
   await runTest('Builder callback: invalid signature returns 401', async () => {
     const requestId = 'builder-sig-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
     const result = await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'success'), 'wrong-secret');
     assert.strictEqual(result.status, 401);
@@ -510,9 +510,9 @@ async function main() {
 
   await runTest('Builder callback: correct execution_claim_id + carrier_identity succeeds', async () => {
     const requestId = 'builder-corr-ok-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
-    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+    const claimResult = await taskRegistry.claimExecutionContext(requestId, {
       carrier_id: 'github-workflow-builder-corr-1',
       carrier_type: 'github_workflow'
     });
@@ -530,9 +530,9 @@ async function main() {
 
   await runTest('Builder callback: wrong execution_claim_id is rejected', async () => {
     const requestId = 'builder-corr-claim-mismatch-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
-    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+    const claimResult = await taskRegistry.claimExecutionContext(requestId, {
       carrier_id: 'github-workflow-builder-corr-2',
       carrier_type: 'github_workflow'
     });
@@ -550,9 +550,9 @@ async function main() {
 
   await runTest('Builder callback: wrong carrier_identity is rejected', async () => {
     const requestId = 'builder-corr-carrier-mismatch-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
-    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+    const claimResult = await taskRegistry.claimExecutionContext(requestId, {
       carrier_id: 'github-workflow-builder-corr-3',
       carrier_type: 'github_workflow'
     });
@@ -583,92 +583,92 @@ async function main() {
    await runTest('Builder callback: rehydrates task from claim lock + callback payload when task missing', async () => {
      const requestId = 'builder-rehydrate-' + Date.now();
      cleanup();
-     taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
-     taskRegistry.updateTaskStatus(requestId, 'SELECTED');
-     taskRegistry.updateTaskStatus(requestId, 'PLANNED');
-     taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+      await taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
+      await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+      await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+      await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
 
-     const claimResult = taskRegistry.claimExecutionContext(requestId, {
-       carrier_id: 'github-workflow-rehydrate-1',
-       carrier_type: 'github_workflow'
-     });
-     assert.strictEqual(claimResult.success, true);
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-rehydrate-1',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
 
-     // Simulate server restart: wipe in-memory cache AND registry file, but preserve claim lock on disk
-     taskRegistry.resetMemoryCache();
-     if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
-     if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
+      // Simulate server restart: wipe in-memory cache AND registry file, but preserve claim lock on disk
+      taskRegistry.resetMemoryCache();
+      if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
+      if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
 
-     assert.strictEqual(taskRegistry.getTask(requestId), null);
+      assert.strictEqual(taskRegistry.getTask(requestId), null);
 
-     const report = makeBuilderReport(
-       requestId, 'builder-task', 'success',
-       claimResult.execution_claim_id,
-       'github-workflow-rehydrate-1'
-     );
-     const res = await postRequest('/poc/builder/callback', report);
-     assert.strictEqual(res.status, 200);
-     assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
-     assert.strictEqual(res.body.builder_status, 'success');
+      const report = makeBuilderReport(
+        requestId, 'builder-task', 'success',
+        claimResult.execution_claim_id,
+        'github-workflow-rehydrate-1'
+      );
+      const res = await postRequest('/poc/builder/callback', report);
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
+      assert.strictEqual(res.body.builder_status, 'success');
 
-     const task = taskRegistry.getTask(requestId);
-     assert.strictEqual(task.builder.status, 'success');
-     assert.strictEqual(task.status, 'EXECUTING');
-   });
+      const task = taskRegistry.getTask(requestId);
+      assert.strictEqual(task.builder.status, 'success');
+      assert.strictEqual(task.status, 'EXECUTING');
+    });
 
-   await runTest('Builder callback: rejects callback when claim lock missing but callback has claim_id', async () => {
-     const requestId = 'builder-rehydrate-no-claim-' + Date.now();
-     cleanup();
+    await runTest('Builder callback: rejects callback when claim lock missing but callback has claim_id', async () => {
+      const requestId = 'builder-rehydrate-no-claim-' + Date.now();
+      cleanup();
 
-     const report = makeBuilderReport(
-       requestId, 'builder-task', 'success',
-       'some-claim-id', 'some-carrier'
-     );
-     const res = await postRequest('/poc/builder/callback', report);
-     assert.strictEqual(res.status, 404);
-     assert(res.body.error.includes('no execution claim lock'));
-   });
+      const report = makeBuilderReport(
+        requestId, 'builder-task', 'success',
+        'some-claim-id', 'some-carrier'
+      );
+      const res = await postRequest('/poc/builder/callback', report);
+      assert.strictEqual(res.status, 404);
+      assert(res.body.error.includes('no execution claim lock'));
+    });
 
-   await runTest('Builder callback: rejects rehydration when execution_claim_id mismatches', async () => {
-     const requestId = 'builder-rehydrate-claim-mismatch-' + Date.now();
-     cleanup();
-     taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
-     taskRegistry.updateTaskStatus(requestId, 'SELECTED');
-     taskRegistry.updateTaskStatus(requestId, 'PLANNED');
-     taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+    await runTest('Builder callback: rejects rehydration when execution_claim_id mismatches', async () => {
+      const requestId = 'builder-rehydrate-claim-mismatch-' + Date.now();
+      cleanup();
+      await taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
+      await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+      await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+      await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
 
-     const claimResult = taskRegistry.claimExecutionContext(requestId, {
-       carrier_id: 'github-workflow-rehydrate-2',
-       carrier_type: 'github_workflow'
-     });
-     assert.strictEqual(claimResult.success, true);
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-rehydrate-2',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
 
-     // Simulate server restart: wipe in-memory cache AND registry file, but preserve claim lock on disk
-     taskRegistry.resetMemoryCache();
-     if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
-     if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
+      // Simulate server restart: wipe in-memory cache AND registry file, but preserve claim lock on disk
+      taskRegistry.resetMemoryCache();
+      if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
+      if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
 
-     assert.strictEqual(taskRegistry.getTask(requestId), null);
+      assert.strictEqual(taskRegistry.getTask(requestId), null);
 
-     const report = makeBuilderReport(
-       requestId, 'builder-task', 'success',
-       'wrong-claim-id',
-       'github-workflow-rehydrate-2'
-     );
-     const res = await postRequest('/poc/builder/callback', report);
-     assert.strictEqual(res.status, 403);
-     assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISMATCH');
-   });
+      const report = makeBuilderReport(
+        requestId, 'builder-task', 'success',
+        'wrong-claim-id',
+        'github-workflow-rehydrate-2'
+      );
+      const res = await postRequest('/poc/builder/callback', report);
+      assert.strictEqual(res.status, 403);
+      assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISMATCH');
+    });
 
-   await runTest('Builder callback: rejects rehydration when carrier_identity mismatches', async () => {
-     const requestId = 'builder-rehydrate-carrier-mismatch-' + Date.now();
-     cleanup();
-     taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
-     taskRegistry.updateTaskStatus(requestId, 'SELECTED');
-     taskRegistry.updateTaskStatus(requestId, 'PLANNED');
-     taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+    await runTest('Builder callback: rejects rehydration when carrier_identity mismatches', async () => {
+      const requestId = 'builder-rehydrate-carrier-mismatch-' + Date.now();
+      cleanup();
+      await taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
+      await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+      await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+      await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
 
-     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+     const claimResult = await taskRegistry.claimExecutionContext(requestId, {
        carrier_id: 'github-workflow-correct-carrier',
        carrier_type: 'github_workflow'
      });
@@ -693,7 +693,7 @@ async function main() {
 
   await runTest('Builder callback: wrong agent (Gemini Reviewer) is rejected', async () => {
     const requestId = 'builder-corr-agent-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
     const report = { ...makeBuilderReport(requestId, 'builder-task', 'success'), agent: 'Gemini' };
     const res = await postRequest('/poc/builder/callback', report);
@@ -704,7 +704,7 @@ async function main() {
 
   await runTest('Builder callback: repository mismatch remains rejected', async () => {
     const requestId = 'builder-corr-repo-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
     const report = { ...makeBuilderReport(requestId, 'builder-task', 'success'), repository: 'evil/repo' };
     const res = await postRequest('/poc/builder/callback', report);
@@ -714,7 +714,7 @@ async function main() {
 
   await runTest('Builder callback: base_branch mismatch remains rejected', async () => {
     const requestId = 'builder-corr-branch-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
     const report = { ...makeBuilderReport(requestId, 'builder-task', 'success'), base_branch: 'develop' };
     const res = await postRequest('/poc/builder/callback', report);
@@ -724,9 +724,9 @@ async function main() {
 
   await runTest('Builder callback: duplicate completion remains idempotent', async () => {
     const requestId = 'builder-corr-dup-' + Date.now();
-    setupTask(requestId, 'builder-task');
+    await setupTask(requestId, 'builder-task');
 
-    const claimResult = taskRegistry.claimExecutionContext(requestId, {
+    const claimResult = await taskRegistry.claimExecutionContext(requestId, {
       carrier_id: 'github-workflow-builder-dup',
       carrier_type: 'github_workflow'
     });
@@ -748,7 +748,7 @@ async function main() {
 
    await runTest('Builder callback: no execution claim on task - correlation skipped (backward compatible)', async () => {
      const requestId = 'builder-corr-no-claim-' + Date.now();
-     setupTask(requestId, 'builder-task');
+     await setupTask(requestId, 'builder-task');
 
      const report = makeBuilderReport(requestId, 'builder-task', 'success', null, null);
      const res = await postRequest('/poc/builder/callback', report);
@@ -758,9 +758,9 @@ async function main() {
 
    await runTest('Builder callback: missing execution_claim_id with authoritative claim returns 403', async () => {
      const requestId = 'builder-missing-claim-' + Date.now();
-     setupTask(requestId, 'builder-task');
+     await setupTask(requestId, 'builder-task');
 
-     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+     const claimResult = await taskRegistry.claimExecutionContext(requestId, {
        carrier_id: 'github-workflow-missing-claim',
        carrier_type: 'github_workflow'
      });
@@ -778,9 +778,9 @@ async function main() {
 
    await runTest('Builder callback: missing carrier_identity with authoritative claim returns 403', async () => {
      const requestId = 'builder-missing-carrier-' + Date.now();
-     setupTask(requestId, 'builder-task');
+     await setupTask(requestId, 'builder-task');
 
-     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+     const claimResult = await taskRegistry.claimExecutionContext(requestId, {
        carrier_id: 'github-workflow-missing-carrier',
        carrier_type: 'github_workflow'
      });
@@ -798,9 +798,9 @@ async function main() {
 
    await runTest('Builder callback: missing both execution_claim_id and carrier_identity returns 403 for missing claim first', async () => {
      const requestId = 'builder-missing-both-' + Date.now();
-     setupTask(requestId, 'builder-task');
+     await setupTask(requestId, 'builder-task');
 
-     const claimResult = taskRegistry.claimExecutionContext(requestId, {
+     const claimResult = await taskRegistry.claimExecutionContext(requestId, {
        carrier_id: 'github-workflow-missing-both',
        carrier_type: 'github_workflow'
      });

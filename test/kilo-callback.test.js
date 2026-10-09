@@ -73,12 +73,12 @@ function makeKiloReport(requestId, task = 'test-task', status = 'success') {
   };
 }
 
-function setupTask(requestId, task = 'test-task') {
-  cleanup();
-  taskRegistry.createTask(makeCommand(requestId, task));
-  taskRegistry.updateTaskStatus(requestId, 'SELECTED');
-  taskRegistry.updateTaskStatus(requestId, 'PLANNED');
-  taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+async function setupTask(requestId, task = 'test-task') {
+    cleanup();
+    await taskRegistry.createTask(makeCommand(requestId, task));
+    await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+    await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+    await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
 }
 
 async function makeRequest(options, data = {}) {
