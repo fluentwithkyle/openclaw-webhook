@@ -2370,7 +2370,7 @@ await runTest('Director-asserted task_mode - server-derived authority overrides 
     cleanup();
 });
 
-await runTest('Director-asserted task_mode - invalid task_mode in embedded descriptor defaults to REVIEW even with secret', async () => {
+await runTest('Director-asserted task_mode - invalid task_mode in embedded descriptor is rejected (fail-closed) even with secret', async () => {
     const commentBody = '@gemini-cli {"task_mode":"INVALID_MODE","task":"Do something","target":"Gemini"}';
     const payload = buildActivationPayloadForIssueComment(
         'director-comment-9',
@@ -2381,12 +2381,12 @@ await runTest('Director-asserted task_mode - invalid task_mode in embedded descr
         'director-origin-test-secret'
     );
 
-    assert.equal(payload.task_mode, 'REVIEW',
-        'Invalid task_mode in embedded descriptor must default to REVIEW even with Director secret');
-    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only'],
-        'Invalid task_mode must result in read_only capabilities');
-    assert.deepStrictEqual(payload.constraints.permitted_paths, ['poc/'],
-        'Invalid task_mode must result in poc/ permitted_paths');
+    assert(payload.error,
+        'Invalid task_mode in embedded descriptor must produce an error (fail-closed)');
+    assert.equal(payload.error_code, 'INVALID_TASK_MODE',
+        'Invalid task_mode must produce INVALID_TASK_MODE error code');
+    assert.equal(payload.task_mode, undefined,
+        'Invalid task_mode must not produce a payload with a defaulted task_mode');
 });
 
 await runTest('Director-asserted task_mode - director_origin_assertion also establishes director_authorized', async () => {

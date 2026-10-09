@@ -191,6 +191,7 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     var hasTarget = typeof candidate.target === 'string' && candidate.target.trim() !== '';
     var hasVerification = typeof candidate.verification === 'string' && candidate.verification.trim() !== '';
     var hasTaskMode = typeof candidate.task_mode === 'string' && candidate.task_mode.trim() !== '' && VALID_TASK_MODES.includes(candidate.task_mode);
+    var explicitTaskMode = Object.prototype.hasOwnProperty.call(candidate, 'task_mode') && !hasTaskMode;
 
     if (!hasTask && !hasTarget && !hasVerification && !hasTaskMode) {
         return null;
@@ -209,6 +210,10 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     if (hasTaskMode) {
         descriptor.task_mode = candidate.task_mode;
     }
+    if (explicitTaskMode) {
+        descriptor._explicit_task_mode = true;
+        descriptor._invalid_task_mode = candidate.task_mode;
+    }
     return descriptor;
 }
 
@@ -216,6 +221,13 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
     const stripped = commentBody.replace('@gemini-cli', '').trim();
 
     var embeddedDescriptor = extractEmbeddedAcpDescriptor(commentBody);
+
+    if (embeddedDescriptor && embeddedDescriptor._explicit_task_mode && embeddedDescriptor._invalid_task_mode) {
+        return {
+            error: 'Invalid task_mode in embedded descriptor: ' + embeddedDescriptor._invalid_task_mode + '. Must be one of: ' + VALID_TASK_MODES.join(', '),
+            error_code: 'INVALID_TASK_MODE'
+        };
+    }
 
     var taskMode = 'REVIEW';
     var capabilities = 'read_only';
