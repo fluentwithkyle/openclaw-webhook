@@ -1040,6 +1040,146 @@ runTest('BUILDER mode with execution capabilities and valid paths passes', () =>
 });
 
 // =====================================================
+// Gap 8: Activation Entry Enforcement — validateAcpTaskArtifact wired into buildActivationPayloadForIssueComment
+// =====================================================
+
+const VALID_CANONICAL_ARTIFACT_FOR_INGRESS = {
+  task_name: 'TASK-KILO-INGRESS-VALID-001',
+  originator: 'Kyle — Director',
+  target_agent: 'Kilo',
+  repository: 'fluentwithkyle/openclaw-webhook',
+  base_branch: 'main',
+  task_mode: 'FAILOVER_EXECUTE',
+  capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+  objective: 'Execute the task with full runtime authority.',
+  scope: { permitted_paths: ['poc/', 'test/'] },
+  verification: 'Run validateAcpTaskArtifact and confirm it passes.',
+  constraints: ['smallest-change'],
+  conflict_handling: 'Report blocked.'
+};
+
+runTest('Gap 8 - valid canonical artifact follows authorized path through buildActivationPayloadForIssueComment', () => {
+  const artifactText = JSON.stringify(VALID_CANONICAL_ARTIFACT_FOR_INGRESS);
+  const body = '@gemini-cli ' + artifactText;
+  const payload = buildActivationPayloadForIssueComment('ingress-valid-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.strictEqual(payload.error, undefined, 'valid artifact should not produce error: ' + (payload.error || ''));
+  assert.strictEqual(payload.error_code, undefined);
+  // Without director origin secret/assertion, task_mode defaults to REVIEW (comment is not authority source)
+  assert.strictEqual(payload.task_mode, 'REVIEW');
+  assert.strictEqual(payload.target, 'Gemini');
+  assert.ok(payload.embedded_acp_descriptor, 'valid artifact should have embedded_acp_descriptor');
+  assert.strictEqual(payload.embedded_acp_descriptor._raw_match, artifactText);
+});
+
+runTest('Gap 8 - missing required field (scope) rejected before TaskRegistry admission', () => {
+  // Full canonical artifact with scope present but empty array — validateAcpTaskArtifact rejects empty permitted_paths
+  const artifact = { ...VALID_CANONICAL_ARTIFACT_FOR_INGRESS, scope: { permitted_paths: [] } };
+  const body = '@gemini-cli ' + JSON.stringify(artifact);
+  const payload = buildActivationPayloadForIssueComment('ingress-missing-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'empty permitted_paths should produce error');
+  assert.strictEqual(payload.error_code, 'ARTIFACT_VALIDATION_FAILED');
+  assert.strictEqual(payload.validation_error_code, 'EMPTY_PERMITTED_PATHS');
+});
+
+runTest('Gap 8 - incorrect canonical field ordering rejected', () => {
+  const outOfOrder = {
+    originator: 'Kyle — Director',
+    task_name: 'TASK-KILO-OUT-OF-ORDER-001',
+    target_agent: 'Kilo',
+    repository: 'fluentwithkyle/openclaw-webhook',
+    base_branch: 'main',
+    task_mode: 'FAILOVER_EXECUTE',
+    capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+    objective: 'Test ordering',
+    scope: { permitted_paths: ['poc/', 'test/'] },
+    verification: 'Verify',
+    constraints: ['smallest-change'],
+    conflict_handling: 'Report'
+  };
+  const body = '@gemini-cli ' + JSON.stringify(outOfOrder);
+  const payload = buildActivationPayloadForIssueComment('ingress-order-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'out-of-order fields should produce error');
+  assert.strictEqual(payload.error_code, 'ARTIFACT_VALIDATION_FAILED');
+});
+
+runTest('Gap 8 - invalid capability rejected', () => {
+  const badCaps = { ...VALID_CANONICAL_ARTIFACT_FOR_INGRESS, capabilities: ['read_only', 'modify_files', 'rm-rf'] };
+  const body = '@gemini-cli ' + JSON.stringify(badCaps);
+  const payload = buildActivationPayloadForIssueComment('ingress-badcap-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'invalid capability should produce error');
+  assert.strictEqual(payload.error_code, 'ARTIFACT_VALIDATION_FAILED');
+  assert.strictEqual(payload.validation_error_code, 'INVALID_CAPABILITY');
+});
+
+runTest('Gap 8 - contradictory capabilities (push without commit) rejected', () => {
+  const conflictCaps = JSON.parse(JSON.stringify(VALID_CANONICAL_ARTIFACT_FOR_INGRESS));
+  conflictCaps.capabilities = ['read_only', 'modify_files', 'push'];
+  const body = '@gemini-cli ' + JSON.stringify(conflictCaps);
+  const payload = buildActivationPayloadForIssueComment('ingress-contradict-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'contradictory capabilities should produce error');
+  assert.strictEqual(payload.error_code, 'ARTIFACT_VALIDATION_FAILED');
+  assert.strictEqual(payload.validation_error_code, 'CONTRADICTORY_CAPABILITIES');
+});
+
+runTest('Gap 8 - path outside max boundary rejected', () => {
+  const badPaths = { ...VALID_CANONICAL_ARTIFACT_FOR_INGRESS };
+  badPaths.scope = { permitted_paths: ['poc/', '../../../etc/passwd'] };
+  const body = '@gemini-cli ' + JSON.stringify(badPaths);
+  const payload = buildActivationPayloadForIssueComment('ingress-badpath-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'path outside max boundary should produce error');
+  assert.strictEqual(payload.error_code, 'ARTIFACT_VALIDATION_FAILED');
+});
+
+runTest('Gap 8 - malformed JSON fails closed', () => {
+  const body = '@gemini-cli {"task_mode": "FAILOVER_EXECUTE", "task": "do something"';
+  const payload = buildActivationPayloadForIssueComment('ingress-malformed-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'malformed JSON should produce error');
+  assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
+});
+
+runTest('Gap 8 - smart-quoted artifact fails closed', () => {
+  const body = '@gemini-cli {\u201ctask_mode\u201d: \u201cFAILOVER_EXECUTE\u201d, \u201ctask\u201d: \u201ctest\u201d}';
+  const payload = buildActivationPayloadForIssueComment('ingress-sq-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'smart-quoted artifact should produce error');
+  assert.strictEqual(payload.error_code, 'MALFORMED_ACP_DESCRIPTOR');
+});
+
+runTest('Gap 8 - invalid task_mode (PLAN) fails closed with INVALID_TASK_MODE', () => {
+  const planArtifact = { ...VALID_CANONICAL_ARTIFACT_FOR_INGRESS, task_mode: 'PLAN' };
+  const body = '@gemini-cli ' + JSON.stringify(planArtifact);
+  const payload = buildActivationPayloadForIssueComment('ingress-plan-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'PLAN task_mode should produce error');
+  assert.strictEqual(payload.error_code, 'INVALID_TASK_MODE');
+});
+
+runTest('Gap 8 - ambiguous/conflicting descriptors (target_agent != target) fail closed', () => {
+  const conflictFields = { ...VALID_CANONICAL_ARTIFACT_FOR_INGRESS, target: 'Gemini' };
+  const body = '@gemini-cli ' + JSON.stringify(conflictFields);
+  const payload = buildActivationPayloadForIssueComment('ingress-conflict-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'conflicting target/target_agent should produce error');
+  assert.strictEqual(payload.error_code, 'ARTIFACT_VALIDATION_FAILED');
+  assert.strictEqual(payload.validation_error_code, 'AUTHORITY_FIELD_CONFLICT');
+});
+
+runTest('Gap 8 - plain-text REVIEW (no embedded descriptor) remains compatible', () => {
+  const body = '@gemini-cli just review this code';
+  const payload = buildActivationPayloadForIssueComment('ingress-plain-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.strictEqual(payload.error, undefined, 'plain text should not produce error: ' + (payload.error || ''));
+  assert.strictEqual(payload.task_mode, 'REVIEW');
+  assert.strictEqual(payload.target, 'Gemini');
+  assert.deepStrictEqual(payload.authorization.capabilities, ['read_only']);
+});
+
+runTest('Gap 8 - rejected artifact has no embedded_acp_descriptor in payload', () => {
+  const badCaps = { ...VALID_CANONICAL_ARTIFACT_FOR_INGRESS, capabilities: ['read_only', 'evil'] };
+  const body = '@gemini-cli ' + JSON.stringify(badCaps);
+  const payload = buildActivationPayloadForIssueComment('ingress-reject-1', body, 'owner/repo', 'main', 'approval-1');
+  assert.ok(payload.error, 'invalid artifact should be rejected');
+  assert.strictEqual(payload.task_mode, undefined, 'rejected payload must not contain task_mode');
+  assert.strictEqual(payload.authorization, undefined, 'rejected payload must not contain authorization');
+});
+
+// =====================================================
 // Summary
 // =====================================================
 

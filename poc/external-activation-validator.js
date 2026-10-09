@@ -1,6 +1,7 @@
 const https = require('https');
 const crypto = require('crypto');
 const taskRegistry = require('./task-registry');
+const { validateAcpTaskArtifact, validateAcpTaskArtifactSyntax } = require('./schemas/acp-schema');
 
 const ACTIVATION_INGRESS_PATH = '/poc/activation/ingress';
 
@@ -264,6 +265,7 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     }
 
     var descriptor = {};
+    descriptor._raw_match = match[0];
     if (hasTarget) {
         descriptor.target = candidate.target;
     }
@@ -295,12 +297,36 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
         };
     }
 
-    if (embeddedDescriptor && embeddedDescriptor._explicit_task_mode && embeddedDescriptor._invalid_task_mode) {
-        return {
-            error: 'Invalid task_mode in embedded descriptor: ' + embeddedDescriptor._invalid_task_mode + '. Must be one of: ' + VALID_TASK_MODES.join(', '),
-            error_code: 'INVALID_TASK_MODE'
-        };
-    }
+     if (embeddedDescriptor && embeddedDescriptor._explicit_task_mode && embeddedDescriptor._invalid_task_mode) {
+         return {
+             error: 'Invalid task_mode in embedded descriptor: ' + embeddedDescriptor._invalid_task_mode + '. Must be one of: ' + VALID_TASK_MODES.join(', '),
+             error_code: 'INVALID_TASK_MODE'
+         };
+     }
+
+      if (embeddedDescriptor && embeddedDescriptor._raw_match) {
+          var artifactValidation = validateAcpTaskArtifactSyntax(embeddedDescriptor._raw_match);
+          if (!artifactValidation.valid) {
+              return {
+                  error: 'Embedded ACP descriptor failed syntax validation: ' + artifactValidation.error,
+                  error_code: 'ARTIFACT_VALIDATION_FAILED',
+                  validation_error_code: artifactValidation.error_code,
+                  validation_details: artifactValidation
+              };
+          }
+
+          if (artifactValidation.is_canonical_artifact) {
+              var canonicalValidation = validateAcpTaskArtifact(embeddedDescriptor._raw_match);
+              if (!canonicalValidation.valid) {
+                  return {
+                      error: 'Embedded ACP descriptor failed canonical artifact validation: ' + canonicalValidation.error,
+                      error_code: 'ARTIFACT_VALIDATION_FAILED',
+                      validation_error_code: canonicalValidation.error_code,
+                      validation_details: canonicalValidation
+                  };
+              }
+          }
+      }
 
     var taskMode = 'REVIEW';
     var capabilities = 'read_only';
