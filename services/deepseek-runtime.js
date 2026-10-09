@@ -1016,7 +1016,7 @@ async function runDeepSeekConversation({ messages, env, httpClient = axios, coor
             };
         }
     }
-    let result = await runDeepSeekTurn({ messages, env, httpClient, coordinationContextId });
+    let result = await runDeepSeekTurn({ messages, env, httpClient, coordinationContextId, trustedIngress });
     if (!autonomousCoordination) return result;
 
     let context = result.coordination_context;

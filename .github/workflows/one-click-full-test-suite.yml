@@ -39,5 +39,17 @@ jobs:
       - name: Run ACP artifact test suite
         run: node test/acp-task-artifact.test.js
 
-      - name: Run full test suite
-        run: npm test
+      - name: Run every test file and collect all failures
+        shell: bash
+        run: |
+          failed=0
+          for test_file in test/*.test.js; do
+            echo "===== RUNNING: $test_file ====="
+            node "$test_file"
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::error::Test file failed: $test_file (exit $status)"
+              failed=1
+            fi
+          done
+          exit "$failed"
