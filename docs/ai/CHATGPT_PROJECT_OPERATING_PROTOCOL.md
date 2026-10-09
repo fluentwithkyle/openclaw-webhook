@@ -1913,7 +1913,7 @@ The Kilo → Gemini handoff progresses through the following **distinguished** s
 
 The `request_id` flows through each stage:
 
-- The ACP command embeds `request_id` (TASK_STANDARD.md Section 7).
+- The activation command/payload carries `request_id` for orchestration correlation; this is separate from the canonical task-artifact JSON envelope.
 - Kilo's execution report references the same `request_id`.
 - The Kilo callback is validated against the TaskRegistry entry keyed by `request_id` (`routes/poc.js` `authenticateKiloCallback` + `validateExecutionReport`).
 - `orchestrator.handleKiloCompletion` looks up the task by `request_id` and passes it to `geminiTrigger.dispatchGemini`.
