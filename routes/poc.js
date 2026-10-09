@@ -208,7 +208,7 @@ router.post('/kilo', authenticatePoc, async (req, res) => {
         }
 
         if (result.status === 'SUCCESS') {
-            const transitionResult = transitionToExecuting(requestId);
+            const transitionResult = await transitionToExecuting(requestId);
             if (!transitionResult.success) {
                 console.error('Failed to transition task to EXECUTING:', transitionResult.error);
             }
@@ -285,7 +285,7 @@ router.post('/builder/dispatch', authenticatePoc, async (req, res) => {
             });
         }
 
-        const transitionResult = transitionToExecuting(command.request_id);
+        const transitionResult = await transitionToExecuting(command.request_id);
         if (!transitionResult.success) {
             console.error('Failed to transition Builder task to EXECUTING:', transitionResult.error);
         }
@@ -825,7 +825,7 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
         }
 
         if (dispatchResult.status === 'SUCCESS') {
-            const transitionResult = transitionToExecuting(command.request_id);
+            const transitionResult = await transitionToExecuting(command.request_id);
             if (!transitionResult.success) {
                 console.error('Failed to transition task to EXECUTING:', transitionResult.error);
             }
@@ -834,7 +834,7 @@ router.post('/chatbox', authenticateChatboxGateway, async (req, res) => {
                 status: 'Task registered and dispatched',
                 stage: 'dispatched',
                 execution_initiated: true,
-                task_status: result.entry.status,
+                task_status: taskRegistry.getTask(command.request_id)?.status || result.entry.status,
                 current_agent: result.entry.current_agent,
                 next_agent: result.entry.next_agent
             });
@@ -948,7 +948,7 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
         }
 
         if (dispatchResult.status === 'SUCCESS') {
-            const transitionResult = transitionToExecuting(command.request_id);
+            const transitionResult = await transitionToExecuting(command.request_id);
             if (!transitionResult.success) {
                 console.error('Failed to transition task to EXECUTING:', transitionResult.error);
             }
@@ -957,7 +957,7 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
                 status: 'Task registered and dispatched',
                 stage: 'dispatched',
                 execution_initiated: true,
-                task_status: result.entry.status,
+                task_status: taskRegistry.getTask(command.request_id)?.status || result.entry.status,
                 current_agent: result.entry.current_agent,
                 next_agent: result.entry.next_agent
             });
