@@ -36,5 +36,8 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Run ACP artifact test suite
+        run: node test/acp-task-artifact.test.js
+
       - name: Run full test suite
         run: npm test
