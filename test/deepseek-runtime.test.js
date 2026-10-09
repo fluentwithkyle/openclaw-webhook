@@ -1165,7 +1165,7 @@ function rawRequest(port, headers, body) {
             });
         }
         for (let index = 0; index < 2; index++) {
-            createChild(`deepseek-runtime-child-diagnostics-blocked-${index}`, 'BLOCKED', {
+            await createChild(`deepseek-runtime-child-diagnostics-blocked-${index}`, 'BLOCKED', {
                 summary: `Blocked ${index}: credential blocked-credential-${index}`, blockers: [`blocker ${index}`], permitted_paths: ['hidden']
             });
         }
