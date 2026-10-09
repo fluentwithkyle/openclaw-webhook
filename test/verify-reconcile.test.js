@@ -146,7 +146,7 @@ runTest('validatePermittedPathsForMode - VERIFY_RECONCILE rejects partial docs p
 });
 
 runTest('validatePermittedPathsForMode - FAILOVER_EXECUTE accepts any explicit path', () => {
-  const result = schema.validatePermittedPathsForMode('FAILOVER_EXECUTE', ['index.js']);
+  const result = schema.validatePermittedPathsForMode('FAILOVER_EXECUTE', ['poc/index.js']);
   assertEqual(result.valid, true);
 });
 
@@ -420,7 +420,7 @@ runTest('ACP Engine - FAILOVER_EXECUTE valid returns SUCCESS', () => {
   const cmd = makeVerifyReconcileCommand('engine-5');
   cmd.task_mode = 'FAILOVER_EXECUTE';
   cmd.authorization.capabilities = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
-  cmd.constraints.permitted_paths = ['index.js', 'utils/helper.js'];
+  cmd.constraints.permitted_paths = ['poc/index.js', 'poc/utils/helper.js'];
   const result = validate(cmd);
   assertEqual(result.status, 'SUCCESS');
 });

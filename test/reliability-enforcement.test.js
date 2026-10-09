@@ -473,7 +473,7 @@ test('Orchestrator handleGeminiCompletion records INDEPENDENT_VERIFICATION evide
     execution_id: 'exec-1',
     report: {}
   }));
-  const result = orchestrator.handleGeminiCompletion('test-rel-1', validGeminiReport);
+  const result = await orchestrator.handleGeminiCompletion('test-rel-1', validGeminiReport);
   assertEqual(result.success, true);
   assertEqual(result.next_action, 'complete');
 
