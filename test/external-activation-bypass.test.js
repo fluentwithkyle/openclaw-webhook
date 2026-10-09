@@ -2677,11 +2677,11 @@ runTest('main.yml report payload step fails closed on invalid JSON', async () =>
 });
 
 runTest('main.yml line 652 uses single unambiguous jq filter with --argjson before filter', async () => {
-    const blockersIdx = mainRaw.indexOf('BLOCKERS=$(jq -n --arg msg "$RESEARCH_BLOCKER" --argjson blockers "$BLOCKERS"');
+    const blockersIdx = mainRaw.indexOf('BLOCKERS_JSON=$(jq -n --arg msg "$RESEARCH_BLOCKER" \'[$msg]\')');
     assert.ok(blockersIdx !== -1,
         'line 652 must use single jq filter with --argjson blockers before the filter expression');
     const section = mainRaw.slice(blockersIdx, blockersIdx + 200);
-    assert.ok(!/\$blockers \+ \[\$msg\]' --argjson blockers/.test(section),
+    assert.ok(!/\$blockers \+ \[\$msg\]/.test(section),
         'line 652 must not have duplicate filter before --argjson blockers');
 });
 
