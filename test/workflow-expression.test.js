@@ -641,13 +641,17 @@ runTest('main.yml changed_files diff fails closed on diff failure', () => {
     'callback payload step must fail closed with descriptive blocker on diff failure');
 });
 
-runTest('main.yml changed_files JSON validates output before accepting it', () => {
-  assert.ok(raw.includes('jq empty'),
-    'callback payload step must validate JSON with jq empty before using it');
+runTest('main.yml changed_files JSON validates output is an array before accepting it', () => {
+  assert.ok(raw.includes("jq -r 'type'"),
+    'callback payload step must validate JSON type with jq -r type before using it');
+  assert.ok(raw.includes('"array"'),
+    'callback payload step must check that changed_files JSON type is array');
+  assert.ok(raw.includes('CHANGED_FILES_TYPE'),
+    'callback payload step must capture jq type output in CHANGED_FILES_TYPE');
   assert.ok(raw.includes('RAW_CHANGED_FILES_JSON'),
     'callback payload step must capture jq output in RAW_CHANGED_FILES_JSON');
   assert.ok(raw.includes('CHANGED_FILES_JSON="$RAW_CHANGED_FILES_JSON"'),
-    'script must only accept CHANGED_FILES_JSON after validation passes');
+    'script must only accept CHANGED_FILES_JSON after array-type validation passes');
 });
 
 runTest('main.yml changed_files JSON initializes to []', () => {
@@ -681,7 +685,8 @@ runTest('Behavioral: successful empty diff produces []', () => {
       DIFF_BLOCKER_MSG="failed"
     else
       RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
-      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+      CHANGED_FILES_TYPE=\$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+      if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
         CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
       fi
     fi
@@ -713,7 +718,8 @@ runTest('Behavioral: successful non-empty diff produces file list array', () => 
       DIFF_BLOCKER_MSG="failed"
     else
       RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
-      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+      CHANGED_FILES_TYPE=\$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+      if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
         CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
       fi
     fi
@@ -749,7 +755,8 @@ runTest('Behavioral: shallow checkout with no HEAD~1 falls back to empty tree di
       DIFF_BLOCKER_MSG="failed"
     else
       RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
-      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+      CHANGED_FILES_TYPE=\$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+      if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
         CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
       fi
     fi
@@ -848,12 +855,13 @@ SCRIPT
     # Run the fake diff; it produces partial output then exits nonzero
     DIFF_OUTPUT=$(/tmp/fake-git-$$/fake-diff.sh 2>&1) || DIFF_STATUS=\$?
 
-    # Apply the SAME jq empty gate the workflow uses
+    # Apply the SAME array-type validation the workflow uses
     if [ "\$DIFF_STATUS" -ne 0 ]; then
       DIFF_BLOCKER_MSG="changed_files diff command failed (exit \$DIFF_STATUS); cannot produce complete changed_files list"
     else
       RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\\n") | map(select(length > 0))' 2>/dev/null)
-      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+      CHANGED_FILES_TYPE=\$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+      if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
         CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
       else
         DIFF_BLOCKER_MSG="changed_files diff produced invalid JSON; cannot report changed files"
@@ -890,7 +898,7 @@ SCRIPT
 
 runTest('Behavioral: partial/invalid jq output is rejected and does not reach changed_files', () => {
   // Simulate: git diff succeeds but produces partial/garbage output that
-  // jq turns into invalid data. The jq empty validation must reject it.
+  // jq turns into invalid data. The type validation must reject it.
   const result = execSync(`
     git init -q test-invalid-$$ && cd test-invalid-$$ &&
     git config user.email t@t.com && git config user.name t &&
@@ -906,7 +914,8 @@ runTest('Behavioral: partial/invalid jq output is rejected and does not reach ch
       DIFF_BLOCKER_MSG="diff failed"
     else
       RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\\n") | map(select(length > 0))' 2>/dev/null)
-      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+      CHANGED_FILES_TYPE=\$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+      if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
         CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
       else
         DIFF_BLOCKER_MSG="changed_files diff produced invalid JSON; cannot report changed files"
@@ -930,31 +939,49 @@ runTest('Behavioral: partial/invalid jq output is rejected and does not reach ch
   assert.ok(arr.includes('f1.txt'), 'must include the modified file');
 });
 
-runTest('Behavioral: invalid JSON from jq is rejected by jq empty gate', () => {
+runTest('Behavioral: invalid JSON from jq is rejected by array-type validation', () => {
   // Directly test the validation gate: feed invalid JSON to the same
-  // jq empty check the workflow uses, confirm it is rejected
+  // type-check the workflow uses, confirm it is rejected
   const result = execSync(`
     RAW_CHANGED_FILES_JSON='not valid json at all'
-    if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+    CHANGED_FILES_TYPE=$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+    if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
       echo -n "ACCEPTED"
     else
       echo -n "REJECTED"
     fi
   `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 5000 });
 
-  assert.equal(result.trim(), 'REJECTED', 'jq empty must reject invalid JSON');
+  assert.equal(result.trim(), 'REJECTED', 'array-type validation must reject invalid JSON');
 });
 
-runTest('Behavioral: valid JSON array passes jq empty validation', () => {
-  // Confirm that a properly formed array passes the jq empty gate
+runTest('Behavioral: valid JSON array passes array-type validation', () => {
+  // Confirm that a properly formed array passes the type-check gate
   const result = execSync(`
     RAW_CHANGED_FILES_JSON='["file1.txt","file2.js"]'
-    if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+    CHANGED_FILES_TYPE=$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+    if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
       echo -n "ACCEPTED"
     else
       echo -n "REJECTED"
     fi
   `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 5000 });
 
-  assert.equal(result.trim(), 'ACCEPTED', 'jq empty must accept a valid JSON array');
+  assert.equal(result.trim(), 'ACCEPTED', 'array-type validation must accept a valid JSON array');
+});
+
+runTest('Behavioral: non-array valid JSON (e.g. null, object) is rejected by array-type validation', () => {
+  // Confirm that valid JSON that is NOT an array is rejected,
+  // which is exactly the gap that jq empty (without array-type check) would miss
+  const result = execSync(`
+    RAW_CHANGED_FILES_JSON='{"not":"an array"}'
+    CHANGED_FILES_TYPE=$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+    if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
+      echo -n "ACCEPTED"
+    else
+      echo -n "REJECTED"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 5000 });
+
+  assert.equal(result.trim(), 'REJECTED', 'array-type validation must reject valid non-array JSON');
 });

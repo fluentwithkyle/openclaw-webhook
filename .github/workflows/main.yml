@@ -727,10 +727,11 @@ jobs:
             DIFF_BLOCKER_MSG="changed_files diff command failed (exit $DIFF_STATUS); cannot produce complete changed_files list"
           else
             RAW_CHANGED_FILES_JSON=$(printf '%s' "$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
-            if jq empty <(printf '%s' "$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+            CHANGED_FILES_TYPE=$(printf '%s' "$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
+            if [ "$CHANGED_FILES_TYPE" = "array" ]; then
               CHANGED_FILES_JSON="$RAW_CHANGED_FILES_JSON"
             else
-              echo "::error::changed_files JSON validation failed: output is not a valid JSON array"
+              echo "::error::changed_files JSON validation failed: output is not a valid JSON array (got type: $CHANGED_FILES_TYPE)"
               DIFF_BLOCKER_MSG="changed_files diff produced invalid JSON; cannot report changed files"
             fi
           fi
