@@ -166,7 +166,7 @@ await runTest('Procedure - main.yml orchestration context consumes execution des
     assertTrue(mainRaw.includes("jq -r '.request_id' \"$DESCRIPTOR_FILE\""), 'main.yml must read request_id from descriptor via jq');
     assertTrue(mainRaw.includes("jq -r '.task_mode' \"$DESCRIPTOR_FILE\""), 'main.yml must read task_mode from descriptor via jq');
     assertTrue(mainRaw.includes("jq -r '.capabilities | join(\",\")' \"$DESCRIPTOR_FILE\""), 'main.yml must read capabilities from descriptor via jq');
-    assertTrue(mainRaw.includes("jq -r '.permitted_paths | join(\",\")' \"$DESCRIPTOR_FILE\""), 'main.yml must read permitted_paths from descriptor via jq');
+    assertTrue(mainRaw.includes("jq -r '.permitted_paths | join(\" \")' \"$DESCRIPTOR_FILE\""), 'main.yml must read permitted_paths from descriptor via jq (space-separated)');
 });
 
 await runTest('Procedure - gemini-builder.yml orchestration context consumes execution descriptor (not workflow inputs)', async () => {

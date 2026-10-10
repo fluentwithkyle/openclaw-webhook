@@ -270,7 +270,7 @@ jobs:
             jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'permitted_paths<<EOF'
-            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
+            jq -r '.permitted_paths | join(" ")' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'execution_claim_id<<EOF'
             jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
@@ -327,7 +327,7 @@ jobs:
             jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'permitted_paths<<EOF'
-            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
+            jq -r '.permitted_paths | join(" ")' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'execution_claim_id<<EOF'
             jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
@@ -444,9 +444,25 @@ jobs:
 
           # Stage only files under PERMITTED_PATHS (space-separated, e.g. "poc/")
           # to avoid capturing unrelated worktree changes.
+          STAGING_ERRORS=""
           for dir in $PERMITTED_PATHS; do
-            git add "$dir" 2>/dev/null || true
+            if ! git add "$dir" 2>/dev/null; then
+              STAGING_ERRORS="${STAGING_ERRORS}${dir}\n"
+            fi
           done
+
+          # Fail-closed: a staging failure for any permitted path must not be
+          # silently ignored. The entire permitted set must stage successfully.
+          if [ -n "$STAGING_ERRORS" ]; then
+            echo "::error::Staging failed for one or more permitted_paths in $TASK_MODE mode:"
+            echo -e "$STAGING_ERRORS"
+            echo "UNCOMMITTED_CHANGES=true" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+            echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+            echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+            echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
 
           # Fail-closed: verify no out-of-scope changes are staged
           STAGED_FILES=$(git diff --cached --name-only)
@@ -481,8 +497,6 @@ jobs:
           CHANGED_FILES=$(git diff --cached --name-only)
           if [ -n "$CHANGED_FILES" ]; then
             HAS_CHANGES="true"
-
-            # Fail-closed for RESEARCH_DOCUMENT: require research record before commit
             if [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ]; then
               if [ -z "$TASK_NAME" ] && [ -n "$TASK_JSON" ]; then
                 TASK_NAME=$(echo "$TASK_JSON" | jq -r '.task_name // empty' 2>/dev/null || echo '')
@@ -558,7 +572,14 @@ jobs:
               exit 1
             fi
           else
-            echo "::warning::No changes to commit in $TASK_MODE mode within permitted_paths: $PERMITTED_PATHS"
+            echo "::error::$TASK_MODE mode staged no changes within permitted_paths: $PERMITTED_PATHS"
+            UNCOMMITTED_CHANGES="true"
+            echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+            echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+            echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+            echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
 
           echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
@@ -610,6 +631,7 @@ jobs:
           # persistence step fails.
           PERSIST_COMMIT_SHA=""
           PERSIST_PUSH_VERIFIED=""
+          COMMIT_PUSH_OUTCOME="${{ steps.commit_push.outcome || '' }}"
           if [ "$TASK_MODE" = "FAILOVER_EXECUTE" ] && [ "$GEMINI_OUTCOME" = "success" ]; then
             PERSIST_COMMIT_SHA="${{ steps.commit_push.outputs.commit_sha || '' }}"
             PERSIST_PUSH_VERIFIED="${{ steps.commit_push.outputs.push_verified }}"
@@ -624,7 +646,6 @@ jobs:
           if [ -n "$PERSIST_COMMIT_SHA" ] && [ "$PERSIST_COMMIT_SHA" != "null" ]; then
             # Check for uncommitted/unpushed changes
             UNCOMMITTED_CHANGES="${{ steps.commit_push.outputs.uncommitted_changes }}"
-            COMMIT_PUSH_OUTCOME="${{ steps.commit_push.outcome }}"
             if [ "$UNCOMMITTED_CHANGES" = "true" ]; then
               STATUS="failure"
               VERIFICATION_STATUS="FAIL"
@@ -648,6 +669,13 @@ jobs:
               VERIFICATION_STATUS="FAIL"
               BLOCKER_MSG="$TASK_MODE mode: commit/push succeeded but remote verification failed; commit not confirmed on remote base branch"
             fi
+          elif [ "$GEMINI_OUTCOME" = "success" ] && [ "$TASK_MODE" != "REVIEW" ]; then
+            # Gemini CLI succeeded in a persistence-capable mode but no commit was
+            # produced. Fail-closed: do not allow status=success without a verified
+            # commit SHA.
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="$TASK_MODE mode: Gemini CLI succeeded but commit/push produced no commit SHA; persistence was not verified"
           fi
 
           # Determine reconciliation status using the same contract as
