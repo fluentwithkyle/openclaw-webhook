@@ -200,6 +200,19 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
 
   const isConsequential = isConsequentialCommand(command);
 
+  if (isConsequential) {
+    const taskName = command.task_name;
+    if (!taskName || typeof taskName !== 'string' || taskName.trim() === '') {
+      return {
+        success: false,
+        status: 'BLOCKED',
+        stage: 'validation blocked',
+        error: 'task_name is required for consequential external activation (FAILOVER_EXECUTE or BUILDER); canonical ACP task identity must not be null or empty',
+        error_code: 'MISSING_TASK_NAME'
+      };
+    }
+  }
+
   const replayResult = taskRegistry.replayTask(command);
   if (replayResult.success && replayResult.replay) {
     if (replayResult.task_terminated) {

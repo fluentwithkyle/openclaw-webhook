@@ -1630,6 +1630,7 @@ function buildExecutionDescriptor(requestId, taskEntry, executionClaimId) {
     repository: taskEntry.repository,
     base_branch: taskEntry.base_branch,
     task_mode: taskEntry.task_mode,
+    task_name: taskEntry.task_name || null,
     capabilities: taskEntry.capabilities,
     permitted_paths: taskEntry.permitted_paths,
     verification: taskEntry.verification,

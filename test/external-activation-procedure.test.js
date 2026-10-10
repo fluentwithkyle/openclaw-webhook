@@ -239,6 +239,7 @@ await runTest('Procedure - ingress returns server-derived execution descriptor',
     const payload = buildBuilderActivationPayload({
         request_id: 'proc-desc-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-PROC-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -270,6 +271,7 @@ await runTest('Procedure - execution claim is exactly-once (concurrent claims bl
     const payload = buildBuilderActivationPayload({
         request_id: 'proc-once-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-PROC-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -311,6 +313,7 @@ await runTest('Procedure - descriptor binds request_id, execution_claim_id, and 
     const payload = buildBuilderActivationPayload({
         request_id: 'proc-corr-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-PROC-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -377,6 +380,7 @@ await runTest('Procedure - server-derived authority overrides externally claimed
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'proc-auth-test-1',
         task: 'implement feature',
+        task_name: 'TASK-PROC-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -482,6 +486,7 @@ await runTest('Procedure - FAILOVER_EXECUTE without Director approval fails clos
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'proc-dir-test-1',
         task: 'implement feature',
+        task_name: 'TASK-PROC-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -503,6 +508,7 @@ await runTest('Procedure - BUILDER without Director approval fails closed', asyn
     const payload = buildBuilderActivationPayload({
         request_id: 'proc-dir-test-2',
         task: 'implement feature',
+        task_name: 'TASK-PROC-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',

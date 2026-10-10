@@ -121,6 +121,7 @@ async function main() {
             writeOutput('carrier_identity', result.activation.carrier_identity || '');
             writeOutput('target_agent', descriptor.target_agent || '');
             writeOutput('task_mode', descriptor.task_mode || '');
+            writeOutput('task_name', descriptor.task_name || '');
             writeOutput('repository', descriptor.repository || '');
             writeOutput('base_branch', descriptor.base_branch || '');
         }

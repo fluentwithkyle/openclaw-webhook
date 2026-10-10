@@ -585,6 +585,7 @@ function createInitialTaskRegistryEntry(requestId, command) {
      base_branch: command.base_branch,
      task: command.task,
      task_mode: taskMode,
+     task_name: command.task_name || null,
      workflow_stage: command.workflow_stage || null,
      status: 'PENDING',
      created_at: now,

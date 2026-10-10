@@ -241,20 +241,24 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     }
 
     // The issue_comment body is NOT an authority source. This function extracts
-    // only candidate fields (target, task, verification, task_mode) that may be
-    // used when the comment author is Director-authorized via a valid Director
-    // origin assertion/secret. task_mode is extracted here only as a candidate;
-    // it is only honored when Director authorization is established at the
-    // canonical activation ingress. capabilities and permitted_paths are NEVER
-    // extracted from the comment — they are server-derived by the canonical
+    // only candidate fields (target, task, verification, task_mode, task_name)
+    // that may be used when the comment author is Director-authorized via a valid
+    // Director origin assertion/secret. task_mode is extracted here only as a
+    // candidate; it is only honored when Director authorization is established
+    // at the canonical activation ingress. capabilities and permitted_paths are
+    // NEVER extracted from the comment — they are server-derived by the canonical
     // activation ingress from the server-side activation-policy authority.
+    // task_name is the canonical ACP task identifier and is extracted here so it
+    // can be preserved through the activation payload into the TaskRegistry entry
+    // and execution descriptor for end-to-end identity propagation.
     var hasTask = typeof candidate.task === 'string' && candidate.task.trim() !== '';
     var hasTarget = typeof candidate.target === 'string' && candidate.target.trim() !== '';
     var hasVerification = typeof candidate.verification === 'string' && candidate.verification.trim() !== '';
     var hasTaskMode = typeof candidate.task_mode === 'string' && candidate.task_mode.trim() !== '' && VALID_TASK_MODES.includes(candidate.task_mode);
+    var hasTaskName = typeof candidate.task_name === 'string' && candidate.task_name.trim() !== '';
     var explicitTaskMode = Object.prototype.hasOwnProperty.call(candidate, 'task_mode') && !hasTaskMode;
 
-    if (!hasTask && !hasTarget && !hasVerification && !hasTaskMode) {
+    if (!hasTask && !hasTarget && !hasVerification && !hasTaskMode && !hasTaskName) {
         if (explicitTaskMode) {
             var descriptor = {};
             descriptor._explicit_task_mode = true;
@@ -277,6 +281,9 @@ function extractEmbeddedAcpDescriptor(commentBody) {
     }
     if (hasTaskMode) {
         descriptor.task_mode = candidate.task_mode;
+    }
+    if (hasTaskName) {
+        descriptor.task_name = candidate.task_name;
     }
     if (explicitTaskMode) {
         descriptor._explicit_task_mode = true;
@@ -341,6 +348,11 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
         taskMode = embeddedDescriptor.task_mode;
     }
 
+    var taskName = null;
+    if (embeddedDescriptor && typeof embeddedDescriptor.task_name === 'string' && embeddedDescriptor.task_name.trim() !== '') {
+        taskName = embeddedDescriptor.task_name;
+    }
+
     return {
         protocol_version: '0.1',
         request_id: String(commentId),
@@ -356,6 +368,7 @@ function buildActivationPayloadForIssueComment(commentId, commentBody, repositor
         verification: verification,
         reporting: 'json',
         originator: 'Kyle',
+        task_name: taskName,
         activation_surface: 'github_issue_comment',
         activation_syntax: '@gemini-cli',
         embedded_acp_descriptor: embeddedDescriptor || undefined,
@@ -399,6 +412,7 @@ function buildActivationPayloadForWorkflowDispatch(inputs) {
         repository: inputs.repository,
         base_branch: inputs.base_branch,
         task: inputs.task,
+        task_name: inputs.task_name || null,
         task_mode: taskMode,
         constraints: { permitted_paths: permittedPaths.split(',').filter(Boolean) },
         authorization: {
@@ -447,6 +461,7 @@ function buildBuilderActivationPayload(inputs) {
         repository: inputs.repository,
         base_branch: inputs.base_branch,
         task: inputs.task,
+        task_name: inputs.task_name || null,
         task_mode: taskMode,
         constraints: { permitted_paths: permittedPaths.split(',').filter(Boolean) },
         authorization: { capabilities: capabilities.split(',').filter(Boolean) },
@@ -507,6 +522,7 @@ function buildKiloActivationPayload(inputs) {
         repository: inputs.repository,
         base_branch: inputs.base_branch,
         task: inputs.task,
+        task_name: inputs.task_name || null,
         task_mode: taskMode,
         constraints: { permitted_paths: permittedPaths.split(',').filter(Boolean) },
         authorization: {

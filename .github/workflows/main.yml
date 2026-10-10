@@ -15,6 +15,10 @@ on:
         description: 'Task description for Gemini execution'
         required: true
         type: string
+      task_name:
+        description: 'Canonical ACP task identifier for the activation (required for consequential task_modes: FAILOVER_EXECUTE, BUILDER, RESEARCH_DOCUMENT)'
+        required: false
+        type: string
       repository:
         description: 'Repository name (owner/repo)'
         required: true
@@ -171,6 +175,7 @@ jobs:
           DIRECTOR_ORIGIN_SECRET: ${{ (inputs.task_mode == 'FAILOVER_EXECUTE' && inputs.approval_id == '' && (github.actor == 'fluentwithkyle' || github.event.pull_request.user.login == 'fluentwithkyle')) && secrets.DIRECTOR_ORIGIN_SECRET || '' }}
           REQUEST_ID: ${{ inputs.request_id }}
           TASK: ${{ inputs.task }}
+          TASK_NAME: ${{ inputs.task_name || '' }}
           REPOSITORY: ${{ inputs.repository }}
           BASE_BRANCH: ${{ github.ref_name }}
           TASK_MODE: ${{ inputs.task_mode || 'REVIEW' }}
@@ -191,6 +196,7 @@ jobs:
           ACTIVATION_JSON=$(jq -n \
             --arg request_id "$REQUEST_ID" \
             --arg task "$TASK" \
+            --arg task_name "$TASK_NAME" \
             --arg repository "$REPOSITORY" \
             --arg base_branch "$BASE_BRANCH" \
             --arg task_mode "$TASK_MODE" \
@@ -201,6 +207,7 @@ jobs:
             '{
               request_id: $request_id,
               task: $task,
+              task_name: (if $task_name == "" then null else $task_name end),
               repository: $repository,
               base_branch: $base_branch,
               task_mode: $task_mode,
@@ -234,6 +241,9 @@ jobs:
           {
             echo 'request_id<<EOF'
             jq -r '.request_id' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'task_name<<EOF'
+            jq -r '.task_name // ""' "$DESCRIPTOR_FILE"
             echo 'EOF'
             echo 'task<<EOF'
             jq -r '.task' "$DESCRIPTOR_FILE"
@@ -289,6 +299,9 @@ jobs:
             echo 'request_id<<EOF'
             jq -r '.request_id' "$DESCRIPTOR_FILE"
             echo 'EOF'
+            echo 'task_name<<EOF'
+            jq -r '.task_name // ""' "$DESCRIPTOR_FILE"
+            echo 'EOF'
             echo 'task<<EOF'
             jq -r '.task' "$DESCRIPTOR_FILE"
             echo 'EOF'
@@ -332,6 +345,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_CLI_TRUST_WORKSPACE: "true"
           ORCHESTRATION_REQUEST_ID: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id }}
+          ORCHESTRATION_TASK_NAME: ${{ steps.orchestration_context_wfd.outputs.task_name || steps.orchestration_context_ic.outputs.task_name }}
           ORCHESTRATION_TASK: ${{ steps.orchestration_context_wfd.outputs.task || steps.orchestration_context_ic.outputs.task }}
           ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context_wfd.outputs.repository || steps.orchestration_context_ic.outputs.repository }}
           ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch }}
@@ -362,6 +376,7 @@ jobs:
 
             ORCHESTRATION CONTEXT:
             - request_id: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id || 'manual' }}
+            - task_name: ${{ steps.orchestration_context_wfd.outputs.task_name || steps.orchestration_context_ic.outputs.task_name || 'undefined' }}
             - repository: ${{ steps.orchestration_context_wfd.outputs.repository || steps.orchestration_context_ic.outputs.repository || github.repository }}
             - base_branch: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch || github.ref_name }}
             - task: ${{ steps.orchestration_context_wfd.outputs.task || steps.orchestration_context_ic.outputs.task || steps.request_comment.outputs.request || 'Provide an architecture/status assessment of the current repository.' }}
@@ -395,6 +410,7 @@ jobs:
           PERMITTED_PATHS: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths || 'poc/' }}
           BASE_BRANCH: ${{ steps.orchestration_context_wfd.outputs.base_branch || steps.orchestration_context_ic.outputs.base_branch || github.ref_name }}
           REQUEST_ID: ${{ steps.orchestration_context_wfd.outputs.request_id || steps.orchestration_context_ic.outputs.request_id || 'manual' }}
+          TASK_NAME: ${{ steps.orchestration_context_wfd.outputs.task_name || steps.orchestration_context_ic.outputs.task_name || '' }}
           TASK_JSON: ${{ steps.orchestration_context_wfd.outputs.task || steps.orchestration_context_ic.outputs.task || '' }}
         run: |
           set -euo pipefail
@@ -467,8 +483,10 @@ jobs:
             HAS_CHANGES="true"
 
             # Fail-closed for RESEARCH_DOCUMENT: require research record before commit
-            if [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ] && [ -n "$TASK_JSON" ]; then
-              TASK_NAME=$(echo "$TASK_JSON" | jq -r '.task_name // empty' 2>/dev/null || echo '')
+            if [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ]; then
+              if [ -z "$TASK_NAME" ] && [ -n "$TASK_JSON" ]; then
+                TASK_NAME=$(echo "$TASK_JSON" | jq -r '.task_name // empty' 2>/dev/null || echo '')
+              fi
               if [ -n "$TASK_NAME" ]; then
                 RESEARCH_RECORD_FILE="docs/ai/research/research-${TASK_NAME}.md"
                 if [ ! -f "$RESEARCH_RECORD_FILE" ]; then
@@ -481,6 +499,16 @@ jobs:
                   echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
                   exit 1
                 fi
+              else
+                # Fail-closed: task_name missing for RESEARCH_DOCUMENT activation commit
+                echo "::error::RESEARCH_DOCUMENT task requires task_name for durable research record verification; cannot commit without task identity"
+                UNCOMMITTED_CHANGES="true"
+                echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+                echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+                echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+                echo "uncommitted_changes=$UNCOMMITTED_CHANGES" >> "$GITHUB_OUTPUT"
+                echo "push_verified=$PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
+                exit 1
               fi
             fi
 
@@ -665,18 +693,21 @@ jobs:
           if [ "$IS_REPLAY" = "true" ] && [ ! -f "$DESCRIPTOR_FILE" ]; then
             echo "::warning::Replay without descriptor file; using fallback values"
             REQUEST_ID=""
+            TASK_NAME=""
             TASK=""
             REPOSITORY="${{ github.repository }}"
             BASE_BRANCH="${{ github.ref_name }}"
             TASK_MODE="REVIEW"
           elif [ -f "$DESCRIPTOR_FILE" ]; then
             REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
+            TASK_NAME="$(jq -r '.task_name // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
             BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
             TASK_MODE="$(jq -r '.task_mode' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$TASK_MODE_INPUT")"
           elif [ -n "$TASK_MODE_INPUT" ]; then
             REQUEST_ID=""
+            TASK_NAME=""
             TASK=""
             REPOSITORY="${{ github.repository }}"
             BASE_BRANCH="${{ github.ref_name }}"
@@ -757,38 +788,36 @@ jobs:
           INVOCATION_ID="gemini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           RUN_ID="${GITHUB_RUN_ID}"
 
-          # For RESEARCH_DOCUMENT tasks, extract task_name from the task JSON and
-          # verify the durable research record exists AND belongs to the current task.
+          # For RESEARCH_DOCUMENT tasks, verify the durable research record exists
+          # AND belongs to the current task. The task_name is sourced from the
+          # server-derived execution descriptor (canonical ACP task identifier).
           # Fail-closed: if the record is missing, malformed, or cannot be verified,
           # the report status is forced to "failure" with a machine-readable blocker.
           # Non-RESEARCH_DOCUMENT tasks get null (no research record required).
           DURABLE_RESEARCH_RECORD_PATH="null"
-          if [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ] && [ -n "$TASK" ]; then
-            TASK_NAME=$(echo "$TASK" | jq -r '.task_name // empty' 2>/dev/null || echo '')
-            if [ -n "$TASK_NAME" ]; then
-              RESEARCH_RECORD_FILE="docs/ai/research/research-${TASK_NAME}.md"
-              if [ -f "$RESEARCH_RECORD_FILE" ]; then
-                # Verify the research record belongs to the current task by checking
-                # that the task_name is referenced in the record header.
-                if grep -q "$TASK_NAME" "$RESEARCH_RECORD_FILE" 2>/dev/null; then
-                  DURABLE_RESEARCH_RECORD_PATH="$RESEARCH_RECORD_FILE"
-                else
-                  STATUS="failure"
-                  RESEARCH_BLOCKER="RESEARCH_DOCUMENT task $(printf '%s' "$TASK_NAME") but research record $RESEARCH_RECORD_FILE does not reference the task_name; record may belong to a different task"
-                  BLOCKERS_JSON=$(echo "$BLOCKERS_JSON" | jq --arg msg "$RESEARCH_BLOCKER" '. + [$msg]')
-                fi
+          if [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ] && [ -n "$TASK_NAME" ]; then
+            RESEARCH_RECORD_FILE="docs/ai/research/research-${TASK_NAME}.md"
+            if [ -f "$RESEARCH_RECORD_FILE" ]; then
+              # Verify the research record belongs to the current task by checking
+              # that the task_name is referenced in the record header.
+              if grep -q "$TASK_NAME" "$RESEARCH_RECORD_FILE" 2>/dev/null; then
+                DURABLE_RESEARCH_RECORD_PATH="$RESEARCH_RECORD_FILE"
               else
-                # Fail-closed: missing research record for RESEARCH_DOCUMENT task
                 STATUS="failure"
-                RESEARCH_BLOCKER="RESEARCH_DOCUMENT task requires durable research record $RESEARCH_RECORD_FILE but it does not exist; report cannot represent a successful completed research task"
-                BLOCKERS_JSON=$(jq -n --arg msg "$RESEARCH_BLOCKER" '[$msg]')
+                RESEARCH_BLOCKER="RESEARCH_DOCUMENT task $(printf '%s' "$TASK_NAME") but research record $RESEARCH_RECORD_FILE does not reference the task_name; record may belong to a different task"
+                BLOCKERS_JSON=$(echo "$BLOCKERS_JSON" | jq --arg msg "$RESEARCH_BLOCKER" '. + [$msg]')
               fi
             else
-              # Fail-closed: task_name missing from task JSON for RESEARCH_DOCUMENT task
+              # Fail-closed: missing research record for RESEARCH_DOCUMENT task
               STATUS="failure"
-              RESEARCH_BLOCKER="RESEARCH_DOCUMENT task is missing task_name in task JSON; cannot verify durable research record path"
+              RESEARCH_BLOCKER="RESEARCH_DOCUMENT task requires durable research record $RESEARCH_RECORD_FILE but it does not exist; report cannot represent a successful completed research task"
               BLOCKERS_JSON=$(jq -n --arg msg "$RESEARCH_BLOCKER" '[$msg]')
             fi
+          elif [ "$TASK_MODE" = "RESEARCH_DOCUMENT" ] && [ -z "$TASK_NAME" ]; then
+            # Fail-closed: task_name missing from server-derived descriptor for RESEARCH_DOCUMENT task
+            STATUS="failure"
+            RESEARCH_BLOCKER="RESEARCH_DOCUMENT task is missing task_name in the server-derived execution descriptor; cannot verify durable research record path"
+            BLOCKERS_JSON=$(jq -n --arg msg "$RESEARCH_BLOCKER" '[$msg]')
           fi
 
           jq -n \
@@ -809,6 +838,7 @@ jobs:
             --arg execution_claim_id "$EXECUTION_CLAIM_ID" \
             --arg carrier_identity "$CARRIER_IDENTITY" \
             --arg task_mode "$TASK_MODE" \
+            --arg task_name "$TASK_NAME" \
             --arg durable_research_record_path "$DURABLE_RESEARCH_RECORD_PATH" \
             --argjson changed_files "$CHANGED_FILES_JSON" \
             --arg failover_commit "$PERSIST_COMMIT_SHA" \
@@ -818,6 +848,7 @@ jobs:
               agent: $agent,
               status: $status,
               task: $task,
+              task_name: (if $task_name == "" then null else $task_name end),
               task_mode: $task_mode,
               repository: $repository,
               base_branch: $base_branch,

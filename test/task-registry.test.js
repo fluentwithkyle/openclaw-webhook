@@ -533,6 +533,46 @@ async function runAllTests() {
     assertEqual(descriptor.execution_claim_id, null);
   });
 
+  await test('buildExecutionDescriptor - preserves task_name as canonical identifier', async () => {
+    const entry = {
+        task: 'test-task',
+        task_name: 'TASK-KILO-ACP-TASK-IDENTITY-PROPAGATION-REGRESSION-FIX-001',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+        permitted_paths: ['poc/'],
+        verification: 'tests must pass',
+        workflow_stage: null,
+        current_agent: 'Kilo',
+        execution_claim: {
+            execution_claim_id: 'claim-1',
+            carrier_identity: 'github-workflow-123-1',
+            carrier_type: 'github_workflow'
+        }
+    };
+    const descriptor = taskRegistry.buildExecutionDescriptor('req-1', entry, 'claim-1');
+    assertEqual(descriptor.task_name, 'TASK-KILO-ACP-TASK-IDENTITY-PROPAGATION-REGRESSION-FIX-001',
+        'Execution descriptor must carry task_name from task entry');
+  });
+
+  await test('buildExecutionDescriptor - task_name is null when absent from task entry', async () => {
+    const entry = {
+        task: 'test-task',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'REVIEW',
+        capabilities: ['read_only'],
+        permitted_paths: ['poc/'],
+        verification: 'review',
+        workflow_stage: null,
+        current_agent: 'Gemini'
+    };
+    const descriptor = taskRegistry.buildExecutionDescriptor('req-1', entry, null);
+    assertEqual(descriptor.task_name, null,
+        'task_name must be null in descriptor when absent from task entry');
+  });
+
   console.log(`\n=== TaskRegistry Tests: ${passCount} passed, ${failCount} failed ===`);
   if (failCount > 0) process.exit(1);
 }

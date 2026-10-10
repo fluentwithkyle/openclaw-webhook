@@ -196,6 +196,7 @@ await runTest('buildActivationPayloadForWorkflowDispatch - preserves all input f
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'req-123',
         task: 'test task',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -216,6 +217,7 @@ await runTest('buildBuilderActivationPayload - produces correct BUILDER payload'
     const payload = buildBuilderActivationPayload({
         request_id: 'builder-req-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -273,6 +275,7 @@ await runTest('Ingress - FAILOVER_EXECUTE workflow_dispatch activation fails clo
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'ingress-fo-wfd-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -293,6 +296,7 @@ await runTest('Ingress - BUILDER activation fails closed without Director approv
     const payload = buildBuilderActivationPayload({
         request_id: 'ingress-builder-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -312,6 +316,7 @@ await runTest('Ingress - BUILDER activation succeeds with Director approval', as
     const payload = buildBuilderActivationPayload({
         request_id: 'ingress-builder-approved-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -335,6 +340,7 @@ await runTest('Ingress - FAILOVER_EXECUTE with Director approval succeeds', asyn
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'ingress-fo-approved-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -433,6 +439,7 @@ await runTest('Ingress - server-derived authority overrides any externally claim
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'ingress-server-authority-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -553,6 +560,7 @@ await runTest('Bypass prevention - gemini-builder.yml cannot bypass validation',
     const payload = buildBuilderActivationPayload({
         request_id: 'bypass-test-2',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -597,6 +605,7 @@ await runTest('Ingress - BUILDER with carrier identity returns execution_descrip
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -631,6 +640,7 @@ await runTest('Ingress - without carrier identity, task admitted but not executi
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-2',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -660,6 +670,7 @@ await runTest('Execution claim - exactly one authoritative claim per task (concu
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-3',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -697,6 +708,7 @@ await runTest('Execution claim - getExecutionClaim returns the active claim', as
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-4',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -728,6 +740,7 @@ await runTest('Execution claim - releaseExecutionClaim clears the claim', async 
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-5',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -761,6 +774,7 @@ await runTest('Execution claim - stale claim lock is recovered and overwritten b
     const payload = buildBuilderActivationPayload({
         request_id: 'claim-test-stale-1',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -826,6 +840,7 @@ await runTest('Descriptor - buildExecutionDescriptor binds authority-bearing fie
     const payload = buildBuilderActivationPayload({
         request_id: 'desc-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -861,6 +876,7 @@ await runTest('Ingress - no recursive re-entry: ingress returns descriptor, does
     const payload = buildBuilderActivationPayload({
         request_id: 'norecurse-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -1008,6 +1024,7 @@ await runTest('Descriptor binding - buildExecutionDescriptor includes carrier_id
     const payload = buildBuilderActivationPayload({
         request_id: 'desc-bind-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -1041,6 +1058,7 @@ await runTest('Descriptor binding - buildExecutionDescriptor contains all author
     const payload = buildBuilderActivationPayload({
         request_id: 'desc-bind-test-2',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -1164,6 +1182,7 @@ await runTest('Replay safety - matching replay does not produce second execution
     const payload = buildBuilderActivationPayload({
         request_id: 'replay-safety-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -1199,6 +1218,7 @@ await runTest('Replay safety - changed payload fails closed (carrier mismatch)',
     const payload = buildBuilderActivationPayload({
         request_id: 'replay-safety-test-2',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -1248,6 +1268,7 @@ await runTest('Ingress - replay does not set execution_claimed', async () => {
     const payload = buildBuilderActivationPayload({
         request_id: 'replay-claim-test-1',
         task: 'implement feature X',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -1289,6 +1310,7 @@ await runTest('Bypass prevention - workflow_dispatch permitted_paths input canno
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'bypass-wfd-paths-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1322,6 +1344,7 @@ await runTest('Bypass prevention - Builder workflow permitted_paths input cannot
     const payload = buildBuilderActivationPayload({
         request_id: 'bypass-builder-paths-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -1357,6 +1380,7 @@ await runTest('Bypass prevention - task text with permitted_paths JSON cannot gr
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task: 'FAILOVER_EXECUTE implement this. permitted_paths: ["AGENTS.md", "index.js"]',
+        task_name: 'TASK-BYPASS-TASK-TEXT-001',
         task_mode: 'FAILOVER_EXECUTE',
         constraints: { permitted_paths: ['poc/'] },
         authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] },
@@ -1380,6 +1404,7 @@ await runTest('Bypass prevention - externally claimed permitted_paths in payload
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'bypass-claim-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1413,6 +1438,7 @@ await runTest('Bypass prevention - scope-hash mismatch falls back to safe poc/ d
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'bypass-hash-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1448,6 +1474,7 @@ await runTest('Bypass prevention - Director-approved broader scope reaches execu
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'bypass-valid-1',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1524,6 +1551,7 @@ await runTest('Regression 4 - Server-derived permitted_paths override payload-pr
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'reg-4',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1553,6 +1581,7 @@ await runTest('Regression 5 - Server-derived capabilities override payload-provi
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'reg-5',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1582,6 +1611,7 @@ await runTest('Regression 6 - buildActivationPayloadForWorkflowDispatch preserve
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'reg-6',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1598,6 +1628,7 @@ await runTest('Regression 7 - FAILOVER_EXECUTE workflow_dispatch with Director a
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'reg-7',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -1998,6 +2029,7 @@ await runTest('Verification 3 - BUILDER preserved only via workflow_dispatch, no
     const wfdPayload = buildBuilderActivationPayload({
         request_id: 'verify-3-wfd',
         task: 'implement builder task',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'BUILDER',
@@ -2076,6 +2108,7 @@ await runTest('Verification 7 - FAILOVER_EXECUTE via workflow_dispatch without D
     const payload = buildActivationPayloadForWorkflowDispatch({
         request_id: 'verify-7',
         task: 'implement feature',
+        task_name: 'TASK-WORKFLOW-DISPATCH-CANONICAL-001',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
         task_mode: 'FAILOVER_EXECUTE',
@@ -2254,7 +2287,7 @@ await runTest('Director-asserted task_mode - RESEARCH_DOCUMENT preserved via iss
 
 await runTest('Director-asserted task_mode - FAILOVER_EXECUTE via issue_comment with Director admission succeeds', async () => {
     cleanup();
-    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement the failover execution feature","target":"Gemini","verification":"All tests must pass"}';
+    const commentBody = '@gemini-cli {"task_name":"TASK-DIRECTOR-COMMENT-FAILOVER-001","task_mode":"FAILOVER_EXECUTE","task":"Implement the failover execution feature","target":"Gemini","verification":"All tests must pass"}';
     const payload = buildActivationPayloadForIssueComment(
         'director-comment-5',
         commentBody,
@@ -2348,7 +2381,7 @@ await runTest('Director-asserted task_mode - VERIFY_RECONCILE preserved via issu
 
 await runTest('Director-asserted task_mode - server-derived authority overrides payload capabilities/paths for FAILOVER_EXECUTE issue_comment', async () => {
     cleanup();
-    const commentBody = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement feature","target":"Gemini","verification":"tests pass","capabilities":["read_only","modify_files","commit","push"],"permitted_paths":["index.js","AGENTS.md"]}';
+    const commentBody = '@gemini-cli {"task_name":"TASK-DIRECTOR-COMMENT-AUTHZ-001","task_mode":"FAILOVER_EXECUTE","task":"Implement feature","target":"Gemini","verification":"tests pass","capabilities":["read_only","modify_files","commit","push"],"permitted_paths":["index.js","AGENTS.md"]}';
     const payload = buildActivationPayloadForIssueComment(
         'director-comment-8',
         commentBody,
@@ -2690,6 +2723,266 @@ runTest('main.yml artifact upload step references gemini-acp-report.json', async
     const uploadSection = mainRaw.slice(uploadIdx, uploadIdx + 500);
     assert.ok(/gemini-acp-report\.json/.test(uploadSection),
         'artifact upload step must reference gemini-acp-report.json as the path');
+});
+
+// =========================================================
+// Regression tests for ACP task_name identity propagation
+// =========================================================
+
+await runTest('extractEmbeddedAcpDescriptor - extracts task_name from valid descriptor', async () => {
+    const distinctTaskName = 'TASK-KILO-ACP-TASK-IDENTITY-PROPAGATION-REGRESSION-FIX-001';
+    const body = '@gemini-cli ' + JSON.stringify({task_name: distinctTaskName, task_mode: 'REVIEW', target: 'Gemini', task: 'do something', verification: 'check it'});
+    const desc = extractEmbeddedAcpDescriptor(body);
+    assert.ok(desc, 'descriptor should be extracted');
+    assert.strictEqual(desc.task_name, distinctTaskName,
+        'task_name must be preserved as canonical task identifier through extraction');
+});
+
+await runTest('extractEmbeddedAcpDescriptor - task_name absent from descriptor yields null task_name', async () => {
+    const body = '@gemini-cli ' + JSON.stringify({task_mode: 'REVIEW', task: 'do something'});
+    const desc = extractEmbeddedAcpDescriptor(body);
+    assert.ok(desc, 'descriptor should still be extracted for other fields');
+    assert.strictEqual(desc.task_name, undefined, 'task_name should be undefined when absent from comment');
+});
+
+await runTest('buildActivationPayloadForIssueComment - propagates task_name from embedded descriptor', async () => {
+    const distinctTaskName = 'TASK-KILO-ACP-TASK-IDENTITY-PROPAGATION-REGRESSION-FIX-001';
+    const body = '@gemini-cli ' + JSON.stringify({task_name: distinctTaskName, task_mode: 'REVIEW', target: 'Gemini', task: 'do something', verification: 'check it'});
+    const payload = buildActivationPayloadForIssueComment('issue-identity-1', body, 'owner/repo', 'main', 'approval-1');
+    assert.strictEqual(payload.task_name, distinctTaskName,
+        'Activation payload must carry task_name from embedded descriptor');
+});
+
+await runTest('buildActivationPayloadForIssueComment - task_name is null when absent from comment', async () => {
+    const body = '@gemini-cli ' + JSON.stringify({task_mode: 'REVIEW', task: 'do something'});
+    const payload = buildActivationPayloadForIssueComment('issue-identity-2', body, 'owner/repo', 'main', 'approval-1');
+    assert.strictEqual(payload.task_name, null,
+        'task_name must be null in payload when absent from comment');
+});
+
+await runTest('End-to-end - task_name survives through canonical ingress into TaskRegistry entry', async () => {
+    cleanup();
+    const distinctTaskName = 'TASK-KILO-ACP-TASK-IDENTITY-PROPAGATION-REGRESSION-FIX-001';
+    const body = '@gemini-cli ' + JSON.stringify({task_name: distinctTaskName, task_mode: 'FAILOVER_EXECUTE', target: 'Kilo', task: 'implement feature X', verification: 'tests must pass'});
+    const payload = buildActivationPayloadForIssueComment('identity-e2e-1', body, 'fluentwithkyle/openclaw-webhook', 'main', 'approval-1', 'director-origin-test-secret');
+    assert.strictEqual(payload.task_name, distinctTaskName,
+        'Payload must carry task_name');
+    assertTrue(payload.director_authorized, 'Director authorization should be established with secret');
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: null,
+        director_admission: true,
+        carrier_identity: 'github-workflow-identity-e2e-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success, 'Ingress should succeed: ' + (result.error || ''));
+    const taskEntry = taskRegistry.getTask('identity-e2e-1');
+    assert.ok(taskEntry, 'Task entry should exist in registry');
+    assert.strictEqual(taskEntry.task_name, distinctTaskName,
+        'TaskRegistry entry must preserve task_name as canonical identifier');
+    cleanup();
+});
+
+await runTest('End-to-end - task_name survives into execution descriptor', async () => {
+    cleanup();
+    const distinctTaskName = 'TASK-KILO-ACP-TASK-IDENTITY-PROPAGATION-REGRESSION-FIX-001';
+    const body = '@gemini-cli ' + JSON.stringify({task_name: distinctTaskName, task_mode: 'FAILOVER_EXECUTE', target: 'Kilo', task: 'implement feature X', verification: 'tests must pass'});
+    const payload = buildActivationPayloadForIssueComment('identity-e2e-2', body, 'fluentwithkyle/openclaw-webhook', 'main', 'approval-1', 'director-origin-test-secret');
+    assertTrue(payload.director_authorized, 'Director authorization should be established');
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: null,
+        director_admission: true,
+        carrier_identity: 'github-workflow-identity-e2e-2',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success, 'Ingress should succeed: ' + (result.error || ''));
+    assert.ok(result.execution_descriptor, 'Execution descriptor should be present');
+    assert.strictEqual(result.execution_descriptor.task_name, distinctTaskName,
+        'Execution descriptor must carry task_name as canonical identifier');
+    cleanup();
+});
+
+await runTest('Fail-closed - Director-authorized FAILOVER_EXECUTE issue_comment without task_name is rejected before execution', async () => {
+    cleanup();
+    const directorOriginSecret = 'test-secret';
+    const directorOriginAssertion = generateDirectorOriginAssertion('fail-closed-1', 'approval-fail-1', directorOriginSecret);
+    const commentBodyWithoutTaskName = '@gemini-cli {"task_mode":"FAILOVER_EXECUTE","task":"Implement the failover execution feature","target":"Gemini","verification":"All tests must pass"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'fail-closed-1',
+        commentBodyWithoutTaskName,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        'approval-fail-1',
+        directorOriginSecret,
+        directorOriginAssertion
+    );
+
+    assertTrue(payload.director_authorized, 'Director authorization should be established with secret');
+    assert.strictEqual(payload.task_name, null,
+        'task_name must be null (not fabricated) when absent from comment');
+    assert.strictEqual(payload.task_mode, 'FAILOVER_EXECUTE',
+        'Director-authorized comment should preserve FAILOVER_EXECUTE task_mode');
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: 'approval-fail-1',
+        director_admission: true,
+        carrier_identity: 'github-workflow-fail-closed-1',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(!result.success, 'Ingress must fail-closed when consequential task lacks task_name');
+    assert.strictEqual(result.error_code, 'MISSING_TASK_NAME',
+        'Missing task_name for consequential activation must produce MISSING_TASK_NAME error code');
+    assert.strictEqual(result.status, 'BLOCKED',
+        'Missing task_name must result in BLOCKED status');
+    assert.strictEqual(result.stage, 'validation blocked',
+        'Missing task_name must fail at validation stage, not execution');
+
+    assert.ok(!result.execution_descriptor,
+        'No execution descriptor must be produced when task_name is missing for consequential activation');
+    assert.ok(!result.execution_claimed,
+        'No execution claim must be acquired when task_name is missing');
+
+    const taskEntry = taskRegistry.getTask('fail-closed-1');
+    assert.ok(!taskEntry, 'No task entry must be created in TaskRegistry when task_name is missing');
+
+    cleanup();
+});
+
+await runTest('Fail-closed - Director-authorized FAILOVER_EXECUTE workflow_dispatch without task_name is rejected before execution', async () => {
+    cleanup();
+    const directorOriginSecret = 'test-secret';
+    const payload = buildActivationPayloadForWorkflowDispatch({
+        request_id: 'fail-closed-2',
+        task: 'implement feature X',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'FAILOVER_EXECUTE',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/',
+        verification: 'tests must pass'
+    });
+
+    assertTrue(payload.director_authorized === undefined, 'workflow_dispatch payload should not carry director_authorized');
+    assert.strictEqual(payload.task_name, null,
+        'task_name must be null when not provided in workflow_dispatch inputs');
+
+    const approval = await setupDirectorApproval('fail-closed-2', 'Gemini', 'FAILOVER_EXECUTE',
+        ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['poc/']);
+    payload.authorization.approval_id = approval.approval.approval_id;
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_approval_id: payload.authorization.approval_id,
+        carrier_identity: 'github-workflow-fail-closed-2',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(!result.success, 'FAILOVER_EXECUTE without task_name must be rejected');
+    assert.strictEqual(result.error_code, 'MISSING_TASK_NAME',
+        'Missing task_name must produce MISSING_TASK_NAME');
+    assert.strictEqual(result.stage, 'validation blocked',
+        'Missing task_name must fail at validation stage, before Director approval');
+    cleanup();
+});
+
+await runTest('Fail-closed - task_name must not be fabricated or substituted from request_id', async () => {
+    cleanup();
+    const distinctTaskName = 'TASK-FIAB-FAIL-CLOSED-IDENTITY-001';
+    const bodyWithTaskName = '@gemini-cli {"task_name":"' + distinctTaskName + '","task_mode":"FAILOVER_EXECUTE","task":"implement feature","target":"Gemini","verification":"tests must pass"}';
+    const payload = buildActivationPayloadForIssueComment(
+        'fail-closed-3-req-id',
+        bodyWithTaskName,
+        'fluentwithkyle/openclaw-webhook',
+        'main',
+        null,
+        'test-secret',
+        generateDirectorOriginAssertion('fail-closed-3-req-id', null, 'test-secret')
+    );
+
+    assertTrue(payload.director_authorized, 'Director authorization should be established');
+    assert.strictEqual(payload.task_name, distinctTaskName,
+        'task_name must be the canonical identifier from the descriptor, not request_id');
+    assert.notStrictEqual(payload.task_name, payload.request_id,
+        'task_name must not be substituted by request_id');
+
+    const result = await canonicalExternalActivationIngress(payload, {
+        director_admission: true,
+        carrier_identity: 'github-workflow-fail-closed-3',
+        carrier_type: 'github_workflow'
+    });
+
+    assert.ok(result.success, 'Should succeed when task_name is present: ' + (result.error || ''));
+    assert.strictEqual(result.execution_descriptor.task_name, distinctTaskName,
+        'Execution descriptor must carry the canonical task_name, not request_id');
+    assert.notStrictEqual(result.execution_descriptor.task_name, result.execution_descriptor.request_id,
+        'task_name in descriptor must not equal request_id');
+    cleanup();
+});
+
+await runTest('Preservation - REVIEW mode issue_comment without task_name succeeds (non-consequential, no identity required)', async () => {
+    cleanup();
+    const commentBody = '@gemini-cli please review the architecture';
+    const payload = buildActivationPayloadForIssueComment(
+        'preservation-1',
+        commentBody,
+        'fluentwithkyle/openclaw-webhook',
+        'main'
+    );
+
+    assert.strictEqual(payload.task_mode, 'REVIEW',
+        'Plain comment should default to REVIEW');
+    assert.strictEqual(payload.task_name, null,
+        'task_name should be null for plain comment (no identity to extract)');
+
+    const result = await canonicalExternalActivationIngress(payload, {});
+
+    assertTrue(result.success, 'REVIEW without task_name should succeed (non-consequential): ' + (result.error || ''));
+    assert.strictEqual(result.command.task_mode, 'REVIEW',
+        'REVIEW mode must be preserved');
+    cleanup();
+});
+
+await runTest('main.yml - orchestration context extracts task_name from execution descriptor', async () => {
+    assert.ok(mainRaw.includes("jq -r '.task_name // \"\"' \"$DESCRIPTOR_FILE\""),
+        'main.yml orchestration context must read task_name from execution descriptor');
+});
+
+await runTest('main.yml - task_name passed to Gemini CLI via ORCHESTRATION_TASK_NAME env', async () => {
+    assert.ok(mainRaw.includes('ORCHESTRATION_TASK_NAME'),
+        'main.yml must pass ORCHESTRATION_TASK_NAME to Gemini CLI step');
+});
+
+await runTest('main.yml - ORCHESTRATION_CONTEXT includes task_name line', async () => {
+    assert.ok(mainRaw.includes('- task_name:'),
+        'main.yml ORCHESTRATION CONTEXT must include task_name field');
+});
+
+await runTest('main.yml - report payload includes task_name from descriptor', async () => {
+    const payloadIdx = mainRaw.indexOf('Prepare ACP report payload');
+    const callbackIdx = mainRaw.indexOf('Send callback to Render');
+    const reportSection = mainRaw.slice(payloadIdx, callbackIdx);
+    assert.ok(reportSection.includes('TASK_NAME'),
+        'Report payload step must extract TASK_NAME from descriptor');
+    assert.ok(reportSection.includes('--arg task_name "$TASK_NAME"'),
+        'Report payload jq must include --arg task_name');
+    assert.ok(reportSection.includes('task_name:'),
+        'Report payload jq output must include task_name field');
+});
+
+await runTest('main.yml - commit/push step uses task_name from descriptor for RESEARCH_DOCUMENT', async () => {
+    const commitPushIdx = mainRaw.indexOf('Commit and push Gemini changes');
+    const commitPushSection = mainRaw.slice(commitPushIdx, commitPushIdx + 2000);
+    assert.ok(commitPushSection.includes('TASK_NAME: ${{ steps.orchestration_context_wfd.outputs.task_name || steps.orchestration_context_ic.outputs.task_name'),
+        'Commit/push step must receive TASK_NAME from orchestration context');
+});
+
+await runTest('validate-external-activation.js - writes task_name to GITHUB_OUTPUT', async () => {
+    const scriptRaw = fs.readFileSync(path.join(__dirname, '..', 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(scriptRaw.includes("writeOutput('task_name', descriptor.task_name"),
+        'validate-external-activation.js must write task_name to GITHUB_OUTPUT from descriptor');
 });
 
 // =========================================================
