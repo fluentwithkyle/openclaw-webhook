@@ -1,4 +1,4 @@
-name: One-Click Gemini Builder Smoke Test
+name: One-Click Gemini Builder Execution Smoke Test
 
 on:
   workflow_dispatch:
@@ -19,10 +19,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          REQUEST_ID="builder-one-click-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          BUILDER_EXEC_ID="builder-one-click-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-
-          TASK='{"task_name":"TASK-GEMINI-BUILDER-ONE-CLICK-SMOKE-001","originator":"Kyle — Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Inspect the current repository HEAD commit SHA and report it as a minimal Gemini Builder execution smoke test.","scope":{"permitted_paths":["poc/"]},"verification":"Return the observed HEAD SHA and confirm execution through the Gemini Builder one-click workflow.","constraints":["No file modifications, no commits, no pushes, no workflow changes"],"conflict_handling":"Preserve the server-derived activation authority and stop if the activation context is invalid or blocked."}'
+          REQUEST_ID="builder-execution-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          BUILDER_EXEC_ID="builder-execution-smoke-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          TASK='{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('\''BUILDER'\'') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}'
 
           {
             echo 'request_id<<EOF'
@@ -70,7 +69,7 @@ jobs:
               target: $target,
               task_mode: $task_mode,
               capabilities: ["read_only", "modify_files", "run_tests", "commit", "push"],
-              permitted_paths: ["poc/"],
+              permitted_paths: ["test/schema.test.js"],
               repository: $repository,
               base_branch: $base_branch
             }')
@@ -114,7 +113,7 @@ jobs:
           BASE_BRANCH: main
           TASK_MODE: BUILDER
           CAPABILITIES: read_only,modify_files,run_tests,commit,push
-          PERMITTED_PATHS: poc/
+          PERMITTED_PATHS: test/schema.test.js
           APPROVAL_ID: ${{ steps.director_approval.outputs.approval_id }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
