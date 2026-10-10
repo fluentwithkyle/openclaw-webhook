@@ -346,7 +346,7 @@ jobs:
 
       - name: Prepare ACP report payload
         id: callback_payload
-        if: always() && steps.orchestration_context.outcome == 'success'
+        if: always()
         env:
           BUILDER_SUMMARY: ${{ steps.gemini_builder_run.outputs.summary }}
           EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
