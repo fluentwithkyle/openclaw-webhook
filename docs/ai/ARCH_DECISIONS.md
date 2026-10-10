@@ -858,3 +858,27 @@ preserves the single-control-plane invariant already enforced by
   behavior.
 - No new activation route, control plane, TaskRegistry, or authorization
   mechanism is introduced.
+
+---
+
+## ADR-026: Phase 4 Design Contract and Transition Bootstrap
+
+**Status**: ACCEPTED — CURRENT / RESEARCH RECONCILED (Phase 4 implementation remains PROPOSED / TARGET)
+
+**Date**: 2026-10-10
+
+**Context**: Phase 3 of the DeepSeek Coordinator Evolution (`Phase 3 — Autonomous Coordination Loop`) is `COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED`. Phase 4 (`Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation`) is the authoritative next roadmap target (`ARCHITECTURE.md` §16.6). However, evaluation of the Phase 4 transition gate (`poc/phase-transition-gate.js`) revealed that mechanical transition cannot be executed without a configured `DEEPSEEK_COORDINATOR_SECRET` environment variable and signed Director decision provenance. Consequently, Phase 3 remains authoritative, and Phase 4 activation is correctly deferred until mechanical transition conditions are met. A repository-grounded Phase 4 design contract is required before implementation can be authorized.
+
+**Decision**:
+1. **Authoritative Phase Retention**: Phase 3 remains authoritative. Phase 4 is not marked active in `STATE.md` or `strategic-state.json` until mechanical transition evidence and signed provenance are durably established.
+2. **Phase 4 Design Contract**: Established the definitive Phase 4 design contract (`docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001.md`) covering multi-task lineage navigation, read-only parent/child aggregation, cross-task diagnostics, policy-driven specialist chaining, recovery/escalation, verification prerequisites, bounded continuation, capability-upgrade authorization, and persistence/evidence requirements.
+3. **Roadmap Reconciliation**: Fully reconciled the design contract with the five-increment lifecycle-enforcement roadmap (Increments 4.1–4.5 in `docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md`).
+4. **Scope Boundaries**: Strictly adhered to `RESEARCH_DOCUMENT` mode and permitted paths (`docs/ai/*`). No production source code was modified.
+
+**Rationale**: Preserves fail-closed security and cryptographic integrity by refusing to bypass the transition gate or fabricate Director provenance. Establishes the necessary architectural specifications and roadmap alignment before implementation work begins.
+
+**Consequences**:
+- `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001.md` created and indexed.
+- `STATE.md`, `CONTROL_CENTER.md`, `TASK_LOG.md`, and `RESEARCH_INDEX.md` updated.
+- No production source code or workflows modified.
+- Phase 4 implementation remains gated until mechanical transition evidence is successfully established.
