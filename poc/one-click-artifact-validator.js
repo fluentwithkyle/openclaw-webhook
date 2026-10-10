@@ -436,7 +436,7 @@ function listOneClickWorkflows() {
     return VALID_ONE_CLICK_WORKFLOWS.slice();
 }
 
-function preflightValidateOneClickActivation(workflowDir) {
+function preflightValidateOneClickActivation(workflowDir, requestedTask) {
     const dir = workflowDir || '.github/workflows';
     const results = {};
 
@@ -450,12 +450,13 @@ function preflightValidateOneClickActivation(workflowDir) {
                 found: false,
                 valid: false,
                 error: 'Workflow file not found: ' + wf,
-                error_code: 'CARRIER_NOT_FOUND'
+                error_code: 'CARRIER_NOT_FOUND',
+                bound: false
             };
             continue;
         }
 
-        const validation = validateOneClickCarrier(workflowRaw);
+        const validation = validateOneClickCarrier(workflowRaw, requestedTask);
         results[wf] = {
             found: true,
             valid: validation.valid,
@@ -463,11 +464,13 @@ function preflightValidateOneClickActivation(workflowDir) {
             error_code: validation.error_code || null,
             canonical_artifact: validation.canonical_artifact || null,
             parsed: validation.parsed_artifact || null,
-            carrier_state: validation.carrier_state
+            carrier_state: validation.carrier_state,
+            bound: validation.binding ? validation.binding.bound : false,
+            binding: validation.binding || null
         };
     }
 
-    const allValid = Object.values(results).every(r => r.valid === true);
+    const allValid = Object.values(results).every(r => r.valid === true && (!requestedTask || r.bound === true));
 
     return {
         all_valid: allValid,
@@ -475,8 +478,10 @@ function preflightValidateOneClickActivation(workflowDir) {
         summary: {
             total: VALID_ONE_CLICK_WORKFLOWS.length,
             valid: Object.values(results).filter(r => r.valid === true).length,
-            invalid: Object.values(results).filter(r => r.valid !== true).length
-        }
+            invalid: Object.values(results).filter(r => r.valid !== true).length,
+            bound: requestedTask ? Object.values(results).filter(r => r.bound === true).length : null
+        },
+        requested_task: requestedTask || null
     };
 }
 

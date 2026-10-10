@@ -1485,5 +1485,156 @@ runTest('Preflight - all four carriers have preflight step in workflow YAML', ()
     }
 });
 
+
+// =========================================================
+// Regression tests for one-click preflight strictness
+// =========================================================
+
+runTest('Preflight strictness - rejects malformed embedded artifact with smart quotes', () => {
+    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\n  originator: Kyle“\n  target_agent: Gemini\n  repository: t\n  base_branch: main\n  task_mode: REVIEW\n  capabilities: read_only\n  objective: t\n  scope: t\n  verification: t\n  constraints: t\n  conflict_handling: t'\n";
+    const result = validateOneClickCarrier(badWorkflow, null);
+    assert.ok(!result.valid, 'Smart quote in origin should fail validation');
+    assert.strictEqual(result.error_code, 'MALFORMED_JSON_SMART_QUOTE');
+});
+
+runTest('Preflight strictness - rejects malformed JSON structure (not normalized to valid)', () => {
+    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\n  originator: t\n  target_agent: t\n  repository: t\n  base_branch: t\n  task_mode: REVIEW\n  capabilities: read_only\n  objective: t\n  scope: {permitted_paths: [docs/]}\n  verification: t\n  constraints: t\n  conflict_handling: t'\n";
+    const result = validateOneClickCarrier(badWorkflow, null);
+    assert.ok(result.valid, 'Minimal valid artifact should pass');
+
+    const malformedWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\n  target_agent: t\n  conflict: t'\n";
+    const result2 = validateOneClickCarrier(malformedWorkflow, null);
+    assert.ok(!result2.valid, 'Malformed/empty artifact should fail');
+    assert.ok(result2.error_code === 'MISSING_REQUIRED_FIELDS' || result2.error_code === 'CARRIER_NO_EMBEDDED_ARTIFACT',
+        'Should fail with fields error, got: ' + result2.error_code);
+});
+
+runTest('Preflight strictness - rejects invalid task_mode without silent conversion', () => {
+    const { validateOneClickCarrier, buildCanonicalArtifactString, parseYamlLikeToArtifactObject } = require('../poc/one-click-artifact-validator');
+    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\ntask_mode: INVALID\noriginator: t\ntarget_agent: Gemini\nrepository: t\nbase_branch: t\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t'\n";
+    const result = validateOneClickCarrier(badWorkflow, null);
+    assert.ok(!result.valid, 'Invalid task_mode should fail');
+    assert.strictEqual(result.error_code, 'INVALID_TASK_MODE');
+    assert.ok(result.canonical_artifact, 'Should produce canonical artifact for inspection');
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(artifact.task_mode, 'INVALID',
+        'buildCanonicalArtifactString must preserve original task_mode');
+});
+
+runTest('Preflight strictness - conceptual PLAN mode is rejected, not converted', () => {
+    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\ntask_mode: PLAN\noriginator: t\ntarget_agent: Gemini\nrepository: t\nbase_branch: t\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t'\n";
+    const result = validateOneClickCarrier(badWorkflow, null);
+    assert.ok(!result.valid, 'Conceptual PLAN mode should fail');
+    assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE');
+});
+
+runTest('Preflight strictness - bindCarrierToRequestedTask detects task_name mismatch', () => {
+    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const validWorkflow = "name: Carrier\non:\n  workflow_dispatch:\nTASK='task_name: TASK-CARRIER-001\ntask_mode: REVIEW\ntarget_agent: Gemini\nrepository: fluentwithkyle/openclaw-webhook\nbase_branch: main\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t\noriginator: Kyle'\n";
+    const requestedTask = {
+        task_name: 'TASK-DIFFERENT-001',
+        target_agent: 'Gemini',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    };
+    const result = validateOneClickCarrier(validWorkflow, requestedTask);
+    assert.ok(result.valid, 'Artifact should be valid');
+    assert.ok(!result.binding.bound, 'Task mismatch should fail binding');
+    assert.ok(result.binding.mismatches.indexOf('task_name') !== -1);
+});
+
+runTest('Preflight strictness - bindCarrierToRequestedTask detects target_agent mismatch', () => {
+    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const validWorkflow = "name: Carrier\non:\n  workflow_dispatch:\nTASK='task_name: TASK-001\ntask_mode: REVIEW\ntarget_agent: Gemini\nrepository: t\nbase_branch: main\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t\noriginator: Kyle'\n";
+    const requestedTask = {
+        task_name: 'TASK-001',
+        target_agent: 'Kilo',
+        repository: 't'
+    };
+    const result = validateOneClickCarrier(validWorkflow, requestedTask);
+    assert.ok(result.valid, 'Artifact should be valid');
+    assert.ok(!result.binding.bound, 'Target agent mismatch should fail binding');
+    assert.ok(result.binding.mismatches.indexOf('target_agent') !== -1);
+});
+
+runTest('Preflight strictness - bindCarrierToRequestedTask succeeds for exact match', () => {
+    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const validWorkflow = "name: Carrier\non:\n  workflow_dispatch:\nTASK='task_name: TASK-001\ntask_mode: REVIEW\ntarget_agent: Gemini\nrepository: fluentwithkyle/openclaw-webhook\nbase_branch: main\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t\noriginator: Kyle'\n";
+    const requestedTask = {
+        task_name: 'TASK-001',
+        target_agent: 'Gemini',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    };
+    const result = validateOneClickCarrier(validWorkflow, requestedTask);
+    assert.ok(result.valid, 'Artifact should be valid');
+    assert.ok(result.binding.bound, 'Exact match should bind successfully');
+});
+
+runTest('Preflight strictness - fails closed with requestedTask when binding mismatches', () => {
+    const { preflightValidateOneClickActivation } = require('../poc/one-click-artifact-validator');
+    const result = preflightValidateOneClickActivation('.github/workflows', {
+        task_name: 'TASK-DOES-NOT-EXIST',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    });
+    assert.ok(!result.all_valid, 'Preflight should fail when no carrier matches requested task');
+    assert.strictEqual(result.summary.bound, 0, 'No carriers should be bound to mismatched task');
+});
+
+runTest('Preflight strictness - fails closed when artifact validation fails', () => {
+    const { preflightValidateOneClickActivation, validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const result = preflightValidateOneClickActivation();
+    assert.ok(result.all_valid, 'All valid carriers should pass preflight');
+    for (const [wf, r] of Object.entries(result.results)) {
+        assert.ok(r.valid, wf + ' should be valid');
+    }
+});
+
+runTest('Preflight CLI command - exits non-zero on validation failure', () => {
+    const { execFileSync } = require('child_process');
+    const preflightArgs = JSON.stringify({ workflow_dir: '.nonexistent-path' });
+    let exitCode = 0;
+    let output = '';
+    try {
+        output = execFileSync('node', ['poc/validate-external-activation.js', 'one-click-preflight', preflightArgs], { encoding: 'utf8', timeout: 10000 });
+    } catch (e) {
+        exitCode = e.status || 1;
+        output = (e.stdout || '') + (e.stderr || '');
+    }
+    assert.ok(exitCode !== 0, 'Preflight CLI must exit non-zero when validation fails');
+    assert.ok(output.includes('failed') || output.includes('error'), 'Output must indicate failure');
+});
+
+runTest('Preflight CLI command - exits zero when all carriers valid', () => {
+    const { execFileSync } = require('child_process');
+    const preflightArgs = JSON.stringify({ workflow_dir: '.github/workflows' });
+    const output = execFileSync('node', ['poc/validate-external-activation.js', 'one-click-preflight', preflightArgs], { encoding: 'utf8', timeout: 10000 });
+    assert.ok(output.includes('passed'), 'Output must indicate success');
+});
+
+runTest('Preflight - all four carriers include one-click-preflight step before dispatch', () => {
+    const allWorkflows = [
+        'one-click-gemini-activation-verify-reconcile.yml',
+        'one-click-gemini-builder-smoke.yml',
+        'one-click-gemini-builder-callback-correlation.yml',
+        'one-click-gemini-research-documentation.yml'
+    ];
+    for (const wf of allWorkflows) {
+        const raw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/one-click-preflight/.test(raw), wf + ' must include one-click-preflight step');
+        const preflightIdx = raw.indexOf('one-click-preflight');
+        const ghApiIdx = raw.indexOf('gh api');
+        const validateIdx = raw.indexOf('Validate external activation through canonical ingress');
+        if (ghApiIdx !== -1) {
+            assert.ok(preflightIdx < ghApiIdx, wf + ' preflight must run before gh api dispatch');
+        }
+        if (validateIdx !== -1) {
+            assert.ok(preflightIdx < validateIdx, wf + ' preflight must run before activation validation');
+        }
+    }
+});
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

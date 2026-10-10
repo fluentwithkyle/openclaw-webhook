@@ -19,12 +19,16 @@ async function main() {
 
     if (command === 'one-click-preflight') {
         const workflowDir = params.workflow_dir || '.github/workflows';
-        const preflightResult = preflightValidateOneClickActivation(workflowDir);
+        const requestedTask = params.requested_task || null;
+        const preflightResult = preflightValidateOneClickActivation(workflowDir, requestedTask);
         if (!preflightResult.all_valid) {
             console.error('::error::One-click preflight validation failed: not all carriers have valid embedded ACP artifacts');
             for (const [wf, r] of Object.entries(preflightResult.results)) {
                 if (!r.valid) {
                     console.error('::error::' + wf + ': ' + (r.error || 'validation failed'));
+                }
+                if (requestedTask && r.bound === false) {
+                    console.error('::error::' + wf + ': task-to-carrier binding failed');
                 }
             }
             process.exit(1);
