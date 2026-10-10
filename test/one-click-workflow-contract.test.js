@@ -30,6 +30,7 @@ const ONE_CLICK_DIR = path.join(ROOT_DIR, '.github', 'workflows');
 const ONE_CLICK_VERIFY_WF = path.join(ONE_CLICK_DIR, 'one-click-gemini-activation-verify-reconcile.yml');
 const ONE_CLICK_BUILDER_SMOKE_WF = path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-smoke.yml');
 const ACTIVATION_POLICY_PATH = path.join(ROOT_DIR, 'poc', 'activation-policy.js');
+const TASK_STANDARD_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'TASK_STANDARD.md');
 const ACP_SCHEMA_PATH = path.join(ROOT_DIR, 'poc', 'schemas', 'acp-schema.js');
 
 const { validateAcpTaskArtifact, validateAcpTaskArtifactSyntax, getRuntimeTaskModeForConceptual, VALID_CAPABILITIES, CANONICAL_TASK_ARTIFACT_FIELD_ORDER, SMART_QUOTE_CHARS } = require('../poc/schemas/acp-schema');
@@ -53,6 +54,7 @@ const oneClickVerifyWfRaw = fs.readFileSync(ONE_CLICK_VERIFY_WF, 'utf8');
 const oneClickBuilderSmokeWfRaw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
 const activationPolicyRaw = fs.readFileSync(ACTIVATION_POLICY_PATH, 'utf8');
 const acpSchemaRaw = fs.readFileSync(ACP_SCHEMA_PATH, 'utf8');
+const taskStandardRaw = fs.readFileSync(TASK_STANDARD_PATH, 'utf8');
 
 function listOneClickWorkflows() {
     // Canonical active one-click carriers declared by ONE_CLICK_WORKFLOW_CONTRACT.md.
@@ -1959,6 +1961,211 @@ runTest('Kilo one-click - workflow passes server-derived descriptor as env vars 
         'Workflow must pass execution_claim_id to kilo execution context');
     assert.ok(/ORCHESTRATION_CAPABILITIES/.test(raw),
         'Workflow must pass capabilities to kilo execution context');
+});
+
+// =========================================================
+// Task-name binding and copy-safe embedding tests
+// =========================================================
+
+runTest('Kilo one-click - embedded task_name matches the exact requested task', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(artifact.task_name, 'TASK-GEMINI-ACP-COPYSAFE-AND-ONE-CLICK-WORKFLOW-FIX-001',
+        'Embedded task_name must match the exact requested task TASK-GEMINI-ACP-COPYSAFE-AND-ONE-CLICK-WORKFLOW-FIX-001');
+});
+
+runTest('Kilo one-click - embedded artifact has target_agent Kilo matching requested task', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(artifact.target_agent, 'Kilo',
+        'target_agent must be Kilo');
+});
+
+runTest('Kilo one-click - embedded artifact has task_mode FAILOVER_EXECUTE matching requested task', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(artifact.task_mode, 'FAILOVER_EXECUTE',
+        'task_mode must be FAILOVER_EXECUTE');
+});
+
+runTest('Kilo one-click - embedded artifact passes full validateAcpTaskArtifact validation', () => {
+    const embeddedText = extractEmbeddedCarrierArtifact(oneClickKiloWfRaw);
+    assert.ok(embeddedText, 'Must extract embedded carrier artifact');
+    const result = validateAcpTaskArtifact(embeddedText);
+    assert.ok(result.valid, 'Embedded artifact must pass validateAcpTaskArtifact: ' + (result.error || ''));
+});
+
+runTest('Kilo one-click - embedded artifact passes validateAcpTaskArtifactSyntax (JSON.parse safe)', () => {
+    const embeddedText = extractEmbeddedCarrierArtifact(oneClickKiloWfRaw);
+    assert.ok(embeddedText, 'Must extract embedded carrier artifact');
+    const result = validateAcpTaskArtifactSyntax(embeddedText);
+    assert.ok(result.valid, 'Embedded artifact must pass syntax validation: ' + (result.error || ''));
+    const parsed = JSON.parse(embeddedText);
+    assert.ok(parsed && typeof parsed === 'object', 'Embedded text must JSON.parse successfully');
+});
+
+runTest('Kilo one-click - no smart/curly quotation marks (all 8 U+2018-U+201F) in embedded artifact', () => {
+    const embeddedText = extractEmbeddedCarrierArtifact(oneClickKiloWfRaw);
+    assert.ok(embeddedText, 'Must extract embedded carrier artifact');
+    for (const char of SMART_QUOTE_CHARS) {
+        assert.ok(embeddedText.indexOf(char) === -1,
+            'Embedded artifact must not contain smart quote U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'));
+    }
+});
+
+runTest('Kilo one-click - originator uses ASCII hyphens, not em-dash or smart punctuation', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.ok(/^[ -~]+$/.test(artifact.originator),
+        'originator must be ASCII-only: ' + artifact.originator);
+    assert.ok(!/\u2014/.test(artifact.originator),
+        'originator must not contain em-dash (U+2014)');
+});
+
+runTest('Kilo one-click - embedded artifact canonical field order (task_name first, capabilities before objective)', () => {
+    const embeddedText = extractEmbeddedCarrierArtifact(oneClickKiloWfRaw);
+    assert.ok(embeddedText, 'Must extract embedded carrier artifact');
+    const parsed = JSON.parse(embeddedText);
+    const orderValidation = require('../poc/schemas/acp-schema').validateCanonicalFieldOrder(parsed);
+    assert.ok(orderValidation.valid, 'Canonical field order must be valid: ' + (orderValidation.error || ''));
+    const keys = Object.keys(parsed);
+    assert.strictEqual(keys[0], 'task_name', 'task_name must be the first field');
+    const capsIdx = keys.indexOf('capabilities');
+    const objIdx = keys.indexOf('objective');
+    assert.ok(capsIdx >= 0 && objIdx >= 0 && capsIdx < objIdx, 'capabilities must appear before objective');
+});
+
+runTest('Kilo one-click - embedded artifact scope is object with permitted_paths array within MAX_AUTHORIZED_PATHS', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.ok(artifact.scope && typeof artifact.scope === 'object',
+        'scope must be an object');
+    assert.ok(Array.isArray(artifact.scope.permitted_paths),
+        'scope.permitted_paths must be an array');
+    const { MAX_AUTHORIZED_PATHS } = require('../poc/activation-policy');
+    for (const p of artifact.scope.permitted_paths) {
+        const within = MAX_AUTHORIZED_PATHS.some(maxPath => p === maxPath || p.startsWith(maxPath));
+        assert.ok(within, 'permitted_path "' + p + '" must be within MAX_AUTHORIZED_PATHS');
+    }
+});
+
+runTest('Kilo one-click - embedded artifact preserves validated fields and values after validation', () => {
+    const embeddedText = extractEmbeddedCarrierArtifact(oneClickKiloWfRaw);
+    assert.ok(embeddedText, 'Must extract embedded carrier artifact');
+    const validation = validateAcpTaskArtifact(embeddedText);
+    assert.ok(validation.valid, 'Artifact must be valid: ' + (validation.error || ''));
+    const before = JSON.parse(embeddedText);
+    const after = validation.parsed_artifact || JSON.parse(embeddedText);
+    assert.strictEqual(before.task_name, after.task_name,
+        'task_name must be preserved after validation');
+    assert.strictEqual(before.target_agent, after.target_agent,
+        'target_agent must be preserved after validation');
+    assert.strictEqual(before.task_mode, after.task_mode,
+        'task_mode must be preserved after validation');
+    assert.deepStrictEqual(before.capabilities, after.capabilities,
+        'capabilities must be preserved after validation');
+    assert.deepStrictEqual(before.scope.permitted_paths, after.scope.permitted_paths,
+        'permitted_paths must be preserved after validation');
+});
+
+runTest('Kilo one-click - embedded artifact has full FAILOVER_EXECUTE capabilities array', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.ok(Array.isArray(artifact.capabilities), 'capabilities must be an array');
+    const expected = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+    for (const cap of expected) {
+        assert.ok(artifact.capabilities.includes(cap),
+            'capabilities must include ' + cap);
+    }
+});
+
+runTest('Kilo one-click - embedded artifact has non-empty constraints and conflict_handling', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.ok(Array.isArray(artifact.constraints) && artifact.constraints.length > 0,
+        'constraints must be a non-empty array');
+    assert.ok(typeof artifact.conflict_handling === 'string' && artifact.conflict_handling.trim() !== '',
+        'conflict_handling must be a non-empty string');
+});
+
+runTest('Kilo one-click - evaluateOneClickCarrierBinding confirms exact task binding', () => {
+    const requestedTask = {
+        task_name: 'TASK-GEMINI-ACP-COPYSAFE-AND-ONE-CLICK-WORKFLOW-FIX-001',
+        target_agent: 'Kilo',
+        task_mode: 'FAILOVER_EXECUTE',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    };
+    const result = evaluateOneClickCarrierBinding(oneClickKiloWfRaw, requestedTask);
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_READY,
+        'Workflow must pass the task-to-workflow binding gate: ' + result.reason);
+    assert.strictEqual(result.ready, true,
+        'Workflow must be ready for one-click activation');
+});
+
+runTest('Kilo one-click - binding gate fails closed on task_name mismatch', () => {
+    const requestedTask = {
+        task_name: 'DIFFERENT-TASK-NAME',
+        target_agent: 'Kilo',
+        task_mode: 'FAILOVER_EXECUTE',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    };
+    const result = evaluateOneClickCarrierBinding(oneClickKiloWfRaw, requestedTask);
+    assert.strictEqual(result.state, CARRIER_STATES.CARRIER_TASK_MISMATCH,
+        'Mismatched task_name must fail closed as CARRIER_TASK_MISMATCH');
+    assert.strictEqual(result.ready, false,
+        'Workflow must not be ready when task_name differs');
+});
+
+// =========================================================
+// TASK_STANDARD.md copy-safe authoring instruction tests
+// =========================================================
+
+runTest('TASK_STANDARD.md Section 10.4 - explicitly prohibits all 8 smart quote characters', () => {
+    const smartQuoteCodes = ['U+2018', 'U+2019', 'U+201A', 'U+201B', 'U+201C', 'U+201D', 'U+201E', 'U+201F'];
+    for (const code of smartQuoteCodes) {
+        assert.ok(taskStandardRaw.indexOf(code) !== -1,
+            'TASK_STANDARD.md must explicitly reference ' + code + ' as prohibited');
+    }
+});
+
+runTest('TASK_STANDARD.md Section 10.4 - includes EXAMPLE-TASK-001 ASCII-only JSON example', () => {
+    assert.ok(/EXAMPLE-TASK-001/.test(taskStandardRaw),
+        'TASK_STANDARD.md must include the EXAMPLE-TASK-001 example task_name');
+    assert.ok(/FAILOVER_EXECUTE/.test(taskStandardRaw),
+        'EXAMPLE-TASK-001 example must include FAILOVER_EXECUTE task_mode');
+    const exampleMatch = taskStandardRaw.match(/"task_name":"EXAMPLE-TASK-001","task_mode":"FAILOVER_EXECUTE"/);
+    assert.ok(exampleMatch,
+        'TASK_STANDARD.md must include exact ASCII-only JSON example with ASCII double-quote delimiters');
+});
+
+runTest('TASK_STANDARD.md Section 10.4 - requires fenced json code block preceded by activation marker', () => {
+    assert.ok(/fenced.*?json.*?code block/i.test(taskStandardRaw) ||
+              /fenced ` ```json `/.test(taskStandardRaw) ||
+              /\`\`\`json/.test(taskStandardRaw),
+        'TASK_STANDARD.md must require a fenced json code block for the descriptor');
+    assert.ok(/activation marker/.test(taskStandardRaw),
+        'TASK_STANDARD.md must require activation marker outside the code block');
+});
+
+runTest('TASK_STANDARD.md Section 10.4 - prohibits descriptor edits after validation', () => {
+    assert.ok(/no post-validation edits/i.test(taskStandardRaw) ||
+              /No post-validation edits/i.test(taskStandardRaw) ||
+              /post-validation edits.*require revalidation/i.test(taskStandardRaw) ||
+              /Any edit.*revalidation/i.test(taskStandardRaw) ||
+              /edits after validation/i.test(taskStandardRaw),
+        'TASK_STANDARD.md must prohibit descriptor edits after validation and require revalidation');
+});
+
+runTest('TASK_STANDARD.md Section 10.1 - MALFORMED_JSON_SMART_QUOTE referenced for all smart quotes', () => {
+    assert.ok(/MALFORMED_JSON_SMART_QUOTE/.test(taskStandardRaw),
+        'TASK_STANDARD.md must reference MALFORMED_JSON_SMART_QUOTE error code for smart quote rejection');
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
