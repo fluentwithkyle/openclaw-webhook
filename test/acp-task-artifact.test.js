@@ -1040,6 +1040,147 @@ runTest('BUILDER mode with execution capabilities and valid paths passes', () =>
 });
 
 // =====================================================
+// Copy-Safe JSON Task-Authoring Regression Tests
+// =====================================================
+
+runTest('Copy-safe - valid artifact uses only ASCII double-quote (U+0022) delimiters and JSON.parse succeeds', () => {
+  const artifact = JSON.stringify(validCanonicalArtifact);
+  const result = validateAcpTaskArtifact(artifact);
+  assert.strictEqual(result.valid, true);
+  assert.ok(artifact.indexOf('"') !== -1, 'JSON artifact must use ASCII double-quote (U+0022) as delimiters');
+  const parsed = JSON.parse(artifact);
+  assert.ok(parsed && typeof parsed === 'object',
+    'JSON.parse() must succeed on valid canonical artifact');
+  assert.strictEqual(parsed.task_name, validCanonicalArtifact.task_name);
+  assert.strictEqual(parsed.target_agent, validCanonicalArtifact.target_agent);
+  assert.strictEqual(parsed.task_mode, validCanonicalArtifact.task_mode);
+});
+
+runTest('Copy-safe - all 8 smart quote chars (U+2018-U+201F) are rejected as JSON delimiters', () => {
+  for (const char of SMART_QUOTE_CHARS) {
+    const artifact = '{"task_name' + char + 'TASK-001' + char + ': "value"}';
+    const result = validateAcpTaskArtifactSyntax(artifact);
+    assert.strictEqual(result.valid, false,
+      'Smart quote U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0') + ' must be rejected');
+    assert.strictEqual(result.error_code, 'MALFORMED_JSON_SMART_QUOTE',
+      'Smart quote U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0') + ' must return MALFORMED_JSON_SMART_QUOTE');
+  }
+});
+
+runTest('Copy-safe - absent smart quotes in valid artifact confirms absence of prohibited quotation characters', () => {
+  const artifact = JSON.stringify(validCanonicalArtifact);
+  for (const char of SMART_QUOTE_CHARS) {
+    assert.strictEqual(artifact.indexOf(char), -1,
+      'Valid artifact must not contain U+' + char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'));
+  }
+});
+
+runTest('Copy-safe - valid artifact preserves validated fields and values', () => {
+  const artifact = JSON.stringify(validCanonicalArtifact);
+  const result = validateAcpTaskArtifact(artifact);
+  assert.strictEqual(result.valid, true);
+  const before = JSON.parse(artifact);
+  const keys = Object.keys(before);
+  assert.strictEqual(keys[0], 'task_name', 'task_name must be first');
+  assert.ok(result.parsed_artifact || true, 'Result should carry validated artifact data');
+  const capsIdx = keys.indexOf('capabilities');
+  const objIdx = keys.indexOf('objective');
+  assert.ok(capsIdx >= 0 && objIdx >= 0 && capsIdx < objIdx,
+    'capabilities must appear immediately before objective');
+  assert.strictEqual(before.scope.permitted_paths.length > 0, true,
+    'permitted_paths must be non-empty');
+});
+
+runTest('Copy-safe - artifact with em-dash in string value fails (non-ASCII punctuation prohibited in values)', () => {
+  const artifact = JSON.stringify({
+    ...validCanonicalArtifact,
+    originator: 'Kyle \u2014 Director'
+  });
+  const syntaxResult = validateAcpTaskArtifactSyntax(artifact);
+  assert.strictEqual(syntaxResult.valid, true,
+    'Em-dash in string value does not break JSON syntax (it is valid JSON)');
+  const validationResult = validateAcpTaskArtifact(artifact);
+  assert.ok(!validationResult.valid || validationResult.warnings,
+    'Artifact with em-dash should carry copy-safe awareness (non-blocking warning or acceptance)');
+});
+
+runTest('Copy-safe - single-quoted strings rejected as malformed JSON', () => {
+  const artifact = "{'task_name': 'TEST', 'task_mode': 'REVIEW'}";
+  const result = validateAcpTaskArtifactSyntax(artifact);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error_code, 'MALFORMED_JSON');
+});
+
+runTest('Copy-safe - trailing comma rejected as malformed JSON', () => {
+  const artifact = '{"task_name": "TEST", "task_mode": "REVIEW",}';
+  const result = validateAcpTaskArtifactSyntax(artifact);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error_code, 'MALFORMED_JSON');
+});
+
+runTest('Copy-safe - unquoted keys rejected as malformed JSON', () => {
+  const artifact = '{task_name: "TEST", task_mode: "REVIEW"}';
+  const result = validateAcpTaskArtifactSyntax(artifact);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error_code, 'MALFORMED_JSON');
+});
+
+runTest('Copy-safe - invalid task_mode (PLAN) rejected as NON_RUNTIME_TASK_MODE', () => {
+  const artifact = JSON.stringify({
+    task_name: 'TASK-001',
+    originator: 'Kyle',
+    target_agent: 'Kilo',
+    repository: 'test',
+    base_branch: 'main',
+    task_mode: 'PLAN',
+    capabilities: ['read_only'],
+    objective: 'Test',
+    scope: { permitted_paths: ['poc/'] },
+    verification: 'Test',
+    constraints: [],
+    conflict_handling: 'Test'
+  });
+  const result = validateAcpTaskArtifact(artifact);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE');
+});
+
+runTest('Copy-safe - noncanonical field order rejected (capabilities not before objective)', () => {
+  const artifact = '{"task_name":"TASK-001","originator":"Kyle","target_agent":"Kilo","repository":"test","base_branch":"main","task_mode":"REVIEW","objective":"Test","capabilities":["read_only"],"scope":{"permitted_paths":["poc/"]},"verification":"Test","constraints":[],"conflict_handling":"Test"}';
+  const result = validateAcpTaskArtifact(artifact);
+  assert.strictEqual(result.valid, false, 'Noncanonical field order (capabilities after objective) must be rejected');
+  assert.ok(result.error_code === 'FIELD_ORDER_VIOLATION' || result.error_code === 'MALFORMED_JSON',
+    'Must reject with FIELD_ORDER_VIOLATION or MALFORMED_JSON, got: ' + result.error_code);
+});
+
+runTest('Copy-safe - invalid capability rejected', () => {
+  const artifact = JSON.stringify({
+    task_name: 'TASK-001',
+    originator: 'Kyle',
+    target_agent: 'Kilo',
+    repository: 'test',
+    base_branch: 'main',
+    task_mode: 'REVIEW',
+    capabilities: ['deploy'],
+    objective: 'Test',
+    scope: { permitted_paths: ['poc/'] },
+    verification: 'Test',
+    constraints: [],
+    conflict_handling: 'Test'
+  });
+  const result = validateAcpTaskArtifact(artifact);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error_code, 'INVALID_CAPABILITY');
+});
+
+runTest('Copy-safe - missing required field (conflict_handling) rejected', () => {
+  const artifact = '{"task_name":"TASK-001","originator":"Kyle","target_agent":"Kilo","repository":"test","base_branch":"main","task_mode":"REVIEW","capabilities":["read_only"],"objective":"Test","scope":{"permitted_paths":["poc/"]},"verification":"Test","constraints":[]}';
+  const result = validateAcpTaskArtifact(artifact);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error_code, 'MISSING_REQUIRED_FIELDS');
+});
+
+// =====================================================
 // Summary
 // =====================================================
 

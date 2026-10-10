@@ -461,7 +461,7 @@ A canonical ACP task artifact embedded in an issue body, comment, or workflow in
 
 ### 10.1 Required JSON Syntax
 
-- **Double-quote delimiters**: All strings, keys, and string values MUST use standard double quotes (`"`, U+0022). Smart/curly quotes (U+2018 `'`, U+2019 `'`, U+201C `"`, U+201D `"`) are **rejected** as JSON delimiters with error code `MALFORMED_JSON_SMART_QUOTE`.
+- **Double-quote delimiters**: All strings, keys, and string values MUST use standard double quotes (`"`, U+0022). Smart/curly quotes — U+2018 (`'`), U+2019 (`'`), U+201A (`‚`), U+201B (`‛`), U+201C (`"`), U+201D (`"`), U+201E (`„`), and U+201F (`‟`) — are **explicitly prohibited** as JSON delimiters and are **rejected** with error code `MALFORMED_JSON_SMART_QUOTE`.
 - **Quoted keys**: All object keys MUST be enclosed in double quotes. Unquoted keys are invalid JSON.
 - **Valid JSON values**: Strings (double-quoted), numbers, booleans, null, arrays, and objects are permitted. Unicode text within string values is allowed; the restriction applies to JSON syntax, not character content.
 - **No comments**: `//` line comments and `/* */` block comments are not permitted.
@@ -485,8 +485,13 @@ The exact final artifact can be passed through `validateAcpTaskArtifact(artifact
 
 Before presenting an ACP artifact for authorization, verify ALL of the following against the **exact final artifact that will be posted/sent**:
 
-- [ ] **JSON syntax**: The artifact is valid JSON with standard double-quote (U+0022) delimiters. Run `validateAcpTaskArtifactSyntax()` — it must return `{ valid: true }`.
-- [ ] **Copy/paste safety**: The artifact contains no smart/curly quotes, no comments, no trailing commas, no single-quoted strings, no unquoted keys.
+- [ ] **JSON syntax**: The artifact is valid JSON with standard double-quote (U+0022) delimiters only. No smart/curly quotes (U+2018, U+2019, U+201A, U+201B, U+201C, U+201D, U+201E, U+201F). No comments, no trailing commas, no single-quoted strings, no unquoted keys. Run `validateAcpTaskArtifactSyntax()` — it must return `{ valid: true }`.
+- [ ] **Copy-safe JSON task-authoring instructions**: The task-authoring instructions explicitly prohibit all eight smart/curly quotation marks (U+2018, U+2019, U+201A, U+201B, U+201C, U+201D, U+201E, U+201F) as JSON delimiters.
+- [ ] **ASCII-only quotation marks**: The artifact uses only ASCII quotation marks (U+0022 `"`) as JSON delimiters. This exact minimal valid JSON example demonstrates JSON quoting only and is **not** a complete ACP task:
+  ```json
+  {"task_name":"EXAMPLE-TASK-001","task_mode":"FAILOVER_EXECUTE"}
+  ```
+- [ ] **Fenced json code block + activation marker**: The complete final ACP descriptor is placed in a fenced ` ```json ` code block, and the activation marker (e.g., `@kilo`) appears **outside** and **before** the code block. No authority-bearing fields are reconstructed from workflow inputs.
 - [ ] **Complete ACP envelope**: All required fields present: `task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`. Omission of `task_name` is an ACP compliance failure.
 - [ ] **Canonical field ordering**: `task_name` appears first; `capabilities` appears immediately before `objective`. Run `validateCanonicalFieldOrder()` — it must return `{ valid: true }`.
 - [ ] **Task identity**: `task_name` matches the task's actual identifier/name, verified against the task's title and identifier.
@@ -495,6 +500,39 @@ Before presenting an ACP artifact for authorization, verify ALL of the following
 - [ ] **Mode-specific rules**: REVIEW requires exactly `["read_only"]`; RESEARCH_DOCUMENT requires exactly `["read_only", "modify_files", "commit", "push"]`; FAILOVER_EXECUTE/BUILDER require the full execution capability set and Director authorization.
 - [ ] **Initiation syntax**: Required protocol markers (e.g., `@kilo`) are present and exact (case-sensitive).
 - [ ] **Full machine validation**: `validateAcpTaskArtifact(artifactText)` on the final artifact returns `{ valid: true }`. A human checklist alone does not satisfy this requirement.
-- [ ] **Identical artifact**: The artifact to be sent is byte-for-byte identical to the validated artifact. No post-validation edits.
+- [ ] **Identical artifact — no post-validation edits**: The artifact to be sent is byte-for-byte identical to the validated artifact. No post-validation edits are permitted; any edit requires revalidation and re-authorization. The validated artifact shown to the Director is the exact artifact that will be posted/sent.
 
 **A task is NOT READY — ACP COMPLIANCE INCOMPLETE if validation cannot be established.** Do not proceed to authorization until the exact final artifact passes machine validation.
+
+### 10.4 Copy-Safe JSON Task-Authoring Instructions
+
+Before authoring or presenting an ACP task artifact, the author must satisfy the following copy-safe rules. These rules are machine-enforced by `validateAcpTaskArtifactSyntax()` and `validateAcpTaskArtifact()` in `poc/schemas/acp-schema.js` and by `extractEmbeddedAcpDescriptor()` in `poc/external-activation-validator.js`.
+
+1. **Use standard double-quote delimiters (U+0022 `"`)** for all JSON keys and string values. **Never** use smart/curly quotation marks (U+2018 `'`, U+2019 `'`, U+201A `‚`, U+201B `‛`, U+201C `"`, U+201D `"`, U+201E `„`, U+201F `‟`). Any such character is **explicitly prohibited** as a JSON delimiter and is **rejected** with error code `MALFORMED_JSON_SMART_QUOTE`.
+
+2. **Use canonical field ordering** as enforced by `validateCanonicalFieldOrder()`. The canonical order is:
+   `task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`.
+   The field `task_name` must appear **first**; `capabilities` must appear **immediately before** `objective`.
+
+3. **`scope` must be a JSON object** with a `permitted_paths` array of strings. Every path must fall within the server-defined `MAX_AUTHORIZED_PATHS` boundary.
+
+4. **`target_agent` must be one of `VALID_AGENTS`**: `Kilo`, `Gemini`, `Gemini Builder`, `Security Specialist`, `Utility Specialist`.
+
+5. **`task_mode` must be one of `VALID_TASK_MODES`**: `REVIEW`, `VERIFY_RECONCILE`, `FAILOVER_EXECUTE`, `BUILDER`, `RESEARCH_DOCUMENT`. The conceptual Director-facing modes `PLAN` and `EXECUTE` are **not** literal runtime `task_mode` values and are rejected with `NON_RUNTIME_TASK_MODE`.
+
+6. **No comments, trailing commas, single-quoted strings, or unquoted keys**. The artifact is parsed with `JSON.parse()` only.
+
+7. **No em-dashes or non-ASCII curly punctuation inside string values**. Use `--` (two hyphens) for em-dashes within string values (e.g., `"Kyle -- Director"`).
+
+8. **Validate before presenting**: After authoring, run:
+   ```sh
+   node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'
+   ```
+   The output must show `all_valid: true`.
+
+9. **Minimal ASCII-only valid JSON example** (demonstrates JSON quoting only; **not** a complete ACP task):
+   ```json
+   {"task_name":"EXAMPLE-TASK-001","task_mode":"FAILOVER_EXECUTE"}
+   ```
+
+10. **No descriptor edits after validation**: Once the complete final ACP descriptor passes `validateAcpTaskArtifact()`, it must be placed in a fenced ` ```json ` code block preceded by its activation marker (e.g., `@kilo`) outside the code block. No post-validation edits are permitted; any edit requires revalidation. The artifact shown to the Director is the exact artifact that will be posted/sent.
