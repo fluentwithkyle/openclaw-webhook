@@ -237,8 +237,8 @@ runTest('issue_comment orchestration context reads task_mode from execution desc
     'orchestration_context_ic must read task_mode from descriptor file');
   assert.ok(raw.includes("jq -r '.capabilities | join(\",\")' \"$DESCRIPTOR_FILE\""),
     'orchestration_context_ic must read capabilities from descriptor file');
-  assert.ok(raw.includes("jq -r '.permitted_paths | join(\",\")' \"$DESCRIPTOR_FILE\""),
-    'orchestration_context_ic must read permitted_paths from descriptor file');
+  assert.ok(raw.includes("jq -r '.permitted_paths | join(\" \")' \"$DESCRIPTOR_FILE\""),
+    'orchestration_context_ic must read permitted_paths from descriptor file (space-separated for shell iteration)');
 });
 
 runTest('issue_comment does NOT reconstruct authority from comment-prefix shell variables', () => {
@@ -1001,4 +1001,164 @@ runTest('Behavioral: non-array valid JSON (e.g. null, object) is rejected by arr
   `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 5000 });
 
   assert.equal(result.trim(), 'REJECTED', 'array-type validation must reject valid non-array JSON');
+});
+
+// --- PERMITTED_PATHS format mismatch regression tests ---
+
+runTest('main.yml orchestration context outputs permitted_paths as space-separated (not comma)', () => {
+  const wfdIdx = raw.indexOf('Prepare orchestration context (workflow_dispatch)');
+  const icIdx = raw.indexOf('Prepare orchestration context (issue_comment)');
+  const wfdSection = raw.slice(wfdIdx, icIdx);
+  const icSection = raw.slice(icIdx);
+  const nextStep = icSection.indexOf('\n      - name:', 30);
+  const icEnd = nextStep === -1 ? icSection.length : nextStep;
+
+  assert.ok(wfdSection.includes("jq -r '.permitted_paths | join(\" \")'"),
+    'workflow_dispatch orchestration context must use join(\" \") for permitted_paths (space-separated)');
+  assert.ok(icSection.slice(0, icEnd).includes("jq -r '.permitted_paths | join(\" \")'"),
+    'issue_comment orchestration context must use join(\" \") for permitted_paths (space-separated)');
+});
+
+runTest('main.yml orchestration context still uses comma-separated for capabilities (display-only)', () => {
+  assert.ok(raw.includes("jq -r '.capabilities | join(\",\")'"),
+    'capabilities output should remain comma-separated (used for display in prompt, not shell iteration)');
+});
+
+runTest('main.yml commit/push step does NOT use git add with 2>/dev/null || true (silent suppression)', () => {
+  const commitIdx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  const section = raw.slice(commitIdx, resultIdx);
+
+  assert.ok(!/git add.*2>\/dev\/null.*\|\| true/.test(section),
+    'commit/push step must NOT silently suppress git add errors with 2>/dev/null || true');
+});
+
+runTest('main.yml commit/push step stages permitted_paths with fail-closed error detection', () => {
+  const commitIdx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  const section = raw.slice(commitIdx, resultIdx);
+
+  assert.ok(section.includes('STAGING_ERRORS'),
+    'commit/push step must track staging errors');
+  assert.ok(section.includes('Staging failed for one or more permitted_paths'),
+    'commit/push step must fail-closed on staging failure');
+});
+
+runTest('main.yml commit/push step fails closed on empty staged set (no silent empty commit)', () => {
+  const commitIdx = raw.indexOf('Commit and push Gemini changes (mode-aware:');
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  const section = raw.slice(commitIdx, resultIdx);
+
+  assert.ok(!section.includes('::warning::No changes to commit'),
+    'commit/push step must NOT use a warning-only path for empty staged set');
+  assert.ok(section.includes('staged no changes within permitted_paths'),
+    'commit/push step must fail-closed when no changes are staged within permitted_paths');
+});
+
+runTest('main.yml gemini_result step fails closed when no commit SHA produced in persistence mode', () => {
+  const resultIdx = raw.indexOf('Determine Gemini execution result');
+  const payloadIdx = raw.indexOf('Prepare ACP report payload');
+  const section = raw.slice(resultIdx, payloadIdx);
+
+  assert.ok(section.includes('no commit SHA was produced'),
+    'gemini_result step must detect and fail when no commit SHA is produced in persistence mode');
+});
+
+runTest('Behavioral: space-separated permitted_paths iterates correctly over multiple paths', () => {
+  const result = execSync(`
+    git init -q test-paths-$$ && cd test-paths-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+
+    PERMITTED_PATHS="docs/ai/research/ docs/ai/TASK_LOG.md"
+
+    mkdir -p docs/ai/research
+    echo "# Research" > docs/ai/research/test.md
+    echo "log entry" > docs/ai/TASK_LOG.md
+
+    STAGING_ERRORS=""
+    for dir in $PERMITTED_PATHS; do
+      if ! git add "$dir" 2>/dev/null; then
+        STAGING_ERRORS="$STAGING_ERRORS $dir"
+      fi
+    done
+
+    if [ -n "$STAGING_ERRORS" ]; then
+      echo "STAGING_FAILED=1"
+      echo "ERRORS=$STAGING_ERRORS"
+    else
+      echo "STAGING_FAILED=0"
+    fi
+
+    STAGED=$(git diff --cached --name-only)
+    echo "STAGED_COUNT=$(echo "$STAGED" | grep -c .)"
+    echo "$STAGED"
+
+    cd .. && rm -rf test-paths-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  assert.ok(!result.includes('STAGING_FAILED=1'),
+    'space-separated permitted_paths must stage successfully without staging errors');
+  const stagedMatch = result.match(/STAGED_COUNT=(\d+)/);
+  assert.ok(stagedMatch, 'must have staged count');
+  assert.equal(parseInt(stagedMatch[1]), 2, 'must stage exactly 2 paths from space-separated list');
+});
+
+runTest('Behavioral: comma-separated permitted_paths causes silent failure (the original bug)', () => {
+  const result = execSync(`
+    git init -q test-comma-$$ && cd test-comma-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+
+    # Simulate the OLD format: comma-separated (the bug)
+    PERMITTED_PATHS="docs/ai/research/,docs/ai/TASK_LOG.md"
+
+    mkdir -p docs/ai/research
+    echo "# Research" > docs/ai/research/test.md
+    echo "log entry" > docs/ai/TASK_LOG.md
+
+    # OLD pattern with 2>/dev/null || true (silent suppression)
+    for dir in $PERMITTED_PATHS; do
+      git add "$dir" 2>/dev/null || true
+    done
+
+    STAGED=$(git diff --cached --name-only)
+    echo "STAGED_COUNT=$(echo "$STAGED" | grep -c . 2>/dev/null || echo 0)"
+    echo "STAGED=$STAGED"
+
+    cd .. && rm -rf test-comma-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  const stagedMatch = result.match(/STAGED_COUNT=(\d+)/);
+  assert.ok(stagedMatch, 'must have staged count');
+  assert.equal(parseInt(stagedMatch[1]), 0,
+    'comma-separated permitted_paths must stage ZERO files (reproduces the original bug)');
+});
+
+runTest('Behavioral: fail-closed staging detects git add errors (new behavior)', () => {
+  const result = execSync(`
+    git init -q test-failclosed-$$ && cd test-failclosed-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+
+    PERMITTED_PATHS="nonexistent/path/file.md"
+
+    STAGING_ERRORS=""
+    for dir in $PERMITTED_PATHS; do
+      if ! git add "$dir" 2>/dev/null; then
+        STAGING_ERRORS="$STAGING_ERRORS $dir"
+      fi
+    done
+
+    if [ -n "$STAGING_ERRORS" ]; then
+      echo "STAGING_FAILED=1"
+    else
+      echo "STAGING_FAILED=0"
+    fi
+
+    cd .. && rm -rf test-failclosed-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  assert.ok(result.includes('STAGING_FAILED=1'),
+    'fail-closed staging must detect and report staging errors for nonexistent paths');
 });
