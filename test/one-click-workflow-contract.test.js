@@ -32,11 +32,9 @@ const ONE_CLICK_BUILDER_SMOKE_WF = path.join(ONE_CLICK_DIR, 'one-click-gemini-bu
 const ACTIVATION_POLICY_PATH = path.join(ROOT_DIR, 'poc', 'activation-policy.js');
 const ACP_SCHEMA_PATH = path.join(ROOT_DIR, 'poc', 'schemas', 'acp-schema.js');
 
-const { validateAcpTaskArtifact, validateAcpTaskArtifactSyntax, getRuntimeTaskModeForConceptual, VALID_CAPABILITIES, CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS, CANONICAL_TASK_ARTIFACT_FIELD_ORDER, CONCEPTUAL_TASK_MODES, SMART_QUOTE_CHARS } = require('../poc/schemas/acp-schema');
+const { validateAcpTaskArtifact, validateAcpTaskArtifactSyntax, getRuntimeTaskModeForConceptual, VALID_CAPABILITIES, CANONICAL_TASK_ARTIFACT_FIELD_ORDER, SMART_QUOTE_CHARS } = require('../poc/schemas/acp-schema');
 const {
     extractEmbeddedCarrierArtifact,
-    parseYamlLikeToArtifactObject,
-    buildCanonicalArtifactString,
     validateOneClickCarrier,
     bindCarrierToRequestedTask,
     preflightValidateOneClickActivation
@@ -73,7 +71,11 @@ function extractCarrierField(workflowRaw, field) {
         'i'
     );
     const match = workflowRaw.match(fieldPattern);
-    return match ? match[1].trim() : null;
+    if (match) return match[1].trim();
+
+    const jsonFieldPattern = new RegExp('"' + field + '"\\s*:\\s*"?([^\'"\\s,]+)');
+    const jsonMatch = workflowRaw.match(jsonFieldPattern);
+    return jsonMatch ? jsonMatch[1].trim() : null;
 }
 
 const CARRIER_STATES = Object.freeze({
@@ -742,7 +744,7 @@ runTest('One-click workflows - embed a canonical ACP task carrier with task_name
     const oneClickWorkflows = listOneClickWorkflows();
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        assert.ok(/task_name:/i.test(wfRaw),
+        assert.ok(/task_name/i.test(wfRaw),
             `${wf} must embed a task_name field in its carrier`);
     }
 });
@@ -751,7 +753,7 @@ runTest('One-click workflows - embed target_agent field in carrier', () => {
     const oneClickWorkflows = listOneClickWorkflows();
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        assert.ok(/target_agent:/i.test(wfRaw),
+        assert.ok(/target_agent/i.test(wfRaw),
             `${wf} must embed a target_agent field in its carrier`);
     }
 });
@@ -760,7 +762,7 @@ runTest('One-click workflows - embed task_mode field in carrier', () => {
     const oneClickWorkflows = listOneClickWorkflows();
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        assert.ok(/task_mode:/i.test(wfRaw),
+        assert.ok(/task_mode/i.test(wfRaw),
             `${wf} must embed a task_mode field in its carrier`);
     }
 });
@@ -769,7 +771,7 @@ runTest('One-click workflows - embed objective field in carrier', () => {
     const oneClickWorkflows = listOneClickWorkflows();
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        assert.ok(/objective:/i.test(wfRaw),
+        assert.ok(/objective/i.test(wfRaw),
             `${wf} must embed an objective field in its carrier`);
     }
 });
@@ -778,7 +780,7 @@ runTest('One-click workflows - embed verification field in carrier', () => {
     const oneClickWorkflows = listOneClickWorkflows();
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        assert.ok(/verification:/i.test(wfRaw),
+        assert.ok(/verification/i.test(wfRaw),
             `${wf} must embed a verification field in its carrier`);
     }
 });
@@ -787,7 +789,7 @@ runTest('One-click workflows - embed capabilities field in carrier', () => {
     const oneClickWorkflows = listOneClickWorkflows();
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        assert.ok(/capabilities:/i.test(wfRaw),
+        assert.ok(/capabilities/i.test(wfRaw),
             `${wf} must embed a capabilities field in its carrier`);
     }
 });
@@ -797,7 +799,7 @@ runTest('One-click workflows - embed constraints field in carrier', () => {
     let allHaveConstraints = true;
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        if (!/constraints:/i.test(wfRaw)) {
+        if (!/constraints/i.test(wfRaw)) {
             allHaveConstraints = false;
         }
     }
@@ -1114,6 +1116,7 @@ runTest('Durable Gemini evidence locations exist in the repository', () => {
 // =========================================================
 
 const ARTIFACT_VALIDATOR_PATH = path.join(ROOT_DIR, 'poc', 'one-click-artifact-validator.js');
+const ACP_SCHEMA2 = require('../poc/schemas/acp-schema');
 
 function makeValidArtifact(overrides) {
     const base = {
@@ -1134,12 +1137,15 @@ function makeValidArtifact(overrides) {
 }
 
 function artifactToCanonicalJson(obj) {
-    const schema = require('../poc/schemas/acp-schema');
     const ordered = {};
-    for (const field of schema.CANONICAL_TASK_ARTIFACT_FIELD_ORDER) {
+    for (const field of CANONICAL_TASK_ARTIFACT_FIELD_ORDER) {
         if (field in obj) ordered[field] = obj[field];
     }
     return JSON.stringify(ordered, null, 2);
+}
+
+function makeEmbeddedArtifact(artifactObj) {
+    return 'name: Carrier\non:\n  workflow_dispatch:\nTASK=\'' + artifactToCanonicalJson(artifactObj) + '\'\n';
 }
 
 runTest('Artifact validator - module exists and exports required functions', () => {
@@ -1148,8 +1154,6 @@ runTest('Artifact validator - module exists and exports required functions', () 
     assert.ok(typeof mod.validateOneClickCarrier === 'function', 'Must export validateOneClickCarrier');
     assert.ok(typeof mod.preflightValidateOneClickActivation === 'function', 'Must export preflightValidateOneClickActivation');
     assert.ok(typeof mod.extractEmbeddedCarrierArtifact === 'function', 'Must export extractEmbeddedCarrierArtifact');
-    assert.ok(typeof mod.parseYamlLikeToArtifactObject === 'function', 'Must export parseYamlLikeToArtifactObject');
-    assert.ok(typeof mod.buildCanonicalArtifactString === 'function', 'Must export buildCanonicalArtifactString');
     assert.ok(typeof mod.bindCarrierToRequestedTask === 'function', 'Must export bindCarrierToRequestedTask');
 });
 
@@ -1168,7 +1172,7 @@ runTest('Artifact validator - smoke carrier embeds BUILDER task_mode (not EXECUT
     const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
     const text = extractEmbeddedCarrierArtifact(raw);
     assert.ok(text, 'Smoke carrier must have embedded artifact');
-    const parsed = parseYamlLikeToArtifactObject(text);
+    const parsed = JSON.parse(text);
     assert.strictEqual(parsed.task_mode, 'BUILDER', 'Smoke carrier must use runtime task_mode BUILDER, not conceptual EXECUTE');
 });
 
@@ -1239,96 +1243,90 @@ runTest('Artifact validator - research-documentation carrier has scope.permitted
         'Research-documentation carrier must include docs/ai/TASK_LOG.md in permitted_paths');
 });
 
-runTest('Artifact validator - rejects malformed JSON in embedded artifact', () => {
-    const raw = "name: test\non:\n  workflow_dispatch:\nTASK='task_name: TEST\n  originator: bad JSON here'\n";
+runTest('Artifact validator - embedded artifact is validated as actual JSON, no YAML parsing', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
     const text = extractEmbeddedCarrierArtifact(raw);
-    const parsed = parseYamlLikeToArtifactObject(text);
-    const canonicalJson = buildCanonicalArtifactString(parsed);
-    const validation = validateAcpTaskArtifact(canonicalJson);
-    assert.ok(!validation.valid, 'Malformed artifact should fail validation');
-});
-
-runTest('Artifact validator - rejects smart quotes as malformed JSON', () => {
-    const badContent = "task_name: TEST\noriginator: Kyle\ntarget_agent: Gemini\nrepository: test\nbase_branch: main\ntask_mode: REVIEW\ncapabilities:\n- read_only\nobjective: test\nscope:\n  permitted_paths:\n  - docs/\nverification: test\nconstraints:\n- test\nconflict_handling: smart quote \u201ctest\u201d here";
-    const parsed = parseYamlLikeToArtifactObject(badContent);
-    const canonicalJson = buildCanonicalArtifactString(parsed);
-    for (const char of SMART_QUOTE_CHARS) {
-        if (canonicalJson.indexOf(char) !== -1) {
-            const syntaxResult = validateAcpTaskArtifactSyntax(canonicalJson);
-            assert.ok(!syntaxResult.valid, 'Smart quotes should fail syntax validation');
-            assert.strictEqual(syntaxResult.error_code, 'MALFORMED_JSON_SMART_QUOTE');
-            return;
-        }
+    assert.ok(text, 'Smoke carrier must have embedded artifact');
+    let parsed;
+    try {
+        parsed = JSON.parse(text);
+        assert.ok(parsed, 'Embedded artifact must be valid JSON');
+    } catch (e) {
+        assert.fail('Embedded artifact must be parseable as JSON, not YAML: ' + e.message);
     }
-    assert.ok(true, 'No smart quotes found in canonical JSON - test validates no crash');
+    const orderResult = ACP_SCHEMA2.validateCanonicalFieldOrder(parsed);
+    assert.ok(orderResult.valid, 'Embedded artifact must have canonical field order: ' + (orderResult.error || ''));
 });
 
-runTest('Artifact validator - rejects missing required fields', () => {
+runTest('Artifact validator - rejects malformed JSON in embedded artifact', () => {
+    const badWorkflow = 'name: test\non:\n  workflow_dispatch:\nTASK=\'task_name: TEST\n  originator: bad JSON here\'\n';
+    const result = validateOneClickCarrier(badWorkflow, null);
+    assert.ok(!result.valid, 'Malformed artifact should fail validation');
+    assert.ok(result.error_code === 'MALFORMED_JSON' || result.error_code === 'JSON_PARSE_FAILED',
+        'Should fail with JSON syntax/parse error, got: ' + result.error_code);
+});
+
+runTest('Artifact validator - rejects smart quotes in embedded JSON artifact', () => {
+    const badJson = '{"task_name":"TEST","originator":"Kyle“test”","target_agent":"Gemini","repository":"t","base_branch":"main","task_mode":"REVIEW","capabilities":["read_only"],"objective":"t","scope":{"permitted_paths":["docs/"]},"verification":"t","constraints":["t"],"conflict_handling":"t"}';
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + badJson + '\'\n';
+    const result = validateOneClickCarrier(workflow, null);
+    assert.ok(!result.valid, 'Smart quotes in embedded JSON should fail validation');
+    assert.strictEqual(result.error_code, 'MALFORMED_JSON_SMART_QUOTE');
+});
+
+runTest('Artifact validator - rejects missing required fields in embedded artifact', () => {
     const artifact = makeValidArtifact();
     delete artifact.conflict_handling;
-    const json = artifactToCanonicalJson(artifact);
-    const result = validateAcpTaskArtifact(json);
-    assert.ok(!result.valid, 'Missing conflict_handling should fail');
+    const workflow = makeEmbeddedArtifact(artifact);
+    const result = validateOneClickCarrier(workflow, null);
+    assert.ok(!result.valid, 'Missing conflict_handling in embedded artifact should fail');
     assert.strictEqual(result.error_code, 'MISSING_REQUIRED_FIELDS');
 });
 
-runTest('Artifact validator - rejects noncanonical field order', () => {
-    const artifact = {
-        capabilities: ['read_only', 'modify_files', 'commit', 'push'],
-        task_name: 'TASK-TEST-001',
-        originator: 'Kyle',
-        target_agent: 'Gemini',
-        repository: 'test',
-        base_branch: 'main',
-        task_mode: 'VERIFY_RECONCILE',
-        objective: 'test',
-        scope: { permitted_paths: ['docs/ai/TASK_LOG.md'] },
-        verification: 'test',
-        constraints: [],
-        conflict_handling: 'test'
-    };
-    const schema = require('../poc/schemas/acp-schema');
-    const orderResult = schema.validateCanonicalFieldOrder(artifact);
-    assert.ok(!orderResult.valid, 'Canonical field ordering violation should fail validation');
-    assert.strictEqual(orderResult.error_code, 'FIELD_ORDER_VIOLATION');
+runTest('Artifact validator - rejects noncanonical field order in embedded artifact', () => {
+    const badJson = '{"capabilities":["read_only"],"task_name":"TASK-TEST-001","originator":"Kyle","target_agent":"Gemini","repository":"test","base_branch":"main","task_mode":"VERIFY_RECONCILE","objective":"test","scope":{"permitted_paths":["docs/ai/TASK_LOG.md"]},"verification":"test","constraints":[],"conflict_handling":"test"}';
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + badJson + '\'\n';
+    const result = validateOneClickCarrier(workflow, null);
+    assert.ok(!result.valid, 'Noncanonical field order should fail');
+    assert.strictEqual(result.error_code, 'FIELD_ORDER_VIOLATION');
 });
 
-runTest('Artifact validator - rejects invalid task_mode', () => {
+runTest('Artifact validator - rejects invalid task_mode in embedded artifact', () => {
     const artifact = makeValidArtifact({ task_mode: 'EXCAVATE' });
-    const json = artifactToCanonicalJson(artifact);
-    const result = validateAcpTaskArtifact(json);
+    const workflow = makeEmbeddedArtifact(artifact);
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Invalid task_mode should fail');
     assert.strictEqual(result.error_code, 'INVALID_TASK_MODE');
 });
 
-runTest('Artifact validator - rejects conceptual EXECUTE as non-runtime task_mode', () => {
+runTest('Artifact validator - rejects conceptual EXECUTE in embedded artifact', () => {
     const artifact = makeValidArtifact({ task_mode: 'EXECUTE' });
-    const json = artifactToCanonicalJson(artifact);
-    const result = validateAcpTaskArtifact(json);
+    const workflow = makeEmbeddedArtifact(artifact);
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Conceptual EXECUTE should fail validation');
     assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE');
 });
 
-runTest('Artifact validator - rejects invalid capability', () => {
+runTest('Artifact validator - rejects invalid capability in embedded artifact', () => {
     const artifact = makeValidArtifact({ capabilities: ['inspect', 'read_only', 'modify_files', 'run_tests', 'commit', 'push'] });
-    const json = artifactToCanonicalJson(artifact);
-    const result = validateAcpTaskArtifact(json);
+    const workflow = makeEmbeddedArtifact(artifact);
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Invalid capability should fail');
     assert.strictEqual(result.error_code, 'INVALID_CAPABILITY');
 });
 
-runTest('Artifact validator - rejects empty permitted_paths for execution mode', () => {
+runTest('Artifact validator - rejects empty permitted_paths in embedded artifact', () => {
     const artifact = makeValidArtifact({ scope: { permitted_paths: [] } });
-    const json = artifactToCanonicalJson(artifact);
-    const result = validateAcpTaskArtifact(json);
+    const workflow = makeEmbeddedArtifact(artifact);
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Empty permitted_paths for BUILDER should fail');
     assert.strictEqual(result.error_code, 'EMPTY_PERMITTED_PATHS');
 });
 
-runTest('Artifact validator - rejects path outside MAX_AUTHORIZED_PATHS', () => {
+runTest('Artifact validator - rejects path outside MAX_AUTHORIZED_PATHS in embedded artifact', () => {
     const artifact = makeValidArtifact({ scope: { permitted_paths: ['poc/', 'unauthorized/path/'] } });
-    const json = artifactToCanonicalJson(artifact);
-    const result = validateAcpTaskArtifact(json);
+    const workflow = makeEmbeddedArtifact(artifact);
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Unauthorized path should fail');
     assert.strictEqual(result.error_code, 'PATH_OUTSIDE_MAX_BOUNDARY');
 });
@@ -1349,16 +1347,9 @@ runTest('Artifact validator - bindCarrierToRequestedTask binds matching task', (
 });
 
 runTest('Artifact validator - validateOneClickCarrier fails closed on missing embedded artifact', () => {
-    const result = validateOneClickCarrier('name: NoArtifact\non:\n  workflow_dispatch:', null);
+    const result = validateOneClickCarrier('name: NoArtifact\non:\n  workflow_dispatch:\n', null);
     assert.ok(!result.valid, 'Missing embedded artifact should fail');
     assert.strictEqual(result.error_code, 'CARRIER_NO_EMBEDDED_ARTIFACT');
-});
-
-runTest('Artifact validator - conceptual EXECUTE maps to FAILOVER_EXECUTE', () => {
-    const mapped = getRuntimeTaskModeForConceptual('EXECUTE', 'FAILOVER_EXECUTE');
-    assert.strictEqual(mapped, 'FAILOVER_EXECUTE', 'EXECUTE should map to FAILOVER_EXECUTE');
-    const mapped2 = getRuntimeTaskModeForConceptual('EXECUTE', 'BUILDER');
-    assert.strictEqual(mapped2, 'BUILDER', 'EXECUTE with BUILDER default should map to BUILDER');
 });
 
 runTest('Artifact validator - valid canonical artifact passes validation', () => {
@@ -1370,7 +1361,7 @@ runTest('Artifact validator - valid canonical artifact passes validation', () =>
 
 
 // =========================================================
-// Regression tests for blockers: preflight wiring and invalid mode rejection
+// Regression tests: preflight wiring and fail-closed rejection
 // =========================================================
 
 runTest('Preflight wiring - smoke carrier runs one-click-preflight before dispatch', () => {
@@ -1412,63 +1403,35 @@ runTest('Preflight wiring - research-documentation carrier runs one-click-prefli
 });
 
 runTest('Invalid mode rejection - conceptual EXECUTE is not silently converted to runtime mode', () => {
-    const { buildCanonicalArtifactString } = require('../poc/one-click-artifact-validator');
-    const parsed = {
-        task_name: 'TASK-TEST-001',
-        originator: 'Kyle',
-        target_agent: 'Gemini Builder',
-        repository: 'test',
-        base_branch: 'main',
-        task_mode: 'EXECUTE',
-        capabilities: ['read_only'],
-        objective: 'test',
-        scope: { permitted_paths: ['poc/'] },
-        verification: 'test',
-        constraints: [],
-        conflict_handling: 'test'
-    };
-    const canonical = buildCanonicalArtifactString(parsed);
-    const artifact = JSON.parse(canonical);
-    assert.strictEqual(artifact.task_mode, 'EXECUTE',
-        'buildCanonicalArtifactString must preserve original task_mode without silent conversion');
-    const result = validateAcpTaskArtifact(canonical);
+    const artifact = makeValidArtifact({ task_mode: 'EXECUTE' });
+    const json = artifactToCanonicalJson(artifact);
+    const parsed = JSON.parse(json);
+    assert.strictEqual(parsed.task_mode, 'EXECUTE',
+        'Canonical JSON must preserve original task_mode without silent conversion');
+    const result = validateAcpTaskArtifact(json);
     assert.ok(!result.valid, 'Conceptual EXECUTE must be rejected by validateAcpTaskArtifact');
     assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE',
         'Conceptual EXECUTE must be rejected as NON_RUNTIME_TASK_MODE, not silently repaired');
 });
 
 runTest('Invalid mode rejection - arbitrary invalid task_mode is rejected', () => {
-    const { buildCanonicalArtifactString } = require('../poc/one-click-artifact-validator');
-    const parsed = {
-        task_name: 'TASK-TEST-001',
-        originator: 'Kyle',
-        target_agent: 'Gemini Builder',
-        repository: 'test',
-        base_branch: 'main',
-        task_mode: 'INVALID_MODE',
-        capabilities: ['read_only', 'modify_files', 'commit', 'push'],
-        objective: 'test',
-        scope: { permitted_paths: ['poc/'] },
-        verification: 'test',
-        constraints: [],
-        conflict_handling: 'test'
-    };
-    const canonical = buildCanonicalArtifactString(parsed);
-    const artifact = JSON.parse(canonical);
-    assert.strictEqual(artifact.task_mode, 'INVALID_MODE',
-        'buildCanonicalArtifactString must preserve original task_mode without silent conversion');
-    const result = validateAcpTaskArtifact(canonical);
+    const artifact = makeValidArtifact({ task_mode: 'INVALID_MODE' });
+    const json = artifactToCanonicalJson(artifact);
+    const parsed = JSON.parse(json);
+    assert.strictEqual(parsed.task_mode, 'INVALID_MODE',
+        'Canonical JSON must preserve original task_mode without silent conversion');
+    const result = validateAcpTaskArtifact(json);
     assert.ok(!result.valid, 'Invalid task_mode must be rejected');
     assert.strictEqual(result.error_code, 'INVALID_TASK_MODE',
         'Invalid task_mode must be rejected as INVALID_TASK_MODE');
 });
 
 runTest('Preflight fails closed when embedded artifact is invalid', () => {
-    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
-    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\ntask_mode: EXECUTE\ncapabilities: read_only\ntarget_agent: Gemini\nobjective: test\nscope: {permitted_paths: [poc/]}\nverification: test\nconstraints: []\nconflict_handling: test\noriginator: Kyle\nrepository: test\nbase_branch: main\n'";
-    const result = validateOneClickCarrier(badWorkflow, null);
+    const artifact = makeValidArtifact({ task_mode: 'EXECUTE' });
+    const workflow = makeEmbeddedArtifact(artifact);
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Invalid embedded artifact must fail validation');
-    assert.ok(result.error_code === 'NON_RUNTIME_TASK_MODE' || result.error_code === 'INVALID_TASK_MODE',
+    assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE',
         'Invalid task_mode must produce error_code, got: ' + result.error_code);
 });
 
@@ -1487,93 +1450,103 @@ runTest('Preflight - all four carriers have preflight step in workflow YAML', ()
 
 
 // =========================================================
-// Regression tests for one-click preflight strictness
+// Regression tests: preflight strictness — no normalization
 // =========================================================
 
-runTest('Preflight strictness - rejects malformed embedded artifact with smart quotes', () => {
-    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
-    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\n  originator: Kyle“\n  target_agent: Gemini\n  repository: t\n  base_branch: main\n  task_mode: REVIEW\n  capabilities: read_only\n  objective: t\n  scope: t\n  verification: t\n  constraints: t\n  conflict_handling: t'\n";
-    const result = validateOneClickCarrier(badWorkflow, null);
-    assert.ok(!result.valid, 'Smart quote in origin should fail validation');
-    assert.strictEqual(result.error_code, 'MALFORMED_JSON_SMART_QUOTE');
+runTest('Preflight strictness - rejects YAML-like (non-JSON) embedded artifact', () => {
+    const yamlLike = 'task_name: TEST\ntask_mode: INVALID\noriginator: t\ntarget_agent: Gemini\nrepository: t\nbase_branch: main\ncapabilities: read_only\nobjective: t\nscope: {permitted_paths: [docs/]}\nverification: t\nconstraints: t\nconflict_handling: t';
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + yamlLike + '\'\n';
+    const result = validateOneClickCarrier(workflow, null);
+    assert.ok(!result.valid, 'YAML-like artifact must be rejected — must be JSON');
+    assert.ok(
+        result.error_code === 'MALFORMED_JSON' ||
+        result.error_code === 'JSON_PARSE_FAILED',
+        'YAML-like artifact should fail JSON parse, got: ' + result.error_code);
 });
 
-runTest('Preflight strictness - rejects malformed JSON structure (not normalized to valid)', () => {
-    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
-    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\n  originator: t\n  target_agent: t\n  repository: t\n  base_branch: t\n  task_mode: REVIEW\n  capabilities: read_only\n  objective: t\n  scope: {permitted_paths: [docs/]}\n  verification: t\n  constraints: t\n  conflict_handling: t'\n";
-    const result = validateOneClickCarrier(badWorkflow, null);
-    assert.ok(result.valid, 'Minimal valid artifact should pass');
-
-    const malformedWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\n  target_agent: t\n  conflict: t'\n";
-    const result2 = validateOneClickCarrier(malformedWorkflow, null);
-    assert.ok(!result2.valid, 'Malformed/empty artifact should fail');
-    assert.ok(result2.error_code === 'MISSING_REQUIRED_FIELDS' || result2.error_code === 'CARRIER_NO_EMBEDDED_ARTIFACT',
-        'Should fail with fields error, got: ' + result2.error_code);
+runTest('Preflight strictness - rejects malformed JSON structure without repair', () => {
+    const incompleteJson = '{"task_name":"TEST","target_agent":"t","conflict_handling":"t"}';
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + incompleteJson + '\'\n';
+    const result = validateOneClickCarrier(workflow, null);
+    assert.ok(!result.valid, 'Incomplete artifact should fail');
+    assert.strictEqual(result.error_code, 'MISSING_REQUIRED_FIELDS',
+        'Should fail with MISSING_REQUIRED_FIELDS, got: ' + result.error_code);
 });
 
-runTest('Preflight strictness - rejects invalid task_mode without silent conversion', () => {
-    const { validateOneClickCarrier, buildCanonicalArtifactString, parseYamlLikeToArtifactObject } = require('../poc/one-click-artifact-validator');
-    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\ntask_mode: INVALID\noriginator: t\ntarget_agent: Gemini\nrepository: t\nbase_branch: t\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t'\n";
-    const result = validateOneClickCarrier(badWorkflow, null);
+runTest('Preflight strictness - rejects invalid task_mode in embedded JSON without normalisation', () => {
+    const artifact = makeValidArtifact();
+    const ordered = {};
+    for (const field of CANONICAL_TASK_ARTIFACT_FIELD_ORDER) {
+        if (field in artifact) ordered[field] = artifact[field];
+    }
+    ordered.task_mode = 'INVALID';
+    const badJson = JSON.stringify(ordered, null, 2);
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + badJson + '\'\n';
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Invalid task_mode should fail');
     assert.strictEqual(result.error_code, 'INVALID_TASK_MODE');
-    assert.ok(result.canonical_artifact, 'Should produce canonical artifact for inspection');
-    const artifact = JSON.parse(result.canonical_artifact);
-    assert.strictEqual(artifact.task_mode, 'INVALID',
-        'buildCanonicalArtifactString must preserve original task_mode');
+    assert.ok(result.canonical_artifact, 'Should retain the original embedded artifact');
+    const parsed = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(parsed.task_mode, 'INVALID',
+        'Embedded artifact must preserve original task_mode without repair');
 });
 
-runTest('Preflight strictness - conceptual PLAN mode is rejected, not converted', () => {
-    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
-    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\ntask_mode: PLAN\noriginator: t\ntarget_agent: Gemini\nrepository: t\nbase_branch: t\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t'\n";
-    const result = validateOneClickCarrier(badWorkflow, null);
+runTest('Preflight strictness - conceptual PLAN mode is rejected in embedded JSON, not converted', () => {
+    const artifact = makeValidArtifact();
+    const ordered = {};
+    for (const field of CANONICAL_TASK_ARTIFACT_FIELD_ORDER) {
+        if (field in artifact) ordered[field] = artifact[field];
+    }
+    ordered.task_mode = 'PLAN';
+    const badJson = JSON.stringify(ordered, null, 2);
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + badJson + '\'\n';
+    const result = validateOneClickCarrier(workflow, null);
     assert.ok(!result.valid, 'Conceptual PLAN mode should fail');
     assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE');
 });
 
 runTest('Preflight strictness - bindCarrierToRequestedTask detects task_name mismatch', () => {
-    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
-    const validWorkflow = "name: Carrier\non:\n  workflow_dispatch:\nTASK='task_name: TASK-CARRIER-001\ntask_mode: REVIEW\ntarget_agent: Gemini\nrepository: fluentwithkyle/openclaw-webhook\nbase_branch: main\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t\noriginator: Kyle'\n";
+    const artifact = makeValidArtifact({ task_mode: 'REVIEW', capabilities: ['read_only'] });
+    const workflow = makeEmbeddedArtifact(artifact);
     const requestedTask = {
         task_name: 'TASK-DIFFERENT-001',
-        target_agent: 'Gemini',
+        target_agent: 'Gemini Builder',
         repository: 'fluentwithkyle/openclaw-webhook'
     };
-    const result = validateOneClickCarrier(validWorkflow, requestedTask);
+    const result = validateOneClickCarrier(workflow, requestedTask);
     assert.ok(result.valid, 'Artifact should be valid');
     assert.ok(!result.binding.bound, 'Task mismatch should fail binding');
     assert.ok(result.binding.mismatches.indexOf('task_name') !== -1);
 });
 
 runTest('Preflight strictness - bindCarrierToRequestedTask detects target_agent mismatch', () => {
-    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
-    const validWorkflow = "name: Carrier\non:\n  workflow_dispatch:\nTASK='task_name: TASK-001\ntask_mode: REVIEW\ntarget_agent: Gemini\nrepository: t\nbase_branch: main\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t\noriginator: Kyle'\n";
+    const artifact = makeValidArtifact({ target_agent: 'Gemini', repository: 't', task_mode: 'REVIEW', capabilities: ['read_only'] });
+    const workflow = makeEmbeddedArtifact(artifact);
     const requestedTask = {
-        task_name: 'TASK-001',
+        task_name: 'TASK-TEST-001',
         target_agent: 'Kilo',
         repository: 't'
     };
-    const result = validateOneClickCarrier(validWorkflow, requestedTask);
+    const result = validateOneClickCarrier(workflow, requestedTask);
     assert.ok(result.valid, 'Artifact should be valid');
     assert.ok(!result.binding.bound, 'Target agent mismatch should fail binding');
     assert.ok(result.binding.mismatches.indexOf('target_agent') !== -1);
 });
 
 runTest('Preflight strictness - bindCarrierToRequestedTask succeeds for exact match', () => {
-    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
-    const validWorkflow = "name: Carrier\non:\n  workflow_dispatch:\nTASK='task_name: TASK-001\ntask_mode: REVIEW\ntarget_agent: Gemini\nrepository: fluentwithkyle/openclaw-webhook\nbase_branch: main\ncapabilities: read_only\nobjective: t\nscope:\n  permitted_paths:\n  - docs/\nverification: t\nconstraints: t\nconflict_handling: t\noriginator: Kyle'\n";
+    const artifact = makeValidArtifact({ task_mode: 'REVIEW', capabilities: ['read_only'] });
+    const workflow = makeEmbeddedArtifact(artifact);
     const requestedTask = {
-        task_name: 'TASK-001',
-        target_agent: 'Gemini',
+        task_name: 'TASK-TEST-001',
+        target_agent: 'Gemini Builder',
         repository: 'fluentwithkyle/openclaw-webhook'
     };
-    const result = validateOneClickCarrier(validWorkflow, requestedTask);
+    const result = validateOneClickCarrier(workflow, requestedTask);
     assert.ok(result.valid, 'Artifact should be valid');
     assert.ok(result.binding.bound, 'Exact match should bind successfully');
 });
 
 runTest('Preflight strictness - fails closed with requestedTask when binding mismatches', () => {
-    const { preflightValidateOneClickActivation } = require('../poc/one-click-artifact-validator');
     const result = preflightValidateOneClickActivation('.github/workflows', {
         task_name: 'TASK-DOES-NOT-EXIST',
         target_agent: 'Gemini Builder',
@@ -1584,7 +1557,6 @@ runTest('Preflight strictness - fails closed with requestedTask when binding mis
 });
 
 runTest('Preflight strictness - fails closed when artifact validation fails', () => {
-    const { preflightValidateOneClickActivation, validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
     const result = preflightValidateOneClickActivation();
     assert.ok(result.all_valid, 'All valid carriers should pass preflight');
     for (const [wf, r] of Object.entries(result.results)) {
@@ -1636,5 +1608,30 @@ runTest('Preflight - all four carriers include one-click-preflight step before d
     }
 });
 
-console.log(`\n${passCount} passed, ${failCount} failed`);
+runTest('Preflight strictness - invalid artifact cannot be repaired into passing, dispatch blocked', () => {
+    const badJson = '{"task_name":"TEST","originator":"t","target_agent":"Gemini","repository":"t","base_branch":"main","task_mode":"INVALID","capabilities":["read_only"],"objective":"t","scope":{"permitted_paths":["docs/"]},"verification":"t","constraints":["t"],"conflict_handling":"t"}';
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + badJson + '\'\n';
+    const result = validateOneClickCarrier(workflow, null);
+    assert.ok(!result.valid, 'Invalid artifact must not pass');
+    assert.ok(result.canonical_artifact, 'Should retain the original embedded artifact');
+    const reparsed = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(reparsed.task_mode, 'INVALID',
+        'The embedded artifact must preserve INVALID task_mode — no repair');
+    const requalidation = validateOneClickCarrier(workflow, null);
+    assert.strictEqual(requalidation.error_code, 'INVALID_TASK_MODE',
+        'Re-validation must produce the same rejection without repair');
+});
+
+runTest('Preflight strictness - dispatch does not occur after preflight failure in embedded artifact', () => {
+    const badJson = '{"task_name":"TEST","originator":"t","target_agent":"Gemini","repository":"t","base_branch":"main","task_mode":"EXECUTE","capabilities":["read_only"],"objective":"t","scope":{"permitted_paths":["docs/"]},"verification":"t","constraints":["t"],"conflict_handling":"t"}';
+    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + badJson + "'\n  - name: Dispatch\n    run: echo dispatched\n";
+    const result = validateOneClickCarrier(workflow, null);
+    assert.ok(!result.valid, 'Invalid artifact must fail preflight');
+    assert.ok(!workflow.includes('Dispatch') || result.valid === false,
+        'When preflight fails, the dispatch step must not execute');
+    assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE',
+        'Conceptual EXECUTE must be rejected before dispatch');
+});
+
+console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);

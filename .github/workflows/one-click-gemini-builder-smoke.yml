@@ -22,25 +22,7 @@ jobs:
           REQUEST_ID="builder-one-click-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           BUILDER_EXEC_ID="builder-one-click-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
 
-          TASK='task_name: TASK-GEMINI-BUILDER-ONE-CLICK-SMOKE-001
-          originator: Kyle — Director
-          target_agent: Gemini Builder
-          repository: fluentwithkyle/openclaw-webhook
-          base_branch: main
-          task_mode: BUILDER
-          capabilities:
-          - read_only
-          - modify_files
-          - run_tests
-          - commit
-          - push
-          objective: Inspect the current repository HEAD commit SHA and report it as a minimal Gemini Builder execution smoke test.
-          scope:
-            permitted_paths:
-            - poc/
-          verification: Return the observed HEAD SHA and confirm execution through the Gemini Builder one-click workflow.
-          constraints: No file modifications, no commits, no pushes, no workflow changes.
-          conflict_handling: Preserve the server-derived activation authority and stop if the activation context is invalid or blocked.'
+          TASK='{"task_name":"TASK-GEMINI-BUILDER-ONE-CLICK-SMOKE-001","originator":"Kyle — Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Inspect the current repository HEAD commit SHA and report it as a minimal Gemini Builder execution smoke test.","scope":{"permitted_paths":["poc/"]},"verification":"Return the observed HEAD SHA and confirm execution through the Gemini Builder one-click workflow.","constraints":["No file modifications, no commits, no pushes, no workflow changes"],"conflict_handling":"Preserve the server-derived activation authority and stop if the activation context is invalid or blocked."}'
 
           {
             echo 'request_id<<EOF'

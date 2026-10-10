@@ -27,77 +27,7 @@ jobs:
           TASK_FILE="gemini-research-task.md"
 
           cat > "$TASK_FILE" <<'TASK_EOF'
-          @kyle
-
-          task_name:
-          TASK-GEMINI-BUILDER-ONE-CLICK-ACTIVATION-STATUS-RESEARCH-001
-
-          originator:
-          Kyle — Director
-
-          target_agent:
-          Gemini
-
-          repository:
-          fluentwithkyle/openclaw-webhook
-
-          base_branch:
-          main
-
-          task_mode:
-          RESEARCH_DOCUMENT
-
-          capabilities:
-          - read_only
-          - modify_files
-          - commit
-          - push
-
-          objective:
-          Independently determine the current VERIFIED status of Gemini Builder one-click activation in the repository and GitHub Actions, using the existing Gemini Researcher one-click activation path. Do not redesign or rebuild the one-click architecture. Inspect the actual current implementation, workflows, tests, durable records, and relevant recent execution evidence; identify exactly what is working, what is not, and the single remaining blocker or next action, if any.
-
-          scope:
-            permitted_paths:
-            - docs/ai/research/
-            - docs/ai/RESEARCH_INDEX.md
-            - docs/ai/TASK_LOG.md
-            - docs/ai/STATE.md
-            - docs/ai/CONTROL_CENTER.md
-          description: Inspect the existing one-click workflow contract, Gemini Builder activation workflow/carrier, canonical main.yml carrier, activation policy and ingress, ACP schema, TaskRegistry execution-claim/recovery path, Builder callback/evidence path, relevant tests, durable research records, and recent GitHub Actions execution evidence. Reconcile repository evidence against the existing project claims. Focus specifically on whether a Director can use a zero-input one-click workflow to activate Gemini Builder and have the Builder execute the intended task through the canonical external-activation architecture. Research and determine whether Builder one-click activation exists, has zero-input workflow_dispatch, has exact machine-verifiable embedded task/carrier binding, dispatches the canonical activation carrier, applies activation policy/ACP validation/server-derived authority/TaskRegistry execution claims, survives the Render restart/callback-correlation boundary, and whether recent GitHub Actions runs provide current evidence of end-to-end execution.
-
-          verification:
-          1. Inspect the actual current repository implementation and current GitHub Actions workflows.
-          2. Inspect the exact Builder one-click carrier and canonical main.yml dispatch path.
-          3. Inspect activation-policy.js, activation-ingress.js, ACP schema, and TaskRegistry execution claim/recovery code relevant to Builder activation.
-          4. Inspect relevant Builder callback/evidence workflows and tests.
-          5. Inspect recent GitHub Actions execution evidence where available.
-          6. Inspect relevant durable research records and reconcile claims with current repository evidence.
-          7. Produce docs/ai/research/research-TASK-GEMINI-BUILDER-ONE-CLICK-ACTIVATION-STATUS-RESEARCH-001.md.
-          8. Update RESEARCH_INDEX.md and TASK_LOG.md as required by RESEARCH_DOCUMENT.
-          9. Reconcile STATE.md and CONTROL_CENTER.md only if durable project-state understanding materially changes.
-          10. Clearly separate VERIFIED, INFERRED, and UNKNOWN findings.
-          11. State the exact remaining blocker and minimum next action if the verdict is not VERIFIED.
-          12. Run repository-authorized research/documentation validation.
-          13. Review the final diff for scope compliance.
-          14. Commit and push the research/documentation result to main and report the commit SHA.
-
-          constraints:
-          - Research/documentation only.
-          - Do not implement or redesign Gemini Builder one-click activation.
-          - Do not modify .github/workflows/*.
-          - Do not modify runtime source code or poc/*.
-          - Do not modify secrets, credentials, environment configuration, dependencies, or GitHub settings.
-          - Do not create a second control plane, executor, state store, or authority path.
-          - Preserve the existing one-click workflow contract and canonical external activation architecture.
-          - No credentials or secret material may be requested, exposed, or persisted.
-          - If evidence is insufficient, mark UNKNOWN.
-          - persistence_expectation: same_execution
-          - deliverable_commit: true
-          - deliverable_push: true
-          - verification_requires_commit_sha: true
-
-          conflict_handling:
-          Repository instructions, ARCHITECTURE.md, GEMINI.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md take precedence. If current implementation contradicts an assumption, use repository evidence and document the discrepancy.
+          {"task_name":"TASK-GEMINI-BUILDER-ONE-CLICK-ACTIVATION-STATUS-RESEARCH-001","originator":"Kyle — Director","target_agent":"Gemini","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"RESEARCH_DOCUMENT","capabilities":["read_only","modify_files","commit","push"],"objective":"Independently determine the current VERIFIED status of Gemini Builder one-click activation in the repository and GitHub Actions, using the existing Gemini Researcher one-click activation path. Do not redesign or rebuild the one-click architecture. Inspect the actual current implementation, workflows, tests, durable records, and relevant recent execution evidence; identify exactly what is working, what is not, and the single remaining blocker or next action, if any.","scope":{"permitted_paths":["docs/ai/research/","docs/ai/RESEARCH_INDEX.md","docs/ai/TASK_LOG.md","docs/ai/STATE.md","docs/ai/CONTROL_CENTER.md"]},"verification":"1. Inspect the actual current repository implementation and current GitHub Actions workflows. 2. Inspect the exact Builder one-click carrier and canonical main.yml dispatch path. 3. Inspect activation-policy.js, activation-ingress.js, ACP schema, and TaskRegistry execution claim/recovery code relevant to Builder activation. 4. Inspect relevant Builder callback/evidence workflows and tests. 5. Inspect recent GitHub Actions execution evidence where available. 6. Inspect relevant durable research records and reconcile claims with current repository evidence. 7. Produce docs/ai/research/research-TASK-GEMINI-BUILDER-ONE-CLICK-ACTIVATION-STATUS-RESEARCH-001.md. 8. Update RESEARCH_INDEX.md and TASK_LOG.md as required by RESEARCH_DOCUMENT. 9. Reconcile STATE.md and CONTROL_CENTER.md only if durable project-state understanding materially changes. 10. Clearly separate VERIFIED, INFERRED, and UNKNOWN findings. 11. State the exact remaining blocker and minimum next action if the verdict is not VERIFIED. 12. Run repository-authorized research/documentation validation. 13. Review the final diff for scope compliance. 14. Commit and push the research/documentation result to main and report the commit SHA.","constraints":["Research/documentation only.","Do not implement or redesign Gemini Builder one-click activation.","Do not modify .github/workflows/*.","Do not modify runtime source code or poc/*.","Do not modify secrets, credentials, environment configuration, dependencies, or GitHub settings.","Do not create a second control plane, executor, state store, or authority path.","Preserve the existing one-click workflow contract and canonical external activation architecture.","No credentials or secret material may be requested, exposed, or persisted.","If evidence is insufficient, mark UNKNOWN.","persistence_expectation: same_execution","deliverable_commit: true","deliverable_push: true","verification_requires_commit_sha: true"],"conflict_handling":"Repository instructions, ARCHITECTURE.md, GEMINI.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md take precedence. If current implementation contradicts an assumption, use repository evidence and document the discrepancy."}
           TASK_EOF
 
           echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
