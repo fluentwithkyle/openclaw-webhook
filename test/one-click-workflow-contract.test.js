@@ -1861,5 +1861,105 @@ runTest('Kilo one-click - kilo-workflow-dispatch CLI command is wired in validat
         'validate-external-activation.js must set targetAgent to Kilo for kilo-workflow-dispatch');
 });
 
+// =========================================================
+// Kilo one-click workflow - actual execution handoff tests
+// =========================================================
+
+runTest('Kilo one-click - workflow invokes actual kilo CLI execution (not just context lookup)', () => {
+    assert.ok(/kilo run/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must invoke kilo run CLI to execute the task');
+    assert.ok(/kilo run --pure/.test(oneClickKiloWfRaw),
+        'Workflow must invoke kilo CLI with --pure flag, not just print context');
+});
+
+runTest('Kilo one-click - Run Kilo step is gated on activation validation success', () => {
+    assert.ok(/Run Kilo execution/.test(oneClickKiloWfRaw),
+        'Must have Run Kilo execution step');
+    assert.ok(/if:.*steps\.validate_activation\.outputs\.activation_validated.*==.*true/.test(oneClickKiloWfRaw),
+        'Run Kilo step must be gated on activation validation');
+});
+
+runTest('Kilo one-click - execution failures fail the workflow (fail-closed)', () => {
+    const raw = oneClickKiloWfRaw;
+    const kiloRunIdx = raw.indexOf('Run Kilo execution');
+    const kiloRunSection = raw.slice(kiloRunIdx, kiloRunIdx + 3000);
+    assert.ok(/KILO_EXIT_CODE/.test(kiloRunSection),
+        'Run Kilo step must capture kilo exit code');
+    assert.ok(/kilo_outcome=failure/.test(kiloRunSection),
+        'Run Kilo step must set failure outcome on non-zero exit');
+    assert.ok(/exit 1/.test(kiloRunSection),
+        'Run Kilo step must exit 1 on execution failure');
+});
+
+runTest('Kilo one-click - commit/push requires KILO_API_KEY (fail-closed on missing auth)', () => {
+    const raw = oneClickKiloWfRaw;
+    assert.ok(/KILO_API_KEY/.test(raw),
+        'Workflow must reference KILO_API_KEY for Kilo execution');
+    assert.ok(/KILO_API_KEY is not configured/.test(raw),
+        'Workflow must fail closed when KILO_API_KEY is missing');
+});
+
+runTest('Kilo one-click - commit/push step is gated on kilo_run.success outcome', () => {
+    const raw = oneClickKiloWfRaw;
+    const commitIdx = raw.indexOf('Commit and push Kilo changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 500);
+    assert.ok(/if: always\(\).*steps\.kilo_run\.outcome == 'success'/.test(commitSection),
+        'Commit/push step must be gated on kilo_run outcome success');
+});
+
+runTest('Kilo one-click - commit/push enforces server-derived permitted paths (scope enforcement)', () => {
+    const raw = oneClickKiloWfRaw;
+    const commitIdx = raw.indexOf('Commit and push Kilo changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 4000);
+    assert.ok(/OUT_OF_SCOPE/.test(commitSection),
+        'Commit step must check for out-of-scope files');
+    assert.ok(/::error::Out-of-scope files/.test(commitSection),
+        'Commit step must fail on out-of-scope files');
+    assert.ok(/PERMITTED_PATHS/.test(commitSection),
+        'Commit step must use server-derived PERMITTED_PATHS');
+});
+
+runTest('Kilo one-click - execution result is captured to artifact', () => {
+    const raw = oneClickKiloWfRaw;
+    assert.ok(/kilo-execution-result\.json/.test(raw),
+        'Workflow must capture kilo execution result to artifact');
+    assert.ok(/kilo-output\.txt/.test(raw),
+        'Workflow must capture kilo output to artifact');
+    assert.ok(/actions\/upload-artifact@v4/.test(raw),
+        'Workflow must upload artifacts');
+});
+
+runTest('Kilo one-click - callback payload includes kilo execution outcome and changed_files', () => {
+    const raw = oneClickKiloWfRaw;
+    const callbackIdx = raw.indexOf('Prepare Kilo ACP report payload');
+    const callbackSection = raw.slice(callbackIdx);
+    assert.ok(/KILO_OUTCOME/.test(callbackSection),
+        'Callback payload must include kilo execution outcome');
+    assert.ok(/kilo_exit_code/.test(callbackSection),
+        'Callback payload must include kilo exit code');
+    assert.ok(/CHANGED_FILES_JSON/.test(callbackSection),
+        'Callback payload must include changed files from actual execution');
+});
+
+runTest('Kilo one-click - kilo run uses --pure flag for clean execution environment', () => {
+    const raw = oneClickKiloWfRaw;
+    assert.ok(/kilo run --pure/.test(raw),
+        'kilo run must use --pure flag for clean execution environment');
+});
+
+runTest('Kilo one-click - workflow passes server-derived descriptor as env vars to kilo run', () => {
+    const raw = oneClickKiloWfRaw;
+    assert.ok(/ORCHESTRATION_REQUEST_ID/.test(raw),
+        'Workflow must pass request_id to kilo execution context');
+    assert.ok(/ORCHESTRATION_TASK_MODE/.test(raw),
+        'Workflow must pass task_mode to kilo execution context');
+    assert.ok(/ORCHESTRATION_PERMITTED_PATHS/.test(raw),
+        'Workflow must pass permitted_paths to kilo execution context');
+    assert.ok(/ORCHESTRATION_EXECUTION_CLAIM_ID/.test(raw),
+        'Workflow must pass execution_claim_id to kilo execution context');
+    assert.ok(/ORCHESTRATION_CAPABILITIES/.test(raw),
+        'Workflow must pass capabilities to kilo execution context');
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);

@@ -150,12 +150,61 @@ jobs:
           git config user.email "kilo@users.noreply.github.com"
           git config --global --add safe.directory '*'
 
-      - name: Run Kilo
+      - name: Prepare Kilo execution prompt
+        id: kilo_prompt
+        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > kilo-prompt.md << 'PROMPT_EOF'
+            You are Kilo, the Fluent with Kyle OpenClaw project's autonomous execution agent.
+
+            You have been dispatched via a one-click Kilo FAILOVER_EXECUTE workflow that routes through
+            the canonical external activation ingress. Your authority is **server-derived** from the
+            canonical activation ingress — you MUST NOT trust any client-supplied capabilities, scopes,
+            or task definitions.
+
+            ## SERVER-DERIVED ORCHESTRATION CONTEXT
+
+            The following values are injected by the canonical ingress and are your source of truth:
+
+            - request_id: ${{ steps.orchestration_context.outputs.request_id }}
+            - repository: ${{ steps.orchestration_context.outputs.repository }}
+            - base_branch: ${{ steps.orchestration_context.outputs.base_branch }}
+            - task_mode: ${{ steps.orchestration_context.outputs.task_mode }}
+            - capabilities: ${{ steps.orchestration_context.outputs.capabilities }}
+            - permitted_paths: ${{ steps.orchestration_context.outputs.permitted_paths }}
+            - execution_claim_id: ${{ steps.orchestration_context.outputs.execution_claim_id }}
+            - verification: ${{ steps.orchestration_context.outputs.verification }}
+
+            ## EXECUTION DIRECTIVES
+
+            1. Implement the task **exactly** as specified. Do not invent architecture or alternate control planes.
+            2. Only modify files within the server-derived permitted_paths listed above.
+            3. Run the relevant tests (`npm test` or targeted test files) and ensure they pass.
+            4. Run `git diff --check` and ensure no whitespace errors.
+            5. Commit all changes with a message referencing request_id.
+            6. Push to base_branch.
+            7. If execution fails at any point, fail closed — do NOT create a false-success commit.
+
+            ## TASK START
+            ${{ steps.orchestration_context.outputs.task }}
+            --- TASK END ---
+
+            ## VERIFICATION REQUIREMENTS
+            ${{ steps.orchestration_context.outputs.verification }}
+          PROMPT_EOF
+
+          echo "prompt_file=kilo-prompt.md" >> "$GITHUB_OUTPUT"
+
+      - name: Run Kilo execution
         id: kilo_run
         if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KILO_API_KEY: ${{ secrets.KILO_API_KEY }}
           ORCHESTRATION_REQUEST_ID: ${{ steps.orchestration_context.outputs.request_id }}
           ORCHESTRATION_TASK: ${{ steps.orchestration_context.outputs.task }}
           ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context.outputs.repository }}
@@ -169,13 +218,59 @@ jobs:
           ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
         run: |
           set -euo pipefail
+
+          if [ -z "$KILO_API_KEY" ]; then
+            echo "::error::KILO_API_KEY is not configured; cannot invoke Kilo execution"
+            exit 1
+          fi
+
           node -e "
             const taskRegistry = require('./poc/task-registry');
             const entry = taskRegistry.getTask(process.env.ORCHESTRATION_REQUEST_ID);
-            if (!entry) { console.error('Task not found in registry'); process.exit(1); }
-            console.log('Kilo execution context initialized for request_id:', process.env.ORCHESTRATION_REQUEST_ID);
+            if (!entry) {
+              console.error('Task not found in TaskRegistry for request_id:', process.env.ORCHESTRATION_REQUEST_ID);
+              process.exit(1);
+            }
+            console.log('Kilo execution authenticated via canonical activation ingress.');
             console.log('Task mode:', process.env.ORCHESTRATION_TASK_MODE);
             console.log('Permitted paths:', process.env.ORCHESTRATION_PERMITTED_PATHS);
+            console.log('Execution claim ID:', process.env.ORCHESTRATION_EXECUTION_CLAIM_ID);
+          "
+
+          KILO_OUTPUT_FILE="kilo-output.txt"
+
+          set +e
+          KILO_EXIT_CODE=0
+          kilo run --pure "$(cat kilo-prompt.md)" 2>&1 | tee "$KILO_OUTPUT_FILE"
+          KILO_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$KILO_EXIT_CODE" -ne 0 ]; then
+            echo "::error::Kilo execution failed with exit code $KILO_EXIT_CODE"
+            echo "kilo_outcome=failure" >> "$GITHUB_OUTPUT"
+            echo "kilo_exit_code=$KILO_EXIT_CODE" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "::notice::Kilo execution completed successfully"
+          echo "kilo_outcome=success" >> "$GITHUB_OUTPUT"
+          echo "kilo_exit_code=0" >> "$GITHUB_OUTPUT"
+
+          node -e "
+            const fs = require('fs');
+            const output = fs.readFileSync('kilo-output.txt', 'utf8');
+            fs.writeFileSync('kilo-execution-result.json', JSON.stringify({
+              request_id: process.env.ORCHESTRATION_REQUEST_ID,
+              agent: 'Kilo',
+              task_mode: process.env.ORCHESTRATION_TASK_MODE,
+              status: 'success',
+              execution_metadata: {
+                kilo_execution_id: process.env.ORCHESTRATION_KILO_EXECUTION_ID,
+                execution_claim_id: process.env.ORCHESTRATION_EXECUTION_CLAIM_ID,
+                carrier_identity: process.env.ORCHESTRATION_CARRIER_IDENTITY
+              },
+              raw_output: output
+            }, null, 2));
           "
 
       - name: Commit and push Kilo changes
@@ -287,7 +382,10 @@ jobs:
 
           KILO_EXEC_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
           TASK_MODE="${{ steps.orchestration_context.outputs.task_mode || 'FAILOVER_EXECUTE' }}"
+          TASK_VERIFICATION="${{ steps.orchestration_context.outputs.verification }}"
           COMMIT_SHA="${{ steps.commit_push.outputs.commit_sha || 'null' }}"
+          HAS_CHANGES="${{ steps.commit_push.outputs.has_changes || 'false' }}"
+          PUSH_STATUS="${{ steps.commit_push.outputs.push_status || 'false' }}"
           CHANGE_SHA="${GITHUB_SHA}"
 
           if [ "$COMMIT_SHA" = "null" ] || [ -z "$COMMIT_SHA" ]; then
@@ -296,11 +394,15 @@ jobs:
             COMMIT_VAL=null
           else
             RECON_COMMIT_SHA="$COMMIT_SHA"
-            PUSH_VAL=true
+            PUSH_VAL=${PUSH_STATUS}
             COMMIT_VAL="$COMMIT_SHA"
           fi
 
-          CHANGED_FILES_JSON="[]"
+          if [ "$HAS_CHANGES" = "true" ] && [ "$COMMIT_SHA" != "null" ] && [ -n "$COMMIT_SHA" ]; then
+            CHANGED_FILES_JSON=$(git diff --name-only "${BASE_BRANCH}...${COMMIT_SHA}" 2>/dev/null | jq -R . | jq -s . || echo '[]')
+          else
+            CHANGED_FILES_JSON="[]"
+          fi
 
           KILO_OUTCOME="${{ steps.kilo_run.outcome }}"
           COMMIT_PUSH_STATUS="${{ steps.commit_push.outcome || 'skipped' }}"
@@ -334,6 +436,9 @@ jobs:
             --arg recon_commit_sha "$RECON_COMMIT_SHA" \
             --arg execution_claim_id "$EXECUTION_CLAIM_ID" \
             --arg carrier_identity "$CARRIER_IDENTITY" \
+            --arg kilo_execution_id "$KILO_EXEC_ID" \
+            --arg kilo_outcome "$KILO_OUTCOME" \
+            --arg kilo_exit_code "${{ steps.kilo_run.outputs.kilo_exit_code || '0' }}" \
             '{
               request_id: (if $request_id == "" then null else $request_id end),
               agent: $agent,
@@ -342,9 +447,9 @@ jobs:
               repository: $repository,
               base_branch: $base_branch,
               current_head_sha: $current_head_sha,
-              changed_files: [],
-              verification: ["Kilo FAILOVER_EXECUTE one-click workflow completed"],
-              result: { execution_metadata: { kilo_execution_id: null, run_id: null, carrier_identity: (if $carrier_identity == "" then null else $carrier_identity end), execution_claim_id: (if $execution_claim_id == "" then null else $execution_claim_id end) } },
+              changed_files: $recon_changed_files,
+              verification: ["Kilo FAILOVER_EXECUTE one-click workflow completed", "execution_outcome: " + $kilo_outcome, "execution_exit_code: " + $kilo_exit_code],
+              result: { execution_metadata: { kilo_execution_id: (if $kilo_execution_id == "" then null else $kilo_execution_id end), run_id: null, carrier_identity: (if $carrier_identity == "" then null else $carrier_identity end), execution_claim_id: (if $execution_claim_id == "" then null else $execution_claim_id end) } },
               commit: (if $commit == "null" then null else $commit end),
               push: $push,
               blockers: $blockers,
@@ -398,6 +503,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kilo-acp-report
-          path: kilo-acp-report.json
+          path: |
+            kilo-acp-report.json
+            kilo-execution-result.json
+            kilo-output.txt
           retention-days: 7
           if-no-files-found: error
