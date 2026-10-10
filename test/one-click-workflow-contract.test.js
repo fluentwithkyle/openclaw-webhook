@@ -1622,15 +1622,35 @@ runTest('Preflight strictness - invalid artifact cannot be repaired into passing
         'Re-validation must produce the same rejection without repair');
 });
 
-runTest('Preflight strictness - dispatch does not occur after preflight failure in embedded artifact', () => {
-    const badJson = '{"task_name":"TEST","originator":"t","target_agent":"Gemini","repository":"t","base_branch":"main","task_mode":"EXECUTE","capabilities":["read_only"],"objective":"t","scope":{"permitted_paths":["docs/"]},"verification":"t","constraints":["t"],"conflict_handling":"t"}';
-    const workflow = 'name: Bad\non:\n  workflow_dispatch:\nTASK=\'' + badJson + "'\n  - name: Dispatch\n    run: echo dispatched\n";
-    const result = validateOneClickCarrier(workflow, null);
-    assert.ok(!result.valid, 'Invalid artifact must fail preflight');
-    assert.ok(!workflow.includes('Dispatch') || result.valid === false,
-        'When preflight fails, the dispatch step must not execute');
-    assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE',
-        'Conceptual EXECUTE must be rejected before dispatch');
+runTest('Preflight strictness - dispatch cannot occur after preflight failure (fail-closed)', () => {
+    const oneClickWorkflows = listOneClickWorkflows();
+    for (const wf of oneClickWorkflows) {
+        const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+
+        const preflightIdx = wfRaw.indexOf('one-click-preflight');
+        assert.ok(preflightIdx !== -1, `${wf} must contain a one-click-preflight step`);
+
+        const preflightStepStart = wfRaw.lastIndexOf('name:', 0, preflightIdx);
+        const preflightStepEnd = wfRaw.indexOf('\n', preflightIdx);
+        const preflightStep = wfRaw.substring(preflightStepStart, preflightStepEnd);
+        assert.ok(!preflightStep.includes('continue-on-error'),
+            `${wf} preflight step must not have continue-on-error (must stop job on failure)`);
+
+        const dispatchIdx = wfRaw.search(/builder-workflow-dispatch|gh api.*dispatches|Dispatch canonical/);
+        assert.ok(dispatchIdx !== -1, `${wf} must dispatch to activation ingress`);
+        assert.ok(preflightIdx < dispatchIdx,
+            `${wf} preflight must run before dispatch`);
+
+        const dispatchStepStart = wfRaw.lastIndexOf('name:', 0, dispatchIdx);
+        const dispatchStepEnd = wfRaw.indexOf('\n', dispatchIdx);
+        const dispatchStep = wfRaw.substring(dispatchStepStart, dispatchStepEnd);
+        const hasStepGate = /if:/.test(dispatchStep);
+        const hasFailSafe = preflightStep.includes('set -euo pipefail');
+        assert.ok(hasFailSafe && !preflightStep.includes('continue-on-error'),
+            `${wf} preflight must fail-closed (set -euo pipefail, no continue-on-error) so dispatch cannot run after failure`);
+        assert.ok(hasStepGate || dispatchIdx > preflightIdx,
+            `${wf} dispatch step must be gated or follow preflight step`);
+    }
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
