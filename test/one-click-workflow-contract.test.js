@@ -1368,5 +1368,122 @@ runTest('Artifact validator - valid canonical artifact passes validation', () =>
     assert.ok(result.valid, 'Valid canonical artifact should pass: ' + (result.error || ''));
 });
 
+
+// =========================================================
+// Regression tests for blockers: preflight wiring and invalid mode rejection
+// =========================================================
+
+runTest('Preflight wiring - smoke carrier runs one-click-preflight before dispatch', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    assert.ok(/one-click-preflight/.test(raw), 'Smoke carrier must call one-click-preflight');
+    const preflightIdx = raw.indexOf('one-click-preflight');
+    const dispatchIdx = raw.indexOf('Validate external activation through canonical ingress');
+    assert.ok(preflightIdx !== -1 && dispatchIdx !== -1, 'Both preflight and dispatch steps must exist');
+    assert.ok(preflightIdx < dispatchIdx, 'Preflight must run before activation dispatch');
+});
+
+runTest('Preflight wiring - callback-correlation carrier runs one-click-preflight before dispatch', () => {
+    const wfPath = path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-callback-correlation.yml');
+    const raw = fs.readFileSync(wfPath, 'utf8');
+    assert.ok(/one-click-preflight/.test(raw), 'Callback-correlation carrier must call one-click-preflight');
+    const preflightIdx = raw.indexOf('one-click-preflight');
+    const dispatchIdx = raw.indexOf('Validate external activation through canonical ingress');
+    assert.ok(preflightIdx !== -1 && dispatchIdx !== -1, 'Both preflight and dispatch steps must exist');
+    assert.ok(preflightIdx < dispatchIdx, 'Preflight must run before activation dispatch');
+});
+
+runTest('Preflight wiring - verify-reconcile carrier runs one-click-preflight before dispatch', () => {
+    const raw = fs.readFileSync(ONE_CLICK_VERIFY_WF, 'utf8');
+    assert.ok(/one-click-preflight/.test(raw), 'Verify-reconcile carrier must call one-click-preflight');
+    const preflightIdx = raw.indexOf('one-click-preflight');
+    const dispatchIdx = raw.indexOf('Dispatch canonical Gemini');
+    assert.ok(preflightIdx !== -1 && dispatchIdx !== -1, 'Both preflight and dispatch steps must exist');
+    assert.ok(preflightIdx < dispatchIdx, 'Preflight must run before dispatch to main.yml');
+});
+
+runTest('Preflight wiring - research-documentation carrier runs one-click-preflight before dispatch', () => {
+    const wfPath = path.join(ONE_CLICK_DIR, 'one-click-gemini-research-documentation.yml');
+    const raw = fs.readFileSync(wfPath, 'utf8');
+    assert.ok(/one-click-preflight/.test(raw), 'Research-documentation carrier must call one-click-preflight');
+    const preflightIdx = raw.indexOf('one-click-preflight');
+    const dispatchIdx = raw.indexOf('Dispatch canonical Gemini research');
+    assert.ok(preflightIdx !== -1 && dispatchIdx !== -1, 'Both preflight and dispatch steps must exist');
+    assert.ok(preflightIdx < dispatchIdx, 'Preflight must run before dispatch to main.yml');
+});
+
+runTest('Invalid mode rejection - conceptual EXECUTE is not silently converted to runtime mode', () => {
+    const { buildCanonicalArtifactString } = require('../poc/one-click-artifact-validator');
+    const parsed = {
+        task_name: 'TASK-TEST-001',
+        originator: 'Kyle',
+        target_agent: 'Gemini Builder',
+        repository: 'test',
+        base_branch: 'main',
+        task_mode: 'EXECUTE',
+        capabilities: ['read_only'],
+        objective: 'test',
+        scope: { permitted_paths: ['poc/'] },
+        verification: 'test',
+        constraints: [],
+        conflict_handling: 'test'
+    };
+    const canonical = buildCanonicalArtifactString(parsed);
+    const artifact = JSON.parse(canonical);
+    assert.strictEqual(artifact.task_mode, 'EXECUTE',
+        'buildCanonicalArtifactString must preserve original task_mode without silent conversion');
+    const result = validateAcpTaskArtifact(canonical);
+    assert.ok(!result.valid, 'Conceptual EXECUTE must be rejected by validateAcpTaskArtifact');
+    assert.strictEqual(result.error_code, 'NON_RUNTIME_TASK_MODE',
+        'Conceptual EXECUTE must be rejected as NON_RUNTIME_TASK_MODE, not silently repaired');
+});
+
+runTest('Invalid mode rejection - arbitrary invalid task_mode is rejected', () => {
+    const { buildCanonicalArtifactString } = require('../poc/one-click-artifact-validator');
+    const parsed = {
+        task_name: 'TASK-TEST-001',
+        originator: 'Kyle',
+        target_agent: 'Gemini Builder',
+        repository: 'test',
+        base_branch: 'main',
+        task_mode: 'INVALID_MODE',
+        capabilities: ['read_only', 'modify_files', 'commit', 'push'],
+        objective: 'test',
+        scope: { permitted_paths: ['poc/'] },
+        verification: 'test',
+        constraints: [],
+        conflict_handling: 'test'
+    };
+    const canonical = buildCanonicalArtifactString(parsed);
+    const artifact = JSON.parse(canonical);
+    assert.strictEqual(artifact.task_mode, 'INVALID_MODE',
+        'buildCanonicalArtifactString must preserve original task_mode without silent conversion');
+    const result = validateAcpTaskArtifact(canonical);
+    assert.ok(!result.valid, 'Invalid task_mode must be rejected');
+    assert.strictEqual(result.error_code, 'INVALID_TASK_MODE',
+        'Invalid task_mode must be rejected as INVALID_TASK_MODE');
+});
+
+runTest('Preflight fails closed when embedded artifact is invalid', () => {
+    const { validateOneClickCarrier } = require('../poc/one-click-artifact-validator');
+    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK='task_name: TEST\ntask_mode: EXECUTE\ncapabilities: read_only\ntarget_agent: Gemini\nobjective: test\nscope: {permitted_paths: [poc/]}\nverification: test\nconstraints: []\nconflict_handling: test\noriginator: Kyle\nrepository: test\nbase_branch: main\n'";
+    const result = validateOneClickCarrier(badWorkflow, null);
+    assert.ok(!result.valid, 'Invalid embedded artifact must fail validation');
+    assert.ok(result.error_code === 'NON_RUNTIME_TASK_MODE' || result.error_code === 'INVALID_TASK_MODE',
+        'Invalid task_mode must produce error_code, got: ' + result.error_code);
+});
+
+runTest('Preflight - all four carriers have preflight step in workflow YAML', () => {
+    const allWorkflows = [
+        'one-click-gemini-activation-verify-reconcile.yml',
+        'one-click-gemini-builder-smoke.yml',
+        'one-click-gemini-builder-callback-correlation.yml',
+        'one-click-gemini-research-documentation.yml'
+    ];
+    for (const wf of allWorkflows) {
+        const raw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        assert.ok(/one-click-preflight/.test(raw), wf + ' must include one-click-preflight step');
+    }
+});
+
 console.log(`\n${passCount} passed, ${failCount} failed`);
 process.exit(failCount > 0 ? 1 : 0);

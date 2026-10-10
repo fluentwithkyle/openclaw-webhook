@@ -103,6 +103,12 @@ jobs:
           echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
           echo "task_file=$TASK_FILE" >> "$GITHUB_OUTPUT"
 
+      - name: Preflight - validate embedded ACP task artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'
+
       - name: Dispatch canonical Gemini research carrier
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

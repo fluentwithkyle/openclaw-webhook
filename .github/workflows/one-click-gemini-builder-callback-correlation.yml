@@ -189,6 +189,12 @@ jobs:
             exit 1
           fi
 
+      - name: Preflight - validate embedded ACP task artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'
+
       - name: Validate external activation through canonical ingress
         id: validate_activation
         env:

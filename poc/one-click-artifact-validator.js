@@ -315,11 +315,7 @@ function normalizeConstraints(constraints) {
 function buildCanonicalArtifactString(parsed) {
     if (!parsed || typeof parsed !== 'object') return null;
 
-    const rawMode = parsed.task_mode;
-    let taskMode = rawMode;
-    if (typeof rawMode === 'string' && CONCEPTUAL_TASK_MODES.includes(rawMode)) {
-        taskMode = getRuntimeTaskModeForConceptual(rawMode, 'FAILOVER_EXECUTE');
-    }
+    const taskMode = parsed.task_mode;
 
     const canonical = {
         task_name: parsed.task_name || '',
