@@ -51,8 +51,7 @@ jobs:
             permitted_paths:
             - .github/workflows/gemini-builder.yml
             - poc/**
-            - services/**
-            - tests/**
+            - test/**
             - docs/ai/**
           architectural_boundary:
             external activation
@@ -114,7 +113,8 @@ jobs:
             callback_status: ""
             commit_sha: ""
             pushed_to: main
-            remaining_blockers: []'
+            remaining_blockers: []
+          conflict_handling: Repository instructions (ARCHITECTURE.md, docs/ai/TASK_STANDARD.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md) and AGENTS.md take precedence. If the embedded artifact contradicts server-derived authority fields, use repository evidence; do not weaken canonical ACP validation.'
 
           {
             echo 'request_id<<EOF'

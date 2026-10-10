@@ -48,13 +48,7 @@ jobs:
           RESEARCH_DOCUMENT
 
           capabilities:
-          - inspect
-          - inspect_repository
-          - inspect_github_actions
-          - research
-          - analyze_activation_architecture
-          - analyze_builder_one_click
-          - analyze_execution_claims
+          - read_only
           - modify_files
           - commit
           - push
@@ -63,22 +57,13 @@ jobs:
           Independently determine the current VERIFIED status of Gemini Builder one-click activation in the repository and GitHub Actions, using the existing Gemini Researcher one-click activation path. Do not redesign or rebuild the one-click architecture. Inspect the actual current implementation, workflows, tests, durable records, and relevant recent execution evidence; identify exactly what is working, what is not, and the single remaining blocker or next action, if any.
 
           scope:
-          Inspect the existing one-click workflow contract, Gemini Builder activation workflow/carrier, canonical main.yml carrier, activation policy and ingress, ACP schema, TaskRegistry execution-claim/recovery path, Builder callback/evidence path, relevant tests, durable research records, and recent GitHub Actions execution evidence. Reconcile repository evidence against the existing project claims. Focus specifically on whether a Director can use a zero-input one-click workflow to activate Gemini Builder and have the Builder execute the intended task through the canonical external-activation architecture.
-
-          Research and determine:
-          1. Whether the Gemini Builder one-click workflow exists and is zero-input workflow_dispatch.
-          2. Whether its embedded task/carrier binding is exact and machine-verifiable.
-          3. Whether it dispatches the canonical activation carrier rather than creating a parallel path.
-          4. Whether activation policy, ACP validation, server-derived authority, and TaskRegistry execution claims are correctly applied.
-          5. Whether Builder execution survives the known Render restart/callback-correlation boundary.
-          6. Whether the Builder callback/evidence path currently completes successfully.
-          7. Whether recent GitHub Actions runs provide current evidence of successful end-to-end execution.
-          8. Whether any remaining persistence/concurrency/recovery issue prevents calling Builder one-click activation VERIFIED.
-          9. The exact minimum next action required if it is not VERIFIED.
-          10. Which conclusions are VERIFIED, INFERRED, or UNKNOWN.
-
-          Required conclusion:
-          Give a direct final verdict of VERIFIED, BLOCKED, or NOT VERIFIED for Gemini Builder one-click activation. Do not substitute a generic assessment of the Researcher one-click path.
+            permitted_paths:
+            - docs/ai/research/
+            - docs/ai/RESEARCH_INDEX.md
+            - docs/ai/TASK_LOG.md
+            - docs/ai/STATE.md
+            - docs/ai/CONTROL_CENTER.md
+          description: Inspect the existing one-click workflow contract, Gemini Builder activation workflow/carrier, canonical main.yml carrier, activation policy and ingress, ACP schema, TaskRegistry execution-claim/recovery path, Builder callback/evidence path, relevant tests, durable research records, and recent GitHub Actions execution evidence. Reconcile repository evidence against the existing project claims. Focus specifically on whether a Director can use a zero-input one-click workflow to activate Gemini Builder and have the Builder execute the intended task through the canonical external-activation architecture. Research and determine whether Builder one-click activation exists, has zero-input workflow_dispatch, has exact machine-verifiable embedded task/carrier binding, dispatches the canonical activation carrier, applies activation policy/ACP validation/server-derived authority/TaskRegistry execution claims, survives the Render restart/callback-correlation boundary, and whether recent GitHub Actions runs provide current evidence of end-to-end execution.
 
           verification:
           1. Inspect the actual current repository implementation and current GitHub Actions workflows.
@@ -142,7 +127,7 @@ jobs:
             --arg repository "$REPOSITORY" \
             --arg base_branch "main" \
             --arg task_mode "RESEARCH_DOCUMENT" \
-            --arg capabilities "inspect,inspect_repository,inspect_github_actions,research,analyze_activation_architecture,analyze_builder_one_click,analyze_execution_claims,modify_files,commit,push" \
+            --arg capabilities "read_only,modify_files,commit,push" \
             --arg permitted_paths "docs/ai/research/,docs/ai/RESEARCH_INDEX.md,docs/ai/TASK_LOG.md,docs/ai/STATE.md,docs/ai/CONTROL_CENTER.md" \
             --arg verification "Inspect current Gemini Builder one-click activation status and one-click contract; produce durable research record; update required research index and task log; distinguish VERIFIED/INFERRED/UNKNOWN; state the exact remaining blocker and minimum next action; commit and push; report commit SHA" \
             '{

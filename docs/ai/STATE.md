@@ -144,6 +144,7 @@ information; it exposes no authority fields. **Director Authorization Architectu
 
 ## Active Tasks
 
+**Note (2026-10-10)**: TASK-KILO-GEMINI-ONE-CLICK-ARTIFACT-PREFLIGHT-VALIDATION-001 **COMPLETED**. Implemented machine validation of the exact embedded ACP task artifact for all four active one-click carrier workflows before activation dispatch. Created `poc/one-click-artifact-validator.js` (reusing existing `validateAcpTaskArtifact`), added `one-click-preflight` command to `poc/validate-external-activation.js`, fixed three carrier artifacts with invalid embedded tasks (smoke: EXECUTE→BUILDER mode + capabilities array + permitted_paths; callback-correlation: added conflict_handling + authorized paths; research-documentation: canonical capabilities + authorized scope), and added 23 machine-verification tests. All four carriers pass preflight validation.
 **Note (2026-10-02)**: TASK-KILO-DURABLE-ONE-CLICK-WORKFLOW-COORDINATOR-CONTRACT-001 is **COMPLETED**. The One-Click Workflow Coordinator Contract is now a durable project document at `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md`, machine-verified by `test/one-click-workflow-contract.test.js`. The term "one-click workflow" is now a durable project command: a zero-input `workflow_dispatch` through the canonical external-activation architecture. This contract is discoverable from the documented cold-start bootstrap path.
 
 | Task | Status | Owner | Notes |

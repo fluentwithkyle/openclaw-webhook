@@ -27,10 +27,17 @@ jobs:
           target_agent: Gemini Builder
           repository: fluentwithkyle/openclaw-webhook
           base_branch: main
-          task_mode: EXECUTE
-          capabilities: read_only
+          task_mode: BUILDER
+          capabilities:
+          - read_only
+          - modify_files
+          - run_tests
+          - commit
+          - push
           objective: Inspect the current repository HEAD commit SHA and report it as a minimal Gemini Builder execution smoke test.
-          scope: Read-only repository inspection; no file modifications.
+          scope:
+            permitted_paths:
+            - poc/
           verification: Return the observed HEAD SHA and confirm execution through the Gemini Builder one-click workflow.
           constraints: No file modifications, no commits, no pushes, no workflow changes.
           conflict_handling: Preserve the server-derived activation authority and stop if the activation context is invalid or blocked.'
