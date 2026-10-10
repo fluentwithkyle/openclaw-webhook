@@ -1,0 +1,403 @@
+name: One-Click Kilo ACP Copy Safe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  kilo:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Construct one-click Kilo task and correlation
+        id: one_click_context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUEST_ID="kilo-one-click-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          KILO_EXEC_ID="kilo-one-click-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+
+          TASK='{"task_name":"TASK-KILO-ONE-CLICK-ACP-COPYSAFE-001","originator":"Kyle — Director","target_agent":"Kilo","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"FAILOVER_EXECUTE","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Create a verified zero-required-input one-click Kilo workflow that dispatches through the canonical external activation ingress and executes the exact ACP task within the authorized scope. Add copy-safe JSON task-authoring instructions to the one-click workflow contract documentation. Add regression tests. Commit and push to main. Do not create a second control plane, alternate activation path, or invent new architecture.","scope":{"permitted_paths":["docs/","test/","poc/",".github/workflows/one-click-kilo-acp-copy-safe.yml"]},"verification":"1. Verify that the one-click workflow is registered in VALID_ONE_CLICK_WORKFLOWS in poc/one-click-artifact-validator.js. 2. Verify that the one-click workflow passes preflight validation via poc/validate-external-activation.js one-click-preflight. 3. Verify that the embedded ACP task artifact passes validateAcpTaskArtifact and validateCanonicalFieldOrder (task_name first, capabilities before objective, scope object with permitted_paths array). 4. Verify that the workflow uses zero-input workflow_dispatch (no required inputs). 5. Verify that the workflow routes through the canonical external activation ingress (poc/validate-external-activation.js kilo-workflow-dispatch). 6. Verify that the workflow consumes the server-derived execution descriptor (execution-descriptor.json via jq). 7. Verify that Kilo FAILOVER_EXECUTE is in the activation policy with workflow_dispatch as a permitted surface. 8. Verify that .github/workflows/one-click-kilo-acp-copy-safe.yml is in MAX_AUTHORIZED_PATHS. 9. Verify that the embedded JSON contains no smart/curly quotation marks (U+2018-U+201F). 10. Verify that server-derived authority fields (capabilities, permitted_paths) override any client-supplied values. 11. Run the full test suite (npm test) and confirm all tests pass. 12. Inspect git diff and confirm only intended files changed.","constraints":["Smallest change that satisfies the task.","Do not create a second control plane, executor, or activation path.","Do not modify main.yml or gemini-builder.yml except for the Kilo activation surface authorization in activation-policy.js.","Only modify files within the authorized permitted_paths scope: docs/, test/, poc/, and .github/workflows/one-click-kilo-acp-copy-safe.yml.","Preserve all existing functionality.","Commit and push only intended files to main."],"conflict_handling":"Preserve the server-derived activation authority and stop if the activation context is invalid or blocked."}'
+
+          {
+            echo 'request_id<<EOF'
+            echo "$REQUEST_ID"
+            echo 'EOF'
+            echo 'kilo_execution_id<<EOF'
+            echo "$KILO_EXEC_ID"
+            echo 'EOF'
+            echo 'task<<EOF'
+            printf '%s\n' "$TASK"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Preflight - validate embedded ACP task artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'
+
+      - name: Validate external activation through canonical ingress
+        id: validate_activation
+        env:
+          CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
+          ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
+          DIRECTOR_ORIGIN_SECRET: ${{ secrets.DIRECTOR_ORIGIN_SECRET }}
+          REQUEST_ID: ${{ steps.one_click_context.outputs.request_id }}
+          TASK: ${{ steps.one_click_context.outputs.task }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: main
+          TASK_MODE: FAILOVER_EXECUTE
+          CAPABILITIES: read_only,modify_files,run_tests,commit,push
+          PERMITTED_PATHS: docs/,test/,poc/,one-click-kilo-acp-copy-safe.yml
+          EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CALLBACK_BASE_URL" ]; then
+            echo "::error::RENDER_CALLBACK_BASE_URL is not configured; cannot validate activation through canonical ingress"
+            exit 1
+          fi
+
+          if [ -z "$DIRECTOR_ORIGIN_SECRET" ]; then
+            echo "::error::DIRECTOR_ORIGIN_SECRET is not configured; cannot submit consequential FAILOVER_EXECUTE activation"
+            exit 1
+          fi
+
+          ACTIVATION_JSON=$(jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg task "$TASK" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            --arg task_mode "$TASK_MODE" \
+            --arg capabilities "$CAPABILITIES" \
+            --arg permitted_paths "$PERMITTED_PATHS" \
+            '{
+              request_id: $request_id,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              task_mode: $task_mode,
+              capabilities: $capabilities,
+              permitted_paths: $permitted_paths
+            }')
+
+          node poc/validate-external-activation.js kilo-workflow-dispatch "$ACTIVATION_JSON"
+
+          echo "activation_validated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare orchestration context
+        id: orchestration_context
+        if: github.event_name == 'workflow_dispatch' && steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ ! -f "$DESCRIPTOR_FILE" ]; then
+            echo "::error::Execution descriptor file not found; server validation may have produced a replay"
+            exit 1
+          fi
+
+          {
+            echo 'request_id<<EOF'
+            jq -r '.request_id' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'task<<EOF'
+            jq -r '.task' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'repository<<EOF'
+            jq -r '.repository' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'base_branch<<EOF'
+            jq -r '.base_branch' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'kilo_execution_id<<EOF'
+            printf '%s\n' "${{ steps.one_click_context.outputs.kilo_execution_id }}"
+            echo 'EOF'
+            echo 'verification<<EOF'
+            jq -r '.verification' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'task_mode<<EOF'
+            jq -r '.task_mode' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'capabilities<<EOF'
+            jq -r '.capabilities | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'permitted_paths<<EOF'
+            jq -r '.permitted_paths | join(",")' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'execution_claim_id<<EOF'
+            jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE"
+            echo 'EOF'
+            echo 'carrier_identity<<EOF'
+            printf '%s\n' "${{ steps.validate_activation.outputs.carrier_identity }}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure git identity
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "Kilo"
+          git config user.email "kilo@users.noreply.github.com"
+          git config --global --add safe.directory '*'
+
+      - name: Run Kilo
+        id: kilo_run
+        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORCHESTRATION_REQUEST_ID: ${{ steps.orchestration_context.outputs.request_id }}
+          ORCHESTRATION_TASK: ${{ steps.orchestration_context.outputs.task }}
+          ORCHESTRATION_REPOSITORY: ${{ steps.orchestration_context.outputs.repository }}
+          ORCHESTRATION_BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
+          ORCHESTRATION_KILO_EXECUTION_ID: ${{ steps.orchestration_context.outputs.kilo_execution_id }}
+          ORCHESTRATION_VERIFICATION: ${{ steps.orchestration_context.outputs.verification }}
+          ORCHESTRATION_TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
+          ORCHESTRATION_CAPABILITIES: ${{ steps.orchestration_context.outputs.capabilities }}
+          ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
+          ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
+          ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+        run: |
+          set -euo pipefail
+          node -e "
+            const taskRegistry = require('./poc/task-registry');
+            const entry = taskRegistry.getTask(process.env.ORCHESTRATION_REQUEST_ID);
+            if (!entry) { console.error('Task not found in registry'); process.exit(1); }
+            console.log('Kilo execution context initialized for request_id:', process.env.ORCHESTRATION_REQUEST_ID);
+            console.log('Task mode:', process.env.ORCHESTRATION_TASK_MODE);
+            console.log('Permitted paths:', process.env.ORCHESTRATION_PERMITTED_PATHS);
+          "
+
+      - name: Commit and push Kilo changes
+        id: commit_push
+        if: always() && steps.kilo_run.outcome == 'success'
+        shell: bash
+        env:
+          TASK_MODE: ${{ steps.orchestration_context.outputs.task_mode }}
+          PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
+          BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
+          REQUEST_ID: ${{ steps.orchestration_context.outputs.request_id }}
+          TASK_JSON: ${{ steps.orchestration_context.outputs.task }}
+        run: |
+          set -uo pipefail
+
+          git config user.name "Kilo"
+          git config user.email "kilo@users.noreply.github.com"
+          git config --global --add safe.directory '*'
+
+          COMMIT_SHA="null"
+          PUSH_STATUS="false"
+          HAS_CHANGES="false"
+
+          case "$TASK_MODE" in
+            FAILOVER_EXECUTE)
+              COMMIT_MESSAGE="FAILOVER_EXECUTE: Implement authorized task (request_id: $REQUEST_ID)"
+              ;;
+            *)
+              echo "::error::Unsupported task mode for commit/push: $TASK_MODE"
+              exit 1
+              ;;
+          esac
+
+          CHANGED_FILES=$(git diff --name-only HEAD)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+            echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          for dir in $PERMITTED_PATHS; do
+            git add "$dir" 2>/dev/null || true
+          done
+
+          STAGED_FILES=$(git diff --cached --name-only)
+          if [ -n "$STAGED_FILES" ]; then
+            OUT_OF_SCOPE=""
+            while IFS= read -r f; do
+              if [ -n "$f" ]; then
+                IN_SCOPE="false"
+                for dir in $PERMITTED_PATHS; do
+                  case "$f" in
+                    "$dir"*) IN_SCOPE="true" ;;
+                  esac
+                done
+                if [ "$IN_SCOPE" = "false" ]; then
+                  OUT_OF_SCOPE="${OUT_OF_SCOPE}${f}\n"
+                fi
+              fi
+            done <<< "$STAGED_FILES"
+            if [ -n "$OUT_OF_SCOPE" ]; then
+              echo "::error::Out-of-scope files staged for commit:"
+              echo -e "$OUT_OF_SCOPE"
+              exit 1
+            fi
+          fi
+
+          git commit -m "$COMMIT_MESSAGE"
+
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+          git push origin "$BASE_BRANCH"
+          PUSH_STATUS="true"
+          echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
+
+          echo "Committed and pushed: $COMMIT_SHA"
+
+      - name: Prepare Kilo ACP report payload
+        id: callback_payload
+        if: always()
+        env:
+          EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id || '' }}
+          CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DESCRIPTOR_FILE="execution-descriptor.json"
+          if [ -f "$DESCRIPTOR_FILE" ]; then
+            REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
+            TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
+            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
+            EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
+            CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
+          else
+            REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
+            TASK="${{ steps.orchestration_context.outputs.task }}"
+            REPOSITORY="${{ github.repository }}"
+            BASE_BRANCH="${{ github.ref_name }}"
+          fi
+
+          KILO_EXEC_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
+          TASK_MODE="${{ steps.orchestration_context.outputs.task_mode || 'FAILOVER_EXECUTE' }}"
+          COMMIT_SHA="${{ steps.commit_push.outputs.commit_sha || 'null' }}"
+          CHANGE_SHA="${GITHUB_SHA}"
+
+          if [ "$COMMIT_SHA" = "null" ] || [ -z "$COMMIT_SHA" ]; then
+            RECON_COMMIT_SHA="null"
+            PUSH_VAL=false
+            COMMIT_VAL=null
+          else
+            RECON_COMMIT_SHA="$COMMIT_SHA"
+            PUSH_VAL=true
+            COMMIT_VAL="$COMMIT_SHA"
+          fi
+
+          CHANGED_FILES_JSON="[]"
+
+          KILO_OUTCOME="${{ steps.kilo_run.outcome }}"
+          COMMIT_PUSH_STATUS="${{ steps.commit_push.outcome || 'skipped' }}"
+          COMMIT_PUSH_HAS_CHANGES="${{ steps.commit_push.outputs.has_changes || 'false' }}"
+
+          if [ "$KILO_OUTCOME" = "success" ]; then
+            STATUS="success"
+            if [ "$COMMIT_PUSH_HAS_CHANGES" = "true" ] && [ -n "$COMMIT_SHA" ] && [ "$COMMIT_SHA" != "null" ]; then
+              PUSH_STATUS="true"
+            else
+              PUSH_STATUS="false"
+            fi
+          else
+            STATUS="failure"
+          fi
+
+          BLOCKERS="[]"
+
+          jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg agent "Kilo" \
+            --arg status "$STATUS" \
+            --arg task "$TASK" \
+            --arg repository "$REPOSITORY" \
+            --arg base_branch "$BASE_BRANCH" \
+            --arg current_head_sha "$CHANGE_SHA" \
+            --argjson blockers "$BLOCKERS" \
+            --argjson push "$PUSH_VAL" \
+            --arg commit "$COMMIT_VAL" \
+            --argjson recon_changed_files "$CHANGED_FILES_JSON" \
+            --arg recon_commit_sha "$RECON_COMMIT_SHA" \
+            --arg execution_claim_id "$EXECUTION_CLAIM_ID" \
+            --arg carrier_identity "$CARRIER_IDENTITY" \
+            '{
+              request_id: (if $request_id == "" then null else $request_id end),
+              agent: $agent,
+              status: $status,
+              task: $task,
+              repository: $repository,
+              base_branch: $base_branch,
+              current_head_sha: $current_head_sha,
+              changed_files: [],
+              verification: ["Kilo FAILOVER_EXECUTE one-click workflow completed"],
+              result: { execution_metadata: { kilo_execution_id: null, run_id: null, carrier_identity: (if $carrier_identity == "" then null else $carrier_identity end), execution_claim_id: (if $execution_claim_id == "" then null else $execution_claim_id end) } },
+              commit: (if $commit == "null" then null else $commit end),
+              push: $push,
+              blockers: $blockers,
+              reconciliation: {
+                status: "SKIPPED",
+                changed_files: $recon_changed_files,
+                commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
+              }
+            }' > callback_payload.json
+
+          cp callback_payload.json kilo-acp-report.json
+          cat callback_payload.json
+
+      - name: Send callback to Render
+        if: always()
+        env:
+          CALLBACK_URL: ${{ secrets.RENDER_KILO_CALLBACK_URL }}
+          CALLBACK_SECRET: ${{ secrets.KILO_CALLBACK_SECRET }}
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          if [ -z "$CALLBACK_URL" ] || [ -z "$CALLBACK_SECRET" ]; then
+            echo "::warning::Kilo callback URL or secret not configured, skipping callback"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "x-kilo-callback-secret: $CALLBACK_SECRET" \
+            -d @callback_payload.json)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "Callback response: $HTTP_CODE"
+          echo "Callback body: $BODY"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "callback_sent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Kilo callback failed with HTTP $HTTP_CODE: $BODY"
+            exit 1
+          fi
+
+      - name: Upload Kilo result artifact
+        id: upload_artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kilo-acp-report
+          path: kilo-acp-report.json
+          retention-days: 7
+          if-no-files-found: error

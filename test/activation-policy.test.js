@@ -259,8 +259,13 @@ async function main() {
     });
 
     await runTest('Surface - invalid surface for Kilo FAILOVER_EXECUTE fails closed', async () => {
+        const result = activationPolicy.validateActivationSurface('github_push_event_invalid', 'Kilo', 'FAILOVER_EXECUTE');
+        assertTrue(!result.valid, 'invalid surface should NOT be valid for Kilo FAILOVER_EXECUTE');
+    });
+
+    await runTest('Surface - workflow_dispatch is valid for Kilo FAILOVER_EXECUTE (one-click carrier)', async () => {
         const result = activationPolicy.validateActivationSurface('workflow_dispatch', 'Kilo', 'FAILOVER_EXECUTE');
-        assertTrue(!result.valid, 'workflow_dispatch should NOT be valid for Kilo FAILOVER_EXECUTE');
+        assertTrue(result.valid, 'workflow_dispatch should be valid for Kilo FAILOVER_EXECUTE');
     });
 
     await runTest('Surface - workflow_dispatch is valid for Gemini FAILOVER_EXECUTE', async () => {
@@ -1267,7 +1272,7 @@ async function main() {
     await runTest('MAX_AUTHORIZED_PATHS - is frozen and contains docs/, test/, poc/, .github/workflows/', async () => {
         assertTrue(activationPolicy.MAX_AUTHORIZED_PATHS !== undefined, 'MAX_AUTHORIZED_PATHS should be defined');
         assertTrue(Object.isFrozen(activationPolicy.MAX_AUTHORIZED_PATHS), 'MAX_AUTHORIZED_PATHS should be frozen');
-        assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml']);
+         assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
     });
 
     await runTest('intersectPathsWithMaxBoundary - filters out paths outside boundary', async () => {

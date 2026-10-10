@@ -441,7 +441,7 @@ test('MAX_AUTHORIZED_PATHS - is exported from schema and matches activation-poli
   const schema = require('../poc/schemas/acp-schema');
   const activationPolicy = require('../poc/activation-policy');
   assertEqual(JSON.stringify(schema.MAX_AUTHORIZED_PATHS), JSON.stringify(activationPolicy.MAX_AUTHORIZED_PATHS));
-  assertDeepEqual(schema.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml']);
+  assertDeepEqual(schema.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
 });
 
 test('validatePermittedPathsForMode - FAILOVER_EXECUTE accepts paths within MAX boundary', () => {

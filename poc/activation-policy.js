@@ -59,7 +59,7 @@ const ACTIVATION_SURFACE_NAMES = Object.freeze(
 
 const EXECUTION_TASK_MODES = Object.freeze(['FAILOVER_EXECUTE', 'BUILDER']);
 
-const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml']);
+const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
 
 function isPathWithinMaxBoundary(permittedPath) {
   return MAX_AUTHORIZED_PATHS.some(maxPath =>
@@ -120,7 +120,7 @@ const ACTIVATION_POLICY = Object.freeze({
     }),
     'FAILOVER_EXECUTE': Object.freeze({
       requires_activation: true,
-      permitted_surfaces: ['github_issue_comment', 'github_issue_body', 'github_push_event'],
+      permitted_surfaces: ['github_issue_comment', 'github_issue_body', 'github_push_event', 'workflow_dispatch'],
       required_capabilities: getRequiredCapabilitiesForMode('FAILOVER_EXECUTE'),
       permitted_paths: getAuthorizedPathsForMode('FAILOVER_EXECUTE') || ['poc/']
     })

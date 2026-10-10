@@ -27,7 +27,8 @@ const VALID_ONE_CLICK_WORKFLOWS = [
     'one-click-gemini-activation-verify-reconcile.yml',
     'one-click-gemini-builder-smoke.yml',
     'one-click-gemini-builder-callback-correlation.yml',
-    'one-click-gemini-research-documentation.yml'
+    'one-click-gemini-research-documentation.yml',
+    'one-click-kilo-acp-copy-safe.yml'
 ];
 
 function extractEmbeddedCarrierArtifact(workflowRaw) {

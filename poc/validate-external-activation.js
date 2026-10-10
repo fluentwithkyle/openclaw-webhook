@@ -3,7 +3,8 @@ const {
     validateExternalActivation,
     buildActivationPayloadForIssueComment,
     buildActivationPayloadForWorkflowDispatch,
-    buildBuilderActivationPayload
+    buildBuilderActivationPayload,
+    buildKiloActivationPayload
 } = require('./external-activation-validator');
 const { preflightValidateOneClickActivation } = require('./one-click-artifact-validator');
 
@@ -67,6 +68,9 @@ async function main() {
     } else if (command === 'builder-workflow-dispatch') {
         payload = buildBuilderActivationPayload(params);
         targetAgent = 'Gemini Builder';
+    } else if (command === 'kilo-workflow-dispatch') {
+        payload = buildKiloActivationPayload(params);
+        targetAgent = 'Kilo';
     } else {
         console.error(`::error::Unknown activation command: ${command}`);
         process.exit(2);

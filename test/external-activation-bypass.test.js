@@ -467,9 +467,9 @@ await runTest('Policy - @gemini-cli issue_comment is permitted for Gemini FAILOV
     assert.ok(surfaces.includes('workflow_dispatch'), 'workflow_dispatch should be permitted');
 });
 
-await runTest('Policy - workflow_dispatch is NOT permitted for Kilo FAILOVER_EXECUTE', async () => {
+await runTest('Policy - workflow_dispatch is permitted for Kilo FAILOVER_EXECUTE (one-click carrier)', async () => {
     const surfaces = activationPolicy.getPermittedActivationSurfaces('Kilo', 'FAILOVER_EXECUTE');
-    assert.ok(!surfaces.includes('workflow_dispatch'), 'workflow_dispatch should NOT be permitted for Kilo');
+    assert.ok(surfaces.includes('workflow_dispatch'), 'workflow_dispatch should be permitted for Kilo');
     assert.ok(surfaces.includes('github_issue_comment'), 'github_issue_comment should be permitted for Kilo');
 });
 
@@ -571,10 +571,10 @@ await runTest('Bypass prevention - issue_comment with @kilo activation is not ac
     assert.ok(!result.valid, '@kilo should not be valid for Gemini target');
 });
 
-await runTest('Bypass prevention - invalid activation surface for target agent is rejected', async () => {
-    // Kilo FAILOVER_EXECUTE should not accept workflow_dispatch surface
-    const result = activationPolicy.validateActivationSurface('workflow_dispatch', 'Kilo', 'FAILOVER_EXECUTE');
-    assert.ok(!result.valid, 'workflow_dispatch should not be valid for Kilo FAILOVER_EXECUTE');
+await runTest('Bypass prevention - unsupported activation surface for Kilo is rejected', async () => {
+    // Kilo FAILOVER_EXECUTE should not accept arbitrary unsupported surfaces
+    const result = activationPolicy.validateActivationSurface('github_unsupported_event', 'Kilo', 'FAILOVER_EXECUTE');
+    assert.ok(!result.valid, 'github_unsupported_event should not be valid for Kilo FAILOVER_EXECUTE');
 });
 
 await runTest('Bypass prevention - external activation validator module exists and is referenced by both workflows', async () => {

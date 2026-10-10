@@ -464,11 +464,71 @@ function buildBuilderActivationPayload(inputs) {
     return payload;
 }
 
+function buildKiloActivationPayload(inputs) {
+    const rawTaskMode = inputs.task_mode || 'FAILOVER_EXECUTE';
+    const taskMode = rawTaskMode;
+
+    if (NON_RUNTIME_TASK_MODES.includes(rawTaskMode)) {
+        return {
+            error: 'task_mode "' + rawTaskMode + '" is a conceptual Director-facing mode, not a runtime task_mode. Runtime-accepted values are: ' + VALID_TASK_MODES.join(', ') + '. See TASK_STANDARD.md Section 9.',
+            error_code: 'NON_RUNTIME_TASK_MODE',
+            invalid_task_mode: rawTaskMode,
+            valid_runtime_modes: VALID_TASK_MODES
+        };
+    }
+
+    if (!VALID_TASK_MODES.includes(rawTaskMode)) {
+        return {
+            error: 'Invalid task_mode: "' + rawTaskMode + '". Must be one of: ' + VALID_TASK_MODES.join(', '),
+            error_code: 'INVALID_TASK_MODE',
+            invalid_task_mode: rawTaskMode,
+            valid_runtime_modes: VALID_TASK_MODES
+        };
+    }
+
+    if (taskMode !== 'FAILOVER_EXECUTE') {
+        return {
+            error: 'Kilo activation only supports FAILOVER_EXECUTE task_mode. Got: "' + taskMode + '".',
+            error_code: 'INVALID_TASK_MODE_FOR_AGENT',
+            invalid_task_mode: taskMode,
+            valid_runtime_modes: ['FAILOVER_EXECUTE']
+        };
+    }
+
+    const capabilities = inputs.capabilities || 'read_only,modify_files,run_tests,commit,push';
+    const permittedPaths = inputs.permitted_paths || 'poc/';
+
+    const payload = {
+        protocol_version: '0.1',
+        request_id: inputs.request_id,
+        source: 'GitHub workflow_dispatch',
+        target: 'Kilo',
+        task_type: 'github_external_activation',
+        repository: inputs.repository,
+        base_branch: inputs.base_branch,
+        task: inputs.task,
+        task_mode: taskMode,
+        constraints: { permitted_paths: permittedPaths.split(',').filter(Boolean) },
+        authorization: {
+            capabilities: capabilities.split(',').filter(Boolean),
+            ...(inputs.approval_id ? { approval_id: inputs.approval_id } : {})
+        },
+        verification: inputs.verification || 'Implement the requested task within the authorized permitted_paths scope, run tests, commit, and push.',
+        reporting: 'json',
+        originator: 'Kyle',
+        activation_surface: 'workflow_dispatch',
+        activation_syntax: '@kilo'
+    };
+
+    return payload;
+}
+
 module.exports = {
     validateExternalActivation,
     buildActivationPayloadForIssueComment,
     buildActivationPayloadForWorkflowDispatch,
     buildBuilderActivationPayload,
+    buildKiloActivationPayload,
     generateDirectorOriginAssertion,
     verifyDirectorOriginAssertion,
     verifyDirectorOriginAssertionAgainstTaskRegistry,

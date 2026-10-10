@@ -146,7 +146,42 @@ A Run workflow link is valid only after the referenced workflow has been indepen
 
 The task-to-workflow binding rule applies equally to RESEARCH_DOCUMENT, VERIFY_RECONCILE, REVIEW, BUILDER, FAILOVER_EXECUTE, and any other policy-supported task mode.
 
-### 4.8 Verification vs. Workflow Construction
+### 4.8 Copy-Safe JSON Task-Authoring Instructions
+
+The embedded canonical ACP task carrier is a JSON string literal. To remain copy-safe and pass the one-click preflight validation (`poc/validate-external-activation.js one-click-preflight`), the carrier must satisfy the following rules:
+
+1. **Use standard double-quote delimiters (U+0022 `"`)** for all JSON keys and string values. **Never** use smart/curly quotation marks (U+2018 `'`, U+2019 `'`, U+201C `"`, U+201D `"`, U+201A `‚`, U+201B `‛`, U+201E `„`, U+201F `‟`). The preflight validator rejects any such character with error code `MALFORMED_JSON_SMART_QUOTE`.
+
+2. **Use canonical field ordering** as enforced by `validateCanonicalFieldOrder()` in `poc/schemas/acp-schema.js`. The canonical order is:
+   `task_name`, `originator`, `target_agent`, `repository`, `base_branch`, `task_mode`, `capabilities`, `objective`, `scope`, `verification`, `constraints`, `conflict_handling`.
+   The field `task_name` must appear **first**; `capabilities` must appear **immediately before** `objective`. Fields must not be reordered or omitted from required positions.
+
+3. **`capabilities` must be a JSON array** of strings, not a single string. For FAILOVER_EXECUTE the canonical capability set is `["read_only", "modify_files", "run_tests", "commit", "push"]`. Each capability must be present in `VALID_CAPABILITIES` in the schema.
+
+4. **`scope` must be a JSON object** with a `permitted_paths` array of strings. Every path in `permitted_paths` must fall within the server-defined `MAX_AUTHORIZED_PATHS` boundary in `poc/activation-policy.js` (currently `docs/`, `test/`, `poc/`, `.github/workflows/main.yml`, `.github/workflows/gemini-builder.yml`, `.github/workflows/one-click-kilo-acp-copy-safe.yml`). Paths outside this boundary are rejected with error code `PATH_OUTSIDE_MAX_BOUNDARY`.
+
+5. **`target_agent` must be one of `VALID_AGENTS`** in the schema: `Kilo`, `Gemini`, `Gemini Builder`, `Security Specialist`, `Utility Specialist`.
+
+6. **`task_mode` must be one of `VALID_TASK_MODES`** (runtime-accepted values): `REVIEW`, `VERIFY_RECONCILE`, `FAILOVER_EXECUTE`, `BUILDER`, `RESEARCH_DOCUMENT`. The conceptual Director-facing modes `PLAN` and `EXECUTE` are **not** literal task_mode values — `PLAN` is rejected as `INVALID_TASK_MODE`; `EXECUTE` is mapped to `FAILOVER_EXECUTE` at the Director layer per `TASK_STANDARD.md` Section 9.
+
+7. **No comments, trailing commas, single-quoted strings, or unquoted keys**. The embedded text is parsed with `JSON.parse()` only — YAML-like text is rejected as `MALFORMED_JSON`.
+
+8. **No em-dashes or non-ASCII curly punctuation inside string values**. Use `--` (two hyphens) for em-dashes within string values (e.g., `"Kyle -- Director"`). Any non-standard Unicode punctuation in a string value can cause copy-paste or encoding issues.
+
+9. **Validate before committing**: After editing the workflow file, run:
+   ```sh
+   node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'
+   ```
+   This validates that the embedded carrier is valid JSON, has canonical field ordering, has no smart quotes, and has permitted paths within the `MAX_AUTHORIZED_PATHS` boundary. The output must show `all_valid: true`.
+
+10. **Minimal example**:
+    ```json
+    {"task_name":"EXAMPLE-TASK-001","originator":"Kyle -- Director","target_agent":"Kilo","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"FAILOVER_EXECUTE","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Example task.","scope":{"permitted_paths":["poc/"]},"verification":"Verify implementation.","constraints":["smallest-change"],"conflict_handling":"Preserve server-derived authority."}
+    ```
+
+---
+
+### 4.9 Verification vs. Workflow Construction
 
 The coordinator must distinguish:
 
@@ -177,7 +212,7 @@ A task mismatch, agent mismatch, task-mode mismatch, required input, missing car
 
 This machine gate verifies workflow readiness; it does not claim that the resulting task executed. Execution remains a separate activation and verification step.
 
-### 4.9 Coordinator Decision Rule
+### 4.11 Coordinator Decision Rule
 
 > "The workflow is the executable carrier of the requested one-click task. The coordinator must verify the embedded task before presenting the Run workflow link."
 

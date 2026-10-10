@@ -61,7 +61,8 @@ function listOneClickWorkflows() {
         'one-click-gemini-activation-verify-reconcile.yml',
         'one-click-gemini-builder-smoke.yml',
         'one-click-gemini-builder-callback-correlation.yml',
-        'one-click-gemini-research-documentation.yml'
+        'one-click-gemini-research-documentation.yml',
+        'one-click-kilo-acp-copy-safe.yml'
     ];
 }
 
@@ -1157,11 +1158,11 @@ runTest('Artifact validator - module exists and exports required functions', () 
     assert.ok(typeof mod.bindCarrierToRequestedTask === 'function', 'Must export bindCarrierToRequestedTask');
 });
 
-runTest('Artifact validator - all four active one-click carriers pass canonical validation', () => {
+runTest('Artifact validator - all active one-click carriers pass canonical validation', () => {
     const results = preflightValidateOneClickActivation();
-    assert.ok(results.all_valid, 'All four carriers should pass: ' + JSON.stringify(results.summary));
-    assert.strictEqual(results.summary.total, 4, 'Should have 4 carriers');
-    assert.strictEqual(results.summary.valid, 4, 'All 4 should be valid');
+    assert.ok(results.all_valid, 'All carriers should pass: ' + JSON.stringify(results.summary));
+    assert.strictEqual(results.summary.total, 5, 'Should have 5 carriers');
+    assert.strictEqual(results.summary.valid, 5, 'All 5 should be valid');
     assert.strictEqual(results.summary.invalid, 0, 'None should be invalid');
     for (const [wf, r] of Object.entries(results.results)) {
         assert.ok(r.valid, wf + ' should be valid: ' + (r.error || ''));
@@ -1435,12 +1436,13 @@ runTest('Preflight fails closed when embedded artifact is invalid', () => {
         'Invalid task_mode must produce error_code, got: ' + result.error_code);
 });
 
-runTest('Preflight - all four carriers have preflight step in workflow YAML', () => {
+runTest('Preflight - all carriers have preflight step in workflow YAML', () => {
     const allWorkflows = [
         'one-click-gemini-activation-verify-reconcile.yml',
         'one-click-gemini-builder-smoke.yml',
         'one-click-gemini-builder-callback-correlation.yml',
-        'one-click-gemini-research-documentation.yml'
+        'one-click-gemini-research-documentation.yml',
+        'one-click-kilo-acp-copy-safe.yml'
     ];
     for (const wf of allWorkflows) {
         const raw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
@@ -1586,12 +1588,13 @@ runTest('Preflight CLI command - exits zero when all carriers valid', () => {
     assert.ok(output.includes('passed'), 'Output must indicate success');
 });
 
-runTest('Preflight - all four carriers include one-click-preflight step before dispatch', () => {
+runTest('Preflight - all carriers include one-click-preflight step before dispatch', () => {
     const allWorkflows = [
         'one-click-gemini-activation-verify-reconcile.yml',
         'one-click-gemini-builder-smoke.yml',
         'one-click-gemini-builder-callback-correlation.yml',
-        'one-click-gemini-research-documentation.yml'
+        'one-click-gemini-research-documentation.yml',
+        'one-click-kilo-acp-copy-safe.yml'
     ];
     for (const wf of allWorkflows) {
         const raw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
@@ -1636,7 +1639,7 @@ runTest('Preflight strictness - dispatch cannot occur after preflight failure (f
         assert.ok(!preflightStep.includes('continue-on-error'),
             `${wf} preflight step must not have continue-on-error (must stop job on failure)`);
 
-        const dispatchIdx = wfRaw.search(/builder-workflow-dispatch|gh api.*dispatches|Dispatch canonical/);
+        const dispatchIdx = wfRaw.search(/workflow-dispatch|gh api.*dispatches|Dispatch canonical/);
         assert.ok(dispatchIdx !== -1, `${wf} must dispatch to activation ingress`);
         assert.ok(preflightIdx < dispatchIdx,
             `${wf} preflight must run before dispatch`);
@@ -1651,6 +1654,211 @@ runTest('Preflight strictness - dispatch cannot occur after preflight failure (f
         assert.ok(hasStepGate || dispatchIdx > preflightIdx,
             `${wf} dispatch step must be gated or follow preflight step`);
     }
+});
+
+// =========================================================
+// Kilo one-click workflow regression tests
+// =========================================================
+
+const ONE_CLICK_KILO_WF = path.join(ONE_CLICK_DIR, 'one-click-kilo-acp-copy-safe.yml');
+const oneClickKiloWfRaw = fs.readFileSync(ONE_CLICK_KILO_WF, 'utf8');
+
+runTest('Kilo one-click - workflow is registered in listOneClickWorkflows', () => {
+    const workflows = listOneClickWorkflows();
+    assert.ok(workflows.includes('one-click-kilo-acp-copy-safe.yml'),
+        'one-click-kilo-acp-copy-safe.yml must be registered in listOneClickWorkflows');
+});
+
+runTest('Kilo one-click - is registered in VALID_ONE_CLICK_WORKFLOWS', () => {
+    const { VALID_ONE_CLICK_WORKFLOWS } = require('../poc/one-click-artifact-validator');
+    assert.ok(VALID_ONE_CLICK_WORKFLOWS.includes('one-click-kilo-acp-copy-safe.yml'),
+        'one-click-kilo-acp-copy-safe.yml must be in VALID_ONE_CLICK_WORKFLOWS');
+});
+
+runTest('Kilo one-click - is in MAX_AUTHORIZED_PATHS in activation-policy', () => {
+    const activationPolicy = require('../poc/activation-policy');
+    assert.ok(activationPolicy.MAX_AUTHORIZED_PATHS.includes('.github/workflows/one-click-kilo-acp-copy-safe.yml'),
+        'one-click-kilo-acp-copy-safe.yml must be in MAX_AUTHORIZED_PATHS');
+});
+
+runTest('Kilo one-click - is in MAX_AUTHORIZED_PATHS in acp-schema (re-export)', () => {
+    const acpSchema = require('../poc/schemas/acp-schema');
+    assert.ok(acpSchema.MAX_AUTHORIZED_PATHS.includes('.github/workflows/one-click-kilo-acp-copy-safe.yml'),
+        'one-click-kilo-acp-copy-safe.yml must be in MAX_AUTHORIZED_PATHS via acp-schema re-export');
+});
+
+runTest('Kilo one-click - embedded artifact is valid canonical ACP task artifact', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Kilo one-click carrier should be valid: ' + (result.error || ''));
+});
+
+runTest('Kilo one-click - embedded artifact has target_agent Kilo', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(artifact.target_agent, 'Kilo',
+        'Kilo one-click carrier must use target_agent "Kilo"');
+});
+
+runTest('Kilo one-click - embedded artifact has task_mode FAILOVER_EXECUTE', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.strictEqual(artifact.task_mode, 'FAILOVER_EXECUTE',
+        'Kilo one-click carrier must use runtime task_mode FAILOVER_EXECUTE');
+});
+
+runTest('Kilo one-click - embedded artifact has canonical field ordering (task_name first, capabilities before objective)', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for field order check');
+    const orderValidation = require('../poc/schemas/acp-schema').validateCanonicalFieldOrder(result.parsed_artifact);
+    assert.ok(orderValidation.valid, 'Canonical field order must be valid: ' + (orderValidation.error || ''));
+});
+
+runTest('Kilo one-click - embedded artifact has full FAILOVER_EXECUTE capabilities', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    const expectedCaps = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+    assert.deepStrictEqual(artifact.capabilities.sort(), expectedCaps.sort(),
+        'Kilo one-click carrier must have all 5 FAILOVER_EXECUTE capabilities');
+    assert.ok(artifact.capabilities.every(function(c) { return VALID_CAPABILITIES.includes(c); }),
+        'All capabilities must be in VALID_CAPABILITIES');
+});
+
+runTest('Kilo one-click - scope.permitted_paths within MAX_AUTHORIZED_PATHS boundary', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid for parsing: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.ok(Array.isArray(artifact.scope.permitted_paths) && artifact.scope.permitted_paths.length > 0,
+        'Kilo one-click carrier must have non-empty scope.permitted_paths');
+    artifact.scope.permitted_paths.forEach(function(p) {
+        const inBoundary = require('../poc/activation-policy').MAX_AUTHORIZED_PATHS.some(function(maxPath) {
+            return p === maxPath || p.startsWith(maxPath) || maxPath.startsWith(p);
+        });
+        assert.ok(inBoundary, 'permitted_path ' + p + ' must be within MAX_AUTHORIZED_PATHS');
+    });
+});
+
+runTest('Kilo one-click - embedded artifact has no smart/curly quotation marks', () => {
+    const text = extractEmbeddedCarrierArtifact(oneClickKiloWfRaw);
+    assert.ok(text, 'Must have embedded artifact');
+    for (const smartChar of SMART_QUOTE_CHARS) {
+        assert.ok(text.indexOf(smartChar) === -1,
+            'Embedded artifact must not contain smart quote U+' + smartChar.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'));
+    }
+});
+
+runTest('Kilo one-click - workflow has zero-input workflow_dispatch (no required inputs)', () => {
+    assert.ok(!/required:\s*true/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must not have required inputs');
+    assert.ok(/on:\s*\n\s*workflow_dispatch:/.test(oneClickKiloWfRaw) || /on:\s*$/m.test(oneClickKiloWfRaw),
+        'Must use workflow_dispatch trigger');
+});
+
+runTest('Kilo one-click - workflow routes through canonical external activation ingress', () => {
+    assert.ok(/validate-external-activation\.js/i.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must call poc/validate-external-activation.js (canonical carrier)');
+});
+
+runTest('Kilo one-click - workflow uses kilo-workflow-dispatch command', () => {
+    assert.ok(/kilo-workflow-dispatch/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must use kilo-workflow-dispatch command');
+});
+
+runTest('Kilo one-click - workflow runs one-click-preflight before dispatch', () => {
+    const preflightIdx = oneClickKiloWfRaw.indexOf('one-click-preflight');
+    assert.ok(preflightIdx !== -1, 'Kilo one-click workflow must include one-click-preflight step');
+    const dispatchIdx = oneClickKiloWfRaw.indexOf('kilo-workflow-dispatch');
+    assert.ok(dispatchIdx !== -1, 'Kilo one-click workflow must include kilo-workflow-dispatch');
+    assert.ok(preflightIdx < dispatchIdx,
+        'Preflight must run before dispatch');
+});
+
+runTest('Kilo one-click - workflow consumes server-derived execution descriptor', () => {
+    assert.ok(/execution-descriptor\.json/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must consume execution-descriptor.json');
+    assert.ok(/jq/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must use jq to read the descriptor');
+});
+
+runTest('Kilo one-click - workflow includes FAILOVER_EXECUTE task_mode binding in activation payload', () => {
+    assert.ok(/TASK_MODE.*FAILOVER_EXECUTE/.test(oneClickKiloWfRaw) || /task_mode.*FAILOVER_EXECUTE/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must set TASK_MODE to FAILOVER_EXECUTE');
+});
+
+runTest('Kilo one-click - workflow embeds director-origin authorization path', () => {
+    assert.ok(/DIRECTOR_ORIGIN_SECRET/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must use DIRECTOR_ORIGIN_SECRET for consequential activation');
+    assert.ok(/ACP_POC_TRIGGER_SECRET/.test(oneClickKiloWfRaw),
+        'Kilo one-click workflow must use ACP_POC_TRIGGER_SECRET for canonical ingress authentication');
+});
+
+runTest('Kilo one-click - workflow embeds constraints and conflict_handling in carrier', () => {
+    const result = validateOneClickCarrier(oneClickKiloWfRaw);
+    assert.ok(result.valid, 'Carrier must be valid: ' + (result.error || ''));
+    const artifact = JSON.parse(result.canonical_artifact);
+    assert.ok(Array.isArray(artifact.constraints) && artifact.constraints.length > 0,
+        'Kilo one-click carrier must have non-empty constraints array');
+    assert.ok(artifact.conflict_handling && artifact.conflict_handling.length > 0,
+        'Kilo one-click carrier must have non-empty conflict_handling string');
+});
+
+runTest('Kilo one-click - validateExternalActivation requiresAssertion check excludes Kilo (uses direct origin secret)', () => {
+    const validatorRaw = fs.readFileSync(path.join(ROOT_DIR, 'poc', 'external-activation-validator.js'), 'utf8');
+    const requiresAssertionLine = validatorRaw.match(/const requiresAssertion\s*=\s*params\s*&&\s*\([^)]*\)/);
+    assert.ok(requiresAssertionLine, 'Must have requiresAssertion check');
+    assert.ok(requiresAssertionLine[0].includes('Gemini Builder'),
+        'requiresAssertion should reference Gemini Builder');
+    assert.ok(!requiresAssertionLine[0].toLowerCase().includes('kilo') ||
+        requiresAssertionLine[0].includes('params.target') && !requiresAssertionLine[0].match(/kilo/i),
+        'Kilo target should not require assertion (uses direct director origin secret)');
+});
+
+runTest('Kilo one-click - buildKiloActivationPayload exports and works for FAILOVER_EXECUTE', () => {
+    const { buildKiloActivationPayload } = require('../poc/external-activation-validator');
+    const payload = buildKiloActivationPayload({
+        request_id: 'test-kilo-001',
+        target: 'Kilo',
+        task_mode: 'FAILOVER_EXECUTE',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task: 'Test Kilo task',
+        capabilities: 'read_only,modify_files,run_tests,commit,push',
+        permitted_paths: 'poc/',
+        verification: 'Verify implementation'
+    });
+    assert.ok(!payload.error, 'Payload should not have error: ' + (payload.error || ''));
+    assert.strictEqual(payload.target, 'Kilo', 'Target should be Kilo');
+    assert.strictEqual(payload.task_mode, 'FAILOVER_EXECUTE', 'Task mode should be FAILOVER_EXECUTE');
+    assert.strictEqual(payload.activation_surface, 'workflow_dispatch');
+    assert.strictEqual(payload.activation_syntax, '@kilo');
+    assert.deepStrictEqual(payload.authorization.capabilities, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+});
+
+runTest('Kilo one-click - buildKiloActivationPayload rejects non-FAILOVER_EXECUTE task_mode', () => {
+    const { buildKiloActivationPayload } = require('../poc/external-activation-validator');
+    const payload = buildKiloActivationPayload({
+        request_id: 'test-001',
+        target: 'Kilo',
+        task_mode: 'REVIEW',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task: 'Test'
+    });
+    assert.ok(payload.error, 'Should reject non-FAILOVER_EXECUTE mode');
+    assert.strictEqual(payload.error_code, 'INVALID_TASK_MODE_FOR_AGENT');
+});
+
+runTest('Kilo one-click - kilo-workflow-dispatch CLI command is wired in validate-external-activation.js', () => {
+    const fs = require('fs');
+    const validateScriptRaw = fs.readFileSync(path.join(ROOT_DIR, 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(/kilo-workflow-dispatch/.test(validateScriptRaw),
+        'validate-external-activation.js must support kilo-workflow-dispatch command');
+    assert.ok(/buildKiloActivationPayload/.test(validateScriptRaw),
+        'validate-external-activation.js must import and use buildKiloActivationPayload');
+    assert.ok(/targetAgent.*=.*'Kilo'/.test(validateScriptRaw),
+        'validate-external-activation.js must set targetAgent to Kilo for kilo-workflow-dispatch');
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
