@@ -5,6 +5,7 @@ const {
     buildActivationPayloadForWorkflowDispatch,
     buildBuilderActivationPayload
 } = require('./external-activation-validator');
+const { preflightValidateOneClickActivation } = require('./one-click-artifact-validator');
 
 const DESCRIPTOR_OUTPUT_FILE = process.env.EXECUTION_DESCRIPTOR_FILE || 'execution-descriptor.json';
 
@@ -15,6 +16,26 @@ function writeOutput(name, value) {
 async function main() {
     const command = process.argv[2];
     const params = JSON.parse(process.argv[3]);
+
+    if (command === 'one-click-preflight') {
+        const workflowDir = params.workflow_dir || '.github/workflows';
+        const requestedTask = params.requested_task || null;
+        const preflightResult = preflightValidateOneClickActivation(workflowDir, requestedTask);
+        if (!preflightResult.all_valid) {
+            console.error('::error::One-click preflight validation failed: not all carriers have valid embedded ACP artifacts');
+            for (const [wf, r] of Object.entries(preflightResult.results)) {
+                if (!r.valid) {
+                    console.error('::error::' + wf + ': ' + (r.error || 'validation failed'));
+                }
+                if (requestedTask && r.bound === false) {
+                    console.error('::error::' + wf + ': task-to-carrier binding failed');
+                }
+            }
+            process.exit(1);
+        }
+        console.log('::notice::One-click preflight validation passed: all ' + preflightResult.summary.total + ' carriers have valid embedded ACP artifacts');
+        process.exit(0);
+    }
 
     const callbackUrl = process.env.CALLBACK_BASE_URL;
     const callbackSecret = process.env.ACP_POC_TRIGGER_SECRET;
