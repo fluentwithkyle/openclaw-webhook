@@ -72,6 +72,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Extract Gemini request (issue_comment)
         id: request_comment
@@ -703,23 +705,19 @@ jobs:
 
           # Build changed_files list from git for persistence tracking.
           # Must produce exactly ONE valid JSON array. A failed diff or
-          # missing HEAD~1 (shallow checkout) must NOT be silently treated
-          # as a successful empty diff — fail closed with an error blocker.
+          # missing HEAD~1 (initial commit, no prior parent) must NOT be
+          # silently treated as a successful diff — fail closed with an
+          # error blocker. The checkout step fetches depth: 2 so HEAD~1
+          # is normally available; if it is still missing, report a blocker
+          # rather than falsely listing all files as changed.
           CHANGED_FILES_JSON='[]'
           DIFF_STATUS=0
           DIFF_OUTPUT=""
           if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
             DIFF_OUTPUT=$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=$?
           else
-            # HEAD~1 does not exist (shallow clone or initial commit).
-            # Diff against the empty tree to get all current files as "added".
-            EMPTY_TREE=$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
-            if [ -n "$EMPTY_TREE" ]; then
-              DIFF_OUTPUT=$(git diff --name-only "$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=$?
-            else
-              DIFF_STATUS=1
-              DIFF_OUTPUT="fatal: cannot establish baseline for diff (no HEAD~1 and empty tree unavailable)"
-            fi
+            DIFF_STATUS=1
+            DIFF_OUTPUT="fatal: HEAD~1 does not exist (initial commit or insufficient checkout depth); cannot determine changed files"
           fi
 
           if [ "$DIFF_STATUS" -ne 0 ]; then

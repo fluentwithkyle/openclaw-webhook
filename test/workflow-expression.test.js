@@ -625,11 +625,18 @@ runTest('main.yml changed_files diff captures exit status explicitly', () => {
     'callback payload step must check DIFF_STATUS for failure handling');
 });
 
-runTest('main.yml changed_files diff handles shallow checkout (missing HEAD~1)', () => {
+runTest('main.yml checkout uses fetch-depth: 2 to provide HEAD~1 for diff', () => {
+  assert.ok(raw.includes('fetch-depth: 2'),
+    'checkout step must use fetch-depth: 2 so HEAD~1 is available for changed_files diff');
+});
+
+runTest('main.yml changed_files diff fails closed on missing HEAD~1 (no empty tree fallback)', () => {
   assert.ok(raw.includes('git rev-parse --verify HEAD~1'),
-    'callback payload step must check for HEAD~1 existence (shallow checkout detection)');
-  assert.ok(raw.includes('EMPTY_TREE'),
-    'callback payload step must use empty tree fallback for shallow checkout');
+    'callback payload step must check for HEAD~1 existence');
+  assert.ok(raw.includes('HEAD~1 does not exist'),
+    'callback payload step must fail closed with descriptive message when HEAD~1 is missing');
+  assert.ok(!raw.includes('EMPTY_TREE'),
+    'callback payload step must NOT use empty tree fallback for missing HEAD~1');
 });
 
 runTest('main.yml changed_files diff fails closed on diff failure', () => {
@@ -672,14 +679,15 @@ runTest('Behavioral: successful empty diff produces []', () => {
     git config user.email t@t.com && git config user.name t &&
     git config --global --add safe.directory '*' &&
     git commit -q --allow-empty -m initial &&
+    git commit -q --allow-empty -m "second commit" &&
     CHANGED_FILES_JSON='[]'
     DIFF_STATUS=0
     DIFF_OUTPUT=""
     if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
       DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
     else
-      EMPTY_TREE=\$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
-      DIFF_OUTPUT=\$(git diff --name-only "\$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=\$?
+      DIFF_STATUS=1
+      DIFF_OUTPUT="fatal: HEAD~1 does not exist (initial commit or insufficient checkout depth); cannot determine changed files"
     fi
     if [ "\$DIFF_STATUS" -ne 0 ]; then
       DIFF_BLOCKER_MSG="failed"
@@ -711,8 +719,8 @@ runTest('Behavioral: successful non-empty diff produces file list array', () => 
     if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
       DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
     else
-      EMPTY_TREE=\$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
-      DIFF_OUTPUT=\$(git diff --name-only "\$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=\$?
+      DIFF_STATUS=1
+      DIFF_OUTPUT="fatal: HEAD~1 does not exist (initial commit or insufficient checkout depth); cannot determine changed files"
     fi
     if [ "\$DIFF_STATUS" -ne 0 ]; then
       DIFF_BLOCKER_MSG="failed"
@@ -732,7 +740,11 @@ runTest('Behavioral: successful non-empty diff produces file list array', () => 
   assert.ok(arr.includes('README.md'), 'must include modified file');
 });
 
-runTest('Behavioral: shallow checkout with no HEAD~1 falls back to empty tree diff', () => {
+runTest('Behavioral: missing HEAD~1 (initial commit) fails closed without false changed-file report', () => {
+  // Simulate a repo with a single commit (no parent). The workflow now
+  // fail-closes instead of diffing against the empty tree, so changed_files
+  // must remain [] and a blocker must be set. Critically, the changed_files
+  // must NOT falsely list every tracked file as changed.
   const result = execSync(`
     git init -q test-shallow-$$ && cd test-shallow-$$ &&
     git config user.email t@t.com && git config user.name t &&
@@ -744,29 +756,39 @@ runTest('Behavioral: shallow checkout with no HEAD~1 falls back to empty tree di
     if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
       DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
     else
-      EMPTY_TREE=\$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
-      if [ -n "\$EMPTY_TREE" ]; then
-        DIFF_OUTPUT=\$(git diff --name-only "\$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=\$?
-      else
-        DIFF_STATUS=1
-      fi
+      DIFF_STATUS=1
+      DIFF_OUTPUT="fatal: HEAD~1 does not exist (initial commit or insufficient checkout depth); cannot determine changed files"
     fi
     if [ "\$DIFF_STATUS" -ne 0 ]; then
-      DIFF_BLOCKER_MSG="failed"
+      DIFF_BLOCKER_MSG="changed_files diff command failed (exit \$DIFF_STATUS); cannot produce complete changed_files list"
     else
       RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))' 2>/dev/null)
       CHANGED_FILES_TYPE=\$(printf '%s' "\$RAW_CHANGED_FILES_JSON" | jq -r 'type' 2>/dev/null || echo 'null')
       if [ "\$CHANGED_FILES_TYPE" = "array" ]; then
         CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
+      else
+        DIFF_BLOCKER_MSG="changed_files diff produced invalid JSON; cannot report changed files"
       fi
     fi
-    echo -n "\$CHANGED_FILES_JSON" &&
+    echo "DIFF_STATUS=\$DIFF_STATUS"
+    echo "BLOCKER=\${DIFF_BLOCKER_MSG:-}"
+    echo "CHANGED_FILES_JSON=\$CHANGED_FILES_JSON"
     cd .. && rm -rf test-shallow-$$
   `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
 
-  const arr = JSON.parse(result.trim());
-  assert.ok(Array.isArray(arr), 'shallow checkout must still produce valid JSON array');
-  assert.ok(!result.includes('fatal:'), 'must not fail with fatal error on shallow checkout');
+  const lines = result.trim().split('\n');
+  const statusLine = lines.find(l => l.startsWith('DIFF_STATUS='));
+  const blockerLine = lines.find(l => l.startsWith('BLOCKER='));
+  const jsonLine = lines.find(l => l.startsWith('CHANGED_FILES_JSON='));
+
+  const diffStatus = statusLine ? statusLine.split('=')[1] : '';
+  const blocker = blockerLine ? blockerLine.split('=')[1] : '';
+  const changedFiles = jsonLine ? jsonLine.split('=')[1] : '';
+
+  assert.notEqual(diffStatus, '0', 'missing HEAD~1 must set DIFF_STATUS to nonzero');
+  assert.ok(blocker.length > 0, 'missing HEAD~1 must record a blocker');
+  assert.ok(blocker.includes('changed_files diff command failed'), 'blocker must describe the failure');
+  assert.equal(changedFiles, '[]', 'CHANGED_FILES_JSON must remain [] (not a false file listing) when HEAD~1 is missing');
 });
 
 runTest('Behavioral: genuinely failing diff sets DIFF_BLOCKER_MSG (fail closed)', () => {
@@ -790,13 +812,8 @@ runTest('Behavioral: genuinely failing diff sets DIFF_BLOCKER_MSG (fail closed)'
     if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
       DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
     else
-      EMPTY_TREE=\$(git hash-object -t tree /dev/null 2>/dev/null || echo '4b825dc642cb6eb9a060e54bf8777a54e5e7e5ce')
-      if [ -n "\$EMPTY_TREE" ]; then
-        DIFF_OUTPUT=\$(git diff --name-only "\$EMPTY_TREE" HEAD 2>&1) || DIFF_STATUS=\$?
-      else
-        DIFF_STATUS=1
-        DIFF_OUTPUT="fatal: cannot establish baseline for diff"
-      fi
+      DIFF_STATUS=1
+      DIFF_OUTPUT="fatal: HEAD~1 does not exist (initial commit or insufficient checkout depth); cannot determine changed files"
     fi
 
     if [ "\$DIFF_STATUS" -ne 0 ]; then
