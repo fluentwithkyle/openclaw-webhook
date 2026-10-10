@@ -762,19 +762,24 @@ runTest('Behavioral: shallow checkout with no HEAD~1 falls back to empty tree di
   assert.ok(!result.includes('fatal:'), 'must not fail with fatal error on shallow checkout');
 });
 
-runTest('Behavioral: diff command failure sets DIFF_BLOCKER_MSG (fail closed)', () => {
-  // Create a git repo with a single commit so HEAD~1 doesn't exist,
-  // then simulate the diff failing by deleting HEAD~1 existence
+runTest('Behavioral: genuinely failing diff sets DIFF_BLOCKER_MSG (fail closed)', () => {
+  // Force git diff to actually fail by using a corrupted git repository.
+  // This is NOT the shallow-checkout scenario (which succeeds via empty-tree fallback).
+  // We simulate a real diff failure by creating a repo where HEAD is broken.
   const result = execSync(`
-    git init -q test-fail-$$ && cd test-fail-$$ &&
+    git init -q test-realfail-$$ && cd test-realfail-$$ &&
     git config user.email t@t.com && git config user.name t &&
     git config --global --add safe.directory '*' &&
     git commit -q --allow-empty -m initial &&
+    echo "content" > file.txt && git add file.txt && git commit -q -m "real commit" &&
+
+    # Corrupt HEAD so git diff fails with a real nonzero exit status
+    echo "corrupted-ref" > .git/HEAD &&
+
     CHANGED_FILES_JSON='[]'
     DIFF_STATUS=0
     DIFF_BLOCKER_MSG=""
     DIFF_OUTPUT=""
-    # HEAD~1 does not exist in a single-commit repo; this simulates diff failure
     if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
       DIFF_OUTPUT=\$(git diff --name-only HEAD~1 HEAD 2>&1) || DIFF_STATUS=\$?
     else
@@ -786,21 +791,101 @@ runTest('Behavioral: diff command failure sets DIFF_BLOCKER_MSG (fail closed)', 
         DIFF_OUTPUT="fatal: cannot establish baseline for diff"
       fi
     fi
+
     if [ "\$DIFF_STATUS" -ne 0 ]; then
       DIFF_BLOCKER_MSG="changed_files diff command failed (exit \$DIFF_STATUS); cannot produce complete changed_files list"
     fi
-    # Output: BLOCKER_SET if blocker was set, CHANGED_FILES_JSON value if not
-    if [ -n "\$DIFF_BLOCKER_MSG" ]; then
-      echo -n "BLOCKER_SET"
-    else
-      echo -n "\$CHANGED_FILES_JSON"
-    fi
-    cd .. && rm -rf test-fail-$$
+
+    # Output structured result for assertion
+    echo "DIFF_STATUS=\$DIFF_STATUS"
+    echo "BLOCKER=\${DIFF_BLOCKER_MSG:-}"
+    echo "CHANGED_FILES_JSON=\$CHANGED_FILES_JSON"
+    cd .. && rm -rf test-realfail-$$
   `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
 
-  // In a single-commit repo, HEAD~1 does not exist, so the empty tree fallback
-  // should succeed (not set the blocker). But if we explicitly test failure:
-  assert.ok(result.trim().length >= 2, 'must produce some output');
+  const lines = result.trim().split('\n');
+  const statusLine = lines.find(l => l.startsWith('DIFF_STATUS='));
+  const blockerLine = lines.find(l => l.startsWith('BLOCKER='));
+  const jsonLine = lines.find(l => l.startsWith('CHANGED_FILES_JSON='));
+
+  const diffStatus = statusLine ? statusLine.split('=')[1] : '';
+  const blocker = blockerLine ? blockerLine.split('=')[1] : '';
+  const changedFiles = jsonLine ? jsonLine.split('=')[1] : '';
+
+  // 1. Nonzero exit status is detected
+  assert.notEqual(diffStatus, '0', 'diff must fail with nonzero exit status when HEAD is corrupted');
+  // 2. A blocker is recorded
+  assert.ok(blocker.length > 0, 'a blocker must be recorded when diff fails');
+  assert.ok(blocker.includes('changed_files diff command failed'), 'blocker must describe the failure');
+  // 3. Incomplete result is not accepted as complete
+  assert.equal(changedFiles, '[]', 'CHANGED_FILES_JSON must remain default [] on failure, not partial output');
+  // 4. CHANGED_FILES_JSON is exactly one valid JSON array
+  const arr = JSON.parse(changedFiles);
+  assert.ok(Array.isArray(arr), 'CHANGED_FILES_JSON must be a valid JSON array even on failure');
+});
+
+runTest('Behavioral: partial diff output then failure is rejected (fail closed)', () => {
+  // Simulate a diff command that emits a filename, then exits nonzero.
+  // The key assertion: the partial filename must NOT appear in CHANGED_FILES_JSON.
+  // We achieve this by creating a script that mimics git diff emitting partial output
+  // then failing.
+  const result = execSync(`
+    # Create a fake git diff that outputs a filename then exits 1
+    mkdir -p /tmp/fake-git-$$ &&
+    cat > /tmp/fake-git-$$/fake-diff.sh << 'SCRIPT'
+#!/bin/bash
+echo "file1.txt"
+echo "file2.txt"
+exit 1
+SCRIPT
+    chmod +x /tmp/fake-git-$$/fake-diff.sh &&
+
+    CHANGED_FILES_JSON='[]'
+    DIFF_STATUS=0
+    DIFF_BLOCKER_MSG=""
+    DIFF_OUTPUT=""
+
+    # Run the fake diff; it produces partial output then exits nonzero
+    DIFF_OUTPUT=$(/tmp/fake-git-$$/fake-diff.sh 2>&1) || DIFF_STATUS=\$?
+
+    # Apply the SAME jq empty gate the workflow uses
+    if [ "\$DIFF_STATUS" -ne 0 ]; then
+      DIFF_BLOCKER_MSG="changed_files diff command failed (exit \$DIFF_STATUS); cannot produce complete changed_files list"
+    else
+      RAW_CHANGED_FILES_JSON=\$(printf '%s' "\$DIFF_OUTPUT" | jq -R -s -c 'split("\\n") | map(select(length > 0))' 2>/dev/null)
+      if jq empty <(printf '%s' "\$RAW_CHANGED_FILES_JSON") 2>/dev/null; then
+        CHANGED_FILES_JSON="\$RAW_CHANGED_FILES_JSON"
+      else
+        DIFF_BLOCKER_MSG="changed_files diff produced invalid JSON; cannot report changed files"
+      fi
+    fi
+
+    echo "DIFF_STATUS=\$DIFF_STATUS"
+    echo "BLOCKER=\${DIFF_BLOCKER_MSG:-}"
+    echo "CHANGED_FILES_JSON=\$CHANGED_FILES_JSON"
+
+    rm -rf /tmp/fake-git-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  const lines = result.trim().split('\n');
+  const statusLine = lines.find(l => l.startsWith('DIFF_STATUS='));
+  const blockerLine = lines.find(l => l.startsWith('BLOCKER='));
+  const jsonLine = lines.find(l => l.startsWith('CHANGED_FILES_JSON='));
+
+  const diffStatus = statusLine ? statusLine.split('=')[1] : '';
+  const blocker = blockerLine ? blockerLine.split('=')[1] : '';
+  const changedFiles = jsonLine ? jsonLine.split('=')[1] : '';
+
+  // The diff exited nonzero
+  assert.notEqual(diffStatus, '0', 'fake diff must exit nonzero');
+  // A blocker is recorded
+  assert.ok(blocker.length > 0, 'partial output then failure must record a blocker');
+  assert.ok(blocker.includes('changed_files diff command failed'), 'blocker must describe the diff failure');
+  // The partial filenames must NOT be in CHANGED_FILES_JSON
+  assert.equal(changedFiles, '[]', 'partial output must not be accepted as changed_files; CHANGED_FILES_JSON must remain []');
+  // CHANGED_FILES_JSON is still exactly one valid JSON array
+  const arr = JSON.parse(changedFiles);
+  assert.ok(Array.isArray(arr), 'CHANGED_FILES_JSON must be a valid JSON array even on partial failure');
 });
 
 runTest('Behavioral: partial/invalid jq output is rejected and does not reach changed_files', () => {
