@@ -1248,7 +1248,7 @@ applicable); the Director's Run click remains the activation action.
 via the `coordinator-verify` CLI command in `poc/validate-external-activation.js`, which
 inspects the workflow file on the default branch and verifies: (1) zero-input
 `workflow_dispatch` (no `required: true` inputs), (2) embedded carrier artifact validity
-via `repairAndRevalidateOneCloseCarrier()` in `poc/one-click-artifact-validator.js` (with
+via `repairAndRevalidateOneClickCarrier()` in `poc/one-click-artifact-validator.js` (with
 automatic repair of correctable defects followed by re-validation), (3) exact task-to-workflow
 binding (`task_name`, `target_agent`, `repository` all match the requested task), and
 (4) canonical external-activation routing. The command outputs `coordinator_status` (VERIFIED

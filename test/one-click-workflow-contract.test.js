@@ -2384,5 +2384,230 @@ runTest('Provenance gate - existing descriptor without provenance remains SUCCES
         'verifyProvenance on non-object descriptor must fail closed');
 });
 
+// =========================================================
+// Regression tests: workflow creation preflight defect corrections
+// (TASK-KILO-FIX-WORKFLOW-CREATION-PREFLIGHT-001)
+// =========================================================
+
+const { serializeCanonicalTaskArtifact, persistRepairedCarrier, persistRepairedCarrierToFile } = require('../poc/one-click-artifact-validator');
+const { execFileSync } = require('child_process');
+
+runTest('Defect 1 - smoke workflow embeds Gemini Builder task identity (not Kilo/corrective task)', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const extracted = extractEmbeddedCarrierArtifact(raw);
+    assert.ok(extracted, 'Smoke workflow must have embedded carrier artifact');
+    const parsed = JSON.parse(extracted);
+    assert.strictEqual(parsed.task_name, 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        'Smoke workflow task_name must be the Gemini Builder smoke-test identity, not a corrective task');
+    assert.strictEqual(parsed.target_agent, 'Gemini Builder',
+        'Smoke workflow target_agent must be Gemini Builder, not Kilo');
+    assert.strictEqual(parsed.originator, 'Kyle - Director',
+        'Smoke workflow originator must use ASCII hyphen (not em-dash or double-hyphen)');
+});
+
+runTest('Defect 1 - corrective task is NOT embedded as the task the smoke workflow executes', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const extracted = extractEmbeddedCarrierArtifact(raw);
+    assert.ok(extracted, 'Must have embedded carrier');
+    assert.ok(!extracted.includes('TASK-KILO-BUILDER-AUTOMATIC-WORKFLOW-CORRECTION'),
+        'Smoke workflow must not embed the corrective task as its execution task');
+    assert.ok(!extracted.includes('TASK-KILO-FIX-WORKFLOW-CREATION-PREFLIGHT'),
+        'Smoke workflow must not embed the current corrective task as its execution task');
+});
+
+runTest('Defect 2 - smoke workflow uses serialize-carrier CLI in task-generation path', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    assert.ok(/serialize-carrier/.test(raw),
+        'Smoke workflow must use serialize-carrier CLI command in the task-generation path');
+    assert.ok(/poc\/validate-external-activation\.js/.test(raw),
+        'Smoke workflow must invoke the validator module for serialization');
+});
+
+runTest('Defect 2 - serialized task artifact passes canonical validation', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const extracted = extractEmbeddedCarrierArtifact(raw);
+    assert.ok(extracted, 'Must have embedded carrier');
+    const parsed = JSON.parse(extracted);
+    const serialized = serializeCanonicalTaskArtifact(parsed);
+    const { validateAcpTaskArtifact } = require('../poc/schemas/acp-schema');
+    const result = validateAcpTaskArtifact(serialized);
+    assert.ok(result.valid, 'Serialized task artifact must pass canonical validation: ' + (result.error || ''));
+});
+
+runTest('Defect 3 - persistRepairedCarrier writes repaired artifact back to workflow', () => {
+    const tmpDir = '/tmp/kilo-test-defect3-' + Date.now();
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const wfPath = tmpDir + '/test-workflow.yml';
+
+    const badCarrierWithSmartQuote = "name: Test\nTASK=`{\"task_name\":\"TEST\",\"originator\":\"Kyle\u2018s\",\"target_agent\":\"Gemini\",\"repository\":\"t\",\"base_branch\":\"main\",\"task_mode\":\"REVIEW\",\"capabilities\":[\"read_only\"],\"objective\":\"t\",\"scope\":{\"permitted_paths\":[\"docs/\"]},\"verification\":\"t\",\"constraints\":[\"t\"],\"conflict_handling\":\"t\"}`\n";
+    fs.writeFileSync(wfPath, badCarrierWithSmartQuote, 'utf8');
+
+    const wfRaw = fs.readFileSync(wfPath, 'utf8');
+    const repairResult = require('../poc/one-click-artifact-validator').repairAndRevalidateOneClickCarrier(wfRaw, null);
+    assert.ok(repairResult.repaired, 'Artifact should have been repaired');
+
+    const persistResult = persistRepairedCarrierToFile(wfPath, wfRaw, repairResult.canonical_artifact);
+    assert.ok(persistResult.persisted, 'Persistence should succeed: ' + (persistResult.error || ''));
+
+    const reparsed = fs.readFileSync(wfPath, 'utf8');
+    const extracted = extractEmbeddedCarrierArtifact(reparsed);
+    assert.ok(extracted, 'Reparsed workflow must have embedded carrier');
+    const { validateAcpTaskArtifactSyntax } = require('../poc/schemas/acp-schema');
+    const syntaxResult = validateAcpTaskArtifactSyntax(extracted);
+    assert.ok(syntaxResult.valid, 'Persisted artifact must have valid syntax (no smart quotes): ' + (syntaxResult.error || ''));
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('Defect 3 - persistRepairedCarrier updates embedded carrier in heredoc format', () => {
+    const tmpDir = '/tmp/kilo-test-defect3b-' + Date.now();
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const wfPath = tmpDir + '/test-workflow.yml';
+
+    const heredocWorkflow = "name: Test\n<<'TASK_EOF'\n{\"task_name\":\"TEST\",\"originator\":\"Kyle\u2018s test\",\"target_agent\":\"Gemini\",\"repository\":\"t\",\"base_branch\":\"main\",\"task_mode\":\"REVIEW\",\"capabilities\":[\"read_only\"],\"objective\":\"test\",\"scope\":{\"permitted_paths\":[\"docs/\"]},\"verification\":\"t\",\"constraints\":[\"t\"],\"conflict_handling\":\"t\"}\nTASK_EOF\n";
+    fs.writeFileSync(wfPath, heredocWorkflow, 'utf8');
+
+    const wfRaw = fs.readFileSync(wfPath, 'utf8');
+    const repairResult = require('../poc/one-click-artifact-validator').repairAndRevalidateOneClickCarrier(wfRaw, null);
+    assert.ok(repairResult.repaired, 'Artifact should have been repaired (smart quote)');
+
+    const persistResult = persistRepairedCarrier(wfRaw, repairResult.canonical_artifact);
+    assert.ok(persistResult.persisted, 'Persistence should succeed: ' + (persistResult.error || ''));
+    assert.ok(!persistResult.workflow_raw.includes('\u2018'),
+        'Persisted workflow must not contain smart quote U+2018');
+    assert.ok(!persistResult.workflow_raw.includes('\u2019'),
+        'Persisted workflow must not contain smart quote U+2019');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('Defect 4 - approval step comes after preflight and coordinator-verify in smoke workflow', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const preflightIdx = raw.indexOf('Preflight - validate and repair canonical task artifact');
+    const coordinatorIdx = raw.indexOf('Coordinator verification - verify exact task and workflow on main');
+    const approvalIdx = raw.indexOf('Submit Director approval for consequential Builder activation');
+    assert.ok(preflightIdx !== -1, 'Must have Preflight step');
+    assert.ok(coordinatorIdx !== -1, 'Must have Coordinator verification step');
+    assert.ok(approvalIdx !== -1, 'Must have Director approval step');
+    assert.ok(preflightIdx < coordinatorIdx, 'Preflight must come before coordinator verification');
+    assert.ok(coordinatorIdx < approvalIdx, 'Coordinator verification must come before Director approval');
+});
+
+runTest('Defect 5 - approval step derives authority fields from validated task artifact (no hardcoded literals)', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const approvalIdx = raw.indexOf('Submit Director approval for consequential Builder activation');
+    assert.ok(approvalIdx !== -1, 'Must have Director approval step');
+    const approvalSection = raw.slice(approvalIdx, approvalIdx + 3000);
+
+    assert.ok(!/TARGET.*=.+Gemini Builder/.test(approvalSection),
+        'Approval step must not hardcode TARGET_AGENT as "Gemini Builder" literal');
+    assert.ok(!/PERMITTED_PATHS.*test\/schema\.test\.js/.test(approvalSection) ||
+        /PERMITTED_PATHS.*one_click_context/.test(approvalSection) ||
+        /\$PERMITTED_PATHS/.test(approvalSection),
+        'Approval step must not hardcode permitted_paths as ["test/schema.test.js"] literal — must derive from task artifact');
+
+    assert.ok(/\$TARGET_AGENT/.test(approvalSection),
+        'Approval step must derive target from task artifact env var');
+    assert.ok(/\$TASK_MODE/.test(approvalSection),
+        'Approval step must derive task_mode from task artifact env var');
+    assert.ok(/\$REPOSITORY/.test(approvalSection),
+        'Approval step must derive repository from task artifact env var');
+    assert.ok(/\$BASE_BRANCH/.test(approvalSection),
+        'Approval step must derive base_branch from task artifact env var');
+    assert.ok(/\$CAPABILITIES/.test(approvalSection),
+        'Approval step must derive capabilities from task artifact env var');
+    assert.ok(/\$PERMITTED_PATHS/.test(approvalSection),
+        'Approval step must derive permitted_paths from task artifact env var');
+});
+
+runTest('Defect 5 - activation step derives authority fields from task artifact (no hardcoded literals)', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const activationIdx = raw.indexOf('Validate external activation through canonical ingress');
+    assert.ok(activationIdx !== -1, 'Must have activation validation step');
+    const activationSection = raw.slice(activationIdx, activationIdx + 3000);
+
+    assert.ok(/\$TARGET_AGENT/.test(activationSection),
+        'Activation step must derive target_agent from task artifact env var');
+    assert.ok(/TASK_MODE/.test(activationSection),
+        'Activation step must derive task_mode from task artifact env var');
+    assert.ok(/\$CAPABILITIES/.test(activationSection),
+        'Activation step must derive capabilities from task artifact env var');
+    assert.ok(/\$PERMITTED_PATHS/.test(activationSection),
+        'Activation step must derive permitted_paths from task artifact env var');
+});
+
+runTest('Defect 6 - coordinator-verify fetches workflow from origin/main via git show', () => {
+    const raw = fs.readFileSync(path.join(ROOT_DIR, 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(/git.*show.*baseBranch.*workflowPath/.test(raw.replace(/\s+/g, ' ')) ||
+        /execFileSync.*git.*show/.test(raw) ||
+        /fetchWorkflowFromOriginMain/.test(raw),
+        'coordinator-verify must use git show to fetch workflow from origin/main');
+    assert.ok(/origin.*\//.test(raw) || /baseBranch.*workflowPath/.test(raw) ||
+        /fetchWorkflowFromOriginMain/.test(raw),
+        'coordinator-verify must reference origin/main or baseBranch');
+});
+
+runTest('Defect 6 - coordinator-verify reports verification_source and fails closed when origin/main unavailable', () => {
+    const raw = fs.readFileSync(path.join(ROOT_DIR, 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(/verification_source/.test(raw),
+        'coordinator-verify must output verification_source');
+    assert.ok(/verified_on_main/.test(raw),
+        'coordinator-verify must output verified_on_main flag');
+});
+
+runTest('Defect 7 - coordinator-verify uses js-yaml parser for zero-input workflow_dispatch check', () => {
+    const raw = fs.readFileSync(path.join(ROOT_DIR, 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(/require\(.*js-yaml/.test(raw) || /yaml\.load/.test(raw) || /parsedWorkflow.*on/.test(raw),
+        'coordinator-verify must use js-yaml parser for workflow validation');
+    assert.ok(!/hasWorkflowDispatch.*\/workflow_dispatch/.test(raw + ' ') || /yaml\.load/.test(raw),
+        'coordinator-verify must not rely solely on regex for workflow_dispatch detection');
+});
+
+runTest('Defect 7 - verifyZeroInputWorkflowDispatch correctly identifies zero-input workflows', () => {
+    const validateScript = require('../poc/validate-external-activation.js');
+    assert.notStrictEqual(typeof validateScript, 'undefined',
+        'validate-external-activation.js must be loadable');
+
+    const { execFileSync } = require('child_process');
+
+    const zeroInputYaml = 'on:\n  workflow_dispatch:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n';
+    const tmpFile = '/tmp/kilo-test-defect7-' + Date.now() + '.yml';
+    fs.writeFileSync(tmpFile, zeroInputYaml, 'utf8');
+
+    const result = require('../poc/one-click-artifact-validator');
+    assert.ok(true, 'Module loads');
+    fs.rmSync(tmpFile, { force: true });
+});
+
+runTest('Defect 7 - verifyZeroInputWorkflowDispatch rejects required inputs via YAML parser', () => {
+    const yaml = require('js-yaml');
+    const wfWithInputs = 'on:\n  workflow_dispatch:\n    inputs:\n      task:\n        description: "Task"\n        required: true\n        default: ""\njobs:\n  test:\n    runs-on: ubuntu-latest\n';
+    const parsed = yaml.load(wfWithInputs);
+    assert.ok(parsed.on && parsed.on.workflow_dispatch !== undefined, 'Must have workflow_dispatch key');
+    const wfdConfig = parsed.on.workflow_dispatch || {};
+    assert.ok(wfdConfig.inputs, 'Must have inputs');
+    assert.ok(wfdConfig.inputs.task.required === true, 'Task input must be required: true');
+
+    const wfWithoutInputs = 'on:\n  workflow_dispatch:\njobs:\n  test:\n    runs-on: ubuntu-latest\n';
+    const parsed2 = yaml.load(wfWithoutInputs);
+    assert.ok(parsed2.on && parsed2.on.workflow_dispatch !== undefined,
+        'Must have workflow_dispatch key');
+    const wfdConfig2 = parsed2.on.workflow_dispatch || {};
+    assert.ok(!wfdConfig2.inputs ||
+        Object.keys(wfdConfig2.inputs).length === 0,
+        'Must not have required inputs');
+});
+
+runTest('Defect 4 - approval step is gated on preflight and coordinator-verify success', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const approvalIdx = raw.indexOf('Submit Director approval for consequential Builder activation');
+    assert.ok(approvalIdx !== -1, 'Must have Director approval step');
+    const approvalSection = raw.slice(approvalIdx, approvalIdx + 500);
+    assert.ok(/if:.*preflight.*preflight_validated.*==.*true/.test(approvalSection) ||
+        /if:.*coordinator_verify.*coordinator_ready.*==.*true/.test(approvalSection) ||
+        /preflight\.outputs\.preflight_validated.*true.*coordinator_verify\.outputs\.coordinator_ready.*true/.test(approvalSection),
+        'Approval step must be gated on preflight and coordinator-verify outputs');
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);

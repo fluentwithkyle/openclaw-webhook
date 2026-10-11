@@ -21,10 +21,27 @@ jobs:
 
           REQUEST_ID="builder-execution-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           BUILDER_EXEC_ID="builder-execution-smoke-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-          TASK=$(cat <<'TASK_EOF'
-          {"task_name":"TASK-KILO-BUILDER-AUTOMATIC-WORKFLOW-CORRECTION-001","originator":"Kyle -- Director","target_agent":"Kilo","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('BUILDER') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js","poc/"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}
+
+          TASK_PAYLOAD=$(node poc/validate-external-activation.js serialize-carrier '{"task":{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('"'"'BUILDER'"'"') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js","poc/"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}}')
+
+          TASK=$(echo "$TASK_PAYLOAD" | jq -c '.')
+
+          echo "$TASK" | jq . > /dev/null
+
+          EMBEDDED_TASK=$(cat <<'TASK_EOF'
+          {"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('BUILDER') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js","poc/"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}
           TASK_EOF
           )
+
+          EMBEDDED_COMPACT=$(echo "$EMBEDDED_TASK" | jq -c '.')
+          SERIALIZED_COMPACT=$(echo "$TASK_PAYLOAD" | jq -c '.')
+
+          if [ "$SERIALIZED_COMPACT" != "$EMBEDDED_COMPACT" ]; then
+            echo "::error::Serialized task does not match embedded carrier artifact"
+            echo "::error::  serialized: $SERIALIZED_COMPACT"
+            echo "::error::  embedded:   $EMBEDDED_COMPACT"
+            exit 1
+          fi
 
           {
             echo 'request_id<<EOF'
@@ -36,17 +53,59 @@ jobs:
             echo 'task<<EOF'
             printf '%s\n' "$TASK"
             echo 'EOF'
+            echo 'target_agent<<EOF'
+            echo "$TASK_PAYLOAD" | jq -r '.target_agent'
+            echo 'EOF'
+            echo 'task_mode<<EOF'
+            echo "$TASK_PAYLOAD" | jq -r '.task_mode'
+            echo 'EOF'
+            echo 'repository<<EOF'
+            echo "$TASK_PAYLOAD" | jq -r '.repository'
+            echo 'EOF'
+            echo 'base_branch<<EOF'
+            echo "$TASK_PAYLOAD" | jq -r '.base_branch'
+            echo 'EOF'
+            echo 'capabilities<<EOF'
+            echo "$TASK_PAYLOAD" | jq -r '.capabilities | join(",")'
+            echo 'EOF'
+            echo 'permitted_paths<<EOF'
+            echo "$TASK_PAYLOAD" | jq -r '.scope.permitted_paths | join(",")'
+            echo 'EOF'
           } >> "$GITHUB_OUTPUT"
+
+      - name: Preflight - validate and repair canonical task artifact
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "::notice::Preflight: validating all one-click carrier artifacts"
+
+          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows", "requested_task": {"task_name": "TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook"}, "persist_repairs": true}'
+
+          echo "preflight_validated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Coordinator verification - verify exact task and workflow on main before Run link
+        id: coordinator_verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          node poc/validate-external-activation.js coordinator-verify '{"workflow_name": "one-click-gemini-builder-smoke.yml", "workflow_dir": ".github/workflows", "base_branch": "main", "requested_task": {"task_name": "TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook", "task_mode": "BUILDER", "permitted_paths": ["test/schema.test.js", "poc/"]}}'
 
       - name: Submit Director approval for consequential Builder activation
         id: director_approval
+        if: steps.preflight.outputs.preflight_validated == 'true' && steps.coordinator_verify.outputs.coordinator_ready == 'true'
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
           DIRECTOR_APPROVAL_SECRET: ${{ secrets.DIRECTOR_APPROVAL_SECRET }}
           REQUEST_ID: ${{ steps.one_click_context.outputs.request_id }}
-          REPOSITORY: ${{ github.repository }}
-          BASE_BRANCH: main
+          TARGET_AGENT: ${{ steps.one_click_context.outputs.target_agent }}
+          TASK_MODE: ${{ steps.one_click_context.outputs.task_mode }}
+          REPOSITORY: ${{ steps.one_click_context.outputs.repository }}
+          BASE_BRANCH: ${{ steps.one_click_context.outputs.base_branch }}
+          CAPABILITIES: ${{ steps.one_click_context.outputs.capabilities }}
+          PERMITTED_PATHS: ${{ steps.one_click_context.outputs.permitted_paths }}
         shell: bash
         run: |
           set -euo pipefail
@@ -61,18 +120,25 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$TARGET_AGENT" ] || [ -z "$TASK_MODE" ] || [ -z "$REPOSITORY" ] || [ -z "$BASE_BRANCH" ] || [ -z "$CAPABILITIES" ] || [ -z "$PERMITTED_PATHS" ]; then
+            echo "::error::Authority fields not found in validated task artifact; cannot submit Director approval"
+            exit 1
+          fi
+
           SCOPE_HASH=$(jq -n \
             --arg request_id "$REQUEST_ID" \
-            --arg target "Gemini Builder" \
-            --arg task_mode "BUILDER" \
+            --arg target "$TARGET_AGENT" \
+            --arg task_mode "$TASK_MODE" \
             --arg repository "$REPOSITORY" \
             --arg base_branch "$BASE_BRANCH" \
+            --arg capabilities "$CAPABILITIES" \
+            --arg permitted_paths "$PERMITTED_PATHS" \
             '{
               request_id: $request_id,
               target: $target,
               task_mode: $task_mode,
-              capabilities: ["read_only", "modify_files", "run_tests", "commit", "push"],
-              permitted_paths: ["test/schema.test.js"],
+              capabilities: ($capabilities | split(",")),
+              permitted_paths: ($permitted_paths | split(",")),
               repository: $repository,
               base_branch: $base_branch
             }')
@@ -99,31 +165,20 @@ jobs:
             exit 1
           fi
 
-      - name: Preflight - validate embedded ACP task artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'
-
-      - name: Coordinator verification - verify exact task and workflow on main before Run link
-        id: coordinator_verify
-        shell: bash
-        run: |
-          set -euo pipefail
-          node poc/validate-external-activation.js coordinator-verify '{"workflow_name": "one-click-gemini-builder-smoke.yml", "workflow_dir": ".github/workflows", "requested_task": {"task_name": "TASK-KILO-BUILDER-AUTOMATIC-WORKFLOW-CORRECTION-001", "target_agent": "Kilo", "task_mode": "BUILDER", "repository": "fluentwithkyle/openclaw-webhook", "permitted_paths": ["test/schema.test.js", "poc/"]}}'
-
       - name: Validate external activation through canonical ingress
         id: validate_activation
+        if: steps.preflight.outputs.preflight_validated == 'true' && steps.coordinator_verify.outputs.coordinator_ready == 'true'
         env:
           CALLBACK_BASE_URL: ${{ secrets.RENDER_CALLBACK_BASE_URL }}
           ACP_POC_TRIGGER_SECRET: ${{ secrets.ACP_POC_TRIGGER_SECRET }}
           REQUEST_ID: ${{ steps.one_click_context.outputs.request_id }}
           TASK: ${{ steps.one_click_context.outputs.task }}
-          REPOSITORY: ${{ github.repository }}
-          BASE_BRANCH: main
-          TASK_MODE: BUILDER
-          CAPABILITIES: read_only,modify_files,run_tests,commit,push
-          PERMITTED_PATHS: test/schema.test.js
+          TARGET_AGENT: ${{ steps.one_click_context.outputs.target_agent }}
+          TASK_MODE: ${{ steps.one_click_context.outputs.task_mode }}
+          REPOSITORY: ${{ steps.one_click_context.outputs.repository }}
+          BASE_BRANCH: ${{ steps.one_click_context.outputs.base_branch }}
+          CAPABILITIES: ${{ steps.one_click_context.outputs.capabilities }}
+          PERMITTED_PATHS: ${{ steps.one_click_context.outputs.permitted_paths }}
           APPROVAL_ID: ${{ steps.director_approval.outputs.approval_id }}
           EXECUTION_DESCRIPTOR_FILE: execution-descriptor.json
         shell: bash
@@ -135,21 +190,28 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$APPROVAL_ID" ]; then
+            echo "::error::Director approval not available; cannot validate activation"
+            exit 1
+          fi
+
           ACTIVATION_JSON=$(jq -n \
             --arg request_id "$REQUEST_ID" \
             --arg task "$TASK" \
+            --arg target_agent "$TARGET_AGENT" \
+            --arg task_mode "$TASK_MODE" \
             --arg repository "$REPOSITORY" \
             --arg base_branch "$BASE_BRANCH" \
-            --arg task_mode "$TASK_MODE" \
             --arg capabilities "$CAPABILITIES" \
             --arg permitted_paths "$PERMITTED_PATHS" \
             --arg approval_id "$APPROVAL_ID" \
             '{
               request_id: $request_id,
               task: $task,
+              target_agent: $target_agent,
+              task_mode: $task_mode,
               repository: $repository,
               base_branch: $base_branch,
-              task_mode: $task_mode,
               capabilities: $capabilities,
               permitted_paths: $permitted_paths,
               approval_id: $approval_id
@@ -166,8 +228,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The orchestration context now consumes the SERVER-DERIVED execution descriptor
-          # returned by the canonical activation ingress, not workflow input values.
           DESCRIPTOR_FILE="execution-descriptor.json"
           if [ ! -f "$DESCRIPTOR_FILE" ]; then
             echo "::error::Execution descriptor file not found; server validation may have produced a replay"
@@ -391,7 +451,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Derive ACP envelope fields from the SERVER-DERIVED execution descriptor.
           DESCRIPTOR_FILE="execution-descriptor.json"
           if [ -f "$DESCRIPTOR_FILE" ]; then
             REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
@@ -501,7 +560,7 @@ jobs:
             -d @callback_payload.json)
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | head -n-1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
 
           echo "Callback response: $HTTP_CODE"
           echo "Callback body: $BODY"

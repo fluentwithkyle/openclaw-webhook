@@ -1,4 +1,6 @@
 const fs = require('fs');
+const yaml = require('js-yaml');
+const { execFileSync } = require('child_process');
 const {
     validateExternalActivation,
     buildActivationPayloadForIssueComment,
@@ -18,6 +20,96 @@ function writeOutput(name, value) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT || '/dev/null', `${name}=${value}\n`, 'utf8');
 }
 
+function fetchWorkflowFromOriginMain(workflowPath, baseBranch) {
+    try {
+        const output = execFileSync('git', ['show', baseBranch + ':' + workflowPath], {
+            encoding: 'utf8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe']
+        });
+        return { ok: true, content: output, source: 'origin/' + baseBranch };
+    } catch (e) {
+        return { ok: false, content: null, source: null, error: e.message };
+    }
+}
+
+function verifyZeroInputWorkflowDispatch(workflowRaw) {
+    let parsedWorkflow;
+    try {
+        parsedWorkflow = yaml.load(workflowRaw);
+    } catch (e) {
+        return {
+            valid: false,
+            error: 'Workflow YAML parse failure: ' + e.message,
+            error_code: 'YAML_PARSE_FAILED',
+            has_workflow_dispatch: false,
+            has_required_inputs: false
+        };
+    }
+
+    if (!parsedWorkflow || typeof parsedWorkflow !== 'object' || !parsedWorkflow.on) {
+        return {
+            valid: false,
+            error: 'Workflow does not declare top-level on: trigger',
+            error_code: 'MISSING_TRIGGER',
+            has_workflow_dispatch: false,
+            has_required_inputs: false
+        };
+    }
+
+    let triggers = parsedWorkflow.on;
+    if (typeof triggers === 'string') {
+        triggers = [triggers];
+    }
+    if (Array.isArray(triggers)) {
+        triggers = triggers.filter(t => typeof t === 'string');
+    }
+
+    const hasWorkflowDispatch = (typeof triggers === 'object' && !Array.isArray(triggers) && Object.prototype.hasOwnProperty.call(triggers, 'workflow_dispatch')) ||
+        (Array.isArray(triggers) && triggers.includes('workflow_dispatch'));
+
+    if (!hasWorkflowDispatch) {
+        return {
+            valid: false,
+            error: 'Workflow does not have workflow_dispatch trigger',
+            error_code: 'MISSING_WORKFLOW_DISPATCH',
+            has_workflow_dispatch: false,
+            has_required_inputs: false
+        };
+    }
+
+    let wfdConfig = {};
+    if (typeof triggers === 'object' && !Array.isArray(triggers) && triggers.workflow_dispatch) {
+        wfdConfig = triggers.workflow_dispatch || {};
+    }
+
+    let hasRequiredInputs = false;
+    if (wfdConfig && typeof wfdConfig === 'object' && wfdConfig.inputs && typeof wfdConfig.inputs === 'object') {
+        for (const [inputName, inputDef] of Object.entries(wfdConfig.inputs)) {
+            if (inputDef && typeof inputDef === 'object' && inputDef.required === true) {
+                hasRequiredInputs = true;
+                break;
+            }
+        }
+    }
+
+    if (hasRequiredInputs) {
+        return {
+            valid: false,
+            error: 'Workflow has required workflow_dispatch inputs (not zero-input)',
+            error_code: 'HAS_REQUIRED_INPUTS',
+            has_workflow_dispatch: true,
+            has_required_inputs: true
+        };
+    }
+
+    return {
+        valid: true,
+        error: null,
+        error_code: null,
+        has_workflow_dispatch: true,
+        has_required_inputs: false
+    };
+}
+
 async function main() {
     const command = process.argv[2];
     const params = JSON.parse(process.argv[3]);
@@ -25,7 +117,8 @@ async function main() {
     if (command === 'one-click-preflight') {
         const workflowDir = params.workflow_dir || '.github/workflows';
         const requestedTask = params.requested_task || null;
-        const preflightResult = preflightValidateOneClickActivation(workflowDir, requestedTask);
+        const persistRepairs = params.persist_repairs === true;
+        const preflightResult = preflightValidateOneClickActivation(workflowDir, requestedTask, persistRepairs);
         if (!preflightResult.all_valid) {
             console.error('::error::One-click preflight validation failed: not all carriers have valid embedded ACP artifacts');
             for (const [wf, r] of Object.entries(preflightResult.results)) {
@@ -38,10 +131,11 @@ async function main() {
             }
             process.exit(1);
         }
-        console.log('::notice::One-click preflight validation passed: all ' + preflightResult.summary.total + ' carriers have valid embedded ACP artifacts' + (preflightResult.summary.repaired > 0 ? ' (' + preflightResult.summary.repaired + ' repaired)' : ''));
+        console.log('::notice::One-click preflight validation passed: all ' + preflightResult.summary.total + ' carriers have valid embedded ACP artifacts' + (preflightResult.summary.repaired > 0 ? ' (' + preflightResult.summary.repaired + ' repaired)' : '') + (preflightResult.summary.persisted > 0 ? ' (' + preflightResult.summary.persisted + ' persisted to disk)' : ''));
         if (process.env.GITHUB_OUTPUT) {
             writeOutput('preflight_passed', 'true');
             writeOutput('preflight_repaired', String(preflightResult.summary.repaired > 0));
+            writeOutput('preflight_persisted', String(preflightResult.summary.persisted > 0));
         }
         process.exit(0);
     }
@@ -50,6 +144,7 @@ async function main() {
         const workflowName = params.workflow_name;
         const requestedTask = params.requested_task;
         const workflowDir = params.workflow_dir || '.github/workflows';
+        const baseBranch = params.base_branch || 'main';
 
         if (!workflowName) {
             console.error('::error::BLOCKED: coordinator-verify requires workflow_name');
@@ -66,33 +161,35 @@ async function main() {
         }
 
         const workflowPath = workflowDir + '/' + workflowName;
+
         let workflowRaw;
-        try {
-            workflowRaw = fs.readFileSync(workflowPath, 'utf8');
-        } catch (e) {
-            console.error('::error::BLOCKED: Workflow file not found on main: ' + workflowPath);
-            writeOutput('coordinator_status', 'BLOCKED');
-            writeOutput('coordinator_ready', 'false');
-            writeOutput('coordinator_reason', 'Workflow file not found on default branch');
-            process.exit(1);
+        let verificationSource = null;
+        let verifiedOnMain = false;
+
+        const remoteFetch = fetchWorkflowFromOriginMain(workflowPath, baseBranch);
+        if (remoteFetch.ok) {
+            workflowRaw = remoteFetch.content;
+            verificationSource = remoteFetch.source;
+            verifiedOnMain = true;
+        } else {
+            try {
+                workflowRaw = fs.readFileSync(workflowPath, 'utf8');
+                verificationSource = 'checkout';
+            } catch (fnfErr) {
+                console.error('::error::BLOCKED: Workflow file not found on default branch: ' + workflowPath);
+                writeOutput('coordinator_status', 'BLOCKED');
+                writeOutput('coordinator_ready', 'false');
+                writeOutput('coordinator_reason', 'Workflow file not found on default branch');
+                process.exit(1);
+            }
         }
 
-        const hasWorkflowDispatch = /workflow_dispatch/i.test(workflowRaw);
-        const hasRequiredInputs = /required:\s*true/i.test(workflowRaw);
-
-        if (!hasWorkflowDispatch) {
-            console.error('::error::BLOCKED: Workflow does not have workflow_dispatch trigger');
+        const dispatchCheck = verifyZeroInputWorkflowDispatch(workflowRaw);
+        if (!dispatchCheck.valid) {
+            console.error('::error::BLOCKED: ' + dispatchCheck.error);
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
-            writeOutput('coordinator_reason', 'Missing workflow_dispatch trigger');
-            process.exit(1);
-        }
-
-        if (hasRequiredInputs) {
-            console.error('::error::BLOCKED: Workflow has required inputs (not zero-input)');
-            writeOutput('coordinator_status', 'BLOCKED');
-            writeOutput('coordinator_ready', 'false');
-            writeOutput('coordinator_reason', 'Workflow has required workflow_dispatch inputs');
+            writeOutput('coordinator_reason', dispatchCheck.error_code || 'REGISTRATION_GATE_FAILED');
             process.exit(1);
         }
 
@@ -130,10 +227,12 @@ async function main() {
             process.exit(1);
         }
 
-        console.log('::notice::Coordinator verification passed: workflow ' + workflowName + ' contains exact task ' + requestedTask.task_name + ' with zero-input workflow_dispatch and canonical activation');
+        console.log('::notice::Coordinator verification passed: workflow ' + workflowName + ' contains exact task ' + requestedTask.task_name + ' with zero-input workflow_dispatch and canonical activation (verified ' + verificationSource + ')');
         writeOutput('coordinator_status', 'VERIFIED');
         writeOutput('coordinator_ready', 'true');
-        writeOutput('coordinator_reason', 'Exact task binding verified on main');
+        writeOutput('coordinator_reason', 'Exact task binding verified on ' + verificationSource);
+        writeOutput('verification_source', verificationSource);
+        writeOutput('verified_on_main', String(verifiedOnMain));
         if (repairResult.repaired) {
             writeOutput('carrier_repaired', 'true');
         }

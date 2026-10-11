@@ -423,9 +423,68 @@ function repairAndRevalidateOneClickCarrier(workflowRaw, requestedTask) {
     return validateOneClickCarrier(workflowRaw, requestedTask);
 }
 
-function preflightValidateOneClickActivation(workflowDir, requestedTask) {
+function persistRepairedCarrier(workflowRaw, repairedArtifactText) {
+    if (!workflowRaw || typeof workflowRaw !== 'string') {
+        return { persisted: false, error: 'workflowRaw is required', error_code: 'CARRIER_WRITE_FAILED' };
+    }
+    if (!repairedArtifactText || typeof repairedArtifactText !== 'string') {
+        return { persisted: false, error: 'repairedArtifactText is required', error_code: 'CARRIER_WRITE_FAILED' };
+    }
+
+    const originalExtracted = extractEmbeddedCarrierArtifact(workflowRaw);
+    if (originalExtracted === null) {
+        return { persisted: false, error: 'Cannot persist: no embedded carrier artifact found to replace', error_code: 'CARRIER_NO_EMBEDDED_ARTIFACT' };
+    }
+
+    const repairedTrimmed = repairedArtifactText.trim();
+
+    const heredocPattern = /<<'TASK_EOF'([\s\S]*?)TASK_EOF/;
+    if (heredocPattern.test(workflowRaw)) {
+        const updated = workflowRaw.replace(
+            /<<'TASK_EOF'[\s\S]*?TASK_EOF/,
+            "<<'TASK_EOF'\n" + repairedTrimmed + "\n          TASK_EOF"
+        );
+        return { persisted: true, workflow_raw: updated, carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_VALID };
+    }
+
+    const backtickPattern = /TASK=`([\s\S]*?)`/;
+    if (backtickPattern.test(workflowRaw)) {
+        const updated = workflowRaw.replace(
+            /TASK=`[\s\S]*?`/,
+            "TASK=`" + repairedTrimmed + "`"
+        );
+        return { persisted: true, workflow_raw: updated, carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_VALID };
+    }
+
+    const singleQuotePattern = /TASK='([\s\S]*?)'/;
+    if (singleQuotePattern.test(workflowRaw)) {
+        const updated = workflowRaw.replace(
+            /TASK='[\s\S]*?'/,
+            "TASK='" + repairedTrimmed + "'"
+        );
+        return { persisted: true, workflow_raw: updated, carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_VALID };
+    }
+
+    return { persisted: false, error: 'Cannot persist: unrecognized carrier embedding format', error_code: 'CARRIER_WRITE_FAILED' };
+}
+
+function persistRepairedCarrierToFile(workflowPath, workflowRaw, repairedArtifactText) {
+    const persistResult = persistRepairedCarrier(workflowRaw, repairedArtifactText);
+    if (!persistResult.persisted) {
+        return persistResult;
+    }
+    try {
+        fs.writeFileSync(workflowPath, persistResult.workflow_raw, 'utf8');
+        return { persisted: true, workflow_path: workflowPath, carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_VALID };
+    } catch (e) {
+        return { persisted: false, error: 'Failed to write repaired workflow: ' + e.message, error_code: 'CARRIER_WRITE_FAILED', workflow_path: workflowPath };
+    }
+}
+
+function preflightValidateOneClickActivation(workflowDir, requestedTask, persistRepairs) {
     const dir = workflowDir || '.github/workflows';
     const results = {};
+    const repairLog = [];
 
     for (const wf of VALID_ONE_CLICK_WORKFLOWS) {
         const wfPath = dir + '/' + wf;
@@ -438,27 +497,85 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask) {
                 valid: false,
                 error: 'Workflow file not found: ' + wf,
                 error_code: 'CARRIER_NOT_FOUND',
-                bound: false
+                bound: false,
+                repaired: false,
+                repairsApplied: null
             };
             continue;
         }
 
         const validation = repairAndRevalidateOneClickCarrier(workflowRaw, requestedTask);
         if (!validation.valid && validation.repaired) {
-            results[wf] = {
-                found: true,
-                valid: validation.valid,
-                error: validation.error || null,
-                error_code: validation.error_code || null,
-                canonical_artifact: validation.canonical_artifact || null,
-                repaired: true,
-                repairsApplied: validation.repairsApplied,
-                original_artifact: validation.original_artifact,
-                parsed: validation.parsed_artifact || null,
-                carrier_state: validation.carrier_state,
-                bound: validation.binding ? validation.binding.bound : false,
-                binding: validation.binding || null
-            };
+            if (persistRepairs === true) {
+                const persistResult = persistRepairedCarrierToFile(wfPath, workflowRaw, validation.canonical_artifact);
+                if (persistResult.persisted) {
+                    const reparsedArtifact = (() => {
+                        try { return fs.readFileSync(wfPath, 'utf8'); } catch (e) { return null; }
+                    })();
+                    let reparsedValid = false;
+                    let reparsedTask = null;
+                    if (reparsedArtifact) {
+                        const revalidation = repairAndRevalidateOneClickCarrier(reparsedArtifact, requestedTask);
+                        reparsedValid = revalidation.valid;
+                        if (revalidation.parsed_artifact) {
+                            reparsedTask = revalidation.parsed_artifact;
+                        }
+                    }
+                    results[wf] = {
+                        found: true,
+                        valid: reparsedValid,
+                        error: reparsedValid ? null : validation.error,
+                        error_code: reparsedValid ? null : validation.error_code,
+                        canonical_artifact: validation.canonical_artifact || null,
+                        repaired: true,
+                        repairsApplied: validation.repairsApplied,
+                        original_artifact: validation.original_artifact,
+                        parsed: validation.parsed_artifact || null,
+                        carrier_state: validation.carrier_state,
+                        bound: validation.binding ? validation.binding.bound : false,
+                        binding: validation.binding || null,
+                        persisted: persistResult.persisted,
+                        persisted_path: wfPath,
+                        reparsed_revalid: reparsedValid,
+                        reparsed_artifact: reparsedTask
+                    };
+                    repairLog.push({ workflow: wf, repaired: true, persisted: true, reparsed_valid: reparsedValid });
+                } else {
+                    results[wf] = {
+                        found: true,
+                        valid: validation.valid,
+                        error: persistResult.error || 'Failed to persist repair: ' + (persistResult.error_code || 'unknown'),
+                        error_code: persistResult.error_code || 'CARRIER_WRITE_FAILED',
+                        canonical_artifact: validation.canonical_artifact || null,
+                        repaired: true,
+                        repairsApplied: validation.repairsApplied,
+                        original_artifact: validation.original_artifact,
+                        parsed: validation.parsed_artifact || null,
+                        carrier_state: validation.carrier_state,
+                        bound: validation.binding ? validation.binding.bound : false,
+                        binding: validation.binding || null,
+                        persisted: false
+                    };
+                    repairLog.push({ workflow: wf, repaired: true, persisted: false, error: persistResult.error_code });
+                }
+            } else {
+                results[wf] = {
+                    found: true,
+                    valid: validation.valid,
+                    error: validation.error || null,
+                    error_code: validation.error_code || null,
+                    canonical_artifact: validation.canonical_artifact || null,
+                    repaired: true,
+                    repairsApplied: validation.repairsApplied,
+                    original_artifact: validation.original_artifact,
+                    parsed: validation.parsed_artifact || null,
+                    carrier_state: validation.carrier_state,
+                    bound: validation.binding ? validation.binding.bound : false,
+                    binding: validation.binding || null,
+                    persisted: false
+                };
+                repairLog.push({ workflow: wf, repaired: true, persisted: false, persisted_requested: false });
+            }
         } else {
             const directValidation = validateOneClickCarrier(workflowRaw, requestedTask);
             results[wf] = {
@@ -472,7 +589,8 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask) {
                 parsed: directValidation.parsed_artifact || null,
                 carrier_state: directValidation.carrier_state,
                 bound: directValidation.binding ? directValidation.binding.bound : false,
-                binding: directValidation.binding || null
+                binding: directValidation.binding || null,
+                persisted: false
             };
         }
     }
@@ -487,8 +605,10 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask) {
             valid: Object.values(results).filter(r => r.valid === true).length,
             invalid: Object.values(results).filter(r => r.valid !== true).length,
             bound: requestedTask ? Object.values(results).filter(r => r.bound === true).length : null,
-            repaired: Object.values(results).filter(r => r.repaired === true).length
+            repaired: Object.values(results).filter(r => r.repaired === true).length,
+            persisted: Object.values(results).filter(r => r.persisted === true).length
         },
+        repair_log: repairLog,
         requested_task: requestedTask || null
     };
 }
@@ -504,6 +624,8 @@ module.exports = {
     repairAndRevalidateOneClickCarrier,
     repairEmbeddedArtifact,
     validateRepairedArtifact,
+    persistRepairedCarrier,
+    persistRepairedCarrierToFile,
     serializeCanonicalTaskArtifact,
     getRuntimeTaskModeForConceptual,
     CANONICAL_TASK_ARTIFACT_FIELD_ORDER,
