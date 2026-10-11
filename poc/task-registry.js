@@ -1636,6 +1636,14 @@ function buildExecutionDescriptor(requestId, taskEntry, executionClaimId) {
     verification: taskEntry.verification,
     workflow_stage: taskEntry.workflow_stage,
     target_agent: taskEntry.current_agent,
+    director_transition_decision_provenance: taskEntry.transition_decision_provenance || null,
+    current_phase: taskEntry.transition_decision_provenance && taskEntry.transition_decision_provenance.current_phase || null,
+    target_phase: taskEntry.transition_decision_provenance && taskEntry.transition_decision_provenance.target_phase || null,
+    coordinator_task_id: taskEntry.transition_decision_provenance && taskEntry.transition_decision_provenance.coordinator_task_id || null,
+    transition_id: taskEntry.transition_decision_provenance && taskEntry.transition_decision_provenance.transition_id || null,
+    transition_evidence_id: taskEntry.transition_decision_provenance && taskEntry.transition_decision_provenance.transition_evidence_id || null,
+    prior_phase_convergence_evidence: taskEntry.transition_decision_provenance && taskEntry.transition_decision_provenance.prior_phase_convergence_evidence || null,
+    independent_verification_id: taskEntry.transition_decision_provenance && taskEntry.transition_decision_provenance.independent_verification_id || null,
     carrier_identity: taskEntry.execution_claim && taskEntry.execution_claim.carrier_identity || null,
     carrier_type: taskEntry.execution_claim && taskEntry.execution_claim.carrier_type || null
   };
