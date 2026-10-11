@@ -38,7 +38,7 @@ function pocHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET }; }
 function directorOriginHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET, 'x-director-origin-secret': DIRECTOR_ORIGIN_SECRET }; }
 function scope(cmd) { return { request_id: cmd.request_id, target: cmd.target, task_mode: cmd.task_mode, capabilities: cmd.authorization.capabilities, permitted_paths: cmd.constraints.permitted_paths, repository: cmd.repository, base_branch: cmd.base_branch }; }
 function command(requestId) {
-  return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Gemini', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Make the approved change', task_mode: 'FAILOVER_EXECUTE', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment' };
+  return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Gemini', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Make the approved change', task_name: 'TASK-ACP-CANONICAL-' + requestId, task_mode: 'FAILOVER_EXECUTE', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment' };
 }
 
 function runTestAsync(name, fn) {
@@ -194,6 +194,7 @@ function runTestAsync(name, fn) {
     const payload = buildActivationPayloadForWorkflowDispatch({
       request_id: 'ingress-auto-auth-1',
       task: 'implement feature',
+      task_name: 'TASK-ACP-CANONICAL-ingress-auto-auth-1',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'FAILOVER_EXECUTE',
@@ -217,6 +218,7 @@ function runTestAsync(name, fn) {
     const payload = buildBuilderActivationPayload({
       request_id: 'ingress-auto-auth-2',
       task: 'implement feature X',
+      task_name: 'TASK-ACP-CANONICAL-ingress-auto-auth-2',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'BUILDER',
@@ -254,6 +256,7 @@ function runTestAsync(name, fn) {
     const payload = buildActivationPayloadForWorkflowDispatch({
       request_id: 'ingress-backward-1',
       task: 'implement feature',
+      task_name: 'TASK-ACP-CANONICAL-ingress-backward-1',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'FAILOVER_EXECUTE',
@@ -279,6 +282,7 @@ function runTestAsync(name, fn) {
     const payload = buildBuilderActivationPayload({
       request_id: 'ingress-proof-1',
       task: 'implement feature',
+      task_name: 'TASK-ACP-CANONICAL-ingress-proof-1',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'BUILDER',
@@ -306,6 +310,7 @@ function runTestAsync(name, fn) {
     const payload = buildActivationPayloadForWorkflowDispatch({
       request_id: 'route-dir-authed-1',
       task: 'implement feature',
+      task_name: 'TASK-ACP-CANONICAL-route-dir-authed-1',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'FAILOVER_EXECUTE',
@@ -380,6 +385,7 @@ function runTestAsync(name, fn) {
     const payload = buildBuilderActivationPayload({
       request_id: 'route-dir-builder-1',
       task: 'implement feature',
+      task_name: 'TASK-ACP-CANONICAL-route-dir-builder-1',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'BUILDER',
@@ -431,6 +437,7 @@ function runTestAsync(name, fn) {
     const payload = buildActivationPayloadForWorkflowDispatch({
       request_id: 'route-preissued-1',
       task: 'implement feature',
+      task_name: 'TASK-ACP-CANONICAL-route-preissued-1',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'FAILOVER_EXECUTE',
@@ -459,6 +466,7 @@ function runTestAsync(name, fn) {
     const payload = buildActivationPayloadForWorkflowDispatch({
       request_id: 'route-replay-1',
       task: 'implement feature',
+      task_name: 'TASK-ACP-CANONICAL-route-replay-1',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'FAILOVER_EXECUTE',
@@ -629,6 +637,7 @@ function runTestAsync(name, fn) {
     const builderPayload = buildBuilderActivationPayload({
       request_id: 'builder-existing-auth-req',
       task: 'builder with director admission',
+      task_name: 'TASK-ACP-CANONICAL-builder-existing-auth-req',
       repository: 'fluentwithkyle/openclaw-webhook',
       base_branch: 'main',
       task_mode: 'BUILDER',

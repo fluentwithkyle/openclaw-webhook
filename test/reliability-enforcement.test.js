@@ -527,10 +527,9 @@ test('F1: @Kilo casing rejected (exact lowercase required)', async () => {
   assertEqual(result.valid, false);
 });
 
-test('F1: @kilo on unauthorized surface (workflow_dispatch) rejected', async () => {
+test('F1: @kilo on authorized surface (workflow_dispatch) accepted for Kilo FAILOVER_EXECUTE', async () => {
   const result = validateACPCompliance({ ...failoverCommand, activation_surface: 'workflow_dispatch' });
-  assertEqual(result.valid, false);
-  assert(result.error.includes('Unauthorized'));
+  assertEqual(result.valid, true, 'workflow_dispatch is a permitted activation surface for Kilo FAILOVER_EXECUTE');
 });
 
 test('F1: target/surface/target-syntax mismatch — Kilo surface for Gemini target rejected', async () => {

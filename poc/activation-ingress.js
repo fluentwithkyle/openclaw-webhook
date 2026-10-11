@@ -200,19 +200,6 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
 
   const isConsequential = isConsequentialCommand(command);
 
-  if (isConsequential) {
-    const taskName = command.task_name;
-    if (!taskName || typeof taskName !== 'string' || taskName.trim() === '') {
-      return {
-        success: false,
-        status: 'BLOCKED',
-        stage: 'validation blocked',
-        error: 'task_name is required for consequential external activation (FAILOVER_EXECUTE or BUILDER); canonical ACP task identity must not be null or empty',
-        error_code: 'MISSING_TASK_NAME'
-      };
-    }
-  }
-
   const replayResult = taskRegistry.replayTask(command);
   if (replayResult.success && replayResult.replay) {
     if (replayResult.task_terminated) {
@@ -255,8 +242,26 @@ async function canonicalExternalActivationIngress(request, dispatchContext) {
 
   let taskResult;
   if (isConsequential && dispatchContext && dispatchContext.director_approval_id) {
+    if (!command.task_name || typeof command.task_name !== 'string' || command.task_name.trim() === '') {
+      return {
+        success: false,
+        status: 'BLOCKED',
+        stage: 'validation blocked',
+        error: 'task_name is required for consequential external activation (FAILOVER_EXECUTE or BUILDER); canonical ACP task identity must not be null or empty',
+        error_code: 'MISSING_TASK_NAME'
+      };
+    }
     taskResult = await taskRegistry.createTaskWithDirectorAuthorization(command);
   } else if (isConsequential && dispatchContext && dispatchContext.director_admission) {
+    if (!command.task_name || typeof command.task_name !== 'string' || command.task_name.trim() === '') {
+      return {
+        success: false,
+        status: 'BLOCKED',
+        stage: 'validation blocked',
+        error: 'task_name is required for consequential external activation (FAILOVER_EXECUTE or BUILDER); canonical ACP task identity must not be null or empty',
+        error_code: 'MISSING_TASK_NAME'
+      };
+    }
     taskResult = await taskRegistry.createTaskWithAutoDirectorAuthorization(command);
   } else if (isConsequential) {
     return {

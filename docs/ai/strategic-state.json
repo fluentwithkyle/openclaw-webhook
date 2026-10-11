@@ -90,7 +90,7 @@
   ],
   "reconciliation_note": "Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Kyle has authorized proceeding to Phase 4 conversationally. The first authorized Phase 4 research/reconciliation task is responsible for establishing the durable transition record and invoking the existing mechanical gate; missing evidence at task start is an expected pre-reconciliation condition and does not require a separate transition-only task.",
   "authoritative_sources_agree": true,
-  "state_md_sha256": "14d47f19fc6fb07e8056468302b9f8273ffe0de5367fc09f7181b86bc7402138",
+  "state_md_sha256": "295f58cb00caa61c0064f56757d38d46079e3b9778694a4992f8e46e1add82f4",
   "verification_status": {
     "phase_3_convergence_verification_commit": "8c9e005",
     "status": "CONVERGED",
