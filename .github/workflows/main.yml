@@ -368,7 +368,7 @@ jobs:
 
       - name: Run Gemini in advisory mode
         id: gemini_run
-        if: (steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay) || (steps.validate_activation_wfd.outputs.activation_validated == 'true' && !steps.validate_activation_wfd.outputs.replay)
+        if: ((steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay) || (steps.validate_activation_wfd.outputs.activation_validated == 'true' && !steps.validate_activation_wfd.outputs.replay)) && steps.director_provenance.outputs.provenance_status == 'SUCCESS'
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -229,7 +229,7 @@ jobs:
 
       - name: Run Kilo execution
         id: kilo_run
-        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
+        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay && steps.director_provenance.outputs.provenance_status == 'SUCCESS'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

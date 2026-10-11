@@ -167,7 +167,7 @@ jobs:
 
       - name: Run Gemini in POC mode
         id: gemini
-        if: steps.validate_acp.outputs.valid == 'true'
+        if: steps.validate_acp.outputs.valid == 'true' && steps.director_provenance.outputs.provenance_status == 'SUCCESS'
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

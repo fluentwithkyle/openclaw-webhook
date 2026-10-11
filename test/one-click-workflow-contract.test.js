@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const yaml = require('js-yaml');
 
 let passCount = 0;
 let failCount = 0;
@@ -79,6 +80,50 @@ function extractCarrierField(workflowRaw, field) {
     const jsonFieldPattern = new RegExp('"' + field + '"\\s*:\\s*"?([^\'"\\s,]+)');
     const jsonMatch = workflowRaw.match(jsonFieldPattern);
     return jsonMatch ? jsonMatch[1].trim() : null;
+}
+
+function extractStepsFromRaw(raw) {
+    const steps = [];
+    const lines = raw.split('\n');
+    let stepStartLine = -1;
+    let stepIndent = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(/^(\s*)-\s+name:\s+(.+)$/);
+        if (m && stepStartLine === -1) {
+            stepIndent = m[1].length;
+            stepStartLine = i;
+        } else if (m && stepStartLine !== -1) {
+            const block = lines.slice(stepStartLine, i).join('\n');
+            addStep(steps, block);
+            stepIndent = m[1].length;
+            stepStartLine = i;
+        }
+    }
+    if (stepStartLine !== -1) {
+        const block = lines.slice(stepStartLine).join('\n');
+        addStep(steps, block);
+    }
+    return steps;
+}
+
+function addStep(steps, block) {
+    const step = { name: null, id: null, if: null, uses: null, run: null, env: null, _raw: block };
+    const nameMatch = block.match(/-\s+name:\s+(.+)/);
+    if (nameMatch) step.name = nameMatch[1].trim();
+    const idMatch = block.match(/id:\s+(\S+)/);
+    if (idMatch) step.id = idMatch[1].trim();
+    const ifMatch = block.match(/if:\s+(.+)/);
+    if (ifMatch) step.if = ifMatch[1].trim();
+    const usesMatch = block.match(/uses:\s+(\S+)/);
+    if (usesMatch) step.uses = usesMatch[1].trim();
+    const envMatch = block.match(/DEEPSEEK_COORDINATOR_SECRET:\s+(.+)/);
+    if (envMatch) step.env = { DEEPSEEK_COORDINATOR_SECRET: envMatch[1].trim() };
+    if (block.includes('run: |')) {
+        const runMatch = block.match(/run:\s*\|\s*\n([\s\S]+)/);
+        if (runMatch) step.run = runMatch[1];
+    }
+    steps.push(step);
 }
 
 const CARRIER_STATES = Object.freeze({
@@ -1879,6 +1924,8 @@ runTest('Kilo one-click - Run Kilo step is gated on activation validation succes
         'Must have Run Kilo execution step');
     assert.ok(/if:.*steps\.validate_activation\.outputs\.activation_validated.*==.*true/.test(oneClickKiloWfRaw),
         'Run Kilo step must be gated on activation validation');
+    assert.ok(/director_provenance\.outputs\.provenance_status.*SUCCESS/.test(oneClickKiloWfRaw),
+        'Run Kilo step must be gated on director_provenance provenance_status == SUCCESS');
 });
 
 runTest('Kilo one-click - execution failures fail the workflow (fail-closed)', () => {
@@ -2166,6 +2213,117 @@ runTest('TASK_STANDARD.md Section 10.4 - prohibits descriptor edits after valida
 runTest('TASK_STANDARD.md Section 10.1 - MALFORMED_JSON_SMART_QUOTE referenced for all smart quotes', () => {
     assert.ok(/MALFORMED_JSON_SMART_QUOTE/.test(taskStandardRaw),
         'TASK_STANDARD.md must reference MALFORMED_JSON_SMART_QUOTE error code for smart quote rejection');
+});
+
+runTest('Provenance gate - model-facing steps blocked when director_provenance verification fails', () => {
+
+    const allWorkflows = [
+        { name: 'main.yml', raw: mainWfRaw, modelStepName: 'Run Gemini in advisory mode' },
+        { name: 'gemini-builder.yml', raw: builderWfRaw, modelStepName: 'Run Gemini Builder' },
+        { name: 'external-gemini-activation-test.yml', raw: fs.readFileSync(path.join(ONE_CLICK_DIR, 'external-gemini-activation-test.yml'), 'utf8'), modelStepName: 'Run Gemini using server-derived execution descriptor' },
+        { name: 'kilo-gemini-poc.yml', raw: fs.readFileSync(path.join(ONE_CLICK_DIR, 'kilo-gemini-poc.yml'), 'utf8'), modelStepName: 'Run Gemini in POC mode' },
+        { name: 'one-click-gemini-builder-smoke.yml', raw: oneClickBuilderSmokeWfRaw, modelStepName: 'Run Gemini Builder' },
+        { name: 'one-click-gemini-builder-callback-correlation.yml', raw: fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-callback-correlation.yml'), 'utf8'), modelStepName: 'Run Gemini Builder' },
+        { name: 'one-click-gemini-builder-coordinator-registration-gate.yml', raw: fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-coordinator-registration-gate.yml'), 'utf8'), modelStepName: 'Run Gemini Builder' },
+        { name: 'one-click-gemini-builder-coordinator-registration-gate-fixed.yml', raw: fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-coordinator-registration-gate-fixed.yml'), 'utf8'), modelStepName: 'Run Gemini Builder' },
+        { name: 'one-click-gemini-acp-report-durable-readable-evidence-builder.yml', raw: fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-gemini-acp-report-durable-readable-evidence-builder.yml'), 'utf8'), modelStepName: 'Run Gemini Builder' },
+        { name: 'one-click-kilo-acp-copy-safe.yml', raw: fs.readFileSync(path.join(ONE_CLICK_DIR, 'one-click-kilo-acp-copy-safe.yml'), 'utf8'), modelStepName: 'Run Kilo execution' }
+    ];
+
+    const provenanceRegex = /director_provenance\.outputs\.provenance_status\s*==\s*'SUCCESS'/;
+
+    for (const wf of allWorkflows) {
+        assert.ok(wf.raw.includes('director_provenance') || wf.raw.includes('id: director_provenance'),
+            wf.name + ' must contain a director_provenance step');
+
+        let steps = [];
+        try {
+            const doc = yaml.load(wf.raw);
+            steps = doc.jobs && doc.jobs[Object.keys(doc.jobs)[0]] && doc.jobs[Object.keys(doc.jobs)[0]].steps || [];
+        } catch (e) {
+            steps = extractStepsFromRaw(wf.raw);
+        }
+
+        let modelStep = null;
+        let provenanceStep = null;
+
+        for (const step of steps) {
+            if (step.name === wf.modelStepName) modelStep = step;
+            if (step.id === 'director_provenance') provenanceStep = step;
+        }
+
+        assert.ok(modelStep, wf.name + ' must have a step named "' + wf.modelStepName + '"');
+        assert.ok(provenanceStep, wf.name + ' must have a director_provenance step');
+
+        const provenanceStepIdx = steps.indexOf(provenanceStep);
+        const modelStepIdx = steps.indexOf(modelStep);
+        assert.ok(provenanceStepIdx < modelStepIdx,
+            wf.name + ' director_provenance step must run before the model-facing step');
+
+        assert.ok(modelStep.if, wf.name + ' model-facing step must have an if condition');
+        assert.ok(provenanceRegex.test(modelStep.if),
+            wf.name + ' model-facing step if condition must gate on director_provenance.outputs.provenance_status == \'SUCCESS\'');
+
+        assert.ok(provenanceStep.if === 'always()',
+            wf.name + ' director_provenance step must use if: always() to run even on prior failures');
+
+        const provenanceRun = provenanceStep.run || '';
+        assert.ok(provenanceRun.includes('provenance_status=SUCCESS'),
+            wf.name + ' director_provenance step must set provenance_status=SUCCESS on success');
+        assert.ok(provenanceRun.includes('provenance_status=BLOCKED'),
+            wf.name + ' director_provenance step must set provenance_status=BLOCKED on failure');
+        assert.ok(provenanceRun.includes('exit 1'),
+            wf.name + ' director_provenance step must exit 1 on verification failure');
+
+        assert.ok(!modelStep.env || !modelStep.env.DEEPSEEK_COORDINATOR_SECRET,
+            wf.name + ' model-facing step must NOT have DEEPSEEK_COORDINATOR_SECRET in env');
+
+        assert.ok(provenanceStep.env && provenanceStep.env.DEEPSEEK_COORDINATOR_SECRET !== undefined,
+            wf.name + ' director_provenance step must have DEEPSEEK_COORDINATOR_SECRET in env');
+
+        assert.ok(!provenanceStep.uses || !provenanceStep.uses.includes('run-gemini-cli'),
+            wf.name + ' director_provenance step must NOT use run-gemini-cli action');
+    }
+});
+
+runTest('Provenance gate - model-facing step skipped when provenance_status is BLOCKED', () => {
+    const path = require('path');
+    const wfPath = path.join(ONE_CLICK_DIR, 'gemini-builder.yml');
+    const raw = fs.readFileSync(wfPath, 'utf8');
+
+    const provenanceIdx = raw.indexOf('id: director_provenance');
+    const modelIdx = raw.indexOf('Run Gemini Builder');
+    assert.ok(provenanceIdx > 0, 'gemini-builder.yml must have director_provenance step');
+    assert.ok(modelIdx > 0, 'gemini-builder.yml must have Run Gemini Builder step');
+    assert.ok(provenanceIdx < modelIdx, 'director_provenance must appear before Run Gemini Builder');
+
+    const provenanceSection = raw.slice(provenanceIdx, modelIdx);
+    const modelIfMatch = raw.slice(modelIdx).match(/if:\s*(.+)/);
+    assert.ok(modelIfMatch, 'Run Gemini Builder step must have an if condition');
+
+    const modelIf = modelIfMatch[1].trim();
+    assert.ok(/'SUCCESS'/.test(modelIf), 'Model-facing step if must reference SUCCESS');
+    assert.ok(/director_provenance\.outputs\.provenance_status/.test(modelIf),
+        'Model-facing step if must gate on director_provenance provenance_status');
+
+    const provenanceRun = provenanceSection;
+    assert.ok(/provenance_status=SUCCESS/.test(provenanceRun),
+        'director_provenance step must set provenance_status=SUCCESS on success path');
+    assert.ok(/provenance_status=BLOCKED/.test(provenanceRun),
+        'director_provenance step must set provenance_status=BLOCKED on failure path');
+    assert.ok(/exit 1/.test(provenanceRun),
+        'director_provenance step must exit 1 on verification failure');
+
+    assert.ok(/if:\s*always\(\)/.test(provenanceSection),
+        'director_provenance step must use if: always()');
+
+    const hasSecretInModelSection = /DEEPSEEK_COORDINATOR_SECRET/.test(raw.slice(modelIdx, modelIdx + 3000));
+    assert.ok(!hasSecretInModelSection,
+        'DEEPSEEK_COORDINATOR_SECRET must not appear in model-facing step section');
+
+    const hasSecretInProvenanceSection = /DEEPSEEK_COORDINATOR_SECRET/.test(provenanceSection);
+    assert.ok(hasSecretInProvenanceSection,
+        'DEEPSEEK_COORDINATOR_SECRET must be present in director_provenance step');
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');

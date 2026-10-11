@@ -111,6 +111,7 @@ jobs:
 
       - name: Run Gemini using server-derived execution descriptor
         id: gemini_run
+        if: steps.director_provenance.outputs.provenance_status == 'SUCCESS'
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
