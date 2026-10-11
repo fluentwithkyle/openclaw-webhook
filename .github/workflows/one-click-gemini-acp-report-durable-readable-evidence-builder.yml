@@ -342,6 +342,35 @@ assert 'workflow_dispatch' in doc['on']
 print('YAML validation passed')
 "
 
+      - name: Verify Director transition decision provenance (trusted, secret not passed to model)
+        id: director_provenance
+        if: always()
+        shell: bash
+        env:
+          DEEPSEEK_COORDINATOR_SECRET: ${{ secrets.DEEPSEEK_COORDINATOR_SECRET }}
+          DESCRIPTOR_FILE: execution-descriptor.json
+        run: |
+          set -uo pipefail
+          if [ ! -f "$DESCRIPTOR_FILE" ]; then
+            echo "::notice::No execution descriptor found; provenance verification not applicable for this activation."
+            echo "provenance_status=SUCCESS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "${DEEPSEEK_COORDINATOR_SECRET:-}" ]; then
+            echo "::warning::DEEPSEEK_COORDINATOR_SECRET is not configured; provenance verification unavailable"
+            echo "provenance_status=BLOCKED" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          RESULT=$(node poc/phase-transition-gate.js --verify "$DESCRIPTOR_FILE" 2>&1) || true
+          echo "provenance_result=$RESULT" >> "$GITHUB_OUTPUT"
+          if echo "$RESULT" | grep -q '"status": "SUCCESS"'; then
+            echo "provenance_status=SUCCESS" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Director transition decision provenance verification failed: $RESULT"
+            echo "provenance_status=BLOCKED" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
       - name: Run Gemini Builder
         id: gemini_builder_run
         if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay
