@@ -1244,6 +1244,18 @@ Creating/updating a workflow remains a consequential repository mutation requiri
 explicit ACP capabilities (including `modify_files`, `commit`, `push` where
 applicable); the Director's Run click remains the activation action.
 
+**Coordinator verification mechanism**: The coordinator verification is machine-enforced
+via the `coordinator-verify` CLI command in `poc/validate-external-activation.js`, which
+inspects the workflow file on the default branch and verifies: (1) zero-input
+`workflow_dispatch` (no `required: true` inputs), (2) embedded carrier artifact validity
+via `repairAndRevalidateOneCloseCarrier()` in `poc/one-click-artifact-validator.js` (with
+automatic repair of correctable defects followed by re-validation), (3) exact task-to-workflow
+binding (`task_name`, `target_agent`, `repository` all match the requested task), and
+(4) canonical external-activation routing. The command outputs `coordinator_status` (VERIFIED
+or BLOCKED) and `coordinator_ready` (true/false) as GitHub Actions step outputs, and exits
+non-zero (fail-closed) if any check fails. Workflows invoke this step after preflight and
+before presenting a Run link.
+
 The following sub-rules are mandatory and non-overrideable within Section 11.2:
 
 * Workflow-file existence is insufficient: a workflow file present on the

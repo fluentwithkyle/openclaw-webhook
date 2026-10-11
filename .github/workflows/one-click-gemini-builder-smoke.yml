@@ -22,7 +22,7 @@ jobs:
           REQUEST_ID="builder-execution-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           BUILDER_EXEC_ID="builder-execution-smoke-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           TASK=$(cat <<'TASK_EOF'
-          {"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('BUILDER') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}
+          {"task_name":"TASK-KILO-BUILDER-AUTOMATIC-WORKFLOW-CORRECTION-001","originator":"Kyle -- Director","target_agent":"Kilo","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('BUILDER') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js","poc/"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}
           TASK_EOF
           )
 
@@ -104,6 +104,13 @@ jobs:
         run: |
           set -euo pipefail
           node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'
+
+      - name: Coordinator verification - verify exact task and workflow on main before Run link
+        id: coordinator_verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          node poc/validate-external-activation.js coordinator-verify '{"workflow_name": "one-click-gemini-builder-smoke.yml", "workflow_dir": ".github/workflows", "requested_task": {"task_name": "TASK-KILO-BUILDER-AUTOMATIC-WORKFLOW-CORRECTION-001", "target_agent": "Kilo", "task_mode": "BUILDER", "repository": "fluentwithkyle/openclaw-webhook", "permitted_paths": ["test/schema.test.js", "poc/"]}}'
 
       - name: Validate external activation through canonical ingress
         id: validate_activation

@@ -9,8 +9,40 @@ const {
     CONCEPTUAL_TASK_MODES,
     VALID_CAPABILITIES,
     VALID_AGENTS,
-    EXECUTION_TASK_MODES
+    EXECUTION_TASK_MODES,
+    MAX_AUTHORIZED_PATHS
 } = require('./schemas/acp-schema');
+
+const SMART_QUOTE_REPLACEMENTS = [
+    ['\u2018', "'"],
+    ['\u2019', "'"],
+    ['\u201A', "'"],
+    ['\u201B', "'"],
+    ['\u201C', '"'],
+    ['\u201D', '"'],
+    ['\u201E', '"'],
+    ['\u201F', '"']
+];
+
+const SMART_DASH_REPLACEMENTS = [
+    ['\u2013', '--'],
+    ['\u2014', '--']
+];
+
+function serializeCanonicalTaskArtifact(taskObj) {
+    const ordered = {};
+    for (const field of CANONICAL_TASK_ARTIFACT_FIELD_ORDER) {
+        if (Object.prototype.hasOwnProperty.call(taskObj, field)) {
+            ordered[field] = taskObj[field];
+        }
+    }
+    for (const [key, value] of Object.entries(taskObj)) {
+        if (!CANONICAL_TASK_ARTIFACT_FIELD_ORDER.includes(key)) {
+            ordered[key] = value;
+        }
+    }
+    return JSON.stringify(ordered, null, 2);
+}
 
 const CARRIER_STATES = Object.freeze({
     CARRIER_NOT_FOUND: 'CARRIER_NOT_FOUND',
@@ -179,6 +211,218 @@ function listOneClickWorkflows() {
     return VALID_ONE_CLICK_WORKFLOWS.slice();
 }
 
+function isPathWithinMaxBoundary(permittedPath) {
+    return MAX_AUTHORIZED_PATHS.some(maxPath =>
+        permittedPath === maxPath || permittedPath.startsWith(maxPath)
+    );
+}
+
+function repairEmbeddedArtifact(artifactText) {
+    let repaired = artifactText;
+    let repairsApplied = [];
+
+    for (const [smartChar, replacement] of SMART_QUOTE_REPLACEMENTS) {
+        const count = (repaired.match(new RegExp(smartChar, 'g')) || []).length;
+        if (count > 0) {
+            repaired = repaired.split(smartChar).join(replacement);
+            repairsApplied.push({
+                defect: 'MALFORMED_JSON_SMART_QUOTE',
+                char_replaced: 'U+' + smartChar.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'),
+                count: count
+            });
+        }
+    }
+
+    for (const [smartChar, replacement] of SMART_DASH_REPLACEMENTS) {
+        const count = (repaired.match(new RegExp(smartChar, 'g')) || []).length;
+        if (count > 0) {
+            repaired = repaired.split(smartChar).join(replacement);
+            repairsApplied.push({
+                defect: 'NON_ASCII_PUNCTUATION',
+                char_replaced: 'U+' + smartChar.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'),
+                count: count
+            });
+        }
+    }
+
+    if (repairsApplied.length === 0) {
+        let parsed;
+        try {
+            parsed = JSON.parse(repaired);
+        } catch (e) {
+            return { repaired: null, repairsApplied: [], error: 'Cannot parse artifact for repair: ' + e.message, error_code: 'MALFORMED_JSON' };
+        }
+
+        const orderValidation = validateCanonicalFieldOrder(parsed);
+        if (!orderValidation.valid) {
+            const reordered = {};
+            for (const field of CANONICAL_TASK_ARTIFACT_FIELD_ORDER) {
+                if (Object.prototype.hasOwnProperty.call(parsed, field)) {
+                    reordered[field] = parsed[field];
+                }
+            }
+            for (const [key, value] of Object.entries(parsed)) {
+                if (!CANONICAL_TASK_ARTIFACT_FIELD_ORDER.includes(key)) {
+                    reordered[key] = value;
+                }
+            }
+            repaired = JSON.stringify(reordered, null, 2);
+            repairsApplied.push({
+                defect: 'FIELD_ORDER_VIOLATION',
+                repair: 'Reordered fields to canonical order'
+            });
+        }
+
+        return {
+            repaired: repaired,
+            repairsApplied: repairsApplied.length > 0 ? repairsApplied : [],
+            error: null
+        };
+    }
+
+    return { repaired: repaired, repairsApplied: repairsApplied, error: null };
+}
+
+function validateRepairedArtifact(repairedText, requestedTask) {
+    const validation = validateAcpTaskArtifact(repairedText);
+    const parsed = (() => {
+        try { return JSON.parse(repairedText); } catch (e) { return null; }
+    })();
+    const binding = requestedTask ? bindCarrierToRequestedTask(parsed, requestedTask) : { bound: false, reason: 'No requested task provided' };
+
+    if (!validation.valid) {
+        return {
+            valid: false,
+            error: validation.error,
+            error_code: validation.error_code,
+            ...(validation.error_code === 'FIELD_ORDER_VIOLATION' ? { field_order_violation: validation.field_order_violation } : {}),
+            ...(validation.missing_fields ? { missing_fields: validation.missing_fields } : {}),
+            ...(validation.invalid_capability ? { invalid_capability: validation.invalid_capability } : {}),
+            ...(validation.invalid_task_mode ? { invalid_task_mode: validation.invalid_task_mode } : {}),
+            canonical_artifact: repairedText,
+            parsed_artifact: parsed,
+            carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_INVALID,
+            binding
+        };
+    }
+
+    return {
+        valid: true,
+        task_mode: validation.task_mode,
+        warnings: validation.warnings,
+        canonical_artifact: repairedText,
+        parsed_artifact: parsed,
+        carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_VALID,
+        binding
+    };
+}
+
+function repairAndRevalidateOneClickCarrier(workflowRaw, requestedTask) {
+    const extractResult = extractEmbeddedCarrierArtifact(workflowRaw);
+    if (!extractResult) {
+        return {
+            valid: false,
+            error: 'No embedded ACP task artifact found in workflow',
+            error_code: 'CARRIER_NO_EMBEDDED_ARTIFACT',
+            carrier_state: CARRIER_STATES.CARRIER_NOT_FOUND,
+            repaired: false,
+            repairsApplied: null
+        };
+    }
+
+    const syntaxCheck = validateAcpTaskArtifactSyntax(extractResult);
+    if (!syntaxCheck.valid) {
+        const repairResult = repairEmbeddedArtifact(extractResult);
+        if (repairResult.error || !repairResult.repaired) {
+            return {
+                valid: false,
+                error: syntaxCheck.error,
+                error_code: syntaxCheck.error_code,
+                ...(syntaxCheck.error_code === 'MALFORMED_JSON_SMART_QUOTE' ? { smart_quote: syntaxCheck } : {}),
+                carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_INVALID,
+                repaired: false,
+                repairsApplied: null,
+                canonical_artifact: extractResult
+            };
+        }
+
+        const repairedSyntax = validateAcpTaskArtifactSyntax(repairResult.repaired);
+        if (!repairedSyntax.valid) {
+            return {
+                valid: false,
+                error: repairedSyntax.error,
+                error_code: repairedSyntax.error_code,
+                carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_INVALID,
+                repaired: false,
+                repairsApplied: null,
+                canonical_artifact: extractResult
+            };
+        }
+
+        const revalidation = validateRepairedArtifact(repairResult.repaired, requestedTask);
+        return {
+            ...revalidation,
+            repaired: true,
+            repairsApplied: repairResult.repairsApplied,
+            original_artifact: extractResult
+        };
+    }
+
+    let parsed;
+    try {
+        parsed = JSON.parse(extractResult);
+    } catch (e) {
+        const repairResult = repairEmbeddedArtifact(extractResult);
+        if (repairResult.error || !repairResult.repaired) {
+            return {
+                valid: false,
+                error: 'JSON parse failed: ' + e.message,
+                error_code: 'JSON_PARSE_FAILED',
+                carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_INVALID,
+                repaired: false,
+                repairsApplied: null,
+                canonical_artifact: extractResult
+            };
+        }
+
+        const revalidation = validateRepairedArtifact(repairResult.repaired, requestedTask);
+        return {
+            ...revalidation,
+            repaired: true,
+            repairsApplied: repairResult.repairsApplied,
+            original_artifact: extractResult
+        };
+    }
+
+    const orderValidation = validateCanonicalFieldOrder(parsed);
+    if (!orderValidation.valid) {
+        const repairResult = repairEmbeddedArtifact(extractResult);
+        if (repairResult.error || !repairResult.repaired || repairResult.repairsApplied.length === 0) {
+            return {
+                valid: false,
+                error: orderValidation.error,
+                error_code: orderValidation.error_code,
+                field_order_violation: orderValidation.field_order_violation,
+                canonical_artifact: extractResult,
+                parsed_artifact: parsed,
+                carrier_state: CARRIER_STATES.CARRIER_ARTIFACT_INVALID,
+                repaired: false,
+                repairsApplied: null
+            };
+        }
+
+        const revalidation = validateRepairedArtifact(repairResult.repaired, requestedTask);
+        return {
+            ...revalidation,
+            repaired: true,
+            repairsApplied: repairResult.repairsApplied,
+            original_artifact: extractResult
+        };
+    }
+
+    return validateOneClickCarrier(workflowRaw, requestedTask);
+}
+
 function preflightValidateOneClickActivation(workflowDir, requestedTask) {
     const dir = workflowDir || '.github/workflows';
     const results = {};
@@ -199,18 +443,38 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask) {
             continue;
         }
 
-        const validation = validateOneClickCarrier(workflowRaw, requestedTask);
-        results[wf] = {
-            found: true,
-            valid: validation.valid,
-            error: validation.error || null,
-            error_code: validation.error_code || null,
-            canonical_artifact: validation.canonical_artifact || null,
-            parsed: validation.parsed_artifact || null,
-            carrier_state: validation.carrier_state,
-            bound: validation.binding ? validation.binding.bound : false,
-            binding: validation.binding || null
-        };
+        const validation = repairAndRevalidateOneClickCarrier(workflowRaw, requestedTask);
+        if (!validation.valid && validation.repaired) {
+            results[wf] = {
+                found: true,
+                valid: validation.valid,
+                error: validation.error || null,
+                error_code: validation.error_code || null,
+                canonical_artifact: validation.canonical_artifact || null,
+                repaired: true,
+                repairsApplied: validation.repairsApplied,
+                original_artifact: validation.original_artifact,
+                parsed: validation.parsed_artifact || null,
+                carrier_state: validation.carrier_state,
+                bound: validation.binding ? validation.binding.bound : false,
+                binding: validation.binding || null
+            };
+        } else {
+            const directValidation = validateOneClickCarrier(workflowRaw, requestedTask);
+            results[wf] = {
+                found: true,
+                valid: directValidation.valid,
+                error: directValidation.error || null,
+                error_code: directValidation.error_code || null,
+                canonical_artifact: directValidation.canonical_artifact || null,
+                repaired: false,
+                repairsApplied: null,
+                parsed: directValidation.parsed_artifact || null,
+                carrier_state: directValidation.carrier_state,
+                bound: directValidation.binding ? directValidation.binding.bound : false,
+                binding: directValidation.binding || null
+            };
+        }
     }
 
     const allValid = Object.values(results).every(r => r.valid === true && (!requestedTask || r.bound === true));
@@ -222,7 +486,8 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask) {
             total: VALID_ONE_CLICK_WORKFLOWS.length,
             valid: Object.values(results).filter(r => r.valid === true).length,
             invalid: Object.values(results).filter(r => r.valid !== true).length,
-            bound: requestedTask ? Object.values(results).filter(r => r.bound === true).length : null
+            bound: requestedTask ? Object.values(results).filter(r => r.bound === true).length : null,
+            repaired: Object.values(results).filter(r => r.repaired === true).length
         },
         requested_task: requestedTask || null
     };
@@ -236,6 +501,10 @@ module.exports = {
     bindCarrierToRequestedTask,
     listOneClickWorkflows,
     preflightValidateOneClickActivation,
+    repairAndRevalidateOneClickCarrier,
+    repairEmbeddedArtifact,
+    validateRepairedArtifact,
+    serializeCanonicalTaskArtifact,
     getRuntimeTaskModeForConceptual,
     CANONICAL_TASK_ARTIFACT_FIELD_ORDER,
     CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS,
