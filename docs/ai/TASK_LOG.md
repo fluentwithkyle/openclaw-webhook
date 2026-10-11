@@ -3113,3 +3113,36 @@ existing Director authorization.
 **outcome**: SUCCESS
 
 | 2026-10-10 | TASK-GEMINI-DEEPSEEK-PHASE4-BOOTSTRAP-REPEATED-FAILURE-ROOT-CAUSE-RESEARCH-001 | Analyzed two repeated RESEARCH_DOCUMENT workflow executions of TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001 (GitHub Actions runs 38024157644 at c179785e and 38056049208 at c5b03216). Established the exact failure boundary: Run 1 (c179785e) failed at the report step with `status: failure` because `task_name` was not propagated through `buildActivationPayloadForIssueComment`, `createInitialTaskRegistryEntry`, or `buildExecutionDescriptor` — the ingress had no `MISSING_TASK_NAME` validation. Run 2 (c5b03216) applied the task-identity fix: `task_name` is correctly propagated at all boundaries, report shows `status: success` with `durable_research_record_path` set. However, both runs still show `commit: null, push: false` because the `PERMITTED_PATHS` format mismatch in the commit/push step causes silent staging failure: `main.yml` outputs `permitted_paths` via `jq -r '.permitted_paths | join(",")'` (comma-separated), but the commit/push step iterates with `for dir in $PERMITTED_PATHS` (unquoted, splits on whitespace only). The entire comma-joined string is treated as one non-existent path; `git add "$dir" 2>/dev/null || true` suppresses the error silently; nothing is staged; no commit or push occurs. Verified by `git show` of `main.yml` at both c179785e (lines 263, 395, 431-432) and c5b03216 (lines 330, 410, 447-448) — identical `join(",")` output and unquoted `for dir` pattern at both. Verified canonical report artifacts for both runs show `task_name: null` (Run 1) vs `task_name` preserved (Run 2) and `commit: null, push: false` in both. Verified research record file does not exist in repository history via `git log --all`. Smallest corrective action: change `join(",")` to `join(" ")` in 4 orchestration-context output locations, making the existing unquoted `for dir` loop (which splits on whitespace) work correctly. This is a RESEARCH_DOCUMENT task; no workflow or code files were modified. Created durable research record at `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE4-BOOTSTRAP-REPEATED-FAILURE-ROOT-CAUSE-RESEARCH-001.md`; updated `docs/ai/RESEARCH_INDEX.md`. | SUCCESS | docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE4-BOOTSTRAP-REPEATED-FAILURE-ROOT-CAUSE-RESEARCH-001.md, docs/ai/RESEARCH_INDEX.md, docs/ai/TASK_LOG.md |
+
+---
+
+## 2026-10-11 | TASK-KILO-FIX-ACTIVATION-WORKFLOW-DEPENDENCY-BLOCKER-001
+
+**Task**: Fix the confirmed GitHub Actions activation failure caused by the missing js-yaml dependency, verify the complete activation-to-execution gate path, and push one minimal, tested repair to main.
+
+**Root cause**: `.github/workflows/main.yml` invokes `node poc/validate-external-activation.js` (which requires the `js-yaml` module) but the workflow had no `npm ci` or `actions/setup-node` step to install dependencies before the first `node` invocation. The GitHub Actions runner starts with no `node_modules/`, so `require('js-yaml')` throws `MODULE_NOT_FOUND`, failing the activation validation step and blocking all downstream Gemini execution.
+
+**Fix applied**: Added two steps to `.github/workflows/main.yml` after `actions/checkout@v4` and before the first `node poc/validate-external-activation.js` invocation:
+1. `Set up Node.js` -- uses `actions/setup-node@v4` with `node-version: 20` and `cache: npm`, matching the pattern in `one-click-full-test-suite.yml`.
+2. `Install locked dependencies` -- runs `npm ci`, installing from `package-lock.json` (which pins `js-yaml` as a dependency).
+
+**Permitted paths scope**: Only `.github/workflows/main.yml` modified (9 insertions). No other files changed.
+
+**Verification performed**:
+- `npm ci` installs js-yaml successfully; `node -e "require('js-yaml')"` confirms availability from `node_modules/`.
+- `node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows"}'` -- all 5 carriers valid.
+- `test/one-click-workflow-contract.test.js` -- 250 passed, 0 failed.
+- `test/external-activation-procedure.test.js` -- 31 passed, 0 failed.
+- `test/external-activation-bypass.test.js` -- 156 passed, 0 failed.
+- `test/gemini-trigger.test.js` -- 18 passed, 0 failed.
+- `test/github-webhook.test.js` -- 77 passed, 0 failed.
+- `test/schema.test.js` -- 57 passed, 0 failed.
+- `test/activation-policy.test.js` -- 117 passed, 0 failed.
+- `git diff --check` -- clean, no whitespace errors.
+
+**Security verification**: No secrets, credentials, or tokens introduced. No authority-bearing fields weakened. Director provenance, descriptor validation, replay protection, permitted-path enforcement, and fail-closed execution conditions all preserved.
+
+**Commit**: `bee44de5e77d7829d49ea7e09f908ff2c27bd788`
+**Push**: Pushed to `origin/main`, verified via `git ls-remote origin main`.
+
+**outcome**: SUCCESS
