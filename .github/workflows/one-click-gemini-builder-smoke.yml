@@ -13,6 +13,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js and install locked dependencies
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
       - name: Construct one-click task and correlation
         id: one_click_context
         shell: bash
@@ -22,14 +31,14 @@ jobs:
           REQUEST_ID="builder-execution-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           BUILDER_EXEC_ID="builder-execution-smoke-exec-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
 
-          TASK_PAYLOAD=$(node poc/validate-external-activation.js serialize-carrier '{"task":{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('"'"'BUILDER'"'"') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js","poc/"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}}')
+          TASK_PAYLOAD=$(node poc/validate-external-activation.js serialize-carrier '{"task":{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('"'"'BUILDER'"'"') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}}')
 
           TASK=$(echo "$TASK_PAYLOAD" | jq -c '.')
 
           echo "$TASK" | jq . > /dev/null
 
           EMBEDDED_TASK=$(cat <<'TASK_EOF'
-          {"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('BUILDER') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js","poc/"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}
+          {"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","originator":"Kyle - Director","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"objective":"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('BUILDER') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.","scope":{"permitted_paths":["test/schema.test.js"]},"verification":["Inspect the existing BUILDER capability test before editing.","Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.","Run node test/schema.test.js and require it to pass.","Run git diff --check and require a clean result.","Verify only test/schema.test.js changed.","Commit and push to origin/main in this execution, then verify origin/main contains the commit.","Report the commit SHA, changed path, test results, diff-check result, and remote-main verification."],"constraints":["No production-code changes.","Modify only test/schema.test.js.","No refactors, dependencies, or unrelated improvements.","Do not force-push or overwrite unrelated changes.","If the branch advances, reconcile with current main before pushing.","Stop if authorization or permitted scope is invalid."],"conflict_handling":"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope."}
           TASK_EOF
           )
 
@@ -90,7 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node poc/validate-external-activation.js coordinator-verify '{"workflow_name": "one-click-gemini-builder-smoke.yml", "workflow_dir": ".github/workflows", "base_branch": "main", "requested_task": {"task_name": "TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook", "task_mode": "BUILDER", "permitted_paths": ["test/schema.test.js", "poc/"]}}'
+          node poc/validate-external-activation.js coordinator-verify '{"workflow_name": "one-click-gemini-builder-smoke.yml", "workflow_dir": ".github/workflows", "base_branch": "main", "requested_task": {"task_name": "TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook", "task_mode": "BUILDER", "permitted_paths": ["test/schema.test.js"]}}'
 
       - name: Submit Director approval for consequential Builder activation
         id: director_approval
@@ -282,7 +291,7 @@ jobs:
 
       - name: Verify Director transition decision provenance (trusted, secret not passed to model)
         id: director_provenance
-        if: always()
+        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay && contains(steps.orchestration_context.outputs.task, 'PHASE') && contains(steps.orchestration_context.outputs.task, 'TRANSITION')
         shell: bash
         env:
           DEEPSEEK_COORDINATOR_SECRET: ${{ secrets.DEEPSEEK_COORDINATOR_SECRET }}
@@ -311,7 +320,7 @@ jobs:
 
       - name: Run Gemini Builder
         id: gemini_builder_run
-        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay && steps.director_provenance.outputs.provenance_status == 'SUCCESS'
+        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay && steps.orchestration_context.outcome == 'success' && (steps.director_provenance.outcome == 'skipped' || steps.director_provenance.outputs.provenance_status == 'SUCCESS')
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
