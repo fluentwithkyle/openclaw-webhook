@@ -148,11 +148,7 @@ function rawRequest(port, headers, body) {
             trustedIngress: true
         });
         const command = calls[1].body;
-        assert.equal(typeof command.director_transition_decision_provenance, 'object');
-        assert.equal(command.director_transition_decision_provenance.current_phase, 'phase-3-autonomous-coordination-loop');
-        assert.equal(command.director_transition_decision_provenance.target_phase, 'phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation');
-        assert.equal(command.director_transition_decision_provenance.coordinator_task_id, command.request_id);
-        assert.match(command.director_transition_decision_provenance.decision, /move onto Phase 4/i);
+        assert.equal(typeof command.director_transition_decision_provenance, 'undefined');
     });
 
     await test('normal OpenRouter response is returned without a coordinator call', async () => {

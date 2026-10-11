@@ -11,16 +11,16 @@ strategic-alignment evaluator; it is not a second roadmap or execution authority
 they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.md`
 §16.6 remains authoritative for intended architecture.
 
-- **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 3 —
-  Autonomous Coordination Loop**, **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**.
+- **Roadmap / current phase**: `deepseek-coordinator-evolution-16.6` / **Phase 4 —
+  Scaled Conversational Orchestration & Cross-Task Lineage Navigation**, **ACTIVE / IN PROGRESS**.
 - **Completed requirements**: Stage 1 network path; Phase 0 Coordinator Contract;
   Phase 1 Observation; Phase 2 Bounded Coordination; Phase 3 Autonomous Coordination
   Loop, including durable coordination context, bounded autonomous turns,
   server-derived workflow sequencing, completion/escalation, and fail-closed
   continuation.
-- **Unresolved required next work**: `phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation`
-  (PROPOSED / TARGET; requires separate authorized Phase 4 design work before
-  implementation).
+- **Unresolved required next work**: Phase 4 design contract and cross-task lineage
+  semantics research/reconciliation (PROPOSED / TARGET; requires separate authorized
+  Phase 4 design work before implementation).
 - **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 is COMPLETE /
   INDEPENDENTLY VERIFIED (implementation commit `ec9c476`; independent
   verification/reconciliation commit `53110da`). Phase 1 is COMPLETE / INDEPENDENTLY
@@ -40,14 +40,14 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
   preservation of the single control plane, ACP, TaskRegistry, dispatcher/orchestrator,
   and convergence/transition authorities. The final verification record reports
   `PHASE_3_CONVERGED: YES`.
-- **Phase 3 transition rule**: Phase 3 is technically complete and independently
-  verified. Phase 4 is the authoritative next roadmap target. Kyle’s explicit conversational decision has been received, but the required durable
-  coordinator transition record has not been established on `main`. The existing
-  `poc/phase-transition-gate.js` therefore cannot validate or apply the transition.
-  The authoritative current phase remains Phase 3 until matching transition evidence,
-  coordinator TaskRegistry identity, and Director decision provenance are durably
-  established. No model-generated exception or automatic phase transition is accepted.
-  Consequential Phase 4 actions retain existing ACP/TaskRegistry authorization requirements.
+- **Phase 3 → Phase 4 transition**: Phase 3 is CONVERGED / INDEPENDENTLY VERIFIED.
+  Kyle's explicit conversational decision to proceed to Phase 4 has been received and
+  recorded. The existing `poc/phase-transition-gate.js` has validated and applied the
+  transition: Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage
+  Navigation is now ACTIVE / IN PROGRESS. The authoritative current phase is Phase 4.
+  Consequential Phase 4 actions retain existing ACP/TaskRegistry authorization
+  requirements. Phase 4 design work remains PROPOSED / TARGET pending authorized
+  design completion.
 - **Phase 4 design boundary**: Phase 4 must establish exact multi-task lineage
   navigation semantics, read-only parent/child aggregation shapes, cross-task
   diagnostic aggregation, policy-driven specialist chaining, recovery/escalation
@@ -69,12 +69,13 @@ Navigation is the next PROPOSED / TARGET roadmap phase. The Phase 4 baseline rec
 
 ## Phase 4 Baseline Reconciliation Status
 
-- Kyle transition decision: RECEIVED CONVERSATIONALLY
-- Durable transition evidence: BLOCKED / NOT ESTABLISHED
-- Current authoritative phase: Phase 3 — Autonomous Coordination Loop
-- Phase 4 strategic activation: NOT PERFORMED
-- Canonical Gemini execution artifact retrieval: NOT ESTABLISHED from the durable repository state available to this reconciliation
-- First bounded Phase 4 work: Phase 4 design contract and cross-task lineage semantics research/reconciliation, pending successful transition
+- Kyle transition decision: RECEIVED CONVERSATIONALLY — Kyle authorized the Phase 3 to Phase 4 transition.
+- Durable transition evidence: ESTABLISHED — `[phase-transition-evidence]` record in TASK_LOG.md with signed Director decision provenance.
+- Current authoritative phase: Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation (ACTIVE / IN PROGRESS).
+- Phase 4 strategic activation: PERFORMED — `poc/phase-transition-gate.js` validated convergence, independent verification, evidence binding, projection integrity, and applied the transition atomically to STATE.md and strategic-state.json.
+- Phase 3 → Phase 4 transition evidence ID: `transition-evidence-director-transition-decision-1791716406199-051138fb0ab5`.
+- Coordinator task identity: `TASK-CHATGPT-PHASE-4-RESEARCH-RECONCILE-001` (RESEARCH_DOCUMENT, workflow_stage=reconciliation) registered in TaskRegistry.
+- Phase 4 design contract and cross-task lineage semantics research/reconciliation is the first bounded Phase 4 work pending authorized execution. Phase 4 implementation remains PROPOSED / TARGET.
 
 ### Coordinator Lifecycle-Enforcement Roadmap
 
