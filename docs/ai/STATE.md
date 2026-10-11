@@ -59,12 +59,6 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
   `BLOCKED` and escalated to Kyle. Recommendation, authorization, execution,
   independent verification, and strategic convergence are separate states.
 
-**Research reconciliation**: Historical research records and increment histories remain
-preserved as evidence. The current authoritative architecture and final Phase 3
-independent verification establish Phase 3 as COMPLETE / INDEPENDENTLY VERIFIED /
-CONVERGED. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage
-Navigation is the next PROPOSED / TARGET roadmap phase. The Phase 4 baseline reconciliation is durably recorded. Phase 4 remains pending mechanical activation until the first authorized Phase 4 research/reconciliation task establishes the durable transition evidence and the existing transition gate validates and applies the transition. No separate transition-only task is required by the canonical procedure.
-
 ---
 
 ## Phase 4 Baseline Reconciliation Status
