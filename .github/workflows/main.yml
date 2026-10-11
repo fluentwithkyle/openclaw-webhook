@@ -366,7 +366,11 @@ jobs:
             exit 1
           fi
           RESULT=$(node poc/phase-transition-gate.js --verify "$DESCRIPTOR_FILE" 2>&1) || true
-          echo "provenance_result=$RESULT" >> "$GITHUB_OUTPUT"
+          {
+            echo 'provenance_result<<EOF'
+            printf '%s\n' "$RESULT"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
           if echo "$RESULT" | grep -q '"status": "SUCCESS"'; then
             echo "provenance_status=SUCCESS" >> "$GITHUB_OUTPUT"
           else
