@@ -143,6 +143,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_CLI_TRUST_WORKSPACE: "true"
+          DEEPSEEK_COORDINATOR_SECRET: ${{ secrets.DEEPSEEK_COORDINATOR_SECRET }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite

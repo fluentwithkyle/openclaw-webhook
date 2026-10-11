@@ -483,6 +483,23 @@ const expectedFields = ['version', 'source', 'decision_id', 'transition_id',
         })
     ]);
 
+    runTest('verifyDirectorTransitionDecision - undefined secret fails closed with clear error', () => {
+        const issued = issueDirectorTransitionDecision({ ...baseParams, secret: SECRET });
+        const expected = {
+            current_phase: issued.record.current_phase,
+            target_phase: issued.record.target_phase,
+            coordinator_task_id: issued.record.coordinator_task_id,
+            transition_id: issued.record.transition_id,
+            transition_evidence_id: issued.record.transition_evidence_id,
+            prior_phase_convergence_evidence: baseParams.priorPhaseConvergenceEvidence,
+            independent_verification_id: baseParams.independentVerificationId
+        };
+        const result = verifyDirectorTransitionDecision(issued.record, expected, undefined);
+        assert.equal(result.valid, false);
+        assert.ok(result.error, 'Should have an error message');
+        assert.ok(result.error.includes('secret'), 'Error should mention secret configuration');
+    });
+
     await new Promise(r => setImmediate(r));
 
     console.log('\n' + pass + ' passed, ' + fail + ' failed');

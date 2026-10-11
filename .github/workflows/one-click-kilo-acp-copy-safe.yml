@@ -216,6 +216,7 @@ jobs:
           ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
           ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
           ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+          DEEPSEEK_COORDINATOR_SECRET: ${{ secrets.DEEPSEEK_COORDINATOR_SECRET }}
         run: |
           set -euo pipefail
 

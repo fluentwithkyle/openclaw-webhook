@@ -357,6 +357,7 @@ jobs:
           ORCHESTRATION_PERMITTED_PATHS: ${{ steps.orchestration_context_wfd.outputs.permitted_paths || steps.orchestration_context_ic.outputs.permitted_paths }}
           ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.orchestration_context_wfd.outputs.execution_claim_id || steps.orchestration_context_ic.outputs.execution_claim_id }}
           ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.orchestration_context_wfd.outputs.carrier_identity || steps.orchestration_context_ic.outputs.carrier_identity }}
+          DEEPSEEK_COORDINATOR_SECRET: ${{ secrets.DEEPSEEK_COORDINATOR_SECRET }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite

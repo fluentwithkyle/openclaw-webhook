@@ -96,6 +96,7 @@ jobs:
           ORCHESTRATION_PERMITTED_PATHS: ${{ steps.descriptor.outputs.permitted_paths }}
           ORCHESTRATION_EXECUTION_CLAIM_ID: ${{ steps.descriptor.outputs.execution_claim_id }}
           ORCHESTRATION_CARRIER_IDENTITY: ${{ steps.descriptor.outputs.carrier_identity }}
+          DEEPSEEK_COORDINATOR_SECRET: ${{ secrets.DEEPSEEK_COORDINATOR_SECRET }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_model: gemini-3.1-flash-lite
