@@ -3146,3 +3146,59 @@ existing Director authorization.
 **Push**: Pushed to `origin/main`, verified via `git ls-remote origin main`.
 
 **outcome**: SUCCESS
+
+---
+
+## 2026-10-11 | TASK-KILO-FIX-ACTIVATION-WORKFLOW-DEPENDENCY-BLOCKER-001 (Workflow Verification & Second Fix)
+
+**Task**: Fix the confirmed GitHub Actions activation failure caused by the missing js-yaml dependency, verify the complete activation-to-execution gate path, and push one minimal, tested repair to main.
+
+**Phase 1 Fix — Missing js-yaml dependency (already committed)**:
+Added `actions/setup-node@v4` (node-version: 20, cache: npm) and `npm ci` steps to `.github/workflows/main.yml` after `actions/checkout@v4` and before the first `node poc/validate-external-activation.js` invocation. This ensures `js-yaml` (and all other dependencies declared in `package-lock.json`) are installed before the workflow attempts to run any Node.js script.
+
+**Pre-fix workflow evidence** (run 38123973410 at commit aa9696a):
+- Step "Validate external activation through canonical ingress (issue_comment)": **failure** — `Error: Cannot find module 'js-yaml'`, `code: 'MODULE_NOT_FOUND'`
+- Step "Verify Director transition decision provenance": **failure** — (cascading from activation failure)
+- Step "Run Gemini in advisory mode": **skipped** — (provenance not verified)
+- Step "Prepare ACP report payload": **failure** — (cascading)
+- Step "Upload Gemini result artifact": **failure** — (cascading)
+
+**Post-fix workflow evidence** (run 38129280051 at commit c7fed50):
+- Step "Set up Node.js": **success** — Node.js 20.20.2
+- Step "Install locked dependencies": **success** — `npm ci` installed 189 packages from package-lock.json
+- Step "Validate external activation through canonical ingress (workflow_dispatch)": **success** — "Activation accepted by canonical ingress. Request ID: kilo-verify-fix-002", "Execution descriptor written to execution-descriptor.json"
+- Step "Prepare orchestration context (workflow_dispatch)": **success** — execution descriptor consumed
+- Step "Verify Director transition decision provenance": **success** — (previously failed due to GITHUB_OUTPUT corruption; now fixed)
+- Step "Run Gemini in advisory mode": **success** — Gemini CLI executed, produced advisory review confirming the fix
+- Step "Prepare ACP report payload": **success**
+- Step "Upload Gemini result artifact": **success** — `gemini-acp-report.zip` uploaded, Artifact ID 11699035763
+- Step "Report artifact filing status": **success** — `filing_status=SUCCESS`
+- Overall workflow conclusion: **success**
+
+**Phase 2 Fix — GITHUB_OUTPUT multiline corruption in provenance step**:
+After fixing the js-yaml dependency issue, the workflow still failed at the "Verify Director transition decision provenance" step. Log analysis revealed that `poc/phase-transition-gate.js --verify` outputs multi-line JSON (via `JSON.stringify(result, null, 2)`), and the workflow wrote it to `$GITHUB_OUTPUT` using `echo "provenance_result=$RESULT"`, which corrupts the output file format (GitHub Actions reported `::error::Invalid format '  "status": "SUCCESS",'` for the indented JSON lines). This caused `provenance_status` to never be set to `SUCCESS`, which in turn caused the "Run Gemini in advisory mode" step to be **skipped** (fail-closed gate at line 378/380).
+
+Fix: Changed the `provenance_result` output to use the heredoc delimiter syntax (`<<EOF`), matching the pattern already used for other multi-line outputs in the same workflow. This is a 5-line fix (1 deletion, 5 insertions) in `.github/workflows/main.yml`.
+
+**Verification of phase 2 fix**:
+- Simulated the GITHUB_OUTPUT write with the heredoc pattern — multi-line JSON correctly written, `provenance_status=SUCCESS` correctly set
+- Post-fix workflow run confirms: provenance step **success**, Gemini CLI step **success** (no longer skipped)
+- The Gemini AC report persisted at `docs/ai/reports/gemini-acp-report-kilo-verify-fix-002.json` confirms `status: "success"`, `blockers: []`, `execution_claim_id: "claim-1791711715696-yngltrcn"`
+
+**Tests run**:
+- `test/one-click-workflow-contract.test.js`: 250 passed, 0 failed
+- `test/external-activation-procedure.test.js`: 31 passed, 0 failed
+- `test/external-activation-bypass.test.js`: 156 passed, 0 failed
+- `test/schema.test.js`: 57 passed, 0 failed
+- `test/activation-policy.test.js`: 117 passed, 0 failed
+- `npm ci` + `node poc/validate-external-activation.js one-click-preflight`: all 5 carriers valid
+- `git diff --check`: clean
+
+**Commits**:
+- `bee44de5e77d7829d49ea7e09f908ff2c27bd788` — FIX: Install Node.js dependencies before activation validation in main.yml
+- `c7fed50506134ce611217813b43f94e4c7cd39e4` — FIX: Use heredoc for provenance_result in GITHUB_OUTPUT
+- `d81768ebeed712ac12f774d2d9d1089345928cf1` — TASK_LOG: Record TASK-KILO-FIX-ACTIVATION-WORKFLOW-DEPENDENCY-BLOCKER-001
+
+**Push**: Both commits pushed to `origin/main`, verified via `git ls-remote`.
+
+**outcome**: SUCCESS
