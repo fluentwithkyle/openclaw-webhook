@@ -90,9 +90,9 @@ jobs:
         run: |
           set -uo pipefail
           if [ ! -f "$DESCRIPTOR_FILE" ]; then
-            echo "::notice::No execution descriptor found; provenance verification not applicable for this activation."
-            echo "provenance_status=SUCCESS" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::Execution descriptor missing; provenance verification cannot proceed."
+            echo "provenance_status=BLOCKED" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
           if [ -z "${DEEPSEEK_COORDINATOR_SECRET:-}" ]; then
             echo "::warning::DEEPSEEK_COORDINATOR_SECRET is not configured; provenance verification unavailable"

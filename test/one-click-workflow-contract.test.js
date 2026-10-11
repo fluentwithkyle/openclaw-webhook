@@ -2326,5 +2326,63 @@ runTest('Provenance gate - model-facing step skipped when provenance_status is B
         'DEEPSEEK_COORDINATOR_SECRET must be present in director_provenance step');
 });
 
+runTest('Provenance gate - missing descriptor sets BLOCKED and blocks model execution', () => {
+    const fs = require('fs');
+    const path = require('path');
+
+    const allWorkflows = [
+        '.github/workflows/main.yml',
+        '.github/workflows/gemini-builder.yml',
+        '.github/workflows/external-gemini-activation-test.yml',
+        '.github/workflows/kilo-gemini-poc.yml',
+        '.github/workflows/one-click-gemini-builder-smoke.yml',
+        '.github/workflows/one-click-gemini-builder-callback-correlation.yml',
+        '.github/workflows/one-click-gemini-builder-coordinator-registration-gate.yml',
+        '.github/workflows/one-click-gemini-builder-coordinator-registration-gate-fixed.yml',
+        '.github/workflows/one-click-gemini-acp-report-durable-readable-evidence-builder.yml',
+        '.github/workflows/one-click-kilo-acp-copy-safe.yml'
+    ];
+
+    for (const wfPath of allWorkflows) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, wfPath), 'utf8');
+
+        assert.ok(!/No execution descriptor found.*provenance verification not applicable/.test(raw),
+            path.basename(wfPath) + ' must not treat missing descriptor as not-applicable SUCCESS');
+
+        assert.ok(/Execution descriptor missing.*provenance verification cannot proceed/.test(raw),
+            path.basename(wfPath) + ' must set BLOCKED on missing descriptor');
+
+        assert.ok(/provenance_status=BLOCKED.*exit 1/.test(raw.replace(/\n\s*/g, ' ')),
+            path.basename(wfPath) + ' missing-descriptor branch must set provenance_status=BLOCKED and exit 1');
+
+        assert.ok(/provenance_status=SUCCESS.*PROVENANCE_NOT_PRESENT|node poc\/phase-transition-gate\.js --verify/.test(raw),
+            path.basename(wfPath) + ' must still invoke verify for existing descriptors');
+    }
+});
+
+runTest('Provenance gate - existing descriptor without provenance remains SUCCESS (non-transition task)', () => {
+    const gate = require('../poc/phase-transition-gate');
+
+    const result = gate.verifyProvenance({});
+    assert.equal(result.status, 'SUCCESS',
+        'verifyProvenance on descriptor with no director_transition_decision_provenance must return SUCCESS');
+    assert.equal(result.code, 'PROVENANCE_NOT_PRESENT',
+        'verifyProvenance on descriptor with no provenance must return PROVENANCE_NOT_PRESENT');
+    assert.equal(result.phase_transition_performed, false,
+        'verifyProvenance must never trigger phase transition');
+
+    const result2 = gate.verifyProvenance({ director_transition_decision_provenance: null });
+    assert.equal(result2.status, 'SUCCESS',
+        'verifyProvenance on descriptor with null provenance must return SUCCESS (non-transition)');
+    assert.equal(result2.code, 'PROVENANCE_NOT_PRESENT');
+
+    assert.equal(gate.verifyProvenance(undefined).status, 'BLOCKED',
+        'verifyProvenance on undefined descriptor must fail closed');
+    assert.equal(gate.verifyProvenance(null).status, 'BLOCKED',
+        'verifyProvenance on null descriptor must fail closed');
+    assert.equal(gate.verifyProvenance('string').status, 'BLOCKED',
+        'verifyProvenance on non-object descriptor must fail closed');
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);
