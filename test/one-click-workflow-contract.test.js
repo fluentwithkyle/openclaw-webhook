@@ -1234,15 +1234,13 @@ runTest('Artifact validator - smoke carrier has full BUILDER capabilities', () =
         'Smoke carrier must have all 5 BUILDER capabilities');
 });
 
-runTest('Artifact validator - smoke carrier has scope.permitted_paths with poc/', () => {
+runTest('Artifact validator - execution smoke carrier is restricted to test/schema.test.js', () => {
     const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
     const result = validateOneClickCarrier(raw);
     assert.ok(result.valid, 'Smoke carrier should be valid: ' + (result.error || ''));
     const artifact = JSON.parse(result.canonical_artifact);
-    assert.ok(Array.isArray(artifact.scope.permitted_paths) && artifact.scope.permitted_paths.length > 0,
-        'Smoke carrier must have non-empty scope.permitted_paths');
-    assert.ok(artifact.scope.permitted_paths.some(function(p) { return p.startsWith('poc'); }),
-        'Smoke carrier must include poc/ in permitted_paths');
+    assert.deepStrictEqual(artifact.scope.permitted_paths, ['test/schema.test.js'],
+        'Execution smoke carrier must authorize only test/schema.test.js');
 });
 
 runTest('Artifact validator - callback-correlation carrier has conflict_handling field', () => {
