@@ -2609,5 +2609,237 @@ runTest('Defect 4 - approval step is gated on preflight and coordinator-verify s
         'Approval step must be gated on preflight and coordinator-verify outputs');
 });
 
+// =========================================================
+// Regression tests: one-click preflight target-carrier binding (Defect 1)
+// TASK-KILO-FIX-ONE-CLICK-PREFLIGHT-REMOTE-MAIN-BLOCKERS-001
+// =========================================================
+
+runTest('Defect 1 - preflight passes when all carriers individually valid despite different task identities', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows');
+    assert.ok(result.all_valid, 'All carriers should pass preflight even with different task identities: ' + JSON.stringify(result.summary));
+    assert.strictEqual(result.summary.total, 5, 'Should have 5 carriers');
+    assert.strictEqual(result.summary.valid, 5, 'All 5 carriers should be valid');
+});
+
+runTest('Defect 1 - preflight with target_workflow passes when target carrier matches requested task', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows', {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    }, true, 'one-click-gemini-builder-smoke.yml');
+    assert.ok(result.all_valid, 'Preflight should pass with target_workflow matching: ' + JSON.stringify(result.summary));
+    assert.strictEqual(result.target_workflow, 'one-click-gemini-builder-smoke.yml');
+    assert.strictEqual(result.target_bound, true, 'Target carrier should be bound to requested task');
+});
+
+runTest('Defect 1 - preflight with target_workflow fails when target carrier task identity mismatches', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows', {
+        task_name: 'TASK-DIFFERENT-TARGET-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    }, true, 'one-click-gemini-builder-smoke.yml');
+    assert.ok(!result.all_valid, 'Preflight should fail when target carrier does not match requested task');
+    assert.strictEqual(result.target_bound, false, 'Target carrier should not be bound');
+});
+
+runTest('Defect 1 - preflight fails when an invalid unrelated carrier exists (fail-closed)', () => {
+    const tmpDir = '/tmp/kilo-test-defect1-failclosed-' + Date.now();
+    fs.mkdirSync(tmpDir + '/.github/workflows', { recursive: true });
+
+    for (const wf of ['one-click-gemini-activation-verify-reconcile.yml',
+                      'one-click-gemini-builder-smoke.yml',
+                      'one-click-gemini-builder-callback-correlation.yml',
+                      'one-click-gemini-research-documentation.yml',
+                      'one-click-kilo-acp-copy-safe.yml']) {
+        const src = path.join(ONE_CLICK_DIR, wf);
+        if (fs.existsSync(src)) {
+            fs.copyFileSync(src, tmpDir + '/.github/workflows/' + wf);
+        }
+    }
+
+    const badWorkflowPath = tmpDir + '/.github/workflows/one-click-gemini-activation-verify-reconcile.yml';
+    const badWorkflow = "name: Bad\non:\n  workflow_dispatch:\nTASK=`{\"task_name\":\"BAD-TASK\",\"target_agent\":\"Gemini\",\"repository\":\"t\",\"base_branch\":\"main\",\"task_mode\":\"INVALID\",\"capabilities\":[\"read_only\"],\"objective\":\"t\",\"scope\":{\"permitted_paths\":[\"docs/\"]},\"verification\":\"t\",\"constraints\":[\"t\"],\"conflict_handling\":\"t\"}`\n";
+    fs.writeFileSync(badWorkflowPath, badWorkflow, 'utf8');
+
+    const result = preflightValidateOneClickActivation(tmpDir + '/.github/workflows');
+    assert.ok(!result.all_valid, 'Preflight should fail when an unrelated carrier is invalid');
+    const badResult = result.results['one-click-gemini-activation-verify-reconcile.yml'];
+    assert.ok(!badResult.valid, 'Bad carrier should be invalid');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('Defect 1 - preflight does not require every carrier to match requested task identity', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows', {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook'
+    }, true, 'one-click-gemini-builder-smoke.yml');
+
+    const allValid = Object.values(result.results).every(r => r.valid === true);
+    assert.ok(allValid, 'All carriers should be individually valid');
+
+    const nonTargetResults = Object.values(result.results).filter((r, i) => {
+        const keys = Object.keys(result.results);
+        return keys[i] !== 'one-click-gemini-builder-smoke.yml';
+    });
+
+    assert.ok(nonTargetResults.length === 4, 'Should have 4 non-target carriers');
+});
+
+runTest('Defect 1 - smoke workflow passes preflight CLI with target_workflow identifying the target carrier', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    assert.ok(/target_workflow/.test(raw),
+        'Smoke workflow preflight CLI call must include target_workflow parameter');
+    const targetWorkflowMatch = raw.match(/"target_workflow":\s*"([^"]+)"/);
+    assert.ok(targetWorkflowMatch, 'Smoke workflow must specify a target_workflow value');
+    assert.strictEqual(targetWorkflowMatch[1], 'one-click-gemini-builder-smoke.yml',
+        'target_workflow must be the smoke workflow itself');
+});
+
+runTest('Defect 1 - preflight CLI passes with target_workflow and matching requested_task', () => {
+    const { execFileSync } = require('child_process');
+    const args = JSON.stringify({
+        workflow_dir: '.github/workflows',
+        target_workflow: 'one-click-gemini-builder-smoke.yml',
+        requested_task: {
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook'
+        },
+        persist_repairs: false
+    });
+    const output = execFileSync('node', ['poc/validate-external-activation.js', 'one-click-preflight', args], {
+        encoding: 'utf8', timeout: 10000
+    });
+    assert.ok(output.includes('passed'), 'Preflight CLI should pass with correct target_workflow binding');
+});
+
+runTest('Defect 1 - preflight CLI fails when target_workflow carrier does not match requested_task', () => {
+    const { execFileSync } = require('child_process');
+    const args = JSON.stringify({
+        workflow_dir: '.github/workflows',
+        target_workflow: 'one-click-gemini-builder-smoke.yml',
+        requested_task: {
+            task_name: 'TASK-WRONG-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook'
+        },
+        persist_repairs: false
+    });
+    let exitCode = 0;
+    let output = '';
+    try {
+        output = execFileSync('node', ['poc/validate-external-activation.js', 'one-click-preflight', args], {
+            encoding: 'utf8', timeout: 10000
+        });
+    } catch (e) {
+        exitCode = e.status || 1;
+        output = (e.stdout || '') + (e.stderr || '');
+    }
+    assert.ok(exitCode !== 0, 'Preflight CLI must fail when target carrier task mismatches requested task');
+    assert.ok(output.includes('failed') || output.includes('error'), 'Output must indicate failure');
+});
+
+// =========================================================
+// Regression tests: coordinator verification reads origin/main (Defect 2)
+// TASK-KILO-FIX-ONE-CLICK-PREFLIGHT-REMOTE-MAIN-BLOCKERS-001
+// =========================================================
+
+runTest('Defect 2 - fetchWorkflowFromOriginMain uses origin/ ref explicitly', () => {
+    const raw = fs.readFileSync(path.join(ROOT_DIR, 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(/git.*show.*origin.*\/.*baseBranch.*workflowPath/.test(raw.replace(/\s+/g, ' ')) ||
+        /'origin\/'.*baseBranch/.test(raw),
+        'fetchWorkflowFromOriginMain must reference origin/ ref explicitly');
+    assert.ok(!/git.*show.*baseBranch.*workflowPath/.test(raw.replace(/\s+/g, ' ')) ||
+        /'origin\/'.*baseBranch/.test(raw),
+        'git show must use origin/baseBranch, not bare baseBranch');
+});
+
+runTest('Defect 2 - coordinator-verify source reports origin/main (not checkout fallback)', () => {
+    const raw = fs.readFileSync(path.join(ROOT_DIR, 'poc', 'validate-external-activation.js'), 'utf8');
+    assert.ok(!/verificationSource.*=.*'checkout'/.test(raw),
+        'coordinator-verify must not fall back to local checkout when origin/main read fails');
+    assert.ok(!/checkout/.test(raw),
+        'coordinator-verify must not reference checkout as a verification source');
+    assert.ok(!/fs\.readFileSync.*workflowPath.*utf8/.test(raw),
+        'coordinator-verify must not read local checkout as origin/main fallback');
+});
+
+runTest('Defect 2 - coordinator-verify fails closed when origin/main unavailable', () => {
+    const { execFileSync } = require('child_process');
+    const args = JSON.stringify({
+        workflow_name: 'one-click-gemini-builder-smoke.yml',
+        workflow_dir: '.github/workflows',
+        base_branch: 'nonexistent-branch-zzz',
+        requested_task: {
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            task_mode: 'BUILDER',
+            permitted_paths: ['test/schema.test.js', 'poc/']
+        }
+    });
+    let exitCode = 0;
+    let output = '';
+    try {
+        output = execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+            encoding: 'utf8', timeout: 10000
+        });
+    } catch (e) {
+        exitCode = e.status || 1;
+        output = (e.stdout || '') + (e.stderr || '');
+    }
+    assert.ok(exitCode !== 0, 'coordinator-verify must fail when origin/main ref is unavailable');
+    assert.ok(output.includes('BLOCKED') || output.includes('not found'), 'Must be blocked, not succeed via fallback');
+});
+
+runTest('Defect 2 - coordinator-verify produces verification_source=origin/main on success', () => {
+    const { execFileSync } = require('child_process');
+    const args = JSON.stringify({
+        workflow_name: 'one-click-gemini-builder-smoke.yml',
+        workflow_dir: '.github/workflows',
+        base_branch: 'main',
+        requested_task: {
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            task_mode: 'BUILDER',
+            permitted_paths: ['test/schema.test.js', 'poc/']
+        }
+    });
+    const output = execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+        encoding: 'utf8', timeout: 10000
+    });
+    assert.ok(output.includes('origin/main'), 'Output must mention origin/main as verification source');
+    assert.ok(!output.includes('checkout'), 'Must not reference local checkout source');
+});
+
+runTest('Defect 2 - coordinator-verify verified_on_main is true only when origin/main read succeeds', () => {
+    const { execFileSync } = require('child_process');
+    const args = JSON.stringify({
+        workflow_name: 'one-click-gemini-builder-smoke.yml',
+        workflow_dir: '.github/workflows',
+        base_branch: 'main',
+        requested_task: {
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            task_mode: 'BUILDER',
+            permitted_paths: ['test/schema.test.js', 'poc/']
+        }
+    });
+    const tmpFile = '/tmp/kilo-coordinator-verify-output-' + Date.now();
+    fs.writeFileSync(tmpFile, '', 'utf8');
+    const env = Object.assign({}, process.env, { GITHUB_OUTPUT: tmpFile });
+    execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+        encoding: 'utf8', timeout: 10000, env: env, cwd: ROOT_DIR
+    });
+    const outputContent = fs.readFileSync(tmpFile, 'utf8');
+    assert.ok(/verified_on_main=true/.test(outputContent), 'verified_on_main must be true when origin/main read succeeds');
+    assert.ok(/verification_source=origin\/main/.test(outputContent), 'verification_source must be origin/main');
+    fs.rmSync(tmpFile, { force: true });
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);

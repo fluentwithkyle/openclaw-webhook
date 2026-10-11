@@ -81,7 +81,7 @@ jobs:
 
           echo "::notice::Preflight: validating all one-click carrier artifacts"
 
-          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows", "requested_task": {"task_name": "TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook"}, "persist_repairs": true}'
+          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir": ".github/workflows", "target_workflow": "one-click-gemini-builder-smoke.yml", "requested_task": {"task_name": "TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook"}, "persist_repairs": true}'
 
           echo "preflight_validated=true" >> "$GITHUB_OUTPUT"
 

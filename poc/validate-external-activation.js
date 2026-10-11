@@ -22,12 +22,12 @@ function writeOutput(name, value) {
 
 function fetchWorkflowFromOriginMain(workflowPath, baseBranch) {
     try {
-        const output = execFileSync('git', ['show', baseBranch + ':' + workflowPath], {
+        const output = execFileSync('git', ['show', 'origin/' + baseBranch + ':' + workflowPath], {
             encoding: 'utf8', timeout: 15000, stdio: ['pipe', 'pipe', 'pipe']
         });
-        return { ok: true, content: output, source: 'origin/' + baseBranch };
+        return { ok: true, content: output, source: 'origin/' + baseBranch, ref: 'origin/' + baseBranch };
     } catch (e) {
-        return { ok: false, content: null, source: null, error: e.message };
+        return { ok: false, content: null, source: null, ref: null, error: e.message + ' (origin/' + baseBranch + ':' + workflowPath + ')' };
     }
 }
 
@@ -118,7 +118,8 @@ async function main() {
         const workflowDir = params.workflow_dir || '.github/workflows';
         const requestedTask = params.requested_task || null;
         const persistRepairs = params.persist_repairs === true;
-        const preflightResult = preflightValidateOneClickActivation(workflowDir, requestedTask, persistRepairs);
+        const targetWorkflow = params.target_workflow || null;
+        const preflightResult = preflightValidateOneClickActivation(workflowDir, requestedTask, persistRepairs, targetWorkflow);
         if (!preflightResult.all_valid) {
             console.error('::error::One-click preflight validation failed: not all carriers have valid embedded ACP artifacts');
             for (const [wf, r] of Object.entries(preflightResult.results)) {
@@ -172,16 +173,13 @@ async function main() {
             verificationSource = remoteFetch.source;
             verifiedOnMain = true;
         } else {
-            try {
-                workflowRaw = fs.readFileSync(workflowPath, 'utf8');
-                verificationSource = 'checkout';
-            } catch (fnfErr) {
-                console.error('::error::BLOCKED: Workflow file not found on default branch: ' + workflowPath);
-                writeOutput('coordinator_status', 'BLOCKED');
-                writeOutput('coordinator_ready', 'false');
-                writeOutput('coordinator_reason', 'Workflow file not found on default branch');
-                process.exit(1);
-            }
+            console.error('::error::BLOCKED: Workflow file not found on origin/' + baseBranch + ': ' + workflowPath + ' (' + remoteFetch.error + ')');
+            writeOutput('coordinator_status', 'BLOCKED');
+            writeOutput('coordinator_ready', 'false');
+            writeOutput('coordinator_reason', 'Workflow file not found on origin/' + baseBranch);
+            writeOutput('verification_source', null);
+            writeOutput('verified_on_main', 'false');
+            process.exit(1);
         }
 
         const dispatchCheck = verifyZeroInputWorkflowDispatch(workflowRaw);

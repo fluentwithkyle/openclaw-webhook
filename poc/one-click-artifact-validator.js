@@ -481,7 +481,7 @@ function persistRepairedCarrierToFile(workflowPath, workflowRaw, repairedArtifac
     }
 }
 
-function preflightValidateOneClickActivation(workflowDir, requestedTask, persistRepairs) {
+function preflightValidateOneClickActivation(workflowDir, requestedTask, persistRepairs, targetWorkflow) {
     const dir = workflowDir || '.github/workflows';
     const results = {};
     const repairLog = [];
@@ -595,7 +595,23 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask, persist
         }
     }
 
-    const allValid = Object.values(results).every(r => r.valid === true && (!requestedTask || r.bound === true));
+    const allCarriersValid = Object.values(results).every(r => r.valid === true);
+
+    let bindingSatisfied = true;
+    let targetBound = null;
+    if (requestedTask) {
+        if (targetWorkflow) {
+            const targetResult = results[targetWorkflow];
+            targetBound = targetResult ? targetResult.bound === true : false;
+            bindingSatisfied = !!(targetResult && targetResult.valid === true && targetResult.bound === true);
+        } else {
+            const boundCount = Object.values(results).filter(r => r.bound === true).length;
+            targetBound = boundCount > 0;
+            bindingSatisfied = boundCount > 0;
+        }
+    }
+
+    const allValid = allCarriersValid && bindingSatisfied;
 
     return {
         all_valid: allValid,
@@ -608,6 +624,8 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask, persist
             repaired: Object.values(results).filter(r => r.repaired === true).length,
             persisted: Object.values(results).filter(r => r.persisted === true).length
         },
+        target_workflow: targetWorkflow || null,
+        target_bound: targetBound,
         repair_log: repairLog,
         requested_task: requestedTask || null
     };
