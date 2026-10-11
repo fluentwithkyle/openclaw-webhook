@@ -2775,7 +2775,7 @@ runTest('Defect 2 - coordinator-verify fails closed when origin/main unavailable
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
-            permitted_paths: ['test/schema.test.js', 'poc/']
+            permitted_paths: ['test/schema.test.js']
         }
     });
     let exitCode = 0;
@@ -2803,7 +2803,7 @@ runTest('Defect 2 - coordinator-verify produces verification_source=origin/main 
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
-            permitted_paths: ['test/schema.test.js', 'poc/']
+            permitted_paths: ['test/schema.test.js']
         }
     });
     const output = execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
@@ -2824,7 +2824,7 @@ runTest('Defect 2 - coordinator-verify verified_on_main is true only when origin
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
-            permitted_paths: ['test/schema.test.js', 'poc/']
+            permitted_paths: ['test/schema.test.js']
         }
     });
     const tmpFile = '/tmp/kilo-coordinator-verify-output-' + Date.now();
