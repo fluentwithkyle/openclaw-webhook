@@ -292,7 +292,7 @@ jobs:
 
       - name: Verify Director transition decision provenance (trusted, secret not passed to model)
         id: director_provenance
-        if: steps.validate_activation.outputs.activation_validated == 'true' && !steps.validate_activation.outputs.replay && contains(steps.orchestration_context.outputs.task, 'PHASE') && contains(steps.orchestration_context.outputs.task, 'TRANSITION')
+        if: always()
         shell: bash
         env:
           DEEPSEEK_COORDINATOR_SECRET: ${{ secrets.DEEPSEEK_COORDINATOR_SECRET }}
