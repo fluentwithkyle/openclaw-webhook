@@ -2841,5 +2841,205 @@ runTest('Defect 2 - coordinator-verify verified_on_main is true only when origin
     fs.rmSync(tmpFile, { force: true });
 });
 
+// =========================================================
+// Regression tests: one-click smoke workflow commit/push, push status, and report safety fixes
+// TASK-KILO-FIX-ONE-CLICK-BUILDER-SMOKE-EXECUTION-AND-REPORTING-001
+// =========================================================
+
+runTest('Smoke workflow - commit/push step does not use git add -A (stages only permitted paths)', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    assert.ok(commitIdx !== -1, 'Must have Commit and push step');
+    const commitSection = raw.slice(commitIdx, raw.indexOf('\n      - name:', commitIdx + 10) > -1
+        ? raw.indexOf('\n      - name:', commitIdx + 10)
+        : commitIdx + 5000);
+    assert.ok(!/git add -A/.test(commitSection),
+        'Commit/push step must NOT use git add -A');
+    assert.ok(/git add "\$dir"/.test(commitSection),
+        'Commit/push step must stage only permitted paths via git add "$dir"');
+    assert.ok(/PERMITTED_PATHS/.test(commitSection),
+        'Commit/push step must use PERMITTED_PATHS env var for staging');
+});
+
+runTest('Smoke workflow - commit/push step stages only permitted paths, not generated files', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(!/git add execution-descriptor\.json/.test(commitSection),
+        'Must not stage execution-descriptor.json');
+    assert.ok(!/git add callback_payload\.json/.test(commitSection),
+        'Must not stage callback_payload.json');
+    assert.ok(!/git add gemini-acp-report\.json/.test(commitSection),
+        'Must not stage gemini-acp-report.json');
+    assert.ok(/git add "\$dir"/.test(commitSection),
+        'Must stage only via permitted path directories');
+});
+
+runTest('Smoke workflow - commit/push step rejects out-of-scope files before committing', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(/OUT_OF_SCOPE/.test(commitSection),
+        'Commit step must track out-of-scope files');
+    assert.ok(/::error::Out-of-scope files/.test(commitSection),
+        'Commit step must emit error on out-of-scope files');
+    assert.ok(/exit 1/.test(commitSection),
+        'Commit step must exit 1 on out-of-scope files');
+    assert.ok(/IN_SCOPE/.test(commitSection),
+        'Commit step must check each staged file against permitted paths');
+});
+
+runTest('Smoke workflow - commit/push step fetches origin/main for reconciliation before pushing', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(/git fetch origin.*\$BASE_BRANCH/.test(commitSection) || /git fetch origin "\$BASE_BRANCH"/.test(commitSection),
+        'Commit step must fetch origin/main before pushing');
+    assert.ok(/git merge-base --is-ancestor/.test(commitSection),
+        'Commit step must check if local HEAD is ancestor of origin/main');
+    assert.ok(/origin\/\$BASE_BRANCH/.test(commitSection),
+        'Commit step must reference origin/$BASE_BRANCH for reconciliation');
+});
+
+runTest('Smoke workflow - commit/push step does NOT force-push', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(!/git push --force/.test(commitSection),
+        'Commit step must NOT use git push --force');
+    assert.ok(!/git push -f/.test(commitSection),
+        'Commit step must NOT use git push -f');
+    assert.ok(/git push origin "\$BASE_BRANCH"/.test(commitSection),
+        'Commit step must push to origin/$BASE_BRANCH');
+});
+
+runTest('Smoke workflow - commit/push step stops safely on merge conflict', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(/Merge conflict/.test(commitSection),
+        'Commit step must handle merge conflicts gracefully');
+    assert.ok(/exit 1/.test(commitSection),
+        'Commit step must stop safely on merge conflict');
+    assert.ok(/not force-push/.test(commitSection) || /not force/.test(commitSection),
+        'Commit step must reference no-force-push constraint on conflict');
+});
+
+runTest('Smoke workflow - commit/push step tracks push_status output accurately', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(/push_status=/.test(commitSection),
+        'Commit step must output push_status');
+    assert.ok(/PUSH_STATUS="true"/.test(commitSection),
+        'Commit step must set PUSH_STATUS=true only after successful push');
+    assert.ok(/PUSH_STATUS="failed"/.test(commitSection),
+        'Commit step must set PUSH_STATUS=failed when push fails');
+});
+
+runTest('Smoke workflow - builder_result step distinguishes commit success from push success', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const resultIdx = raw.indexOf('Determine Builder execution result');
+    assert.ok(resultIdx !== -1, 'Must have builder_result step');
+    const resultSection = raw.slice(resultIdx, resultIdx + 3000);
+    assert.ok(/Commit created but push.*failed/.test(resultSection),
+        'builder_result must have a branch for commit-success-push-failed');
+    assert.ok(/BUILDER_OUTCOME/.test(resultSection),
+        'builder_result must reference BUILDER_OUTCOME');
+    assert.ok(/COMMIT_PUSH_OUTCOME/.test(resultSection),
+        'builder_result must reference COMMIT_PUSH_OUTCOME');
+    assert.ok(/HAS_CHANGES/.test(resultSection),
+        'builder_result must reference HAS_CHANGES output');
+    assert.ok(/PUSH_STATUS/.test(resultSection),
+        'builder_result must reference PUSH_STATUS output');
+    assert.ok(!/Builder completed with no file changes/.test(resultSection) ||
+        /Builder completed but produced no commit/.test(resultSection),
+        'builder_result must not claim success when builder has no changes');
+});
+
+runTest('Smoke workflow - callback_payload step uses set -uo pipefail (not -e) to avoid exit-before-report', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const cbIdx = raw.indexOf('Prepare ACP report payload');
+    assert.ok(cbIdx !== -1, 'Must have Prepare ACP report payload step');
+    const cbSection = raw.slice(cbIdx, cbIdx + 3000);
+    assert.ok(/set -uo pipefail/.test(cbSection),
+        'callback_payload step must use set -uo pipefail (not -e) to ensure report generation');
+    assert.ok(!/set -euo pipefail/.test(cbSection),
+        'callback_payload step must NOT use set -e which would exit before creating the report');
+});
+
+runTest('Smoke workflow - callback_payload step always generates gemini-acp-report.json even on failure', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const cbIdx = raw.indexOf('Prepare ACP report payload');
+    const cbSection = raw.slice(cbIdx, cbIdx + 7000);
+    assert.ok(/callback_payload\.json/.test(cbSection),
+        'callback_payload step must write to callback_payload.json');
+    assert.ok(/gemini-acp-report\.json/.test(cbSection),
+        'callback_payload must write to gemini-acp-report.json');
+    assert.ok(/failed-closed report/.test(cbSection) || /report generation failed/.test(cbSection),
+        'callback_payload must have fail-closed fallback for report generation');
+});
+
+runTest('Smoke workflow - callback_payload step push status reflects actual push, not just commit existence', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const cbIdx = raw.indexOf('Prepare ACP report payload');
+    const cbSection = raw.slice(cbIdx, cbIdx + 5000);
+    assert.ok(/if.*PUSH_STATUS.*=.*true/.test(cbSection) || /PUSH_VAL.*PUSH_STATUS/.test(cbSection),
+        'callback_payload must derive push status from PUSH_STATUS output, not just commit SHA existence');
+    assert.ok(!/PUSH_STATUS=true/.test(cbSection.replace(/if.*PUSH_STATUS.*/, '')),
+        'callback_payload must not unconditionally set push=true based on commit SHA alone');
+});
+
+runTest('Smoke workflow - has failure-safe step ensuring gemini-acp-report.json exists', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    assert.ok(/Ensure gemini-acp-report\.json exists.*failure-safe/.test(raw),
+        'Workflow must have a failure-safe step ensuring report exists');
+    assert.ok(/! -f gemini-acp-report\.json/.test(raw),
+        'Failure-safe step must check for missing report file');
+    assert.ok(/fail-closed report/.test(raw) || /gemini-acp-report\.json could not be generated/.test(raw),
+        'Failure-safe step must write a fail-closed report');
+});
+
+runTest('Smoke workflow - upload artifact uses if-no-files-found: warn (not error)', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const uploadIdx = raw.indexOf('Upload Builder result artifact');
+    assert.ok(uploadIdx !== -1, 'Must have Upload artifact step');
+    const uploadSection = raw.slice(uploadIdx, uploadIdx + 500);
+    assert.ok(/if-no-files-found: warn/.test(uploadSection),
+        'Upload step must use if-no-files-found: warn so it does not fail the workflow when report is missing');
+});
+
+runTest('Smoke workflow - commit/push step references BASE_BRANCH from orchestration context, not hardcoded', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(/BASE_BRANCH.*orchestration_context/.test(commitSection) || /BASE_BRANCH.*steps\.orchestration_context/.test(commitSection),
+        'Commit/push step must derive BASE_BRANCH from orchestration context');
+    assert.ok(/PERMITTED_PATHS.*orchestration_context/.test(commitSection) || /PERMITTED_PATHS.*steps\.orchestration_context/.test(commitSection),
+        'Commit/push step must derive PERMITTED_PATHS from orchestration context');
+});
+
+runTest('Smoke workflow - safe reconciliation preserves unrelated remote work', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(/git merge --no-edit/.test(commitSection),
+        'Commit step must use merge --no-edit for reconciliation');
+    assert.ok(/--no-ff/.test(commitSection),
+        'Commit step must use --no-ff for explicit merge');
+});
+
+runTest('Smoke workflow - execution-descriptor.json excluded from commit staging', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const commitIdx = raw.indexOf('Commit and push Builder changes');
+    const commitSection = raw.slice(commitIdx, commitIdx + 5000);
+    assert.ok(/execution-descriptor\.json/.test(raw),
+        'Workflow references execution-descriptor.json');
+    assert.ok(!/git add.*execution-descriptor\.json/.test(commitSection),
+        'Commit step must NOT stage execution-descriptor.json');
+    assert.ok(/git add "\$dir"/.test(commitSection),
+        'Commit step must stage only permitted path directories');
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);
