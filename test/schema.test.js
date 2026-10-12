@@ -313,13 +313,15 @@ test('VALID_TASK_MODES includes BUILDER', () => {
   assert(VALID_TASK_MODES.includes('FAILOVER_EXECUTE'), 'FAILOVER_EXECUTE should still be a valid task mode');
 });
 
-test('BUILDER_CAPABILITIES includes all execution capabilities', () => {
+test('BUILDER_CAPABILITIES contains the complete fixed set exactly', () => {
   assertArrayIncludes(BUILDER_CAPABILITIES, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+  assertEqual(BUILDER_CAPABILITIES.length, 5);
 });
 
-test('getRequiredCapabilitiesForMode returns BUILDER_CAPABILITIES for BUILDER mode', () => {
+test('getRequiredCapabilitiesForMode returns BUILDER_CAPABILITIES for BUILDER mode exactly', () => {
   const caps = getRequiredCapabilitiesForMode('BUILDER');
-  assertArrayIncludes(caps, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+  assertDeepEqual(caps, BUILDER_CAPABILITIES);
+  assertEqual(caps.length, 5);
 });
 
 test('Execution report with agent Gemini Builder is valid', () => {

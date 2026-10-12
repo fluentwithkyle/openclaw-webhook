@@ -1,0 +1,36 @@
+{
+  "request_id": "builder-execution-smoke-38244915308-1",
+  "execution_claim_id": "claim-1791805661322-04ozsyio",
+  "activation_id": "ext-activ-1791805661315-b2usk62x",
+  "activation_target": "Gemini Builder",
+  "activation_task_mode": "BUILDER",
+  "activation_surface": "workflow_dispatch",
+  "task": "{\"task_name\":\"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001\",\"originator\":\"Kyle - Director\",\"target_agent\":\"Gemini Builder\",\"repository\":\"fluentwithkyle/openclaw-webhook\",\"base_branch\":\"main\",\"task_mode\":\"BUILDER\",\"capabilities\":[\"read_only\",\"modify_files\",\"run_tests\",\"commit\",\"push\"],\"objective\":\"Strengthen the existing BUILDER capability test in test/schema.test.js so getRequiredCapabilitiesForMode('BUILDER') is asserted to equal the canonical BUILDER_CAPABILITIES exactly, with no missing or additional capabilities.\",\"scope\":{\"permitted_paths\":[\"test/schema.test.js\"]},\"verification\":[\"Inspect the existing BUILDER capability test before editing.\",\"Make the smallest change needed to assert exact equality against BUILDER_CAPABILITIES.\",\"Run node test/schema.test.js and require it to pass.\",\"Run git diff --check and require a clean result.\",\"Verify only test/schema.test.js changed.\",\"Commit and push to origin/main in this execution, then verify origin/main contains the commit.\",\"Report the commit SHA, changed path, test results, diff-check result, and remote-main verification.\"],\"constraints\":[\"No production-code changes.\",\"Modify only test/schema.test.js.\",\"No refactors, dependencies, or unrelated improvements.\",\"Do not force-push or overwrite unrelated changes.\",\"If the branch advances, reconcile with current main before pushing.\",\"Stop if authorization or permitted scope is invalid.\"],\"conflict_handling\":\"Follow AGENTS.md, ARCHITECTURE.md, docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md, and docs/ai/TASK_STANDARD.md. Repository policy and server-derived authorization take precedence. Fail closed if required authority is missing; do not expand scope.\"}",
+  "repository": "fluentwithkyle/openclaw-webhook",
+  "base_branch": "main",
+  "task_mode": "BUILDER",
+  "task_name": "TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001",
+  "capabilities": [
+    "read_only",
+    "modify_files",
+    "run_tests",
+    "commit",
+    "push"
+  ],
+  "permitted_paths": [
+    "test/schema.test.js"
+  ],
+  "verification": "Build and implement within permitted_paths scope.",
+  "workflow_stage": null,
+  "target_agent": "Gemini Builder",
+  "director_transition_decision_provenance": null,
+  "current_phase": null,
+  "target_phase": null,
+  "coordinator_task_id": null,
+  "transition_id": null,
+  "transition_evidence_id": null,
+  "prior_phase_convergence_evidence": null,
+  "independent_verification_id": null,
+  "carrier_identity": "github-workflow-38244915308-1",
+  "carrier_type": "github_workflow"
+}
