@@ -1,7 +1,9 @@
 ## Current AI Project State
 
-**Last Updated**: 2026-10-11
-**Updated By**: Kilo — TASK-KILO-FIX-ONE-CLICK-SMOKE-WORKFLOW-DEFECTS-001
+**Last Updated**: 2026-10-12
+**Updated By**: Kilo — TASK-KILO-ONE-CLICK-SAFEGUARD-GAP-AUDIT-AND-HARDENING-001
+
+| 2026-10-12 | TASK-KILO-ONE-CLICK-SAFEGUARD-GAP-AUDIT-AND-HARDENING-001 | COMPLETED | Kilo | Fixed root-cause defect in `one-click-gemini-builder-smoke.yml`: `director_provenance` step (line 295) now uses `if: always()` instead of task-content-based conditional that was skipped when orchestration_context failed or descriptor was missing for non-transition tasks. One-click contract tests: 250/250 pass (was 249/1). All other test files pass. Pre-existing `strategic-alignment.test.js` / `deepseek-runtime.test.js` failures confirmed unrelated (strategic-state projection mismatch). Committed as 395b459. | SUCCESS | .github/workflows/one-click-gemini-builder-smoke.yml, docs/ai/TASK_LOG.md |
 
 ## Current Strategic State — Authoritative for Alignment
 
