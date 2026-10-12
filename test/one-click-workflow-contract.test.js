@@ -2526,6 +2526,8 @@ runTest('Defect 5 - activation step derives authority fields from task artifact 
 
     assert.ok(/\$TARGET_AGENT/.test(activationSection),
         'Activation step must derive target_agent from task artifact env var');
+    assert.ok(/task_name:\s*\(\$task\s*\|\s*fromjson\s*\|\s*\.task_name\)/.test(activationSection),
+        'Activation step must pass the canonical task_name from the ACP task artifact');
     assert.ok(/TASK_MODE/.test(activationSection),
         'Activation step must derive task_mode from task artifact env var');
     assert.ok(/\$CAPABILITIES/.test(activationSection),
