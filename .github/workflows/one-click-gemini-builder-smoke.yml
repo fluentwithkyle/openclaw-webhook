@@ -217,6 +217,7 @@ jobs:
             '{
               request_id: $request_id,
               task: $task,
+              task_name: ($task | fromjson | .task_name),
               target_agent: $target_agent,
               task_mode: $task_mode,
               repository: $repository,
