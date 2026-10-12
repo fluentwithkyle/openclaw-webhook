@@ -394,29 +394,125 @@ jobs:
         id: commit_push
         if: always()
         shell: bash
+        env:
+          PERMITTED_PATHS: ${{ steps.orchestration_context.outputs.permitted_paths }}
+          BASE_BRANCH: ${{ steps.orchestration_context.outputs.base_branch }}
+          REQUEST_ID: ${{ steps.orchestration_context.outputs.request_id }}
         run: |
           set -uo pipefail
 
-          CHANGED_FILES=$(git diff --name-only HEAD)
+          git config --global --add safe.directory '*'
+
+          COMMIT_SHA="null"
+          PUSH_STATUS="failed"
+          HAS_CHANGES="false"
+
+          CHANGED_FILES=$(git diff --name-only HEAD 2>/dev/null || true)
+
           if [ -z "$CHANGED_FILES" ]; then
             echo "No changes to commit"
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
             echo "commit_sha=null" >> "$GITHUB_OUTPUT"
-          else
-            echo "Changed files:"
-            echo "$CHANGED_FILES"
-
-            git add -A
-            git commit -m "BUILDER: Implement task (request_id: ${{ steps.orchestration_context.outputs.request_id }})"
-
-            COMMIT_SHA=$(git rev-parse HEAD)
-            echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-
-            git push origin "${{ steps.orchestration_context.outputs.base_branch }}"
-
-            echo "Pushed commit: $COMMIT_SHA"
+            echo "push_status=failed" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          echo "Fetching origin/$BASE_BRANCH for reconciliation..."
+          git fetch origin "$BASE_BRANCH" || {
+            echo "::error::Failed to fetch origin/$BASE_BRANCH; cannot reconcile"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=null" >> "$GITHUB_OUTPUT"
+            echo "push_status=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          }
+
+          BASE_SHA=$(git rev-parse "origin/$BASE_BRANCH" 2>/dev/null || echo "")
+
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "$(git rev-parse HEAD)" ]; then
+            echo "Reconciling current branch with origin/$BASE_BRANCH..."
+            if ! git merge-base --is-ancestor "$BASE_SHA" HEAD 2>/dev/null; then
+              if ! git merge --no-edit --no-ff "origin/$BASE_BRANCH" 2>&1; then
+                echo "::error::Merge conflict reconciling with origin/$BASE_BRANCH; preserving work, not force-pushing"
+                echo "has_changes=false" >> "$GITHUB_OUTPUT"
+                echo "commit_sha=null" >> "$GITHUB_OUTPUT"
+                echo "push_status=failed" >> "$GITHUB_OUTPUT"
+                exit 1
+              fi
+            else
+              echo "origin/$BASE_BRANCH is ahead; fast-forwarding local checkout..."
+              git merge --no-edit --ff-only "origin/$BASE_BRANCH" 2>&1
+            fi
+          fi
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No authorized changes to commit after reconciliation"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=null" >> "$GITHUB_OUTPUT"
+            echo "push_status=failed" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          STAGED_FILES=""
+          for dir in $PERMITTED_PATHS; do
+            echo "Staging permitted path: $dir"
+            git add "$dir" 2>&1
+          done
+
+          STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
+
+          if [ -n "$STAGED_FILES" ]; then
+            OUT_OF_SCOPE=""
+            while IFS= read -r f; do
+              if [ -n "$f" ]; then
+                IN_SCOPE="false"
+                for dir in $PERMITTED_PATHS; do
+                  case "$f" in
+                    "$dir"*) IN_SCOPE="true" ;;
+                  esac
+                done
+                if [ "$IN_SCOPE" = "false" ]; then
+                  OUT_OF_SCOPE="${OUT_OF_SCOPE}${f}\n"
+                fi
+              fi
+            done <<< "$STAGED_FILES"
+
+            if [ -n "$OUT_OF_SCOPE" ]; then
+              echo "::error::Out-of-scope files would be staged for commit:"
+              echo -e "$OUT_OF_SCOPE"
+              echo "::error::Rejecting commit to prevent unauthorized file changes"
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+              echo "commit_sha=null" >> "$GITHUB_OUTPUT"
+              echo "push_status=failed" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+          fi
+
+          git commit -m "BUILDER: Implement task (request_id: $REQUEST_ID)" || {
+            echo "::error::git commit failed"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=null" >> "$GITHUB_OUTPUT"
+            echo "push_status=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          }
+
+          COMMIT_SHA=$(git rev-parse HEAD)
+          HAS_CHANGES="true"
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+          echo "Pushing commit $COMMIT_SHA to origin/$BASE_BRANCH..."
+          if git push origin "$BASE_BRANCH" 2>&1; then
+            PUSH_STATUS="true"
+            echo "Pushed commit: $COMMIT_SHA"
+          else
+            PUSH_STATUS="failed"
+            echo "::error::git push failed; commit created locally but not pushed"
+          fi
+
+          echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
 
       - name: Determine Builder execution result
         id: builder_result
@@ -425,16 +521,30 @@ jobs:
         run: |
           set -uo pipefail
 
-          BUILDER_OUTCOME="${{ steps.gemini_builder_run.outcome }}"
+          BUILDER_OUTCOME="${{ steps.gemini_builder_run.outcome || 'unknown' }}"
+          COMMIT_PUSH_OUTCOME="${{ steps.commit_push.outcome || 'skipped' }}"
+          HAS_CHANGES="${{ steps.commit_push.outputs.has_changes || 'false' }}"
+          COMMIT_SHA="${{ steps.commit_push.outputs.commit_sha || 'null' }}"
+          PUSH_STATUS="${{ steps.commit_push.outputs.push_status || 'failed' }}"
 
-          if [ "$BUILDER_OUTCOME" = "success" ] && [ "${{ steps.commit_push.outputs.has_changes }}" = "true" ]; then
+          echo "BUILDER_OUTCOME=$BUILDER_OUTCOME"
+          echo "COMMIT_PUSH_OUTCOME=$COMMIT_PUSH_OUTCOME"
+          echo "HAS_CHANGES=$HAS_CHANGES"
+          echo "COMMIT_SHA=$COMMIT_SHA"
+          echo "PUSH_STATUS=$PUSH_STATUS"
+
+          if [ "$BUILDER_OUTCOME" = "success" ] && [ "$COMMIT_PUSH_OUTCOME" = "success" ] && [ "$HAS_CHANGES" = "true" ] && [ "$COMMIT_SHA" != "null" ]; then
             STATUS="success"
             VERIFICATION_STATUS="PASS"
             BLOCKER_MSG=""
-          elif [ "$BUILDER_OUTCOME" = "success" ] && [ "${{ steps.commit_push.outputs.has_changes }}" = "false" ]; then
-            STATUS="success"
-            VERIFICATION_STATUS="PASS"
-            BLOCKER_MSG="Builder completed with no file changes"
+          elif [ "$BUILDER_OUTCOME" = "success" ] && [ "$HAS_CHANGES" = "true" ] && [ "$COMMIT_SHA" != "null" ] && [ "$PUSH_STATUS" = "failed" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Commit created but push to origin/$BASE_BRANCH failed"
+          elif [ "$BUILDER_OUTCOME" = "success" ] && [ "$HAS_CHANGES" = "false" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Builder completed but produced no commit (no changes or commit failed)"
           elif [ "$BUILDER_OUTCOME" = "failure" ]; then
             STATUS="failure"
             VERIFICATION_STATUS="FAIL"
@@ -442,13 +552,14 @@ jobs:
           else
             STATUS="failure"
             VERIFICATION_STATUS="FAIL"
-            BLOCKER_MSG="Builder workflow did not execute successfully (step outcome: ${BUILDER_OUTCOME:-none})"
+            BLOCKER_MSG="Builder workflow did not execute successfully (builder_outcome: ${BUILDER_OUTCOME:-none}, commit_push_outcome: ${COMMIT_PUSH_OUTCOME:-none})"
           fi
 
           echo "builder_status=$STATUS" >> "$GITHUB_OUTPUT"
           echo "verification_status=$VERIFICATION_STATUS" >> "$GITHUB_OUTPUT"
           echo "blocker_message=$BLOCKER_MSG" >> "$GITHUB_OUTPUT"
-          echo "commit_sha=${{ steps.commit_push.outputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "push_status=$PUSH_STATUS" >> "$GITHUB_OUTPUT"
 
       - name: Prepare ACP report payload
         id: callback_payload
@@ -459,14 +570,14 @@ jobs:
           CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           DESCRIPTOR_FILE="execution-descriptor.json"
           if [ -f "$DESCRIPTOR_FILE" ]; then
-            REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
-            TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
-            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
+            REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            TASK="$(jq -r '.task // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            REPOSITORY="$(jq -r '.repository // "'${{ github.repository }}'"' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
+            BASE_BRANCH="$(jq -r '.base_branch // "'${{ github.ref_name }}'"' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
             EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
           else
@@ -478,34 +589,50 @@ jobs:
 
           BUILDER_EXEC_ID="${{ steps.orchestration_context.outputs.builder_execution_id }}"
           KILO_EXEC_ID="${{ steps.orchestration_context.outputs.kilo_execution_id || '' }}"
-          BUILDER_OUTPUT="$BUILDER_SUMMARY"
+          BUILDER_OUTPUT="${BUILDER_SUMMARY:-}"
 
           CURRENT_HEAD_SHA="${GITHUB_SHA}"
-          STATUS="${{ steps.builder_result.outputs.builder_status }}"
-          VERIFICATION_STATUS="${{ steps.builder_result.outputs.verification_status }}"
-          BLOCKER_MSG="${{ steps.builder_result.outputs.blocker_message }}"
-          COMMIT_SHA="${{ steps.builder_result.outputs.commit_sha }}"
+          STATUS="${{ steps.builder_result.outputs.builder_status || 'failure' }}"
+          VERIFICATION_STATUS="${{ steps.builder_result.outputs.verification_status || 'FAIL' }}"
+          BLOCKER_MSG="${{ steps.builder_result.outputs.blocker_message || 'Builder execution result unavailable' }}"
+          COMMIT_SHA="${{ steps.builder_result.outputs.commit_sha || 'null' }}"
+          PUSH_STATUS="${{ steps.builder_result.outputs.push_status || 'failed' }}"
+
+          if [ -z "$STATUS" ] || [ "$STATUS" = "null" ]; then
+            STATUS="failure"
+          fi
+          if [ -z "$VERIFICATION_STATUS" ]; then
+            VERIFICATION_STATUS="FAIL"
+          fi
+          if [ -z "$BLOCKER_MSG" ]; then
+            BLOCKER_MSG="Builder execution result unavailable"
+          fi
 
           CHANGED_FILES_JSON="[]"
 
-          if [ "$STATUS" = "failure" ]; then
-            BLOCKERS=$(jq -n --arg msg "$BLOCKER_MSG" '[$msg]')
-          else
-            BLOCKERS="[]"
+          BLOCKERS_JSON="[]"
+          if [ "$STATUS" = "failure" ] && [ -n "$BLOCKER_MSG" ]; then
+            BLOCKERS_JSON=$(jq -n --arg msg "$BLOCKER_MSG" '[$msg]' 2>/dev/null || echo '["Builder execution failed"]')
           fi
 
           if [ "$COMMIT_SHA" = "null" ] || [ -z "$COMMIT_SHA" ]; then
             RECON_COMMIT_SHA="null"
-            PUSH_STATUS=false
+            PUSH_VAL=false
+            COMMIT_VAL=null
           else
             RECON_COMMIT_SHA="$COMMIT_SHA"
-            PUSH_STATUS=true
+            COMMIT_VAL="$COMMIT_SHA"
+            if [ "$PUSH_STATUS" = "true" ]; then
+              PUSH_VAL=true
+            else
+              PUSH_VAL=false
+            fi
           fi
 
           INVOCATION_ID="gemini-builder-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           RUN_ID="${GITHUB_RUN_ID}"
 
-          jq -n \
+          REPORT_JSON=$(jq -n \
             --arg request_id "$REQUEST_ID" \
             --arg agent "Gemini Builder" \
             --arg status "$STATUS" \
@@ -516,12 +643,12 @@ jobs:
             --arg builder_output "$BUILDER_OUTPUT" \
             --arg invocation_id "$INVOCATION_ID" \
             --arg run_id "$RUN_ID" \
-            --argjson blockers "$BLOCKERS" \
+            --argjson blockers "$BLOCKERS_JSON" \
             --arg recon_status "SKIPPED" \
             --argjson recon_changed_files "$CHANGED_FILES_JSON" \
             --arg recon_commit_sha "$RECON_COMMIT_SHA" \
-            --argjson push "$PUSH_STATUS" \
-            --arg commit "$COMMIT_SHA" \
+            --argjson push "$PUSH_VAL" \
+            --arg commit "$COMMIT_VAL" \
             --arg execution_claim_id "$EXECUTION_CLAIM_ID" \
             --arg carrier_identity "$CARRIER_IDENTITY" \
             '{
@@ -535,7 +662,7 @@ jobs:
               changed_files: [],
               verification: ["builder execution completed"],
               result: { execution_metadata: { invocation_id: $invocation_id, run_id: $run_id, carrier_identity: (if $carrier_identity == "" then null else $carrier_identity end), execution_claim_id: (if $execution_claim_id == "" then null else $execution_claim_id end) }, builder_output: $builder_output },
-              commit: (if $commit == "null" then null else $commit end),
+              commit: $commit,
               push: $push,
               blockers: $blockers,
               reconciliation: {
@@ -543,9 +670,15 @@ jobs:
                 changed_files: $recon_changed_files,
                 commit_sha: (if $recon_commit_sha == "null" then null else $recon_commit_sha end)
               }
-            }' > callback_payload.json
+            }') || {
+            echo "::error::Failed to generate callback payload JSON; writing fail-closed report"
+            REPORT_JSON='{"agent":"Gemini Builder","status":"failure","blockers":["report generation failed"]}'
+          }
 
-          cp callback_payload.json gemini-acp-report.json
+          echo "$REPORT_JSON" > callback_payload.json
+          echo "$REPORT_JSON" > gemini-acp-report.json
+
+          echo "report_status=generated" >> "$GITHUB_OUTPUT"
 
           cat callback_payload.json
 
@@ -583,6 +716,16 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure gemini-acp-report.json exists (failure-safe)
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -f gemini-acp-report.json ]; then
+            echo "::warning::gemini-acp-report.json was not generated; writing fail-closed report"
+            node -e "const fs = require('fs'); fs.writeFileSync('gemini-acp-report.json', JSON.stringify({agent: 'Gemini Builder', status: 'failure', blockers: ['gemini-acp-report.json could not be generated by the report payload step'], commit: null, push: false}, null, 2));"
+          fi
+
       - name: Upload Builder result artifact
         id: upload_artifact
         if: always()
@@ -591,7 +734,7 @@ jobs:
           name: gemini-acp-report
           path: gemini-acp-report.json
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Report artifact filing status
         if: always()
