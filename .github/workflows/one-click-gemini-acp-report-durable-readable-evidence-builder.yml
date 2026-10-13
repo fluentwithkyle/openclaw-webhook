@@ -146,7 +146,7 @@ jobs:
             }
           }
           TASK_EOF
-)
+          )
 
           {
             echo 'request_id<<EOF'
@@ -334,13 +334,13 @@ jobs:
           set -euo pipefail
           echo "::notice::Validating workflow YAML syntax..."
           python3 -c "
-import yaml, sys
-with open('.github/workflows/.github/workflows/one-click-gemini-acp-report-durable-readable-evidence-builder.yml') as f:
-    doc = yaml.safe_load(f)
-assert doc['name'] == 'One-Click Gemini Builder ACP Report Durable Readable Evidence'
-assert 'workflow_dispatch' in doc['on']
-print('YAML validation passed')
-"
+            import yaml, sys
+            with open('.github/workflows/.github/workflows/one-click-gemini-acp-report-durable-readable-evidence-builder.yml') as f:
+                doc = yaml.safe_load(f)
+            assert doc['name'] == 'One-Click Gemini Builder ACP Report Durable Readable Evidence'
+            assert 'workflow_dispatch' in doc['on']
+            print('YAML validation passed')
+            "
 
       - name: Verify Director transition decision provenance (trusted, secret not passed to model)
         id: director_provenance
@@ -604,7 +604,7 @@ print('YAML validation passed')
       - name: Prepare ACP report payload
         id: callback_payload
         if: always()
-         env:
+        env:
           BUILDER_SUMMARY: ${{ steps.gemini_builder_run.outputs.summary }}
           EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
           CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
