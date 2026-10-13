@@ -5,8 +5,8 @@
 
 Designed for Kyle checking the project from a phone.
 
-**Last Updated**: 2026-10-10
-**Updated By**: Gemini — TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001
+**Last Updated**: 2026-10-13
+**Updated By**: ChatGPT Coordinator — Phase 4 baseline reconciliation
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -23,13 +23,13 @@ the existing orchestrator/dispatcher, GitHub, and Kyle retain authority.
 
 **Phase 1 — Observation**: **COMPLETE / INDEPENDENTLY VERIFIED** (PR #225, commit `8c77901`, TASK-GEMINI-DEEPSEEK-PHASE-1-OBSERVATION-VERIFY-RECONCILE-001). Extends `get_task` with safe coverage for all eight ACP lifecycle states, lineage, agent execution reports, evidence counts/categories, independent verification, verification requirements, and failure/blocked information. No authority fields or second control plane. Phase 2+ capabilities remain GAP / PROPOSED / TARGET.
 
-**Current roadmap phase**: **Phase 3 — Autonomous Coordination Loop** — **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED** (`TASK-GEMINI-DEEPSEEK-PHASE-3-AUTONOMOUS-COORDINATION-FINAL-VERIFY-RECONCILE-001`, final reconciliation commit `8c9e005`). The full Phase 3 lifecycle is verified and reconciled. Kyle has received and authorized proceeding to Phase 4 conversationally, but the durable transition record required by `poc/phase-transition-gate.js` is not established on `main`; Phase 4 remains the next PROPOSED / TARGET phase and is not activated. The external-activation foundation at commit 2136c44 is independently source-verified; existing external activation producers remain only partially migrated to the canonical ingress.
+**Current roadmap phase**: **Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — ACTIVE / IN PROGRESS**. `STATE.md` and `strategic-state.json` record the transition as applied through `poc/phase-transition-gate.js`, with signed transition evidence `transition-evidence-director-transition-decision-1791716406199-051138fb0ab5` and coordinator task identity `TASK-CHATGPT-PHASE-4-RESEARCH-RECONCILE-001`. Phase 3 remains COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Phase 4 feature design and implementation remain PROPOSED / TARGET until the design contract is independently reconciled and implementation increments receive separate ACP authorization.
 
 ---
 
 ## Strategic Alignment Control
 
-**Current strategic checkpoint:** Phase 3 — Autonomous Coordination Loop is **COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED**. `STATE.md` is the live authority and `docs/ai/strategic-state.json` is its machine-readable projection; this dashboard is derived only. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — is the next PROPOSED / TARGET phase. Kyle’s explicit conversational decision is already the roadmap-transition authorization. The first authorized Phase 4 research/reconciliation task must establish the durable transition record and then invoke the existing phase-transition gate. Missing evidence at task start is an expected pre-reconciliation condition and does not require a separate transition-only task; the gate remains fail closed until its evidence requirements are satisfied.
+**Current strategic checkpoint:** Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation is **ACTIVE / IN PROGRESS**. `STATE.md` is authoritative and `docs/ai/strategic-state.json` is its machine-readable projection; this dashboard is derived. The transition evidence and coordinator-task identity are recorded and the existing phase-transition gate is documented as applied. The remaining Phase 4 prerequisite is the independently reconciled design contract. Lifecycle-enforcement Increment 4.1 (server-side protocol and roadmap-alignment ingress gate) is the first planned implementation increment and requires its own ACP task authorization. This is distinct from the older read-only observation increments 4.1–4.9.
 
 ---
 
@@ -69,7 +69,7 @@ Updated By | ChatGPT — TASK-CHATGPT-DEEPSEEK-PHASE-2-CONVERGENCE-DOCUMENTATION
 3. **Render Control Gate / Gatekeeper** — **PROPOSED / TARGET** (not implemented). Render is the future technical Control Gate between ChatGPT and repository execution. Layer 1 (Kilo↔Gemini orchestration stabilization) is prerequisite. Full research: `docs/ai/CHATGPT_CONTROL_GATE_RESEARCH.md`.
 4. **Apps Script authentication hardening** — BACKLOG. Anonymous web app endpoint accepts CRM writes and Gmail delivery without application-level authentication.
 5. **Automated test suite** — **IMPLEMENTED**. 18 test files with 450 tests covering ACP schema, TaskRegistry, Orchestrator, integration, Gemini trigger, Builder trigger, callbacks, polling, verifier, POC, coordinator, chatbox gateway, and verify-reconcile modes.
-6. **DeepSeek Coordinator Evolution** — **PHASE 3 CONVERGED**. The bounded autonomous coordination lifecycle is IMPLEMENTED / INDEPENDENTLY VERIFIED / CONVERGED. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — is the next PROPOSED / TARGET phase and requires Kyle's explicit transition decision.
+6. **DeepSeek Coordinator Evolution** — **PHASE 4 ACTIVE / IN PROGRESS**. Phase 3 is COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED. Phase 4's cross-task orchestration and lifecycle-enforcement capabilities remain PROPOSED / TARGET pending design reconciliation and separately authorized implementation.
 7. **Git completion-signal emitter and Path 2** — Signal emitter implemented (Issue #180, commit `7bec058`): `poc/signal-emitter.js` with `poc/signals/<request_id>.json` artifact. **Path 2 recovery IMPLEMENTED / VERIFIED** (Issue #175, commit `030f888`): `recoverTaskFromGitHub()` reconstructs task context from GitHub issue body when TaskRegistry is absent. **Commit-SHA hardening IMPLEMENTED** (commit `f63211d`). Architectural direction (Issue #172, ADR-016) APPROVED / PROPOSED / TARGET — fully documented. Remaining gap: **live end-to-end validation (GitHub push ↠ Render webhook ↠ Gemini dispatch) NOT verified**; tests use mocks. Test count discrepancy: signal artifact claims 337 regression (total 378); independently verified actual is 369 regression (total 410). See STATE.md for full details.
 8. **Chatbox → Render live integration gap** — `/poc/chatbox` remains distinct from the DeepSeek runtime endpoint; its prior network-error investigation remains unresolved.
 9. **DeepSeek Runtime response compatibility** — `/poc/deepseek-runtime` now returns OpenAI-compatible SSE for an explicit `stream: true` request: assistant chunk, `finish_reason: stop`, then `data: [DONE]`. The internal bounded tool loop and `control_plane` authority model remain unchanged, and non-streaming requests retain JSON. Focused regression coverage passes. **COMPLETED / LIVE VERIFIED**: Live Director verification confirmed a brand-new ChatBox conversation successfully sent "Ping." and received "Pong! 🏓 I’m here and ready to help. What can I do for you?". New-chat blank response issue is successfully resolved.
