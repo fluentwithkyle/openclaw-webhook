@@ -392,21 +392,23 @@ jobs:
           CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity || '' }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           DESCRIPTOR_FILE="execution-descriptor.json"
+          DEFAULT_REPO="${GITHUB_REPOSITORY}"
+          DEFAULT_BRANCH="${GITHUB_REF_NAME}"
           if [ -f "$DESCRIPTOR_FILE" ]; then
             REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
             TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
-            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
+            REPOSITORY="$(jq -r --arg def "$DEFAULT_REPO" '.repository // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_REPO")"
+            BASE_BRANCH="$(jq -r --arg def "$DEFAULT_BRANCH" '.base_branch // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_BRANCH")"
             EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
           else
             REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
             TASK="${{ steps.orchestration_context.outputs.task }}"
-            REPOSITORY="${{ github.repository }}"
-            BASE_BRANCH="${{ github.ref_name }}"
+            REPOSITORY="$DEFAULT_REPO"
+            BASE_BRANCH="$DEFAULT_BRANCH"
           fi
 
           KILO_EXEC_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
