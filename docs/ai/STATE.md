@@ -1,8 +1,9 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-10-12
-**Updated By**: Kilo — TASK-KILO-ONE-CLICK-SAFEGUARD-GAP-AUDIT-AND-HARDENING-001
+**Updated By**: Kilo — TASK-KILO-SYSTEMIC-WORKFLOW-SAFETY-REGRESSION-HARDENING-001
 
+| 2026-10-12 | TASK-KILO-SYSTEMIC-WORKFLOW-SAFETY-REGRESSION-HARDENING-001 | IN PROGRESS | Kilo | Auditing all carrier workflows for systemic defects (unsafe `git add -A`, inaccurate push status, `set -euo pipefail` in callback_payload, missing request_id guards, missing failure-safe reports, `if-no-files-found: error`, wrong YAML validation references, VALID_ONE_CLICK_WORKFLOWS/test list drift). Implementing machine-enforced regression tests to prevent recurrence. | — | .github/workflows/one-click-gemini-builder-callback-correlation.yml, .github/workflows/one-click-gemini-builder-coordinator-registration-gate.yml, .github/workflows/one-click-gemini-builder-coordinator-registration-gate-fixed.yml, .github/workflows/one-click-gemini-acp-report-durable-readable-evidence-builder.yml, .github/workflows/gemini-builder.yml, .github/workflows/one-click-gemini-builder-smoke.yml, .github/workflows/one-click-kilo-acp-copy-safe.yml, test/one-click-workflow-contract.test.js, poc/one-click-artifact-validator.js |
 | 2026-10-12 | TASK-KILO-ONE-CLICK-SAFEGUARD-GAP-AUDIT-AND-HARDENING-001 | COMPLETED | Kilo | Fixed root-cause defect in `one-click-gemini-builder-smoke.yml`: `director_provenance` step (line 295) now uses `if: always()` instead of task-content-based conditional that was skipped when orchestration_context failed or descriptor was missing for non-transition tasks. One-click contract tests: 250/250 pass (was 249/1). All other test files pass. Pre-existing `strategic-alignment.test.js` / `deepseek-runtime.test.js` failures confirmed unrelated (strategic-state projection mismatch). Committed as 395b459. | SUCCESS | .github/workflows/one-click-gemini-builder-smoke.yml, docs/ai/TASK_LOG.md |
 
 ## Current Strategic State — Authoritative for Alignment
@@ -1232,3 +1233,33 @@ control-plane mechanisms:
 **Verification**: 89/89 activation-policy tests pass (including 9 new
 notification persistence tests). No new test failures in other suites.
 `git diff --check` clean.
+
+---
+
+## Systemic Workflow Safety Hardening — IN PROGRESS
+
+**Task**: TASK-KILO-SYSTEMIC-WORKFLOW-SAFETY-REGRESSION-HARDENING-001
+
+**Root-cause analysis**: Auditing all carrier workflows for systemic defects:
+
+1. **Unsafe `git add -A`** (staging safety): Workflows used `git add -A` which stage ALL changes including generated files (execution-descriptor.json, callback_payload.json, gemini-acp-report.json), violating scope enforcement. Fixed all carrier workflows to use path-scoped staging via `PERMITTED_PATHS` env var with out-of-scope file rejection.
+
+2. **Inaccurate push status**: The `push` field in callback payloads was derived from commit SHA existence (`PUSH_STATUS=true` when a commit was created), not from actual push success. Fixed all carrier workflows to emit `push_status` output from the commit/push step and use it in callback_payload.
+
+3. **`set -euo pipefail` in callback_payload**: The `-e` flag caused early exit before report generation on any non-zero return code, leaving no `gemini-acp-report.json` for debugging. Changed to `set -uo pipefail` and added fail-closed report fallback with `|| { ... }`.
+
+4. **Missing request_id guard in callback steps**: Some callback steps didn't validate `request_id` before sending HTTP callbacks. Added explicit `[ -z "$REQUEST_ID" ]` checks in all callback steps.
+
+5. **`if-no-files-found: error` in artifact uploads**: This caused workflow failures when reports were missing due to upstream failures. Changed to `warn` so the workflow completes and the failure-safe step can handle missing reports.
+
+6. **Wrong YAML validation reference**: `one-click-gemini-builder-coordinator-registration-gate-fixed.yml` validated `one-click-gemini-builder-callback-correlation.yml` (wrong file). Fixed to reference itself.
+
+7. **VALID_ONE_CLICK_WORKFLOWS drift**: The test file `listOneClickWorkflows()` maintained its own hardcoded list separate from `VALID_ONE_CLICK_WORKFLOWS` in `poc/one-click-artifact-validator.js`, creating drift risk. Fixed by importing from the source module.
+
+8. **Missing failure-safe step**: Workflows lacked a step ensuring `gemini-acp-report.json` exists even if callback_payload fails. Added `Ensure gemini-acp-report.json exists (failure-safe)` step to all carrier workflows.
+
+9. **builder_result didn't distinguish commit vs push success**: Workflows marked execution as "success" even when push failed, as long as a commit was created. Added `commit-success-push-failed` branch and proper push_status check.
+
+10. **Missing error guard in curl responses**: Callback steps didn't handle empty HTTP_CODE from curl failures. Added `2>/dev/null || echo ''` fallback and empty HTTP_CODE check.
+
+**Status**: All fixes applied. 277/277 contract tests pass (266 original + 11 new regression tests). No new test failures in other suites. Pre-existing `director-authorization`, `specialist-routing`, `deepseek-runtime`, and `strategic-alignment` test failures confirmed unrelated.

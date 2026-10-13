@@ -218,7 +218,9 @@ jobs:
             exit 1
           fi
           RESULT=$(node poc/phase-transition-gate.js --verify "$DESCRIPTOR_FILE" 2>&1) || true
-          echo "provenance_result=$RESULT" >> "$GITHUB_OUTPUT"
+          echo "provenance_result<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$RESULT" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
           if echo "$RESULT" | grep -q '"status": "SUCCESS"'; then
             echo "provenance_status=SUCCESS" >> "$GITHUB_OUTPUT"
           else
@@ -390,23 +392,26 @@ jobs:
         env:
           EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id || '' }}
           CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity || '' }}
+          TASK_JSON: ${{ steps.orchestration_context.outputs.task }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           DESCRIPTOR_FILE="execution-descriptor.json"
+          DEFAULT_REPO="${GITHUB_REPOSITORY}"
+          DEFAULT_BRANCH="${GITHUB_REF_NAME}"
           if [ -f "$DESCRIPTOR_FILE" ]; then
             REQUEST_ID="$(jq -r '.request_id' "$DESCRIPTOR_FILE")"
             TASK="$(jq -r '.task' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            REPOSITORY="$(jq -r '.repository' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
-            BASE_BRANCH="$(jq -r '.base_branch' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
+            REPOSITORY="$(jq -r --arg def "$DEFAULT_REPO" '.repository // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_REPO")"
+            BASE_BRANCH="$(jq -r --arg def "$DEFAULT_BRANCH" '.base_branch // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_BRANCH")"
             EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
           else
             REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
-            TASK="${{ steps.orchestration_context.outputs.task }}"
-            REPOSITORY="${{ github.repository }}"
-            BASE_BRANCH="${{ github.ref_name }}"
+            TASK="$TASK_JSON"
+            REPOSITORY="$DEFAULT_REPO"
+            BASE_BRANCH="$DEFAULT_BRANCH"
           fi
 
           KILO_EXEC_ID="${{ steps.orchestration_context.outputs.kilo_execution_id }}"
@@ -492,11 +497,14 @@ jobs:
           cp callback_payload.json kilo-acp-report.json
           cat callback_payload.json
 
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+
       - name: Send callback to Render
         if: always()
         env:
           CALLBACK_URL: ${{ secrets.RENDER_KILO_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.KILO_CALLBACK_SECRET }}
+          REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
         shell: bash
         run: |
           set -uo pipefail
@@ -507,10 +515,17 @@ jobs:
             exit 0
           fi
 
+          REQUEST_ID="${REQUEST_ID:-}"
+          if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+            echo "::error::BLOCKED: request_id is missing, empty, or invalid; callback cannot execute without valid server-derived correlation"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
             -H "x-kilo-callback-secret: $CALLBACK_SECRET" \
-            -d @callback_payload.json)
+            -d @callback_payload.json 2>/dev/null || echo '')
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | head -n -1)
@@ -537,4 +552,4 @@ jobs:
             kilo-execution-result.json
             kilo-output.txt
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn

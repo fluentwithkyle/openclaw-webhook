@@ -35,12 +35,15 @@ const TASK_STANDARD_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'TASK_STANDARD.md')
 const ACP_SCHEMA_PATH = path.join(ROOT_DIR, 'poc', 'schemas', 'acp-schema.js');
 
 const { validateAcpTaskArtifact, validateAcpTaskArtifactSyntax, getRuntimeTaskModeForConceptual, VALID_CAPABILITIES, CANONICAL_TASK_ARTIFACT_FIELD_ORDER, SMART_QUOTE_CHARS } = require('../poc/schemas/acp-schema');
+const oneClickArtifactValidator = require('../poc/one-click-artifact-validator');
 const {
     extractEmbeddedCarrierArtifact,
     validateOneClickCarrier,
     bindCarrierToRequestedTask,
-    preflightValidateOneClickActivation
-} = require('../poc/one-click-artifact-validator');
+    preflightValidateOneClickActivation,
+    listOneClickWorkflows: canonicalListOneClickWorkflows,
+    VALID_ONE_CLICK_WORKFLOWS: CANONICAL_VALID_ONE_CLICK_WORKFLOWS
+} = oneClickArtifactValidator;
 
 const contractRaw = fs.readFileSync(CONTRACT_DOC_PATH, 'utf8');
 const startHereRaw = fs.readFileSync(CHATGPT_START_HERE_PATH, 'utf8');
@@ -58,15 +61,7 @@ const acpSchemaRaw = fs.readFileSync(ACP_SCHEMA_PATH, 'utf8');
 const taskStandardRaw = fs.readFileSync(TASK_STANDARD_PATH, 'utf8');
 
 function listOneClickWorkflows() {
-    // Canonical active one-click carriers declared by ONE_CLICK_WORKFLOW_CONTRACT.md.
-    // Historical/experimental one-click-named workflows are not active carriers.
-    return [
-        'one-click-gemini-activation-verify-reconcile.yml',
-        'one-click-gemini-builder-smoke.yml',
-        'one-click-gemini-builder-callback-correlation.yml',
-        'one-click-gemini-research-documentation.yml',
-        'one-click-kilo-acp-copy-safe.yml'
-    ];
+    return canonicalListOneClickWorkflows();
 }
 
 function extractCarrierField(workflowRaw, field) {
@@ -3039,6 +3034,334 @@ runTest('Smoke workflow - execution-descriptor.json excluded from commit staging
         'Commit step must NOT stage execution-descriptor.json');
     assert.ok(/git add "\$dir"/.test(commitSection),
         'Commit step must stage only permitted path directories');
+});
+
+// =========================================================
+// Regression tests: all carrier workflows must not use git add -A (Defect 2 - staging safety)
+// TASK-KILO-FIX-SYSTEMIC-WORKFLOW-SAFETY-REGRESSION-001
+// =========================================================
+
+runTest('All carrier workflows - no git add -A in commit/push step', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const commitIdx = raw.indexOf('Commit and push Builder changes');
+        if (commitIdx === -1) continue;
+        const commitSection = raw.slice(commitIdx, commitIdx + 6000);
+        assert.ok(!/git add -A/.test(commitSection),
+            wf + ' must NOT use git add -A in commit/push step');
+        assert.ok(/PERMITTED_PATHS|permitted_paths/.test(commitSection),
+            wf + ' must use PERMITTED_PATHS or permitted_paths for staging');
+    }
+});
+
+runTest('All carrier workflows - commit/push pushes to base_branch without --force', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const commitIdx = raw.indexOf('Commit and push Builder changes');
+        if (commitIdx === -1) continue;
+        const commitSection = raw.slice(commitIdx, commitIdx + 6000);
+        assert.ok(!/git push --force|git push -f/.test(commitSection),
+            wf + ' must NOT use git push --force');
+        assert.ok(/git push origin/.test(commitSection),
+            wf + ' must push to origin');
+    }
+});
+
+runTest('All carrier workflows - commit/push step emits push_status output', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const commitIdx = raw.indexOf('Commit and push Builder changes');
+        if (commitIdx === -1) continue;
+        const commitSection = raw.slice(commitIdx, commitIdx + 6000);
+        assert.ok(/push_status=/.test(commitSection),
+            wf + ' must emit push_status output variable');
+        assert.ok(/PUSH_STATUS="true"/.test(commitSection) || /PUSH_STATUS=true/.test(commitSection),
+            wf + ' must set PUSH_STATUS=true on successful push');
+        assert.ok(/PUSH_STATUS="failed"/.test(commitSection) || /PUSH_STATUS=failed/.test(commitSection),
+            wf + ' must set PUSH_STATUS=failed on push failure');
+    }
+});
+
+runTest('All carrier workflows - callback_payload step uses set -uo pipefail (not -e)', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 3000);
+        assert.ok(/set -uo pipefail/.test(cbSection),
+            wf + ' callback_payload step must use set -uo pipefail');
+        assert.ok(!/set -euo pipefail/.test(cbSection),
+            wf + ' callback_payload step must NOT use set -e which would exit before creating the report');
+    }
+});
+
+runTest('All carrier workflows - have failure-safe step ensuring gemini-acp-report.json exists', () => {
+    const allWorkflows = listOneClickWorkflows();
+    const reportStepRegex = /Ensure gemini-acp-report\.json exists.*failure-safe/i;
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        assert.ok(reportStepRegex.test(raw),
+            wf + ' must have a failure-safe step ensuring report exists');
+        assert.ok(/! -f gemini-acp-report\.json/.test(raw),
+            wf + ' failure-safe step must check for missing report file');
+    }
+});
+
+runTest('All carrier workflows - upload artifact uses if-no-files-found: warn (not error)', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        assert.ok(!/if-no-files-found: error/.test(raw),
+            wf + ' must NOT use if-no-files-found: error');
+    }
+});
+
+runTest('All carrier workflows - builder_result distinguishes commit success from push success', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const resultIdx = raw.indexOf('Determine Builder execution result');
+        if (resultIdx === -1) continue;
+        const resultSection = raw.slice(resultIdx, resultIdx + 3000);
+        assert.ok(/PUSH_STATUS/.test(resultSection),
+            wf + ' builder_result must reference PUSH_STATUS output');
+        assert.ok(/Commit created but push/.test(resultSection),
+            wf + ' builder_result must distinguish commit-success-push-failed');
+        assert.ok(/COMMIT_PUSH_OUTCOME/.test(resultSection),
+            wf + ' builder_result must reference COMMIT_PUSH_OUTCOME');
+    }
+});
+
+runTest('All carrier workflows - callback handling guards request_id before sending callback', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const cbIdx = raw.indexOf('Send callback to Render');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 3000);
+        assert.ok(/\[ -z "\$REQUEST_ID" \]/.test(cbSection) || /request_id.*missing.*empty.*invalid/.test(cbSection),
+            wf + ' callback step must check request_id before sending callback');
+    }
+});
+
+// =========================================================
+// Regression tests: VALID_ONE_CLICK_WORKFLOWS drift prevention
+// TASK-KILO-FIX-SYSTEMIC-WORKFLOW-SAFETY-REGRESSION-001
+// =========================================================
+
+runTest('VALID_ONE_CLICK_WORKFLOWS in source matches listOneClickWorkflows helper', () => {
+    const sourceList = CANONICAL_VALID_ONE_CLICK_WORKFLOWS;
+    const helperList = canonicalListOneClickWorkflows();
+    assert.deepStrictEqual(sourceList, helperList,
+        'VALID_ONE_CLICK_WORKFLOWS and listOneClickWorkflows must stay in sync');
+});
+
+runTest('All VALID_ONE_CLICK_WORKFLOWS files exist on disk', () => {
+    for (const wf of CANONICAL_VALID_ONE_CLICK_WORKFLOWS) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        assert.ok(fs.existsSync(filePath),
+            'Workflow file declared in VALID_ONE_CLICK_WORKFLOWS must exist: ' + wf);
+    }
+});
+
+runTest('VALID_ONE_CLICK_WORKFLOWS contains all active carrier workflows', () => {
+    const registered = new Set(CANONICAL_VALID_ONE_CLICK_WORKFLOWS);
+    const expectedCarriers = [
+        'one-click-gemini-activation-verify-reconcile.yml',
+        'one-click-gemini-builder-smoke.yml',
+        'one-click-gemini-builder-callback-correlation.yml',
+        'one-click-gemini-research-documentation.yml',
+        'one-click-kilo-acp-copy-safe.yml'
+    ];
+    for (const wf of expectedCarriers) {
+        assert.ok(registered.has(wf),
+            'Active carrier workflow must be registered: ' + wf);
+    }
+});
+
+// =========================================================
+// Regression tests: workflow-failure prevention fixes
+// (TASK-KILO-SYSTEMWIDE-WORKFLOW-FAILURE-PREVENTION-001)
+// Defects #11-#13 discovered during smoke run verification
+// =========================================================
+
+const ALL_WORKFLOWS_WITH_PROVENANCE = [
+    'external-gemini-activation-test.yml',
+    'gemini-builder.yml',
+    'kilo-gemini-poc.yml',
+    'main.yml',
+    'one-click-gemini-acp-report-durable-readable-evidence-builder.yml',
+    'one-click-gemini-builder-callback-correlation.yml',
+    'one-click-gemini-builder-coordinator-registration-gate.yml',
+    'one-click-gemini-builder-coordinator-registration-gate-fixed.yml',
+    'one-click-gemini-builder-smoke.yml',
+    'one-click-kilo-acp-copy-safe.yml'
+];
+
+const CARRIER_WORKFLOWS = [
+    'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-callback-correlation.yml',
+    'one-click-gemini-builder-coordinator-registration-gate.yml',
+    'one-click-gemini-builder-coordinator-registration-gate-fixed.yml',
+    'one-click-gemini-acp-report-durable-readable-evidence-builder.yml',
+    'one-click-kilo-acp-copy-safe.yml'
+];
+
+// =========================================================
+// Defect #11: jq quotation breakage — REPOSITORY/BASE_BRANCH
+// inline GitHub expressions inside jq string literals
+// =========================================================
+
+runTest('Defect 11 - no inline ${{ }} in jq --arg for repository or base_branch', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const inlineRepoInJq = raw.match(/--arg\s+repository\s+'\$\{\{[^}]+\}\}'/);
+        const inlineBranchInJq = raw.match(/--arg\s+base_branch\s+'\$\{\{[^}]+\}\}'/);
+        assert.ok(!inlineRepoInJq, wfName + ' must not use inline ${{ }} for repository in jq --arg');
+        assert.ok(!inlineBranchInJq, wfName + ' must not use inline ${{ }} for base_branch in jq --arg');
+    }
+});
+
+runTest('Defect 11 - REPOSITORY/BASE_BRANCH use env vars (not inline ${{ }} in bash body) in callback_payload', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 5000);
+        const hasEnvVar = /REPOSITORY:\s*\$\{\{/.test(cbSection) ||
+            /DEFAULT_REPO.*GITHUB_REPOSITORY/.test(cbSection) ||
+            /REPOSITORY=.*steps.*outputs\.repository/.test(cbSection);
+        assert.ok(hasEnvVar,
+            wfName + ' callback_payload step must use env var for REPOSITORY, not inline bash');
+        const hasBranchVar = /BASE_BRANCH:\s*\$\{\{/.test(cbSection) ||
+            /DEFAULT_BRANCH.*GITHUB_REF_NAME/.test(cbSection) ||
+            /BASE_BRANCH=.*steps.*outputs\.base_branch/.test(cbSection);
+        assert.ok(hasBranchVar,
+            wfName + ' callback_payload step must use env var for BASE_BRANCH, not inline bash');
+    }
+});
+
+runTest('Defect 11 - no inline ${{ github.repository }} or ${{ github.ref_name }} in callback_payload bash body', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 8000);
+        assert.ok(!cbSection.includes('${{ github.repository }}'),
+            wfName + ' callback_payload must not use inline ${{ github.repository }} in bash body');
+        assert.ok(!cbSection.includes('${{ github.ref_name }}'),
+            wfName + ' callback_payload must not use inline ${{ github.ref_name }} in bash body');
+    }
+});
+
+// =========================================================
+// Defect #12: TASK JSON inline expansion breakage
+// When task JSON contains embedded quotes, inline
+// ${TASK_JSON} expansion breaks bash quoting
+// =========================================================
+
+runTest('Defect 12 - no inline bash string expansion of TASK with embedded JSON containing quotes', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const badInlinePattern = raw.match(/TASK="\$\{\{[^}]*\.task[^}]*\}\}"/);
+        assert.ok(!badInlinePattern,
+            wfName + ' must not use inline TASK="${{ steps.*.outputs.task }}"');
+    }
+});
+
+runTest('Defect 12 - callback_payload uses TASK_JSON env var for task field assignment', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        assert.ok(/TASK_JSON:\s*\$\{\{/.test(raw.slice(cbIdx, cbIdx + 2000)),
+            wfName + ' callback_payload step must declare TASK_JSON as an env: variable');
+    }
+});
+
+runTest('Defect 12 - callback_payload assigns TASK="$TASK_JSON" (via env var, not inline)', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 8000);
+        if (cbSection.includes('TASK=')) {
+            assert.ok(/TASK="\$TASK_JSON"/.test(cbSection) || /TASK=\$TASK_JSON/.test(cbSection),
+                wfName + ' callback_payload must assign TASK from $TASK_JSON env var');
+            assert.ok(!/TASK="\$\{\{/.test(cbSection),
+                wfName + ' callback_payload must not use inline TASK="${{ }}"');
+        }
+    }
+});
+
+runTest('Defect 12 - TASK_JSON is declared as env: variable in callback_payload step', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const envSection = raw.slice(cbIdx, cbIdx + 1500);
+        assert.ok(/TASK_JSON:\s*\$\{\{/.test(envSection),
+            wfName + ' callback_payload step must declare TASK_JSON as an env: variable');
+    }
+});
+
+// =========================================================
+// Defect #13: GITHUB_OUTPUT multi-line value corruption
+// echo "field=$MULTI_LINE_VALUE" >> $GITHUB_OUTPUT
+// corrupts multi-line JSON output; must use <<EOF delimiter
+// =========================================================
+
+runTest('Defect 13 - provenance_result uses <<EOF delimiter (not direct echo of multi-line JSON)', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const hasProvenanceResult = /provenance_result/.test(raw);
+        if (!hasProvenanceResult) continue;
+        assert.ok(/provenance_result<<EOF/.test(raw) || /provenance_result<</.test(raw),
+            wfName + ' must use <<EOF delimiter for provenance_result multi-line output');
+        assert.ok(!/echo "provenance_result=\$\{/.test(raw),
+            wfName + ' must NOT use direct echo "provenance_result=${...}" for multi-line JSON');
+    }
+});
+
+runTest('Defect 13 - no direct echo of multi-line variables to GITHUB_OUTPUT without <<EOF', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const badPattern = raw.match(/echo "(RESULT|REPORT_JSON|provenance_result)=\$\{/);
+        assert.ok(!badPattern,
+            wfName + ' must not directly echo RESULT/REPORT_JSON to GITHUB_OUTPUT (use <<EOF)');
+    }
+});
+
+runTest('Defect 13 - provenance_result section has matching EOF delimiter', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const hasProvenanceResult = /provenance_result<<EOF/.test(raw) || /provenance_result<</.test(raw);
+        if (!hasProvenanceResult) continue;
+        assert.ok(/echo "EOF"/.test(raw) || /echo 'EOF'/.test(raw),
+            wfName + ' must have matching EOF delimiter after provenance_result<<EOF');
+    }
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
