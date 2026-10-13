@@ -779,7 +779,7 @@ Phase 3 is not an unbounded autonomous agent loop. Progression remains bounded b
 
 12.8 Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation
 
-PROPOSED / TARGET
+**Roadmap phase status: ACTIVE / IN PROGRESS.** The transition is recorded in `STATE.md` and `strategic-state.json`. The capabilities described below remain **PROPOSED / TARGET** until their design is independently reconciled and implementation is separately authorized.
 
 Objective:
 
@@ -993,7 +993,7 @@ The Coordinator roadmap is:
 | Phase 1 — Observation | COMPLETE / INDEPENDENTLY VERIFIED | Bounded task observation, lifecycle, lineage, diagnostics, evidence, and verification projection through the existing TaskRegistry. |
 | Phase 2 — Bounded Coordination | COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED | Bounded lineage, workflow-step policy, Director authorization, specialist routing, result-driven continuation, and automatic result consumption. |
 | Phase 3 — Autonomous Coordination Loop | COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED | Durable context, bounded autonomous turns, server-derived workflow sequencing, completion/escalation, and fail-closed continuation. |
-| Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation | PROPOSED / TARGET | Multi-task lineage navigation, cross-task aggregation, multi-specialist chaining, structured recovery/escalation, and bounded cross-task next-action reasoning. |
+| Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation | ACTIVE / IN PROGRESS (roadmap phase); capabilities PROPOSED / TARGET | Multi-task lineage navigation, cross-task aggregation, multi-specialist chaining, structured recovery/escalation, and bounded cross-task next-action reasoning remain targets pending design reconciliation and separately authorized implementation. |
 
 The authoritative live strategic state remains STATE.md, with docs/ai/strategic-state.json as its machine-readable projection.
 
@@ -1267,7 +1267,7 @@ Bounded autonomous coordination, durable context, server-derived workflow sequen
 
 Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation
 
-PROPOSED / TARGET
+ROADMAP PHASE ACTIVE / IN PROGRESS; CAPABILITIES PROPOSED / TARGET
 
 Phase 4 extends the verified Phase 3 foundation across multi-step, multi-specialist task graphs.
 
