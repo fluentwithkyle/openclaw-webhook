@@ -549,6 +549,8 @@ Tasks that create or modify GitHub Actions workflow files (`.github/workflows/*.
 - Workflow files must not contain tab characters in indentation.
 - `workflow_dispatch` must appear under the top-level `on:` key, not nested inside a job.
 - Block scalar indentation must be consistent (8 spaces for `env:` under a step with 6-space `run:`, matching sibling properties).
+- **All** `.github/workflows/*.yml` files — not just those listed in `VALID_ONE_CLICK_WORKFLOWS` — must pass YAML parsing validation before commit. Run `node poc/validate-external-activation.js one-click-preflight` which now invokes `validateAllWorkflowYaml()` to enumerate every workflow file on disk and reject any with invalid YAML, tabs, or parse errors.
+- New workflow files cannot bypass validation: `validateAllWorkflowYaml()` enumerates all `*.yml` files from the filesystem rather than relying on a manually maintained list. A workflow file that exists on disk but is not in `VALID_ONE_CLICK_WORKFLOWS` must still parse as valid YAML; the test at `All workflow files - newly added workflows cannot bypass YAML validation` enforces this.
 
 ### 11.2 Safe JSON and Multiline GitHub Output Handling
 
@@ -573,6 +575,7 @@ Direct `echo "field_name=$MULTI_LINE_VALUE" >> "$GITHUB_OUTPUT"` corrupts multi-
 
 - Every defect discovered during workflow execution must have a corresponding machine-verifiable regression test in `test/one-click-workflow-contract.test.js` before the task is considered complete.
 - Regression tests must verify the specific fix pattern (e.g., `<<EOF` delimiter usage, `TASK_JSON` env var, `jq --arg` usage) and must not be weakened or removed to make other tests pass.
+- YAML structural defects (e.g., unindented heredoc bodies, tab characters, document-separator errors) must have regression tests that invoke `validateAllWorkflowYaml()` with malformed input and assert rejection.
 
 ### 11.5 Smoke-Run Verification Before Completion
 

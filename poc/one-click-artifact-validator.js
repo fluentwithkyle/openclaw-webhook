@@ -1,4 +1,6 @@
 const fs = require('fs');
+const path = require('path');
+const yaml = require('js-yaml');
 const {
     validateAcpTaskArtifact,
     validateAcpTaskArtifactSyntax,
@@ -12,6 +14,8 @@ const {
     EXECUTION_TASK_MODES,
     MAX_AUTHORIZED_PATHS
 } = require('./schemas/acp-schema');
+
+const ROOT_DIR = path.join(__dirname, '..');
 
 const SMART_QUOTE_REPLACEMENTS = [
     ['\u2018', "'"],
@@ -631,6 +635,73 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask, persist
     };
 }
 
+/**
+ * Validates that every workflow file in the workflows directory parses as
+ * valid YAML. This is a structural gate: GitHub rejects workflows that fail
+ * to parse, so any unparseable file blocks workflow registration.
+ *
+ * Unlike preflightValidateOneClickActivation (which iterates a manually
+ * maintained VALID_ONE_CLICK_WORKFLOWS list), this function enumerates all
+ * *.yml files on disk so that newly added workflows cannot bypass validation.
+ */
+function validateAllWorkflowYaml(workflowDir) {
+    const dir = workflowDir || path.join(ROOT_DIR, '.github', 'workflows');
+    const results = {};
+    let allValid = true;
+
+    let files;
+    try {
+        files = fs.readdirSync(dir).filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
+    } catch (e) {
+        return {
+            all_valid: false,
+            error: 'Cannot read workflow directory: ' + e.message,
+            error_code: 'WORKFLOW_DIR_UNREADABLE',
+            results: {},
+            summary: { total: 0, valid: 0, invalid: 0 }
+        };
+    }
+
+    for (const wf of files) {
+        const wfPath = path.join(dir, wf);
+        const wfRaw = fs.readFileSync(wfPath, 'utf8');
+
+        if (/\t/.test(wfRaw)) {
+            results[wf] = {
+                valid: false,
+                error: 'Contains tab characters in indentation',
+                error_code: 'WORKFLOW_CONTAINS_TABS'
+            };
+            allValid = false;
+            continue;
+        }
+
+        try {
+            yaml.load(wfRaw);
+            results[wf] = { valid: true };
+        } catch (e) {
+            results[wf] = {
+                valid: false,
+                error: 'YAML parse failure: ' + e.message,
+                error_code: 'YAML_PARSE_FAILED',
+                line: e.mark ? e.mark.line + 1 : null,
+                column: e.mark ? e.mark.column + 1 : null
+            };
+            allValid = false;
+        }
+    }
+
+    return {
+        all_valid: allValid,
+        results,
+        summary: {
+            total: files.length,
+            valid: Object.values(results).filter(r => r.valid === true).length,
+            invalid: Object.values(results).filter(r => r.valid !== true).length
+        }
+    };
+}
+
 module.exports = {
     CARRIER_STATES,
     VALID_ONE_CLICK_WORKFLOWS,
@@ -645,6 +716,7 @@ module.exports = {
     persistRepairedCarrier,
     persistRepairedCarrierToFile,
     serializeCanonicalTaskArtifact,
+    validateAllWorkflowYaml,
     getRuntimeTaskModeForConceptual,
     CANONICAL_TASK_ARTIFACT_FIELD_ORDER,
     CANONICAL_TASK_ARTIFACT_REQUIRED_FIELDS,

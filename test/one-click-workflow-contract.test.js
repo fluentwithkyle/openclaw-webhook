@@ -41,6 +41,7 @@ const {
     validateOneClickCarrier,
     bindCarrierToRequestedTask,
     preflightValidateOneClickActivation,
+    validateAllWorkflowYaml,
     listOneClickWorkflows: canonicalListOneClickWorkflows,
     VALID_ONE_CLICK_WORKFLOWS: CANONICAL_VALID_ONE_CLICK_WORKFLOWS
 } = oneClickArtifactValidator;
@@ -1022,13 +1023,71 @@ runTest('Contract - invariants summary includes VERIFIED/INFERRED/UNKNOWN enforc
 // (registration gate: a workflow that GitHub cannot parse fails the gate)
 // =========================================================
 
+runTest('All workflow files - every .github/workflows/*.yml parses as valid YAML', () => {
+    const yamlValidation = validateAllWorkflowYaml(ONE_CLICK_DIR);
+    assert.ok(yamlValidation.all_valid,
+        'All workflow files must parse as valid YAML. Failures: ' +
+        Object.entries(yamlValidation.results)
+            .filter(([, r]) => !r.valid)
+            .map(([wf, r]) => `${wf}: ${r.error} (line ${r.line || '?'})`)
+            .join('; '));
+});
+
+runTest('All workflow files - no tab characters in indentation', () => {
+    const yamlValidation = validateAllWorkflowYaml(ONE_CLICK_DIR);
+    const tabOffenders = Object.entries(yamlValidation.results)
+        .filter(([, r]) => !r.valid && r.error_code === 'WORKFLOW_CONTAINS_TABS')
+        .map(([wf]) => wf);
+    assert.strictEqual(tabOffenders.length, 0,
+        'Workflow files must not use tabs for indentation: ' + tabOffenders.join(', '));
+});
+
+runTest('All workflow files - newly added workflows cannot bypass YAML validation', () => {
+    const actualFiles = fs.readdirSync(ONE_CLICK_DIR).filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
+    const canonicalWorkflows = CANONICAL_VALID_ONE_CLICK_WORKFLOWS;
+    const nonCanonical = actualFiles.filter(f => !canonicalWorkflows.includes(f));
+
+    const yamlValidation = validateAllWorkflowYaml(ONE_CLICK_DIR);
+
+    for (const wf of actualFiles) {
+        const result = yamlValidation.results[wf];
+        assert.ok(result, `validateAllWorkflowYaml must return a result for ${wf}`);
+        assert.ok(result.valid,
+            `Newly added workflow ${wf} must pass YAML validation (cannot bypass validation). ` +
+            `Error: ${result.error || 'none'} at line ${result.line || '?'})`);
+    }
+
+    assert.ok(nonCanonical.length >= 0,
+        'Non-canonical workflows exist and are validated: ' + nonCanonical.join(', '));
+});
+
+runTest('validateAllWorkflowYaml - rejects malformed YAML content', () => {
+    const malformedYaml = 'name: Test\non:\n  workflow_dispatch:\nbad:\n - indent: 0-item\n\tbad tab';
+    const fs2 = require('fs');
+    const path2 = require('path');
+    const tmpDir = path2.join(ROOT_DIR, '.tmp-test-wf');
+
+    if (!fs2.existsSync(tmpDir)) fs2.mkdirSync(tmpDir, { recursive: true });
+    fs2.writeFileSync(path2.join(tmpDir, 'malformed.yml'), malformedYaml);
+
+    const result = validateAllWorkflowYaml(tmpDir);
+
+    assert.ok(!result.all_valid, 'Malformed YAML must be rejected');
+    assert.ok(result.results['malformed.yml'], 'Malformed workflow must appear in results');
+    assert.ok(!result.results['malformed.yml'].valid, 'Malformed workflow must be marked invalid');
+    assert.ok(result.results['malformed.yml'].error_code === 'YAML_PARSE_FAILED' ||
+              result.results['malformed.yml'].error_code === 'WORKFLOW_CONTAINS_TABS',
+        'Malformed workflow error_code must be YAML_PARSE_FAILED or WORKFLOW_CONTAINS_TABS, got: ' +
+        result.results['malformed.yml'].error_code);
+
+    fs2.unlinkSync(path2.join(tmpDir, 'malformed.yml'));
+    fs2.rmdirSync(tmpDir);
+});
+
 runTest('One-click workflows - YAML parses as valid YAML (structural registration prerequisite)', () => {
     const oneClickWorkflows = listOneClickWorkflows();
     for (const wf of oneClickWorkflows) {
         const wfRaw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
-        // A structural parse check: the file must begin with a top-level mapping
-        // that contains 'name' and 'on' as top-level keys (the minimal keys GitHub
-        // requires to register a workflow). Tabs are forbidden in YAML indentation.
         assert.ok(!/\t/.test(wfRaw), `${wf} must not contain tab characters (YAML/GitHub parse failure)`);
         assert.ok(/^\s*name:\s*\S/m.test(wfRaw), `${wf} must define a top-level 'name' key`);
         assert.ok(/^\s*on:\s*$/m.test(wfRaw) || /^\s*on:/.test(wfRaw), `${wf} must define a top-level 'on' key`);

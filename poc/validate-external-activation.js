@@ -11,6 +11,7 @@ const {
 const {
     preflightValidateOneClickActivation,
     repairAndRevalidateOneClickCarrier,
+    validateAllWorkflowYaml,
     serializeCanonicalTaskArtifact
 } = require('./one-click-artifact-validator');
 
@@ -119,6 +120,22 @@ async function main() {
         const requestedTask = params.requested_task || null;
         const persistRepairs = params.persist_repairs === true;
         const targetWorkflow = params.target_workflow || null;
+
+        const yamlValidation = validateAllWorkflowYaml(workflowDir);
+        if (!yamlValidation.all_valid) {
+            console.error('::error::BLOCKED: One or more workflow files contain invalid YAML');
+            for (const [wf, r] of Object.entries(yamlValidation.results)) {
+                if (!r.valid) {
+                    console.error('::error::' + wf + ': ' + (r.error || 'YAML parse failure') + ' (line: ' + (r.line || 'unknown') + ')');
+                }
+            }
+            if (process.env.GITHUB_OUTPUT) {
+                writeOutput('preflight_passed', 'false');
+                writeOutput('preflight_yaml_valid', 'false');
+            }
+            process.exit(1);
+        }
+
         const preflightResult = preflightValidateOneClickActivation(workflowDir, requestedTask, persistRepairs, targetWorkflow);
         if (!preflightResult.all_valid) {
             console.error('::error::One-click preflight validation failed: not all carriers have valid embedded ACP artifacts');
@@ -132,11 +149,14 @@ async function main() {
             }
             process.exit(1);
         }
-        console.log('::notice::One-click preflight validation passed: all ' + preflightResult.summary.total + ' carriers have valid embedded ACP artifacts' + (preflightResult.summary.repaired > 0 ? ' (' + preflightResult.summary.repaired + ' repaired)' : '') + (preflightResult.summary.persisted > 0 ? ' (' + preflightResult.summary.persisted + ' persisted to disk)' : ''));
+        console.log('::notice::One-click preflight validation passed: all ' + preflightResult.summary.total + ' carriers have valid embedded ACP artifacts' + (preflightResult.summary.repaired > 0 ? ' (' + preflightResult.summary.repaired + ' repaired)' : '') + (preflightResult.summary.persisted > 0 ? ' (' + preflightResult.summary.persisted + ' persisted to disk)' : '') + ' (' + yamlValidation.summary.valid + '/' + yamlValidation.summary.total + ' workflow files parse as valid YAML)');
         if (process.env.GITHUB_OUTPUT) {
             writeOutput('preflight_passed', 'true');
             writeOutput('preflight_repaired', String(preflightResult.summary.repaired > 0));
             writeOutput('preflight_persisted', String(preflightResult.summary.persisted > 0));
+            writeOutput('preflight_yaml_valid', 'true');
+            writeOutput('preflight_yaml_total', String(yamlValidation.summary.total));
+            writeOutput('preflight_yaml_valid_count', String(yamlValidation.summary.valid));
         }
         process.exit(0);
     }
