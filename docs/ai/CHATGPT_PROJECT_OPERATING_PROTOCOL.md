@@ -778,7 +778,23 @@ If an applicable requirement cannot be verified against the completed ACP artifa
 
 This checklist must be satisfied during the **Preparing** operating mode (Section 16.4) before transitioning to the **Authorizing** mode. A failed checklist item requires correction and another full compliance check.
 
-9. External Services and Tool Use
+### 8.3 Workflow Change Protocol
+
+When a task involves creating or modifying GitHub Actions workflow files (`.github/workflows/*.yml`), the coordinator must enforce the following protocol. These requirements are mandatory for workflow-modifying tasks and integrate with the existing fail-closed model.
+
+**Mandatory requirements:**
+
+- **Strict YAML validation**: Each modified workflow file must parse as valid YAML (using `js-yaml`). Tab characters in indentation are prohibited. `workflow_dispatch` must appear under the top-level `on:` key. The coordinator must verify this before presenting the task for authorization.
+- **Safe GitHub expression expansion**: GitHub expressions (`${{ ... }}`) must never be expanded inline inside bash command bodies where JSON with embedded quotes or special characters is involved. All workflow-derived values must be declared as step-level `env:` variables and referenced via `$VARNAME` in the `run:` block. When passing values to `jq`, use `jq --arg varname "$VALUE"` and reference `$varname` inside the jq filter.
+- **Safe task JSON assignment**: Task JSON that may contain embedded quotes must be passed via an `env:` variable (`TASK_JSON`) and assigned via `TASK="$TASK_JSON"` in bash, not inline `TASK="${{ steps.* }}"`.
+- **Safe multiline GitHub output**: Multi-line values (including JSON output) written to `$GITHUB_OUTPUT` must use the heredoc-style delimiter pattern (`field<<EOF` / `printf '%s\n'` / `EOF`), never `echo "field=$MULTI_LINE_VALUE" >> "$GITHUB_OUTPUT"` which corrupts multi-line JSON.
+- **Regression tests for discovered defects**: Every defect discovered during workflow execution must have a corresponding machine-verifiable regression test in `test/one-click-workflow-contract.test.js` before the task is considered complete. These tests must verify the specific fix pattern and must not be weakened or removed.
+- **Smoke-run verification**: Workflow changes affecting the canonical external-activation path, coordinator verification, provenance gate, callback payload, or commit/push logic must be verified end-to-end via a smoke workflow run on GitHub Actions. The smoke run must be observed to completion before declaring the task complete.
+- **Truthful reporting**: Reports must state exactly what was verified — test results, smoke-run IDs, commit SHAs, and remaining blockers. A green workflow conclusion does not prove semantic verification succeeded.
+
+These requirements are defined in detail in `docs/ai/TASK_STANDARD.md` (Section 11). They do not create a second control plane, alternate activation path, or competing workflow system.
+
+## 9. External Services and Tool Use
 
 For external services, tools, APIs, and connected applications, ChatGPT should follow this operating sequence.
 

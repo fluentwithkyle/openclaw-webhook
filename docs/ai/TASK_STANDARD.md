@@ -536,3 +536,52 @@ Before authoring or presenting an ACP task artifact, the author must satisfy the
    ```
 
 10. **No descriptor edits after validation**: Once the complete final ACP descriptor passes `validateAcpTaskArtifact()`, it must be placed in a fenced ` ```json ` code block preceded by its activation marker (e.g., `@kilo`) outside the code block. No post-validation edits are permitted; any edit requires revalidation. The artifact shown to the Director is the exact artifact that will be posted/sent.
+
+---
+
+## 11. Workflow Change Requirements
+
+Tasks that create or modify GitHub Actions workflow files (`.github/workflows/*.yml`) must satisfy the following mandatory requirements in addition to the ACP artifact standard above.
+
+### 11.1 Strict YAML Validity
+
+- Workflow files must parse as valid YAML. Run `node -e "require('js-yaml').load(require('fs').readFileSync('<file>','utf8'))"` for each modified workflow; it must succeed without error.
+- Workflow files must not contain tab characters in indentation.
+- `workflow_dispatch` must appear under the top-level `on:` key, not nested inside a job.
+- Block scalar indentation must be consistent (8 spaces for `env:` under a step with 6-space `run:`, matching sibling properties).
+
+### 11.2 Safe JSON and Multiline GitHub Output Handling
+
+When a workflow step writes a multi-line value (JSON output, multi-line report) to `$GITHUB_OUTPUT`, it must use the heredoc-style delimiter pattern, not direct echo:
+
+```bash
+echo "field_name<<EOF" >> "$GITHUB_OUTPUT"
+printf '%s\n' "$VALUE" >> "$GITHUB_OUTPUT"
+echo "EOF" >> "$GITHUB_OUTPUT"
+```
+
+Direct `echo "field_name=$MULTI_LINE_VALUE" >> "$GITHUB_OUTPUT"` corrupts multi-line JSON output and is prohibited.
+
+### 11.3 Safe GitHub Expression Expansion in Bash
+
+- GitHub expressions (`${{ ... }}`) must never be expanded inline inside bash command bodies where JSON with embedded quotes or special characters is involved.
+- Instead, declare workflow values as `env:` variables at the step level and reference them via `$VARNAME` in the bash `run:` block.
+- When passing values to `jq`, use `jq --arg varname "$VALUE"` and reference `$varname` inside the jq filter, never inline `${{ }}` expressions inside jq string literals.
+- For task JSON that contains embedded quotes, pass the value via an `env:` variable (`TASK_JSON`) and assign `TASK="$TASK_JSON"` in bash, not `TASK="${{ steps.* }}"` inline.
+
+### 11.4 Regression Tests for Discovered Defects
+
+- Every defect discovered during workflow execution must have a corresponding machine-verifiable regression test in `test/one-click-workflow-contract.test.js` before the task is considered complete.
+- Regression tests must verify the specific fix pattern (e.g., `<<EOF` delimiter usage, `TASK_JSON` env var, `jq --arg` usage) and must not be weakened or removed to make other tests pass.
+
+### 11.5 Smoke-Run Verification Before Completion
+
+- Workflow changes that modify the canonical external-activation path, coordinator verification, provenance gate, callback payload, or commit/push logic must be verified end-to-end via a smoke workflow run on GitHub Actions.
+- The smoke run must be observed to completion (all steps passed) before declaring the task complete.
+- The smoke run ID and result must be recorded in `docs/ai/TASK_LOG.md`.
+
+### 11.6 Truthful Reporting
+
+- Reports must state exactly what was verified: test file results, smoke-run IDs, commit SHAs, and remaining blockers.
+- A green workflow conclusion does not prove semantic verification succeeded; reports must distinguish "reported complete" from "GitHub verified" from "documentation reconciled."
+- Smoke-run verification requires the workflow file to exist on `origin/main` (not just the working branch) when coordinator verification uses `git show origin/main:<workflow>`.

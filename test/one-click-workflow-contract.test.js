@@ -3201,5 +3201,168 @@ runTest('VALID_ONE_CLICK_WORKFLOWS contains all active carrier workflows', () =>
     }
 });
 
+// =========================================================
+// Regression tests: workflow-failure prevention fixes
+// (TASK-KILO-SYSTEMWIDE-WORKFLOW-FAILURE-PREVENTION-001)
+// Defects #11-#13 discovered during smoke run verification
+// =========================================================
+
+const ALL_WORKFLOWS_WITH_PROVENANCE = [
+    'external-gemini-activation-test.yml',
+    'gemini-builder.yml',
+    'kilo-gemini-poc.yml',
+    'main.yml',
+    'one-click-gemini-acp-report-durable-readable-evidence-builder.yml',
+    'one-click-gemini-builder-callback-correlation.yml',
+    'one-click-gemini-builder-coordinator-registration-gate.yml',
+    'one-click-gemini-builder-coordinator-registration-gate-fixed.yml',
+    'one-click-gemini-builder-smoke.yml',
+    'one-click-kilo-acp-copy-safe.yml'
+];
+
+const CARRIER_WORKFLOWS = [
+    'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-callback-correlation.yml',
+    'one-click-gemini-builder-coordinator-registration-gate.yml',
+    'one-click-gemini-builder-coordinator-registration-gate-fixed.yml',
+    'one-click-gemini-acp-report-durable-readable-evidence-builder.yml',
+    'one-click-kilo-acp-copy-safe.yml'
+];
+
+// =========================================================
+// Defect #11: jq quotation breakage — REPOSITORY/BASE_BRANCH
+// inline GitHub expressions inside jq string literals
+// =========================================================
+
+runTest('Defect 11 - no inline ${{ }} in jq --arg for repository or base_branch', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const inlineRepoInJq = raw.match(/--arg\s+repository\s+'\$\{\{[^}]+\}\}'/);
+        const inlineBranchInJq = raw.match(/--arg\s+base_branch\s+'\$\{\{[^}]+\}\}'/);
+        assert.ok(!inlineRepoInJq, wfName + ' must not use inline ${{ }} for repository in jq --arg');
+        assert.ok(!inlineBranchInJq, wfName + ' must not use inline ${{ }} for base_branch in jq --arg');
+    }
+});
+
+runTest('Defect 11 - REPOSITORY/BASE_BRANCH use env vars (not inline ${{ }} in bash body) in callback_payload', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 5000);
+        const hasEnvVar = /REPOSITORY:\s*\$\{\{/.test(cbSection) ||
+            /DEFAULT_REPO.*GITHUB_REPOSITORY/.test(cbSection) ||
+            /REPOSITORY=.*steps.*outputs\.repository/.test(cbSection);
+        assert.ok(hasEnvVar,
+            wfName + ' callback_payload step must use env var for REPOSITORY, not inline bash');
+        const hasBranchVar = /BASE_BRANCH:\s*\$\{\{/.test(cbSection) ||
+            /DEFAULT_BRANCH.*GITHUB_REF_NAME/.test(cbSection) ||
+            /BASE_BRANCH=.*steps.*outputs\.base_branch/.test(cbSection);
+        assert.ok(hasBranchVar,
+            wfName + ' callback_payload step must use env var for BASE_BRANCH, not inline bash');
+    }
+});
+
+runTest('Defect 11 - no inline ${{ github.repository }} or ${{ github.ref_name }} in callback_payload bash body', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 8000);
+        assert.ok(!cbSection.includes('${{ github.repository }}'),
+            wfName + ' callback_payload must not use inline ${{ github.repository }} in bash body');
+        assert.ok(!cbSection.includes('${{ github.ref_name }}'),
+            wfName + ' callback_payload must not use inline ${{ github.ref_name }} in bash body');
+    }
+});
+
+// =========================================================
+// Defect #12: TASK JSON inline expansion breakage
+// When task JSON contains embedded quotes, inline
+// ${TASK_JSON} expansion breaks bash quoting
+// =========================================================
+
+runTest('Defect 12 - no inline bash string expansion of TASK with embedded JSON containing quotes', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const badInlinePattern = raw.match(/TASK="\$\{\{[^}]*\.task[^}]*\}\}"/);
+        assert.ok(!badInlinePattern,
+            wfName + ' must not use inline TASK="${{ steps.*.outputs.task }}"');
+    }
+});
+
+runTest('Defect 12 - callback_payload uses TASK_JSON env var for task field assignment', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        assert.ok(/TASK_JSON:\s*\$\{\{/.test(raw.slice(cbIdx, cbIdx + 2000)),
+            wfName + ' callback_payload step must declare TASK_JSON as an env: variable');
+    }
+});
+
+runTest('Defect 12 - callback_payload assigns TASK="$TASK_JSON" (via env var, not inline)', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 8000);
+        if (cbSection.includes('TASK=')) {
+            assert.ok(/TASK="\$TASK_JSON"/.test(cbSection) || /TASK=\$TASK_JSON/.test(cbSection),
+                wfName + ' callback_payload must assign TASK from $TASK_JSON env var');
+            assert.ok(!/TASK="\$\{\{/.test(cbSection),
+                wfName + ' callback_payload must not use inline TASK="${{ }}"');
+        }
+    }
+});
+
+runTest('Defect 12 - TASK_JSON is declared as env: variable in callback_payload step', () => {
+    for (const wfName of CARRIER_WORKFLOWS) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const envSection = raw.slice(cbIdx, cbIdx + 1500);
+        assert.ok(/TASK_JSON:\s*\$\{\{/.test(envSection),
+            wfName + ' callback_payload step must declare TASK_JSON as an env: variable');
+    }
+});
+
+// =========================================================
+// Defect #13: GITHUB_OUTPUT multi-line value corruption
+// echo "field=$MULTI_LINE_VALUE" >> $GITHUB_OUTPUT
+// corrupts multi-line JSON output; must use <<EOF delimiter
+// =========================================================
+
+runTest('Defect 13 - provenance_result uses <<EOF delimiter (not direct echo of multi-line JSON)', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const hasProvenanceResult = /provenance_result/.test(raw);
+        if (!hasProvenanceResult) continue;
+        assert.ok(/provenance_result<<EOF/.test(raw) || /provenance_result<</.test(raw),
+            wfName + ' must use <<EOF delimiter for provenance_result multi-line output');
+        assert.ok(!/echo "provenance_result=\$\{/.test(raw),
+            wfName + ' must NOT use direct echo "provenance_result=${...}" for multi-line JSON');
+    }
+});
+
+runTest('Defect 13 - no direct echo of multi-line variables to GITHUB_OUTPUT without <<EOF', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const badPattern = raw.match(/echo "(RESULT|REPORT_JSON|provenance_result)=\$\{/);
+        assert.ok(!badPattern,
+            wfName + ' must not directly echo RESULT/REPORT_JSON to GITHUB_OUTPUT (use <<EOF)');
+    }
+});
+
+runTest('Defect 13 - provenance_result section has matching EOF delimiter', () => {
+    for (const wfName of ALL_WORKFLOWS_WITH_PROVENANCE) {
+        const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
+        const hasProvenanceResult = /provenance_result<<EOF/.test(raw) || /provenance_result<</.test(raw);
+        if (!hasProvenanceResult) continue;
+        assert.ok(/echo "EOF"/.test(raw) || /echo 'EOF'/.test(raw),
+            wfName + ' must have matching EOF delimiter after provenance_result<<EOF');
+    }
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);
