@@ -2,7 +2,7 @@
 
 > **Authoritative status**: `PROPOSED / TARGET` documentation and sequencing. This document establishes the implementation ordering for converting the coordinator operating protocol from a partially procedural/documentary contract into a machine-enforced lifecycle. It does **not** authorize implementation. Implementation of each increment requires a separate explicitly authorized ACP task.
 >
-> **Current phase**: Phase 3 — Autonomous Coordination Loop — `COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED`. Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — `PROPOSED / TARGET` (not yet transitioned).
+> **Current roadmap phase**: Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — `ACTIVE / IN PROGRESS`, as recorded in `docs/ai/STATE.md` and `docs/ai/strategic-state.json`. Phase 3 remains `COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED`. The lifecycle-enforcement capabilities and increments in this roadmap remain `PROPOSED / TARGET`; each increment requires a separate ACP authorization.
 >
 > **Source material**: Two completed Gemini research passes:
 > - `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-COORDINATOR-MACHINE-ENFORCEMENT-LIFECYCLE-RESEARCH-001.md`
@@ -283,45 +283,32 @@ The roadmap explicitly distinguishes the following authority-bearing states. The
 
 ## 7. Phase 4 Transition / Activation Boundary (STEP 0)
 
-**Phase 4 must become the authoritative active roadmap phase through the existing phase-transition/convergence mechanism before Phase 4 implementation work proceeds.**
+**Status: SATISFIED / RECONCILED.** Phase 4 is the authoritative active roadmap phase. The activation gate is documented as having validated and applied the transition; this section records the current state rather than repeating the historical transition bootstrap.
 
 ### Current Phase State (Verified Against Repository)
 
-- **Phase 3 — Autonomous Coordination Loop**: `COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED` (STATE.md line 14; commit `8c9e005`).
-- **Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation**: `PROPOSED / TARGET` (not yet transitioned).
-- **Kyle's conversational transition decision**: RECEIVED (STATE.md Phase 4 Baseline Reconciliation Status).
-- **Durable transition evidence**: BLOCKED / NOT ESTABLISHED. The `poc/phase-transition-gate.js` cannot validate or apply the transition because the durable coordinator transition record and coordinator TaskRegistry identity for the Phase 4 transition are not yet established on `main`.
-- **Canonical Gemini execution artifact**: NOT ESTABLISHED from the durable repository state available to this reconciliation.
-- **Authoritative current phase**: Phase 3 (remains so until matching transition evidence is durably established).
+- **Phase 3 — Autonomous Coordination Loop**: `COMPLETE / INDEPENDENTLY VERIFIED / CONVERGED` (final reconciliation commit `8c9e005`).
+- **Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation**: `ACTIVE / IN PROGRESS` in `docs/ai/STATE.md` and `docs/ai/strategic-state.json`.
+- **Durable transition evidence**: ESTABLISHED in `docs/ai/TASK_LOG.md`, including signed Director decision provenance.
+- **Transition evidence ID**: `transition-evidence-director-transition-decision-1791716406199-051138fb0ab5`.
+- **Coordinator task identity**: `TASK-CHATGPT-PHASE-4-RESEARCH-RECONCILE-001` (registered as `RESEARCH_DOCUMENT`, reconciliation stage).
+- **Phase 4 design status**: IN PROGRESS / NOT YET INDEPENDENTLY RECONCILED. Existing Gemini research provides the design baseline; the current audit must reconcile it against implementation, tests, and the active architecture.
+- **Implementation status**: No lifecycle-enforcement increment is authorized by this roadmap. Each increment requires a separate ACP task and independent verification.
 
-### The Phase 4 Transition Procedure (Existing — Not Redefined)
+### Existing Transition Procedure (Historical Record)
 
-The repository's existing phase-transition procedure (CHATGPT_PROJECT_OPERATING_PROTOCOL.md §17.12, STATE.md Phase 3 Transition Rule, strategic-state.json Phase 4 baseline) requires:
+The transition procedure remains governed by `CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, `poc/phase-transition-gate.js`, `STATE.md`, and the machine-readable projection. The gate checks Phase 3 convergence, independent verification, durable evidence, coordinator TaskRegistry identity, signed Director decision provenance, projection integrity, and post-transition validity. The repository's current state records that this procedure was applied. The earlier bootstrap research records that the gate was blocked before the signed evidence was established; that historical report is not the current phase status.
 
-1. Phase 3 convergence requirements satisfied (DONE — Phase 3 is CONVERGED per `poc/strategic-alignment.js` evaluation).
-2. Independent verification recorded (DONE — Phase 3 independently verified).
-3. Kyle's explicit conversational roadmap authorization (DONE — received conversationally).
-4. The first authorized Phase 4 research/reconciliation task records the decision and creates the durable transition evidence (PENDING — this is the task being executed).
-5. The existing `poc/phase-transition-gate.js` validates convergence, independent verification, evidence binding, projection integrity, atomic update, and post-transition validity, then applies the transition (PENDING — cannot invoke until evidence is established in step 4).
+### Roadmap Phase vs. Capability Status
 
-### Distinction: Roadmap Target vs. Authorized vs. Reconciled vs. Implementation
+| State | Current status |
+|---|---|
+| Phase 4 roadmap activation | **ACTIVE / IN PROGRESS** |
+| Phase 4 design contract | **Existing research baseline; audit and independent reconciliation pending** |
+| Lifecycle-enforcement Increment 4.1 | **PLANNED / TARGET; not yet authorized for implementation** |
+| Later lifecycle-enforcement increments 4.2–4.5 | **PLANNED / TARGET; dependent on preceding increment verification** |
 
-| State | Meaning | Current Status |
-|---|---|---|
-| Phase 4 is the next roadmap target | ARCHITECTURE.md §16.6 and STATE.md both identify Phase 4 as the next target | **TRUE** — Phase 4 is identified as next PROPOSED / TARGET |
-| Phase 4 transition is authorized | Kyle has decided to proceed and this documentation task is authorized | **TRUE (for this documentation task)** — Kyle's conversational decision + this ACP task authorization establish the transition-bootstrap execution context |
-| Phase 4 transition is durably reconciled | The phase-transition gate has validated and applied the transition; STATE.md and strategic-state.json reflect Phase 4 as active | **NOT TRUE** — durable transition evidence not yet established; gate not invoked |
-| Phase 4 implementation is permitted | Implementation increments (4.1–4.5) may be separately authorized | **NOT TRUE** — implementation requires separate ACP authorization per increment; this task does not implement or authorize implementation |
-
-### This Task's Role in Phase 4 Transition
-
-This documentation task is the **transition-bootstrap execution context**: it establishes the authoritative lifecycle-enforcement roadmap and durable transition evidence, then invokes the phase-transition gate. It does **not** mark implementation increments complete. It does **not** activate Phase 4 merely by writing the roadmap.
-
-The durable transition evidence this task creates will include the roadmap alignment decision, the requirement ID (`phase-4-scaled-conversational-orchestration-cross-task-lineage-navigation`), and the coordinator task identity — satisfying the transition-evidence fields required by `poc/phase-transition-gate.js` `transitionEvidence()`.
-
-**Important**: Per the task's `conflict_handling` and `roadmap_alignment` sections, if the repository's current Phase 4 transition state differs from assumptions, the actual authoritative state is preserved and the discrepancy is documented. The repository's actual state is: Phase 3 CONVERGED, Phase 4 PROPOSED/TARGET, transition evidence BLOCKED/NOT ESTABLISHED. This documentation preserves that distinction.
-
----
+**Increment naming clarification:** These lifecycle-enforcement increments 4.1–4.5 are separate from the older read-only observation increments 4.1–4.9 already merged to `main`. Do not conflate the two sequences.
 
 ## 8. Implementation Sequence
 
