@@ -313,15 +313,35 @@ test('VALID_TASK_MODES includes BUILDER', () => {
   assert(VALID_TASK_MODES.includes('FAILOVER_EXECUTE'), 'FAILOVER_EXECUTE should still be a valid task mode');
 });
 
-test('BUILDER_CAPABILITIES contains the complete fixed set exactly', () => {
-  assertArrayIncludes(BUILDER_CAPABILITIES, ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
-  assertEqual(BUILDER_CAPABILITIES.length, 5);
+test('BUILDER_CAPABILITIES contains the complete fixed set exactly with no missing or additional capabilities', () => {
+  const expected = ['read_only', 'modify_files', 'run_tests', 'commit', 'push'];
+  assertDeepEqual(BUILDER_CAPABILITIES, expected);
+  assertEqual(BUILDER_CAPABILITIES.length, expected.length);
+  for (const cap of expected) {
+    assert(BUILDER_CAPABILITIES.includes(cap), `BUILDER_CAPABILITIES must include ${cap}`);
+  }
 });
 
-test('getRequiredCapabilitiesForMode returns BUILDER_CAPABILITIES for BUILDER mode exactly', () => {
+test('getRequiredCapabilitiesForMode returns BUILDER_CAPABILITIES for BUILDER mode exactly with no missing or additional capabilities', () => {
   const caps = getRequiredCapabilitiesForMode('BUILDER');
   assertDeepEqual(caps, BUILDER_CAPABILITIES);
   assertEqual(caps.length, 5);
+  for (const cap of BUILDER_CAPABILITIES) {
+    assert(caps.includes(cap), `getRequiredCapabilitiesForMode('BUILDER') must include ${cap}`);
+  }
+});
+
+test('validateCapabilitiesForMode - BUILDER accepts complete fixed set', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('BUILDER', ['read_only', 'modify_files', 'run_tests', 'commit', 'push']);
+  assertEqual(result.valid, true);
+});
+
+test('validateCapabilitiesForMode - BUILDER rejects missing run_tests', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validateCapabilitiesForMode('BUILDER', ['read_only', 'modify_files', 'commit', 'push']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('run_tests'));
 });
 
 test('Execution report with agent Gemini Builder is valid', () => {
