@@ -35,12 +35,15 @@ const TASK_STANDARD_PATH = path.join(ROOT_DIR, 'docs', 'ai', 'TASK_STANDARD.md')
 const ACP_SCHEMA_PATH = path.join(ROOT_DIR, 'poc', 'schemas', 'acp-schema.js');
 
 const { validateAcpTaskArtifact, validateAcpTaskArtifactSyntax, getRuntimeTaskModeForConceptual, VALID_CAPABILITIES, CANONICAL_TASK_ARTIFACT_FIELD_ORDER, SMART_QUOTE_CHARS } = require('../poc/schemas/acp-schema');
+const oneClickArtifactValidator = require('../poc/one-click-artifact-validator');
 const {
     extractEmbeddedCarrierArtifact,
     validateOneClickCarrier,
     bindCarrierToRequestedTask,
-    preflightValidateOneClickActivation
-} = require('../poc/one-click-artifact-validator');
+    preflightValidateOneClickActivation,
+    listOneClickWorkflows: canonicalListOneClickWorkflows,
+    VALID_ONE_CLICK_WORKFLOWS: CANONICAL_VALID_ONE_CLICK_WORKFLOWS
+} = oneClickArtifactValidator;
 
 const contractRaw = fs.readFileSync(CONTRACT_DOC_PATH, 'utf8');
 const startHereRaw = fs.readFileSync(CHATGPT_START_HERE_PATH, 'utf8');
@@ -58,15 +61,7 @@ const acpSchemaRaw = fs.readFileSync(ACP_SCHEMA_PATH, 'utf8');
 const taskStandardRaw = fs.readFileSync(TASK_STANDARD_PATH, 'utf8');
 
 function listOneClickWorkflows() {
-    // Canonical active one-click carriers declared by ONE_CLICK_WORKFLOW_CONTRACT.md.
-    // Historical/experimental one-click-named workflows are not active carriers.
-    return [
-        'one-click-gemini-activation-verify-reconcile.yml',
-        'one-click-gemini-builder-smoke.yml',
-        'one-click-gemini-builder-callback-correlation.yml',
-        'one-click-gemini-research-documentation.yml',
-        'one-click-kilo-acp-copy-safe.yml'
-    ];
+    return canonicalListOneClickWorkflows();
 }
 
 function extractCarrierField(workflowRaw, field) {
@@ -3039,6 +3034,171 @@ runTest('Smoke workflow - execution-descriptor.json excluded from commit staging
         'Commit step must NOT stage execution-descriptor.json');
     assert.ok(/git add "\$dir"/.test(commitSection),
         'Commit step must stage only permitted path directories');
+});
+
+// =========================================================
+// Regression tests: all carrier workflows must not use git add -A (Defect 2 - staging safety)
+// TASK-KILO-FIX-SYSTEMIC-WORKFLOW-SAFETY-REGRESSION-001
+// =========================================================
+
+runTest('All carrier workflows - no git add -A in commit/push step', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const commitIdx = raw.indexOf('Commit and push Builder changes');
+        if (commitIdx === -1) continue;
+        const commitSection = raw.slice(commitIdx, commitIdx + 6000);
+        assert.ok(!/git add -A/.test(commitSection),
+            wf + ' must NOT use git add -A in commit/push step');
+        assert.ok(/PERMITTED_PATHS|permitted_paths/.test(commitSection),
+            wf + ' must use PERMITTED_PATHS or permitted_paths for staging');
+    }
+});
+
+runTest('All carrier workflows - commit/push pushes to base_branch without --force', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const commitIdx = raw.indexOf('Commit and push Builder changes');
+        if (commitIdx === -1) continue;
+        const commitSection = raw.slice(commitIdx, commitIdx + 6000);
+        assert.ok(!/git push --force|git push -f/.test(commitSection),
+            wf + ' must NOT use git push --force');
+        assert.ok(/git push origin/.test(commitSection),
+            wf + ' must push to origin');
+    }
+});
+
+runTest('All carrier workflows - commit/push step emits push_status output', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const commitIdx = raw.indexOf('Commit and push Builder changes');
+        if (commitIdx === -1) continue;
+        const commitSection = raw.slice(commitIdx, commitIdx + 6000);
+        assert.ok(/push_status=/.test(commitSection),
+            wf + ' must emit push_status output variable');
+        assert.ok(/PUSH_STATUS="true"/.test(commitSection) || /PUSH_STATUS=true/.test(commitSection),
+            wf + ' must set PUSH_STATUS=true on successful push');
+        assert.ok(/PUSH_STATUS="failed"/.test(commitSection) || /PUSH_STATUS=failed/.test(commitSection),
+            wf + ' must set PUSH_STATUS=failed on push failure');
+    }
+});
+
+runTest('All carrier workflows - callback_payload step uses set -uo pipefail (not -e)', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 3000);
+        assert.ok(/set -uo pipefail/.test(cbSection),
+            wf + ' callback_payload step must use set -uo pipefail');
+        assert.ok(!/set -euo pipefail/.test(cbSection),
+            wf + ' callback_payload step must NOT use set -e which would exit before creating the report');
+    }
+});
+
+runTest('All carrier workflows - have failure-safe step ensuring gemini-acp-report.json exists', () => {
+    const allWorkflows = listOneClickWorkflows();
+    const reportStepRegex = /Ensure gemini-acp-report\.json exists.*failure-safe/i;
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const cbIdx = raw.indexOf('Prepare ACP report payload');
+        if (cbIdx === -1) continue;
+        assert.ok(reportStepRegex.test(raw),
+            wf + ' must have a failure-safe step ensuring report exists');
+        assert.ok(/! -f gemini-acp-report\.json/.test(raw),
+            wf + ' failure-safe step must check for missing report file');
+    }
+});
+
+runTest('All carrier workflows - upload artifact uses if-no-files-found: warn (not error)', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        assert.ok(!/if-no-files-found: error/.test(raw),
+            wf + ' must NOT use if-no-files-found: error');
+    }
+});
+
+runTest('All carrier workflows - builder_result distinguishes commit success from push success', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const resultIdx = raw.indexOf('Determine Builder execution result');
+        if (resultIdx === -1) continue;
+        const resultSection = raw.slice(resultIdx, resultIdx + 3000);
+        assert.ok(/PUSH_STATUS/.test(resultSection),
+            wf + ' builder_result must reference PUSH_STATUS output');
+        assert.ok(/Commit created but push/.test(resultSection),
+            wf + ' builder_result must distinguish commit-success-push-failed');
+        assert.ok(/COMMIT_PUSH_OUTCOME/.test(resultSection),
+            wf + ' builder_result must reference COMMIT_PUSH_OUTCOME');
+    }
+});
+
+runTest('All carrier workflows - callback handling guards request_id before sending callback', () => {
+    const allWorkflows = listOneClickWorkflows();
+    for (const wf of allWorkflows) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        if (!fs.existsSync(filePath)) continue;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const cbIdx = raw.indexOf('Send callback to Render');
+        if (cbIdx === -1) continue;
+        const cbSection = raw.slice(cbIdx, cbIdx + 3000);
+        assert.ok(/\[ -z "\$REQUEST_ID" \]/.test(cbSection) || /request_id.*missing.*empty.*invalid/.test(cbSection),
+            wf + ' callback step must check request_id before sending callback');
+    }
+});
+
+// =========================================================
+// Regression tests: VALID_ONE_CLICK_WORKFLOWS drift prevention
+// TASK-KILO-FIX-SYSTEMIC-WORKFLOW-SAFETY-REGRESSION-001
+// =========================================================
+
+runTest('VALID_ONE_CLICK_WORKFLOWS in source matches listOneClickWorkflows helper', () => {
+    const sourceList = CANONICAL_VALID_ONE_CLICK_WORKFLOWS;
+    const helperList = canonicalListOneClickWorkflows();
+    assert.deepStrictEqual(sourceList, helperList,
+        'VALID_ONE_CLICK_WORKFLOWS and listOneClickWorkflows must stay in sync');
+});
+
+runTest('All VALID_ONE_CLICK_WORKFLOWS files exist on disk', () => {
+    for (const wf of CANONICAL_VALID_ONE_CLICK_WORKFLOWS) {
+        const filePath = path.join(ONE_CLICK_DIR, wf);
+        assert.ok(fs.existsSync(filePath),
+            'Workflow file declared in VALID_ONE_CLICK_WORKFLOWS must exist: ' + wf);
+    }
+});
+
+runTest('VALID_ONE_CLICK_WORKFLOWS contains all active carrier workflows', () => {
+    const registered = new Set(CANONICAL_VALID_ONE_CLICK_WORKFLOWS);
+    const expectedCarriers = [
+        'one-click-gemini-activation-verify-reconcile.yml',
+        'one-click-gemini-builder-smoke.yml',
+        'one-click-gemini-builder-callback-correlation.yml',
+        'one-click-gemini-research-documentation.yml',
+        'one-click-kilo-acp-copy-safe.yml'
+    ];
+    for (const wf of expectedCarriers) {
+        assert.ok(registered.has(wf),
+            'Active carrier workflow must be registered: ' + wf);
+    }
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');

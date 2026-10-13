@@ -492,11 +492,14 @@ jobs:
           cp callback_payload.json kilo-acp-report.json
           cat callback_payload.json
 
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+
       - name: Send callback to Render
         if: always()
         env:
           CALLBACK_URL: ${{ secrets.RENDER_KILO_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.KILO_CALLBACK_SECRET }}
+          REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
         shell: bash
         run: |
           set -uo pipefail
@@ -507,10 +510,17 @@ jobs:
             exit 0
           fi
 
+          REQUEST_ID="${REQUEST_ID:-}"
+          if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+            echo "::error::BLOCKED: request_id is missing, empty, or invalid; callback cannot execute without valid server-derived correlation"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
             -H "x-kilo-callback-secret: $CALLBACK_SECRET" \
-            -d @callback_payload.json)
+            -d @callback_payload.json 2>/dev/null || echo '')
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | head -n -1)
@@ -537,4 +547,4 @@ jobs:
             kilo-execution-result.json
             kilo-output.txt
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn

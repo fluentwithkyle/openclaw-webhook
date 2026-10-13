@@ -679,6 +679,7 @@ jobs:
           echo "$REPORT_JSON" > gemini-acp-report.json
 
           echo "report_status=generated" >> "$GITHUB_OUTPUT"
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
 
           cat callback_payload.json
 
@@ -687,6 +688,7 @@ jobs:
         env:
           CALLBACK_URL: ${{ secrets.RENDER_BUILDER_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.BUILDER_CALLBACK_SECRET }}
+          REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
         shell: bash
         run: |
           set -uo pipefail
@@ -697,10 +699,17 @@ jobs:
             exit 0
           fi
 
+          REQUEST_ID="${REQUEST_ID:-}"
+          if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+            echo "::error::BLOCKED: request_id is missing, empty, or invalid; callback cannot execute without valid server-derived correlation"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
             -H "x-builder-callback-secret: $CALLBACK_SECRET" \
-            -d @callback_payload.json)
+            -d @callback_payload.json 2>/dev/null || echo '')
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | head -n -1)
