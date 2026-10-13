@@ -1275,7 +1275,7 @@ async function main() {
     await runTest('MAX_AUTHORIZED_PATHS - is frozen and contains docs/, test/, poc/, .github/workflows/', async () => {
         assertTrue(activationPolicy.MAX_AUTHORIZED_PATHS !== undefined, 'MAX_AUTHORIZED_PATHS should be defined');
         assertTrue(Object.isFrozen(activationPolicy.MAX_AUTHORIZED_PATHS), 'MAX_AUTHORIZED_PATHS should be frozen');
-         assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
+         assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', 'routes/', 'services/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
     });
 
     await runTest('intersectPathsWithMaxBoundary - filters out paths outside boundary', async () => {
@@ -1298,10 +1298,16 @@ async function main() {
         assertTrue(activationPolicy.isPathWithinMaxBoundary('poc/activation-ingress.js'));
     });
 
-    await runTest('isPathWithinMaxBoundary - index.js is NOT within boundary', async () => {
+    await runTest('isPathWithinMaxBoundary - index.js and AGENTS.md are NOT within boundary', async () => {
         assertTrue(!activationPolicy.isPathWithinMaxBoundary('index.js'));
         assertTrue(!activationPolicy.isPathWithinMaxBoundary('AGENTS.md'));
-        assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/'));
+    });
+
+    await runTest('isPathWithinMaxBoundary - routes/ and services/ ARE within boundary', async () => {
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('routes/'));
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('routes/poc.js'));
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('services/'));
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('services/deepseek-runtime.js'));
     });
 
     // =========================================================
@@ -1523,12 +1529,12 @@ async function main() {
         cleanup();
     });
 
-    await runTest('Bootstrap - Director-approved path outside MAX_AUTHORIZED_PATHS (services/) is rejected', async () => {
+    await runTest('Bootstrap - Director-approved path outside MAX_AUTHORIZED_PATHS (index.js) is rejected', async () => {
         cleanup();
         process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
         const approval = await setupDirectorApproval('bootstrap-test-11', 'Gemini Builder', 'BUILDER',
-            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['services/']);
-        assertTrue(!approval.success, 'Approval with services/ should be rejected');
+            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['index.js']);
+        assertTrue(!approval.success, 'Approval with index.js should be rejected');
         cleanup();
     });
 

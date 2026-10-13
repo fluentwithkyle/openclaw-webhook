@@ -158,7 +158,7 @@ The embedded canonical ACP task carrier is a JSON string literal. To remain copy
 
 3. **`capabilities` must be a JSON array** of strings, not a single string. For FAILOVER_EXECUTE the canonical capability set is `["read_only", "modify_files", "run_tests", "commit", "push"]`. Each capability must be present in `VALID_CAPABILITIES` in the schema.
 
-4. **`scope` must be a JSON object** with a `permitted_paths` array of strings. Every path in `permitted_paths` must fall within the server-defined `MAX_AUTHORIZED_PATHS` boundary in `poc/activation-policy.js` (currently `docs/`, `test/`, `poc/`, `.github/workflows/main.yml`, `.github/workflows/gemini-builder.yml`, `.github/workflows/one-click-kilo-acp-copy-safe.yml`). Paths outside this boundary are rejected with error code `PATH_OUTSIDE_MAX_BOUNDARY`.
+4. **`scope` must be a JSON object** with a `permitted_paths` array of strings. Every path in `permitted_paths` must fall within the server-defined `MAX_AUTHORIZED_PATHS` boundary in `poc/activation-policy.js` (currently `docs/`, `test/`, `poc/`, `routes/`, `services/`, `.github/workflows/main.yml`, `.github/workflows/gemini-builder.yml`, `.github/workflows/one-click-kilo-acp-copy-safe.yml`). Paths outside this boundary are rejected with error code `PATH_OUTSIDE_MAX_BOUNDARY`.
 
 5. **`target_agent` must be one of `VALID_AGENTS`** in the schema: `Kilo`, `Gemini`, `Gemini Builder`, `Security Specialist`, `Utility Specialist`.
 
