@@ -310,7 +310,9 @@ jobs:
             exit 1
           fi
           RESULT=$(node poc/phase-transition-gate.js --verify "$DESCRIPTOR_FILE" 2>&1) || true
-          echo "provenance_result=$RESULT" >> "$GITHUB_OUTPUT"
+          echo "provenance_result<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$RESULT" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
           if echo "$RESULT" | grep -q '"status": "SUCCESS"'; then
             echo "provenance_status=SUCCESS" >> "$GITHUB_OUTPUT"
           else
@@ -568,21 +570,24 @@ jobs:
           BUILDER_SUMMARY: ${{ steps.gemini_builder_run.outputs.summary }}
           EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
           CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+          TASK_JSON: ${{ steps.one_click_context.outputs.task }}
         shell: bash
         run: |
           set -uo pipefail
 
           DESCRIPTOR_FILE="execution-descriptor.json"
+          DEFAULT_REPO="${GITHUB_REPOSITORY}"
+          DEFAULT_BRANCH="${GITHUB_REF_NAME}"
           if [ -f "$DESCRIPTOR_FILE" ]; then
             REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             TASK="$(jq -r '.task // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            REPOSITORY="$(jq -r '.repository // "'${{ github.repository }}'"' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.repository }}')"
-            BASE_BRANCH="$(jq -r '.base_branch // "'${{ github.ref_name }}'"' "$DESCRIPTOR_FILE" 2>/dev/null || echo '${{ github.ref_name }}')"
+            REPOSITORY="$(jq -r --arg def "$DEFAULT_REPO" '.repository // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_REPO")"
+            BASE_BRANCH="$(jq -r --arg def "$DEFAULT_BRANCH" '.base_branch // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_BRANCH")"
             EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
           else
             REQUEST_ID="${{ steps.one_click_context.outputs.request_id }}"
-            TASK="${{ steps.one_click_context.outputs.task }}"
+            TASK="$TASK_JSON"
             REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
             BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
           fi
@@ -679,6 +684,7 @@ jobs:
           echo "$REPORT_JSON" > gemini-acp-report.json
 
           echo "report_status=generated" >> "$GITHUB_OUTPUT"
+          echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
 
           cat callback_payload.json
 
@@ -687,6 +693,7 @@ jobs:
         env:
           CALLBACK_URL: ${{ secrets.RENDER_BUILDER_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.BUILDER_CALLBACK_SECRET }}
+          REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
         shell: bash
         run: |
           set -uo pipefail
@@ -697,10 +704,17 @@ jobs:
             exit 0
           fi
 
+          REQUEST_ID="${REQUEST_ID:-}"
+          if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
+            echo "::error::BLOCKED: request_id is missing, empty, or invalid; callback cannot execute without valid server-derived correlation"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
             -H "x-builder-callback-secret: $CALLBACK_SECRET" \
-            -d @callback_payload.json)
+            -d @callback_payload.json 2>/dev/null || echo '')
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | head -n -1)
