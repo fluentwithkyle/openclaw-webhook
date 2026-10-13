@@ -392,6 +392,7 @@ jobs:
         env:
           EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id || '' }}
           CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity || '' }}
+          TASK_JSON: ${{ steps.orchestration_context.outputs.task }}
         shell: bash
         run: |
           set -uo pipefail
@@ -408,7 +409,7 @@ jobs:
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
           else
             REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
-            TASK="${{ steps.orchestration_context.outputs.task }}"
+            TASK="$TASK_JSON"
             REPOSITORY="$DEFAULT_REPO"
             BASE_BRANCH="$DEFAULT_BRANCH"
           fi

@@ -604,10 +604,11 @@ print('YAML validation passed')
       - name: Prepare ACP report payload
         id: callback_payload
         if: always()
-        env:
+         env:
           BUILDER_SUMMARY: ${{ steps.gemini_builder_run.outputs.summary }}
           EXECUTION_CLAIM_ID: ${{ steps.orchestration_context.outputs.execution_claim_id }}
           CARRIER_IDENTITY: ${{ steps.orchestration_context.outputs.carrier_identity }}
+          TASK_JSON: ${{ steps.orchestration_context.outputs.task }}
         shell: bash
         run: |
           set -uo pipefail
@@ -622,7 +623,7 @@ print('YAML validation passed')
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
           else
             REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
-            TASK="${{ steps.orchestration_context.outputs.task }}"
+            TASK="$TASK_JSON"
             REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
             BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
           fi
