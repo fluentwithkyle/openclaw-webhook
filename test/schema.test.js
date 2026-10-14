@@ -325,9 +325,12 @@ test('BUILDER_CAPABILITIES contains the complete fixed set exactly with no missi
 test('getRequiredCapabilitiesForMode returns BUILDER_CAPABILITIES for BUILDER mode exactly with no missing or additional capabilities', () => {
   const caps = getRequiredCapabilitiesForMode('BUILDER');
   assertDeepEqual(caps, BUILDER_CAPABILITIES);
-  assertEqual(caps.length, 5);
+  assertEqual(caps.length, BUILDER_CAPABILITIES.length);
   for (const cap of BUILDER_CAPABILITIES) {
-    assert(caps.includes(cap), `getRequiredCapabilitiesForMode('BUILDER') must include ${cap}`);
+    assert(caps.includes(cap), `Missing required capability: ${cap}`);
+  }
+  for (const cap of caps) {
+    assert(BUILDER_CAPABILITIES.includes(cap), `Unexpected additional capability: ${cap}`);
   }
 });
 
