@@ -463,7 +463,7 @@ test('MAX_AUTHORIZED_PATHS - is exported from schema and matches activation-poli
   const schema = require('../poc/schemas/acp-schema');
   const activationPolicy = require('../poc/activation-policy');
   assertEqual(JSON.stringify(schema.MAX_AUTHORIZED_PATHS), JSON.stringify(activationPolicy.MAX_AUTHORIZED_PATHS));
-  assertDeepEqual(schema.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
+  assertDeepEqual(schema.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', 'routes/', 'services/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
 });
 
 test('validatePermittedPathsForMode - FAILOVER_EXECUTE accepts paths within MAX boundary', () => {
@@ -492,9 +492,15 @@ test('validatePermittedPathsForMode - BUILDER accepts paths within MAX boundary'
   assertEqual(result.valid, true);
 });
 
-test('validatePermittedPathsForMode - BUILDER rejects services/ (outside boundary)', () => {
+test('validatePermittedPathsForMode - BUILDER accepts services/ (within boundary)', () => {
   const schema = require('../poc/schemas/acp-schema');
   const result = schema.validatePermittedPathsForMode('BUILDER', ['services/']);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - BUILDER rejects index.js (outside boundary)', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('BUILDER', ['index.js']);
   assertEqual(result.valid, false);
   assert(result.error.includes('maximum authorization boundary'));
 });
