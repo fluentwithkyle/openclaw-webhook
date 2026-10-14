@@ -518,6 +518,16 @@ test('validatePermittedPathsForMode - BUILDER rejects routes/other.js (outside b
   assert(result.error.includes('maximum authorization boundary'));
 });
 
+test('validatePermittedPathsForMode - BUILDER rejects path traversal and absolute paths', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const pathTraversal = schema.validatePermittedPathsForMode('BUILDER', ['routes/poc.js/../index.js']);
+  assertEqual(pathTraversal.valid, false);
+  const absolute = schema.validatePermittedPathsForMode('BUILDER', ['/routes/poc.js']);
+  assertEqual(absolute.valid, false);
+  const fileSuffix = schema.validatePermittedPathsForMode('BUILDER', ['routes/poc.js.bak']);
+  assertEqual(fileSuffix.valid, false);
+});
+
 test('validatePermittedPathsForMode - REVIEW mode is not affected by MAX boundary', () => {
   const schema = require('../poc/schemas/acp-schema');
   const result = schema.validatePermittedPathsForMode('REVIEW', ['poc/']);

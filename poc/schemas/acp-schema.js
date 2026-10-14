@@ -282,7 +282,7 @@ function validatePermittedPathsForMode(taskMode, permittedPaths) {
 
   if (EXECUTION_TASK_MODES.includes(mode)) {
     for (const p of permittedPaths) {
-      const withinBoundary = MAX_AUTHORIZED_PATHS.some(maxPath => p === maxPath || p.startsWith(maxPath));
+      const withinBoundary = activationPolicy.isPathWithinMaxBoundary(p);
       if (!withinBoundary) {
         return { valid: false, error: 'Path outside server-defined maximum authorization boundary (' + MAX_AUTHORIZED_PATHS.join(', ') + '): ' + p };
       }
@@ -1087,7 +1087,7 @@ function validateAcpTaskArtifact(artifactText) {
       return { valid: false, error: 'FAILOVER_EXECUTE and BUILDER modes require at least one permitted_path', error_code: 'EMPTY_PERMITTED_PATHS' };
     }
     for (const p of parsed.scope.permitted_paths) {
-      const withinBoundary = MAX_AUTHORIZED_PATHS.some(maxPath => p === maxPath || p.startsWith(maxPath));
+      const withinBoundary = activationPolicy.isPathWithinMaxBoundary(p);
       if (!withinBoundary) {
         return { valid: false, error: 'Path outside server-defined maximum authorization boundary (' + MAX_AUTHORIZED_PATHS.join(', ') + '): ' + p, error_code: 'PATH_OUTSIDE_MAX_BOUNDARY', offending_path: p };
       }

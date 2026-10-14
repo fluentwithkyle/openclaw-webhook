@@ -62,9 +62,20 @@ const EXECUTION_TASK_MODES = Object.freeze(['FAILOVER_EXECUTE', 'BUILDER']);
 const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/', 'routes/poc.js', 'services/deepseek-runtime.js', 'services/transport-provider.js', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
 
 function isPathWithinMaxBoundary(permittedPath) {
-  return MAX_AUTHORIZED_PATHS.some(maxPath =>
-    permittedPath === maxPath || permittedPath.startsWith(maxPath)
-  );
+  if (typeof permittedPath !== 'string' || permittedPath.length === 0) {
+    return false;
+  }
+
+  if (permittedPath.startsWith('/') || permittedPath.includes('..')) {
+    return false;
+  }
+
+  return MAX_AUTHORIZED_PATHS.some(maxPath => {
+    if (maxPath.endsWith('/')) {
+      return permittedPath === maxPath || permittedPath.startsWith(maxPath);
+    }
+    return permittedPath === maxPath;
+  });
 }
 
 function intersectPathsWithMaxBoundary(paths) {

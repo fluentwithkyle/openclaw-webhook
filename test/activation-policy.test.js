@@ -1317,6 +1317,30 @@ async function main() {
         assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/lineService.js'));
     });
 
+    await runTest('isPathWithinMaxBoundary - explicit file extensions and subpaths are rejected', async () => {
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('routes/poc.js.bak'),
+            'routes/poc.js.bak must be rejected (file suffix, not suffix-prefix match)');
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('routes/poc.js/anything'),
+            'routes/poc.js/anything must be rejected (trailing path after explicit file)');
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/deepseek-runtime.js.bak'),
+            'services/deepseek-runtime.js.bak must be rejected');
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/transport-provider.js/anything'),
+            'services/transport-provider.js/anything must be rejected');
+    });
+
+    await runTest('isPathWithinMaxBoundary - path traversal and absolute paths are rejected', async () => {
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('../index.js'),
+            'Path traversal ../index.js must be rejected');
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('poc/../index.js'),
+            'Path traversal poc/../index.js must be rejected');
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('/services/deepseek-runtime.js'),
+            'Absolute path must be rejected');
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('/routes/poc.js'),
+            'Absolute path must be rejected');
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary(''),
+            'Empty path must be rejected');
+    });
+
     // =========================================================
     // Director-approved permitted_paths Bootstrap Tests
     // =========================================================

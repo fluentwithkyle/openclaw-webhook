@@ -14,6 +14,7 @@ const {
     EXECUTION_TASK_MODES,
     MAX_AUTHORIZED_PATHS
 } = require('./schemas/acp-schema');
+const { isPathWithinMaxBoundary } = require('./activation-policy');
 
 const ROOT_DIR = path.join(__dirname, '..');
 
@@ -213,12 +214,6 @@ function bindCarrierToRequestedTask(parsed, requestedTask) {
 
 function listOneClickWorkflows() {
     return VALID_ONE_CLICK_WORKFLOWS.slice();
-}
-
-function isPathWithinMaxBoundary(permittedPath) {
-    return MAX_AUTHORIZED_PATHS.some(maxPath =>
-        permittedPath === maxPath || permittedPath.startsWith(maxPath)
-    );
 }
 
 function repairEmbeddedArtifact(artifactText) {
