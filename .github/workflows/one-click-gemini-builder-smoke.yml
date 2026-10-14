@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node poc/validate-external-activation.js coordinator-verify '{"workflow_name": "one-click-gemini-builder-smoke.yml", "workflow_dir": ".github/workflows", "base_branch": "main", "requested_task": {"task_name": "TASK-GEMINI-PHASE4-INGRESS-ALIGNMENT-GATE-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook", "task_mode": "BUILDER", "permitted_paths": ["poc/strategic-alignment.js","poc/phase-transition-gate.js","poc/task-registry.js","poc/activation-policy.js","poc/schemas/acp-schema.js","poc/validate-external-activation.js","routes/poc.js","services/deepseek-runtime.js","test/","docs/ai/research/","docs/ai/RESEARCH_INDEX.md","docs/ai/TASK_LOG.md"]}}'
+          node poc/validate-external-activation.js coordinator-verify '{"workflow_name": "one-click-gemini-builder-smoke.yml", "workflow_dir": ".github/workflows", "base_branch": "main", "requested_task": {"task_name": "TASK-GEMINI-PHASE4-INGRESS-ALIGNMENT-GATE-001", "target_agent": "Gemini Builder", "repository": "fluentwithkyle/openclaw-webhook", "task_mode": "BUILDER", "permitted_paths": ["poc/strategic-alignment.js","poc/activation-policy.js","poc/schemas/acp-schema.js","poc/validate-external-activation.js","routes/poc.js","services/deepseek-runtime.js","test/","docs/ai/research/","docs/ai/RESEARCH_INDEX.md","docs/ai/TASK_LOG.md"]}}'
 
       - name: Submit Director approval for consequential Builder activation
         id: director_approval
