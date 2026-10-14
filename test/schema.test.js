@@ -463,7 +463,7 @@ test('MAX_AUTHORIZED_PATHS - is exported from schema and matches activation-poli
   const schema = require('../poc/schemas/acp-schema');
   const activationPolicy = require('../poc/activation-policy');
   assertEqual(JSON.stringify(schema.MAX_AUTHORIZED_PATHS), JSON.stringify(activationPolicy.MAX_AUTHORIZED_PATHS));
-  assertDeepEqual(schema.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', 'routes/', 'services/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
+  assertDeepEqual(schema.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', 'routes/poc.js', 'services/deepseek-runtime.js', 'services/transport-provider.js', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
 });
 
 test('validatePermittedPathsForMode - FAILOVER_EXECUTE accepts paths within MAX boundary', () => {
@@ -492,15 +492,28 @@ test('validatePermittedPathsForMode - BUILDER accepts paths within MAX boundary'
   assertEqual(result.valid, true);
 });
 
-test('validatePermittedPathsForMode - BUILDER accepts services/ (within boundary)', () => {
+test('validatePermittedPathsForMode - BUILDER accepts services/deepseek-runtime.js (within boundary)', () => {
   const schema = require('../poc/schemas/acp-schema');
-  const result = schema.validatePermittedPathsForMode('BUILDER', ['services/']);
+  const result = schema.validatePermittedPathsForMode('BUILDER', ['services/deepseek-runtime.js']);
   assertEqual(result.valid, true);
 });
 
-test('validatePermittedPathsForMode - BUILDER rejects index.js (outside boundary)', () => {
+test('validatePermittedPathsForMode - BUILDER rejects services/tally.js (outside boundary)', () => {
   const schema = require('../poc/schemas/acp-schema');
-  const result = schema.validatePermittedPathsForMode('BUILDER', ['index.js']);
+  const result = schema.validatePermittedPathsForMode('BUILDER', ['services/tally.js']);
+  assertEqual(result.valid, false);
+  assert(result.error.includes('maximum authorization boundary'));
+});
+
+test('validatePermittedPathsForMode - BUILDER accepts routes/poc.js (within boundary)', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('BUILDER', ['routes/poc.js']);
+  assertEqual(result.valid, true);
+});
+
+test('validatePermittedPathsForMode - BUILDER rejects routes/other.js (outside boundary)', () => {
+  const schema = require('../poc/schemas/acp-schema');
+  const result = schema.validatePermittedPathsForMode('BUILDER', ['routes/other.js']);
   assertEqual(result.valid, false);
   assert(result.error.includes('maximum authorization boundary'));
 });
