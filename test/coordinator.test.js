@@ -59,7 +59,7 @@ function makeCommand(requestId) {
         task_type: 'implementation',
         repository: 'fluentwithkyle/openclaw-webhook',
         base_branch: 'main',
-        task: 'test-coordinator-task',
+        task: 'Research Phase 4 cross-task lineage navigation',
         constraints: { permitted_paths: ['poc/'] },
         authorization: { capabilities: ['read_only'] },
         verification: 'Run tests and verify',
@@ -502,6 +502,42 @@ async function main() {
         const task = taskRegistry.getTask('coord-test-nobody');
         assertEqual(task, null);
 
+        cleanup();
+    });
+
+    // Test: Strategic alignment blocking (Increment 4.1)
+    await runTest('Coordinator - unaligned task is blocked by strategic alignment and does not create task or dispatch', async () => {
+        cleanup();
+        const command = makeCommand('coord-unaligned');
+        command.task = 'Review caching optimization';
+        const res = await makeRequest({
+            hostname: 'localhost', port: 3004, path: '/poc/coordinator', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-deepseek-coordinator-secret': 'test-deepseek-secret' }
+        }, command);
+        assertEqual(res.status, 403);
+        assertEqual(res.body.status, 'strategic alignment blocked');
+        assertEqual(res.body.code, 'OBJECTIVE_NOT_MAPPED');
+
+        const task = taskRegistry.getTask('coord-unaligned');
+        assertEqual(task, null);
+        cleanup();
+    });
+
+    // Test: Protocol mismatch blocking (Increment 4.1)
+    await runTest('Coordinator - mismatched protocol hash is blocked and does not create task or dispatch', async () => {
+        cleanup();
+        const command = makeCommand('coord-protocol-mismatch');
+        command.protocol_hash = 'bad-hash-12345';
+        const res = await makeRequest({
+            hostname: 'localhost', port: 3004, path: '/poc/coordinator', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-deepseek-coordinator-secret': 'test-deepseek-secret' }
+        }, command);
+        assertEqual(res.status, 403);
+        assertEqual(res.body.status, 'protocol mismatch blocked');
+        assertEqual(res.body.code, 'STALE_OR_MISMATCHED_PROTOCOL');
+
+        const task = taskRegistry.getTask('coord-protocol-mismatch');
+        assertEqual(task, null);
         cleanup();
     });
 

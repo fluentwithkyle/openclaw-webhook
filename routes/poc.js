@@ -1,8 +1,11 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const { getDispatcher } = require('../services/transport-provider');
 const orchestrator = require('../poc/orchestrator');
 const { validateExecutionReport, validateACPCompliance, validateDirectorApprovalScope, VALID_AGENTS } = require('../poc/schemas/acp-schema');
+const { evaluateCoordinatorIntent } = require('../poc/strategic-alignment');
 const taskRegistry = require('../poc/task-registry');
 const gitWebhook = require('../poc/github-webhook');
 const { createDeepSeekRuntimeHandler } = require('../services/deepseek-runtime');
@@ -892,6 +895,53 @@ router.post('/coordinator', authenticateDeepSeekCoordinator, async (req, res) =>
             status: 'validation blocked',
             stage: 'validation blocked',
             error: `Invalid ACP command: ${validation.error}`
+        });
+    }
+
+    // Protocol Hash Binding and Validation Gate (Increment 4.1)
+    const protocolPath = path.join(__dirname, '..', 'docs', 'ai', 'CHATGPT_PROJECT_OPERATING_PROTOCOL.md');
+    let protocolHash = '';
+    try {
+        const protocolText = fs.readFileSync(protocolPath, 'utf8');
+        protocolHash = crypto.createHash('sha256').update(protocolText).digest('hex');
+    } catch (e) {
+        return res.status(500).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'protocol read failed',
+            stage: 'failed',
+            error: 'Authoritative operating protocol could not be read'
+        });
+    }
+
+    if (command.protocol_hash && command.protocol_hash !== protocolHash) {
+        return res.status(403).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'protocol mismatch blocked',
+            stage: 'blocked',
+            code: 'STALE_OR_MISMATCHED_PROTOCOL',
+            error: 'Supplied protocol hash does not match authoritative CHATGPT_PROJECT_OPERATING_PROTOCOL.md'
+        });
+    }
+    if (command.protocol_context && command.protocol_context.hash && command.protocol_context.hash !== protocolHash) {
+        return res.status(403).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'protocol mismatch blocked',
+            stage: 'blocked',
+            code: 'STALE_OR_MISMATCHED_PROTOCOL',
+            error: 'Supplied protocol context hash does not match authoritative CHATGPT_PROJECT_OPERATING_PROTOCOL.md'
+        });
+    }
+    command.protocol_hash = protocolHash;
+
+    // Strategic Alignment Ingress Gate (Increment 4.1)
+    const strategicAlignment = evaluateCoordinatorIntent(command.task);
+    if (strategicAlignment.status !== 'ALIGNED_PENDING_AUTHORIZATION') {
+        return res.status(403).json({
+            request_id: command?.request_id || 'unknown',
+            status: 'strategic alignment blocked',
+            stage: 'blocked',
+            code: strategicAlignment.code || 'STRATEGIC_ALIGNMENT_BLOCKED',
+            error: strategicAlignment.detail || 'Strategic alignment could not be established'
         });
     }
 
