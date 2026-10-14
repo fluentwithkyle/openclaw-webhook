@@ -1275,7 +1275,7 @@ async function main() {
     await runTest('MAX_AUTHORIZED_PATHS - is frozen and contains docs/, test/, poc/, .github/workflows/', async () => {
         assertTrue(activationPolicy.MAX_AUTHORIZED_PATHS !== undefined, 'MAX_AUTHORIZED_PATHS should be defined');
         assertTrue(Object.isFrozen(activationPolicy.MAX_AUTHORIZED_PATHS), 'MAX_AUTHORIZED_PATHS should be frozen');
-         assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', 'routes/', 'services/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
+         assertDeepEqual(activationPolicy.MAX_AUTHORIZED_PATHS, ['docs/', 'test/', 'poc/', 'routes/poc.js', 'services/deepseek-runtime.js', 'services/transport-provider.js', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
     });
 
     await runTest('intersectPathsWithMaxBoundary - filters out paths outside boundary', async () => {
@@ -1303,11 +1303,18 @@ async function main() {
         assertTrue(!activationPolicy.isPathWithinMaxBoundary('AGENTS.md'));
     });
 
-    await runTest('isPathWithinMaxBoundary - routes/ and services/ ARE within boundary', async () => {
-        assertTrue(activationPolicy.isPathWithinMaxBoundary('routes/'));
+    await runTest('isPathWithinMaxBoundary - routes/poc.js and services/ files ARE within boundary', async () => {
         assertTrue(activationPolicy.isPathWithinMaxBoundary('routes/poc.js'));
-        assertTrue(activationPolicy.isPathWithinMaxBoundary('services/'));
         assertTrue(activationPolicy.isPathWithinMaxBoundary('services/deepseek-runtime.js'));
+        assertTrue(activationPolicy.isPathWithinMaxBoundary('services/transport-provider.js'));
+    });
+
+    await runTest('isPathWithinMaxBoundary - unspecified routes/ and services/ sibling paths are NOT within boundary', async () => {
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('routes/other.js'));
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/tally.js'));
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/cal.js'));
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/appsScript.js'));
+        assertTrue(!activationPolicy.isPathWithinMaxBoundary('services/lineService.js'));
     });
 
     // =========================================================
@@ -1529,12 +1536,30 @@ async function main() {
         cleanup();
     });
 
-    await runTest('Bootstrap - Director-approved path outside MAX_AUTHORIZED_PATHS (index.js) is rejected', async () => {
+    await runTest('Bootstrap - Director-approved path outside MAX_AUTHORIZED_PATHS (AGENTS.md) is rejected', async () => {
         cleanup();
         process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
         const approval = await setupDirectorApproval('bootstrap-test-11', 'Gemini Builder', 'BUILDER',
-            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['index.js']);
-        assertTrue(!approval.success, 'Approval with index.js should be rejected');
+            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['AGENTS.md']);
+        assertTrue(!approval.success, 'Approval with AGENTS.md should be rejected');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - Director-approved explicit Phase 4 paths ARE accepted (routes/poc.js, services/deepseek-runtime.js, services/transport-provider.js)', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const approval = await setupDirectorApproval('bootstrap-test-11b', 'Kilo', 'FAILOVER_EXECUTE',
+            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['routes/poc.js', 'services/deepseek-runtime.js', 'services/transport-provider.js', 'poc/']);
+        assertTrue(approval.success, 'Approval with Phase 4 implementation paths should be accepted');
+        cleanup();
+    });
+
+    await runTest('Bootstrap - Director-approved sibling services/ paths are rejected (only deepseek-runtime.js and transport-provider.js authorized)', async () => {
+        cleanup();
+        process.env.DIRECTOR_ORIGIN_SECRET = 'director-origin-test-secret';
+        const approval = await setupDirectorApproval('bootstrap-test-11c', 'Gemini Builder', 'BUILDER',
+            ['read_only', 'modify_files', 'run_tests', 'commit', 'push'], ['services/tally.js']);
+        assertTrue(!approval.success, 'Approval with services/tally.js should be rejected');
         cleanup();
     });
 

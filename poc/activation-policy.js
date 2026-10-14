@@ -59,7 +59,7 @@ const ACTIVATION_SURFACE_NAMES = Object.freeze(
 
 const EXECUTION_TASK_MODES = Object.freeze(['FAILOVER_EXECUTE', 'BUILDER']);
 
-const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/', 'routes/', 'services/', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
+const MAX_AUTHORIZED_PATHS = Object.freeze(['docs/', 'test/', 'poc/', 'routes/poc.js', 'services/deepseek-runtime.js', 'services/transport-provider.js', '.github/workflows/main.yml', '.github/workflows/gemini-builder.yml', '.github/workflows/one-click-kilo-acp-copy-safe.yml']);
 
 function isPathWithinMaxBoundary(permittedPath) {
   return MAX_AUTHORIZED_PATHS.some(maxPath =>
