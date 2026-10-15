@@ -877,6 +877,7 @@ async function main() {
      assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISSING');
    });
 
+   cleanup();
    server.close();
 
   console.log(`\n=== Gemini Callback Tests: ${passCount} passed, ${failCount} failed ===`);
