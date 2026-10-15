@@ -616,6 +616,67 @@ async function main() {
       assert.strictEqual(task.status, 'EXECUTING');
     });
 
+    await runTest('Builder callback: rehydrates task when claim lock lost but claim persists in registry entry', async () => {
+      const requestId = 'builder-rehydrate-registry-' + Date.now();
+      cleanup();
+       await taskRegistry.createTask(makeCommand(requestId, 'builder-task'));
+       await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+       await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+       await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+
+       const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+         carrier_id: 'github-workflow-rehydrate-reg-1',
+         carrier_type: 'github_workflow'
+       });
+       assert.strictEqual(claimResult.success, true);
+
+       // Simulate process restart: wipe in-memory cache AND claim lock files, but preserve registry file
+       // The execution_claim is persisted in the task entry within task-registry.json
+       taskRegistry.resetMemoryCache();
+       const claimsDir = path.join(__dirname, '..', 'poc', 'claims');
+       if (fs.existsSync(claimsDir)) {
+         const claimFiles = fs.readdirSync(claimsDir);
+         for (const file of claimFiles) {
+           try { fs.unlinkSync(path.join(claimsDir, file)); } catch (err) {}
+         }
+       }
+
+       // Task should still be found in the persisted registry file
+       const cachedTask = taskRegistry.getTask(requestId);
+       assert.ok(cachedTask, 'Task should be loaded from persisted registry file after restart');
+
+       const report = makeBuilderReport(
+         requestId, 'builder-task', 'success',
+         claimResult.execution_claim_id,
+         'github-workflow-rehydrate-reg-1'
+       );
+       const res = await postRequest('/poc/builder/callback', report);
+       assert.strictEqual(res.status, 200);
+       assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
+       assert.strictEqual(res.body.builder_status, 'success');
+    });
+
+    await runTest('Builder callback: rejects callback when both claim lock and registry claim are missing', async () => {
+      const requestId = 'builder-rehydrate-both-missing-' + Date.now();
+      cleanup();
+
+      const claimsDir = path.join(__dirname, '..', 'poc', 'claims');
+      if (fs.existsSync(claimsDir)) {
+        const claimFiles = fs.readdirSync(claimsDir);
+        for (const file of claimFiles) {
+          try { fs.unlinkSync(path.join(claimsDir, file)); } catch (err) {}
+        }
+      }
+
+      const report = makeBuilderReport(
+        requestId, 'builder-task', 'success',
+        'some-claim-id', 'some-carrier'
+      );
+      const res = await postRequest('/poc/builder/callback', report);
+      assert.strictEqual(res.status, 404);
+      assert(res.body.error.includes('no execution claim lock'));
+    });
+
     await runTest('Builder callback: rejects callback when claim lock missing but callback has claim_id', async () => {
       const requestId = 'builder-rehydrate-no-claim-' + Date.now();
       cleanup();

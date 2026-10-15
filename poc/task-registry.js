@@ -1456,7 +1456,10 @@ async function releaseExecutionClaim(requestId, executionClaimId) {
     const lockPath = claimLockPath(requestId);
 
     if (executionClaimId) {
-      const existingClaim = readClaimLock(lockPath);
+      let existingClaim = readClaimLock(lockPath);
+      if (!existingClaim || existingClaim.request_id !== requestId) {
+        existingClaim = getExecutionClaimFromRegistry(requestId);
+      }
       if (existingClaim && existingClaim.execution_claim_id !== executionClaimId) {
         return { success: false, error_code: 'CLAIM_MISMATCH', error: 'Execution claim ID does not match current claim', existing_claim: existingClaim };
       }
@@ -1501,6 +1504,40 @@ function getExecutionClaimFromDisk(requestId) {
   return readClaimLock(lockPath);
 }
 
+function getExecutionClaimFromRegistry(requestId) {
+  const cache = getCache();
+  const entry = cache.get(requestId);
+  if (!entry || !entry.execution_claim) {
+    return null;
+  }
+  const claim = entry.execution_claim;
+  if (isClaimStale(claim)) {
+    return null;
+  }
+  return {
+    request_id: requestId,
+    execution_claim_id: claim.execution_claim_id,
+    carrier_identity: claim.carrier_identity,
+    carrier_type: claim.carrier_type,
+    claimed_at: claim.claimed_at,
+    claim_epoch: claim.claim_epoch
+  };
+}
+
+function getExecutionClaimFromAnywhere(requestId) {
+  const lockPath = claimLockPath(requestId);
+  let claim = readClaimLock(lockPath);
+
+  if (!claim || claim.request_id !== requestId) {
+    const registryClaim = getExecutionClaimFromRegistry(requestId);
+    if (registryClaim) {
+      return registryClaim;
+    }
+  }
+
+  return claim;
+}
+
 async function rehydrateTaskFromCallback(requestId, callbackReport) {
   return withRegistryLock(async () => {
     const callbackClaimId = callbackReport &&
@@ -1513,7 +1550,7 @@ async function rehydrateTaskFromCallback(requestId, callbackReport) {
       callbackReport.result.execution_metadata &&
       callbackReport.result.execution_metadata.carrier_identity;
 
-    const diskClaim = getExecutionClaimFromDisk(requestId);
+    const diskClaim = getExecutionClaimFromAnywhere(requestId);
 
     if (!diskClaim) {
       return {
