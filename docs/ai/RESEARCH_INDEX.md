@@ -27,6 +27,7 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
+| TASK-KILO-UNIFIED-COORDINATOR-BUILDER-AUTO-ACTIVATION-001 | 2026-10-16 | Kilo | `docs/ai/research/research-TASK-KILO-UNIFIED-COORDINATOR-BUILDER-AUTO-ACTIVATION-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-PHASE4-DESIGN-CONTRACT-RECONCILIATION-001 | 2026-10-16 | Gemini | `docs/ai/research/research-TASK-GEMINI-PHASE4-DESIGN-CONTRACT-RECONCILIATION-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-RECONCILE-PHASE4-TRANSITION-AUDIT-001 | 2026-10-11 | Gemini | `docs/ai/research/research-TASK-GEMINI-RECONCILE-PHASE4-TRANSITION-AUDIT-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001 | 2026-10-10 | Gemini | `docs/ai/research/research-TASK-GEMINI-DEEPSEEK-PHASE4-TRANSITION-BOOTSTRAP-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
