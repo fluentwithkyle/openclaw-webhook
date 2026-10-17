@@ -43,9 +43,7 @@ they differ, stop and reconcile `STATE.md` before selecting work. `ARCHITECTURE.
   Loop, including durable coordination context, bounded autonomous turns,
   server-derived workflow sequencing, completion/escalation, and fail-closed
   continuation.
-- **Unresolved required next work**: Phase 4 design contract and cross-task lineage
-  semantics research/reconciliation (PROPOSED / TARGET; requires separate authorized
-  Phase 4 design work before implementation).
+- **Unresolved required next work**: Correct and independently verify Phase 4 lifecycle-enforcement Increment 4.2 Part 1 before starting Part 2. The design-contract research/reconciliation is already recorded; do not repeat it. Part 1 remains BLOCKED by fail-open strategic-alignment bypass, fabricated projection hash, synthesized evidence fallbacks, non-strict requirements-reference matching, and callback `NO_CLAIM_ON_DISK`.
 - **Prerequisite evidence**: Stage 1 is COMPLETE / VERIFIED. Phase 0 is COMPLETE /
   INDEPENDENTLY VERIFIED (implementation commit `ec9c476`; independent
   verification/reconciliation commit `53110da`). Phase 1 is COMPLETE / INDEPENDENTLY
