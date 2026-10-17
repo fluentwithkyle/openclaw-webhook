@@ -349,7 +349,9 @@ runTest('STATUS is not hardcoded to success in callback payload step', () => {
   const payloadIdx = raw.indexOf('Prepare ACP report payload');
   const sendIdx = raw.indexOf('Send callback to Render');
   const payloadSection = raw.slice(payloadIdx, sendIdx);
-  assert.ok(!payloadSection.includes('STATUS="success"'), 'STATUS should not be hardcoded to success in callback payload step');
+  // Use regex to match STATUS="success" as a standalone variable assignment,
+  // not as part of a longer variable name like EVIDENCE_ACTUAL_STATUS="success"
+  assert.ok(!/\bSTATUS="success"/.test(payloadSection), 'STATUS should not be hardcoded to success in callback payload step');
 });
 
 runTest('request_id is null when empty (issue_comment path)', () => {
@@ -1173,31 +1175,31 @@ runTest('main.yml evidence projection step has id: evidence_projection', () => {
 runTest('main.yml evidence projection step has fail-closed staging error detection', () => {
   const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
   assert.ok(evidenceIdx !== -1, 'evidence projection step missing');
-  const evidenceSection = raw.slice(evidenceIdx);
-  assert.ok(evidenceSection.includes('STAGING_ERRORS') || evidenceSection.includes('Evidence projection staging failed'),
+  const evidenceSection = raw.slice(evidenceIdx, raw.indexOf('Update canonical report with evidence projection status'));
+  assert.ok(evidenceSection.includes('Evidence projection staging failed'),
     'evidence projection step must track staging errors with fail-closed behavior');
 });
 
 runTest('main.yml evidence projection step DOES NOT use silent || true suppression for git add', () => {
   const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
-  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
-  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
   assert.ok(!/git add.*\|\| true/.test(evidenceSection),
     'evidence projection step must NOT silently suppress git add errors');
 });
 
 runTest('main.yml evidence projection step stashes working-tree changes before git pull --rebase', () => {
   const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
-  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
-  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
   assert.ok(evidenceSection.includes('git stash'),
     'evidence projection step must stash unstaged changes before rebase to prevent "cannot pull with rebase" errors');
 });
 
 runTest('main.yml evidence projection step has merge fallback when rebase fails', () => {
   const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
-  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
-  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
   assert.ok(evidenceSection.includes('git merge'),
     'evidence projection step must have merge fallback when rebase fails');
   assert.ok(evidenceSection.includes('merge fallback'),
@@ -1206,25 +1208,92 @@ runTest('main.yml evidence projection step has merge fallback when rebase fails'
 
 runTest('main.yml evidence projection step fails closed on staging failure (exit 1)', () => {
   const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
-  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
-  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
-  // The staging error path should exit 1 (fail-closed), not exit 0 with warning
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
   assert.ok(evidenceSection.includes("EVIDENCE_BLOCKER=\"Evidence projection staging failed"),
     'evidence projection must fail-closed with blocker message on staging failure');
 });
 
 runTest('main.yml evidence projection step does NOT silently swallow rebase failures', () => {
   const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
-  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
-  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
-  assert.ok(!evidenceSection.includes("Rebase failed during durable evidence push; evidence file remains created but not pushed"),
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
+  assert.ok(!evidenceSection.includes('::warning::Rebase failed'),
     'evidence projection must NOT silently swallow rebase failures with warning-only exit');
+});
+
+runTest('main.yml evidence projection step git commit failure exits 1 (fail-closed)', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
+  const commitFailIdx = evidenceSection.indexOf('Evidence projection commit failed');
+  assert.ok(commitFailIdx !== -1, 'evidence projection must have commit failure handler');
+  const afterCommitFail = evidenceSection.slice(commitFailIdx);
+  assert.ok(!afterCommitFail.includes('::warning::Evidence projection commit failed'),
+    'commit failure must use ::error:: not ::warning::');
+  assert.ok(afterCommitFail.includes('exit 1'),
+    'commit failure must exit 1 (fail-closed), not exit 0');
+});
+
+runTest('main.yml evidence projection step fetch failures are NOT suppressed with || true', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
+  assert.ok(!/git fetch.*\|\| true/.test(evidenceSection),
+    'evidence projection must NOT suppress git fetch failures with || true');
+  assert.ok(!/git fetch.*2>\/dev\/null \|\| true/.test(evidenceSection),
+    'evidence projection must NOT suppress git fetch stderr with 2>/dev/null || true');
+});
+
+runTest('main.yml evidence projection step detects and fails on fetch failure', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
+  assert.ok(evidenceSection.includes('FETCH_RESULT') || evidenceSection.includes('FETCH_VERIFY_RESULT'),
+    'evidence projection must capture fetch exit code for fail-closed handling');
+  assert.ok(evidenceSection.includes('Evidence projection fetch failed') ||
+    evidenceSection.includes('fetch verification failed'),
+    'evidence projection must produce a blocker on fetch failure');
+});
+
+runTest('main.yml evidence projection step stash pop failure is fail-closed (not warning)', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
+  assert.ok(!evidenceSection.includes('::warning::Could not restore stashed changes'),
+    'stash pop failure must NOT be reported as warning-only (should be error/fail-closed)');
+  assert.ok(evidenceSection.includes('Could not restore stashed changes') ||
+    evidenceSection.includes('git stash pop'),
+    'evidence projection must handle stash restoration failure with fail-closed behavior');
+});
+
+runTest('main.yml evidence projection step rejects empty remote head', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
+  assert.ok(evidenceSection.includes('REMOTE_HEAD could not be resolved') ||
+    evidenceSection.includes('remote HEAD could not be resolved'),
+    'evidence projection must reject missing/empty remote HEAD with blocker');
+});
+
+runTest('main.yml evidence projection step exits 1 when push not verified', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
+  assert.ok(evidenceSection.includes('PUSH_SUCCESS') && evidenceSection.includes('EVIDENCE_PUSH_VERIFIED'),
+    'evidence projection must check both push success and verification before exiting 0');
+  assert.ok(/PUSH_SUCCESS.*!=.*"true"/.test(evidenceSection),
+    'evidence projection must check PUSH_SUCCESS is not true before exiting');
+  assert.ok(/EVIDENCE_PUSH_VERIFIED.*!=.*"true"/.test(evidenceSection),
+    'evidence projection must check EVIDENCE_PUSH_VERIFIED is not true before exiting');
+  assert.ok(evidenceSection.includes('exit 1'),
+    'evidence projection must exit 1 when push is not verified');
 });
 
 runTest('main.yml evidence projection step outputs evidence_push_status, evidence_push_verified, evidence_commit_sha, evidence_blocker', () => {
   const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
-  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
-  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  const endIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, endIdx);
   assert.ok(evidenceSection.includes('echo "evidence_push_status'),
     'evidence projection must output evidence_push_status');
   assert.ok(evidenceSection.includes('echo "evidence_push_verified'),
@@ -1237,17 +1306,51 @@ runTest('main.yml evidence projection step outputs evidence_push_status, evidenc
 
 runTest('main.yml callback_payload step includes evidence_projection field in canonical report', () => {
   const callbackIdx = raw.indexOf('Prepare ACP report payload');
-  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
-  const callbackSection = raw.slice(callbackIdx, uploadIdx);
+  const endIdx = raw.indexOf('Persist durable readable evidence projection');
+  const callbackSection = raw.slice(callbackIdx, endIdx);
   assert.ok(callbackSection.includes('evidence_projection'),
     'callback payload step must include evidence_projection field in canonical report');
 });
 
-runTest('main.yml has post-evidence step that updates canonical report with actual evidence projection results', () => {
+runTest('main.yml post-evidence step updates canonical report with actual evidence projection results and status', () => {
   assert.ok(raw.includes('Update canonical report with evidence projection status'),
     'workflow must have a step to update canonical report with evidence projection results');
   assert.ok(raw.includes('steps.evidence_projection.outputs.evidence_push_status'),
     'workflow must reference evidence_projection outputs when updating canonical report');
+  assert.ok(raw.includes('steps.evidence_projection.outputs.evidence_blocker'),
+    'workflow must reference evidence_blocker output when updating canonical report');
+  const postEvidenceIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const reportSection = raw.slice(postEvidenceIdx, raw.indexOf('Send callback to Render'));
+  assert.ok(reportSection.includes('.evidence_projection.status'),
+    'post-evidence step must update the evidence_projection status field with actual result');
+  assert.ok(reportSection.includes('.evidence_projection.push_status'),
+    'post-evidence step must update the evidence_projection push_status field');
+  assert.ok(reportSection.includes('.evidence_projection.push_verified'),
+    'post-evidence step must update the evidence_projection push_verified field');
+  assert.ok(reportSection.includes('.evidence_projection.commit_sha'),
+    'post-evidence step must update the evidence_projection commit_sha field');
+  assert.ok(reportSection.includes('.evidence_projection.blocker'),
+    'post-evidence step must update the evidence_projection blocker field');
+});
+
+runTest('main.yml post-evidence step fails closed if canonical report update fails', () => {
+  const postEvidenceIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const endIdx = raw.indexOf('Send callback to Render');
+  const reportSection = raw.slice(postEvidenceIdx, endIdx);
+  assert.ok(reportSection.includes('not valid JSON'),
+    'post-evidence step must check JSON validity');
+  assert.ok(reportSection.includes('gemini-acp-report.json not found'),
+    'post-evidence step must handle missing canonical report file');
+});
+
+runTest('main.yml post-evidence step re-commits and pushes updated canonical report on success', () => {
+  const postEvidenceIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const endIdx = raw.indexOf('Send callback to Render');
+  const reportSection = raw.slice(postEvidenceIdx, endIdx);
+  assert.ok(reportSection.includes('git commit'),
+    'post-evidence step must re-commit updated canonical report when evidence succeeds');
+  assert.ok(reportSection.includes('git push origin'),
+    'post-evidence step must push updated canonical report when evidence succeeds');
 });
 
 runTest('Behavioral: git stash before pull --rebase prevents unstaged changes error', () => {
