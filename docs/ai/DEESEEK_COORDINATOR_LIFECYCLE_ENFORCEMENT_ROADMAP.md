@@ -659,15 +659,27 @@ The report maps ChatGPT, DeepSeek, and Gemini entry paths to the canonical activ
 - **Related contracts:** `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md` and `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md`.
 
 
-## Deferred Cross-Project Reference — Token Budget and Quota Guard
+## Assigned Implementation — Increment 4.6: Pre-Activation Token Budget & Provider Quota Guard
 
-**Status: DEFERRED DESIGN REFERENCE ONLY — no implementation authorized.**
+**Status: PLANNED / REQUIRED ROADMAP DELIVERABLE — not yet authorized for implementation.**
 
-The corrected research record [Token Budget, Quota Guard, and Pre-Activation Guardrails — Evidence-Backed Gap Closure and Design Addendum](research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001.md) is retained as a future cross-cutting design reference for the DeepSeek Coordinator Evolution project.
+This work is assigned to **lifecycle-enforcement Increment 4.6**, sequenced after Increment 4.5 has been implemented, independently verified, and reconciled. It is not an optional or unassigned deferred reference. The increment requires implementation of the token-budget and provider-quota guard; it must not be silently dropped when earlier increments close.
 
-- **Use:** future review of provider-aware request token estimation, quota/error classification, bounded retry/defer behavior, safe subdivision, and pre-dispatch budget decisions.
-- **Important limitations:** reported quota values do not prove the quota window or root cause; character/token ratios are estimates, not guaranteed bounds; total task usage must not be used as an input-token predictor; HTTP mapping and common enforcement boundary require repository call-path verification.
-- **Roadmap protection:** do not fold this into Increment 4.2, whose defined scope is mandatory state inspection and applicable-requirements extraction. Reconcile it against current state and actual provider call paths before proposing a separate increment.
-- **Re-entry gates:** confirm authoritative provider/quota evidence; inspect actual request serialization and telemetry; trace each relevant model lane; define and test PROCEED/SUBDIVIDE/DEFER/BLOCK; prepare a separate Director-authorized ACP task.
+**Both research inputs are required design references:**
+1. Original research: [Token Budget Prediction and Quota Guard](research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-PREDICTION-AND-QUOTA-GUARD-001.md) — initial architecture and mitigation options.
+2. Corrected follow-up: [Token Budget, Quota Guard, and Pre-Activation Guardrails — Evidence-Backed Gap Closure and Design Addendum](research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001.md) — required correction to the original, including uncertainty and unsupported assumptions. Where they conflict, the corrected follow-up takes precedence.
 
-This link preserves the research for later implementation planning; it does not change the active Phase 4 priority, roadmap status, or authorization state.
+### Increment 4.6 — Required Scope and Acceptance Criteria
+
+- Reconcile both research records against current source, actual provider request serialization, telemetry, and every relevant activation/model lane before coding. Do not repeat research unless a concrete evidence gap remains.
+- Identify and verify the shared enforcement boundary from the live call graph; do not assume the originally proposed ingress is universal without tracing it.
+- Implement provider-aware input-token preflight and quota/error classification. Prefer exact provider counting when supported; never describe a character heuristic as a guaranteed upper bound.
+- Enforce typed fail-closed decisions for **PROCEED / SUBDIVIDE / DEFER / BLOCK**, with bounded retry behavior only when supported by authoritative error/reset evidence. Preserve existing API error contracts; do not invent HTTP status mappings.
+- Keep input-token estimation distinct from output, reasoning, tool-turn, and retry budgets. Add calibration/telemetry only where actual provider evidence is available.
+- Preserve the existing single control plane, TaskRegistry authority, Director authorization, lineage, and permitted-path security boundaries. Do not treat permitted paths as the model context itself.
+- Add tests for supported/unsupported counting, uncertain estimates, quota errors, ambiguous telemetry, retry bounds, subdivision safety, and every activation lane covered by the implementation.
+- Update authoritative project state and task records; independently verify the implementation and reconcile evidence before marking the increment complete.
+
+**Completion gate:** Increment 4.6 is not complete until the implementation is committed, tests and independent verification pass, all required activation lanes are accounted for, and durable project records identify both research inputs and the resulting implementation evidence. A separate Director-authorized ACP task is required before execution.
+
+**Ordering rule:** Complete and reconcile lifecycle increments 4.1–4.5 first. Then execute Increment 4.6; do not insert it ahead of earlier numbered increments or treat this roadmap assignment as execution authorization.
