@@ -210,3 +210,8 @@ Add to the operational sequence:
 - **VERIFIED**: Canonical activation ingress (`poc/activation-ingress.js`) is the universal bottleneck for all task activations.
 - **VERIFIED**: Observed API error: `generativelanguage.googleapis.com/generate_content_free_tier_input_token_count`, limit 250,000.
 - **VERIFIED**: Permitted paths (`docs/ai/research/`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`, `docs/ai/TASK_STANDARD.md`, `docs/ai/CHATGPT_PROJECT_OPERATING_PROTOCOL.md`, `docs/ai/CONTROL_CENTER.md`) strictly respected. No production source code modified.
+
+
+## Implementation Assignment — DeepSeek Lifecycle Increment 4.6
+
+**Assignment: REQUIRED ROADMAP DELIVERABLE — PLANNED, not yet authorized for execution.** Both this original research and its correction follow-up are assigned to **DeepSeek Coordinator lifecycle-enforcement Increment 4.6 — Pre-Activation Token Budget & Provider Quota Guard**, sequenced after Increment 4.5 is implemented, independently verified, and reconciled. The corrected follow-up at `research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001.md` supersedes conflicting or unsupported claims in this original report. Increment 4.6 must reconcile both records against current code and provider evidence, then implement and test the guard; this assignment is not implementation authorization. See `docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md`, “Increment 4.6 — Pre-Activation Token Budget & Provider Quota Guard.”
