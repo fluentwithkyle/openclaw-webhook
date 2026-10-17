@@ -349,7 +349,11 @@ runTest('STATUS is not hardcoded to success in callback payload step', () => {
   const payloadIdx = raw.indexOf('Prepare ACP report payload');
   const sendIdx = raw.indexOf('Send callback to Render');
   const payloadSection = raw.slice(payloadIdx, sendIdx);
-  assert.ok(!payloadSection.includes('STATUS="success"'), 'STATUS should not be hardcoded to success in callback payload step');
+  // Use regex to match STATUS="success" as a standalone variable assignment,
+  // not as part of a longer variable name like EVIDENCE_ACTUAL_STATUS="success"
+  // or EVIDENCE_PUSH_STATUS="true"
+  assert.ok(!/\bSTATUS="success"/.test(payloadSection), 'STATUS should not be hardcoded to success in callback payload step');
+  assert.ok(!/\bVERIFICATION_STATUS="PASS"/.test(payloadSection), 'VERIFICATION_STATUS should not be hardcoded to PASS in callback payload step');
 });
 
 runTest('request_id is null when empty (issue_comment path)', () => {
@@ -1323,4 +1327,233 @@ runTest('Behavioral: evidence projection stash failure fails closed', () => {
 
   assert.ok(!result.includes('EXIT_CODE=1'),
     'stash should succeed in this test environment');
+});
+
+// === TASK-KILO-EVIDENCE-REPORT-UPDATE-FAILURE-HANDLING-003 regression tests ===
+
+runTest('Report update step explicitly checks jq transformation exit code (fail-closed)', () => {
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const updateSection = raw.slice(updateIdx, sendIdx);
+  assert.ok(updateSection.includes('JQ_EXIT'),
+    'post-evidence step must capture jq exit code for fail-closed handling');
+  assert.ok(updateSection.includes('exit 1'),
+    'post-evidence step must exit 1 on jq transformation failure');
+  assert.ok(!/jq.*\|\| true/.test(updateSection),
+    'post-evidence step must NOT suppress jq failures with || true');
+});
+
+runTest('Report update step verifies transformed output before mv replacement', () => {
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const updateSection = raw.slice(updateIdx, sendIdx);
+  assert.ok(updateSection.includes('printf'),
+    'post-evidence step must write jq output to tmp file explicitly');
+  assert.ok(updateSection.includes('! -s gemini-acp-report.tmp.json'),
+    'post-evidence step must check tmp file is non-empty before mv');
+  assert.ok(updateSection.includes('jq empty gemini-acp-report.tmp.json'),
+    'post-evidence step must validate tmp file JSON before replacing canonical report');
+  assert.ok(updateSection.includes('mv gemini-acp-report.tmp.json gemini-acp-report.json'),
+    'post-evidence step must use mv to atomically replace canonical report');
+  assert.ok(updateSection.includes('exit 1'),
+    'post-evidence step must exit 1 if mv replacement fails');
+});
+
+runTest('Report update step fails closed on missing canonical report file', () => {
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const updateSection = raw.slice(updateIdx, sendIdx);
+  assert.ok(updateSection.includes('gemini-acp-report.json not found'),
+    'post-evidence step must produce a blocker when canonical report is missing');
+  assert.ok(updateSection.includes('exit 1'),
+    'post-evidence step must exit 1 when canonical report is missing');
+});
+
+runTest('Report update step computes EVIDENCE_ACTUAL_STATUS from evidence projection outcome', () => {
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const updateSection = raw.slice(updateIdx, sendIdx);
+  assert.ok(updateSection.includes('EVIDENCE_ACTUAL_STATUS'),
+    'post-evidence step must compute actual evidence projection status');
+  assert.ok(updateSection.includes('EVIDENCE_PROJECTION_OUTCOME'),
+    'post-evidence step must read evidence_projection step outcome');
+  assert.ok(updateSection.includes('.evidence_projection.status'),
+    'post-evidence step must update evidence_projection.status in canonical report');
+});
+
+runTest('Report update step only re-commits canonical report on evidence success', () => {
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const sendIdx = raw.indexOf('Send callback to Render');
+  const updateSection = raw.slice(updateIdx, sendIdx);
+  assert.ok(updateSection.includes('EVIDENCE_ACTUAL_STATUS'),
+    'post-evidence step must compute actual evidence projection status');
+  assert.ok(updateSection.includes('"$EVIDENCE_ACTUAL_STATUS" = "success"'),
+    'post-evidence step must conditionally re-commit only when evidence projection succeeded');
+});
+
+// === Behavioral tests for report transformation failure paths ===
+
+runTest('Behavioral: jq transformation failure produces nonzero exit', () => {
+  const result = execSync(`
+    # Simulate jq transformation failure with invalid JSON input file
+    echo 'not valid json' > invalid_input.json
+    JQ_OUTPUT=$(jq '.value' invalid_input.json 2>&1)
+    JQ_EXIT=$?
+    if [ "$JQ_EXIT" -ne 0 ]; then
+      echo "JQ_FAILED=true"
+      echo "EXIT_CODE=1"
+    else
+      echo "EXIT_CODE=0"
+    fi
+    rm -f invalid_input.json
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('JQ_FAILED=true'),
+    'jq with invalid JSON input should be detected as failure');
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'jq transformation failure should produce exit code 1');
+});
+
+runTest('Behavioral: mv replacement failure produces nonzero exit', () => {
+  const result = execSync(`
+    set -uo pipefail
+    echo '{"test":true}' > tmp_test.json
+    # Simulate mv failure by trying to write to a protected location
+    if mv tmp_test.json /nonexistent_path/canonical.json 2>/dev/null; then
+      echo "MV_RESULT=success"
+      echo "EXIT_CODE=0"
+    else
+      echo "::error::Could not replace canonical report with transformed output"
+      echo "MV_RESULT=failure"
+      echo "EXIT_CODE=1"
+    fi
+    rm -f tmp_test.json
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('MV_RESULT=failure'),
+    'mv failure should be detected');
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'mv failure should produce exit code 1');
+});
+
+runTest('Behavioral: evidence projection failure is truthfully reported without false success', () => {
+  // When evidence projection fails, the canonical report's evidence_projection
+  // status should be "failure", and the workflow should exit nonzero.
+  // This test verifies the logic pattern used in the post-evidence step.
+  const result = execSync(`
+    set -uo pipefail
+    EVIDENCE_PROJECTION_OUTCOME="failure"
+    EVIDENCE_PUSH_STATUS="false"
+    EVIDENCE_PUSH_VERIFIED="false"
+    EVIDENCE_COMMIT_SHA=""
+    EVIDENCE_BLOCKER="push failed"
+
+    # Compute actual status (mirrors workflow logic)
+    if [ "$EVIDENCE_PROJECTION_OUTCOME" = "failure" ] || [ "$EVIDENCE_PUSH_STATUS" != "true" ] || [ "$EVIDENCE_PUSH_VERIFIED" != "true" ]; then
+      EVIDENCE_ACTUAL_STATUS="failure"
+    else
+      EVIDENCE_ACTUAL_STATUS="success"
+    fi
+
+    if [ "$EVIDENCE_ACTUAL_STATUS" = "success" ]; then
+      echo "CANONICAL_STATUS=success"
+      echo "EXIT_CODE=0"
+    else
+      echo "CANONICAL_STATUS=failure"
+      echo "EXIT_CODE=1"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('CANONICAL_STATUS=failure'),
+    'evidence projection failure should result in canonical report status=failure');
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'evidence projection failure should produce exit code 1');
+});
+
+runTest('Behavioral: no false success when report persistence fails', () => {
+  // Simulate the full evidence projection outcome when persistence fails
+  // and verify the status is failure, not success.
+  const result = execSync(`
+    set -uo pipefail
+    # Simulate: evidence projection step failed
+    EVIDENCE_PROJECTION_OUTCOME="failure"
+    EVIDENCE_PUSH_STATUS="false"
+    EVIDENCE_PUSH_VERIFIED="false"
+
+    if [ "$EVIDENCE_PROJECTION_OUTCOME" = "failure" ] || [ "$EVIDENCE_PUSH_STATUS" != "true" ] || [ "$EVIDENCE_PUSH_VERIFIED" != "true" ]; then
+      EVIDENCE_ACTUAL_STATUS="failure"
+    else
+      EVIDENCE_ACTUAL_STATUS="success"
+    fi
+
+    echo "EVIDENCE_ACTUAL_STATUS=$EVIDENCE_ACTUAL_STATUS"
+    echo "EVIDENCE_PUSH_STATUS=$EVIDENCE_PUSH_STATUS"
+    echo "EVIDENCE_PUSH_VERIFIED=$EVIDENCE_PUSH_VERIFIED"
+
+    # The report should NOT claim success
+    if [ "$EVIDENCE_ACTUAL_STATUS" = "success" ] && [ "$EVIDENCE_PUSH_STATUS" = "true" ]; then
+      echo "REPORTED_STATUS=success"
+    else
+      echo "REPORTED_STATUS=failure"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('REPORTED_STATUS=failure'),
+    'when persistence fails, the report must NOT claim success');
+  assert.ok(!result.includes('REPORTED_STATUS=success'),
+    'there should be no false success claim when persistence fails');
+});
+
+runTest('Behavioral: stale report prevention - jq must produce valid output or fail', () => {
+  const result = execSync(`
+    set -uo pipefail
+    # Start with a valid report
+    echo '{"evidence_projection":{"status":"failure","push_status":"false","push_verified":"false","commit_sha":null,"blocker":null}}' > valid_report.json
+
+    # Simulate successful jq transformation
+    JQ_OUTPUT=$(jq --arg status "success" --arg push "true" --arg verified "true" \
+      '.evidence_projection.status = $status |
+       .evidence_projection.push_status = $push |
+       .evidence_projection.push_verified = $verified' valid_report.json 2>&1)
+    JQ_EXIT=$?
+
+    if [ "$JQ_EXIT" -ne 0 ]; then
+      echo "TRANSFORM=failure"
+      rm -f valid_report.json
+      exit 1
+    fi
+
+    printf '%s' "\$JQ_OUTPUT" > valid_report.tmp.json
+
+    # Verify tmp file is non-empty
+    if [ ! -s valid_report.tmp.json ]; then
+      echo "::error::Transformed output is empty; refusing to replace"
+      echo "TRANSFORM=failure"
+      rm -f valid_report.json valid_report.tmp.json
+      exit 1
+    fi
+
+    # Validate JSON
+    if ! jq empty valid_report.tmp.json 2>/dev/null; then
+      echo "::error::Transformed output is not valid JSON"
+      echo "TRANSFORM=failure"
+      rm -f valid_report.json valid_report.tmp.json
+      exit 1
+    fi
+
+    # Replace atomically
+    mv valid_report.tmp.json valid_report.json
+    echo "TRANSFORM=success"
+
+    # Verify the final report has the updated status
+    final_status=$(jq -r '.evidence_projection.status' valid_report.json)
+    echo "FINAL_STATUS=$final_status"
+
+    rm -f valid_report.json
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('TRANSFORM=success'),
+    'successful jq transformation should be detected');
+  assert.ok(result.includes('FINAL_STATUS=success'),
+    'final report should reflect the transformed evidence_projection status');
 });

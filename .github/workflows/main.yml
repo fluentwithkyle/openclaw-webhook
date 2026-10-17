@@ -936,6 +936,7 @@ jobs:
               },
               durable_research_record_path: (if $durable_research_record_path == "null" then null else $durable_research_record_path end),
               evidence_projection: {
+                status: "failure",
                 push_status: "false",
                 push_verified: "false",
                 commit_sha: null,
@@ -1103,30 +1104,90 @@ jobs:
         if: always() && steps.callback_payload.outputs.request_id != ''
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
-          EVIDENCE_PUSH_STATUS="${{ steps.evidence_projection.outputs.evidence_push_status }}"
-          EVIDENCE_PUSH_VERIFIED="${{ steps.evidence_projection.outputs.evidence_push_verified }}"
-          EVIDENCE_COMMIT_SHA="${{ steps.evidence_projection.outputs.evidence_commit_sha }}"
-          EVIDENCE_BLOCKER="${{ steps.evidence_projection.outputs.evidence_blocker }}"
+          EVIDENCE_PUSH_STATUS="${{ steps.evidence_projection.outputs.evidence_push_status || 'false' }}"
+          EVIDENCE_PUSH_VERIFIED="${{ steps.evidence_projection.outputs.evidence_push_verified || 'false' }}"
+          EVIDENCE_COMMIT_SHA="${{ steps.evidence_projection.outputs.evidence_commit_sha || '' }}"
+          EVIDENCE_BLOCKER="${{ steps.evidence_projection.outputs.evidence_blocker || '' }}"
+          EVIDENCE_PROJECTION_OUTCOME="${{ steps.evidence_projection.outcome || '' }}"
+          REQUEST_ID="${{ steps.callback_payload.outputs.request_id }}"
+
+          # Determine evidence projection outcome from actual step result
+          if [ "$EVIDENCE_PROJECTION_OUTCOME" = "failure" ] || [ "$EVIDENCE_PUSH_STATUS" != "true" ] || [ "$EVIDENCE_PUSH_VERIFIED" != "true" ]; then
+            EVIDENCE_ACTUAL_STATUS="failure"
+          else
+            EVIDENCE_ACTUAL_STATUS="success"
+          fi
 
           if [ -f "gemini-acp-report.json" ]; then
-            jq \
-              --arg ep_status "${EVIDENCE_PUSH_STATUS:-false}" \
-              --arg ep_verified "${EVIDENCE_PUSH_VERIFIED:-false}" \
+            # Transform the canonical report with actual evidence projection results.
+            # Fail-closed: if jq fails, the report is NOT updated and the step exits 1.
+            JQ_OUTPUT=$(jq \
+              --arg ep_status "$EVIDENCE_PUSH_STATUS" \
+              --arg ep_verified "$EVIDENCE_PUSH_VERIFIED" \
               --arg ep_commit "${EVIDENCE_COMMIT_SHA:-}" \
               --arg ep_blocker "${EVIDENCE_BLOCKER:-}" \
+              --arg ep_outcome "$EVIDENCE_ACTUAL_STATUS" \
               '.evidence_projection.push_status = $ep_status |
                .evidence_projection.push_verified = $ep_verified |
                .evidence_projection.commit_sha = (if $ep_commit == "" then null else $ep_commit end) |
-               .evidence_projection.blocker = (if $ep_blocker == "" then null else $ep_blocker end)' \
-              gemini-acp-report.json > gemini-acp-report.tmp.json && mv gemini-acp-report.tmp.json gemini-acp-report.json
-
-            # Validate the updated report is still valid JSON
-            if ! jq empty gemini-acp-report.json 2>/dev/null; then
-              echo "::error::Updated gemini-acp-report.json is not valid JSON"
+               .evidence_projection.blocker = (if $ep_blocker == "" then null else $ep_blocker end) |
+               .evidence_projection.status = $ep_outcome' \
+              gemini-acp-report.json 2>&1)
+            JQ_EXIT=$?
+            if [ "$JQ_EXIT" -ne 0 ]; then
+              echo "::error::jq transformation of gemini-acp-report.json failed (exit $JQ_EXIT): $JQ_OUTPUT"
               exit 1
             fi
+            printf '%s' "$JQ_OUTPUT" > gemini-acp-report.tmp.json
+
+            # Fail-closed: verify the transformed output was written and is non-empty
+            if [ ! -s gemini-acp-report.tmp.json ]; then
+              echo "::error::Transformed output gemini-acp-report.tmp.json is empty; refusing to replace canonical report with stale/empty data"
+              exit 1
+            fi
+
+            # Validate the transformed output is valid JSON before replacing
+            if ! jq empty gemini-acp-report.tmp.json 2>/dev/null; then
+              echo "::error::Transformed gemini-acp-report.tmp.json is not valid JSON; refusing to replace canonical report"
+              exit 1
+            fi
+
+            # Atomically replace the canonical report with the transformed output
+            if ! mv gemini-acp-report.tmp.json gemini-acp-report.json; then
+              echo "::error::Could not replace gemini-acp-report.json with transformed output; canonical report may be stale"
+              exit 1
+            fi
+
+            # If evidence projection succeeded, re-commit the updated canonical report
+            # with the actual evidence projection status so the durable report on the
+            # remote matches the canonical report. Only re-commit on success; on failure,
+            # the canonical report is updated locally but NOT claimed as durable.
+            if [ "$EVIDENCE_ACTUAL_STATUS" = "success" ]; then
+              git config user.name "Gemini" 2>/dev/null || true
+              git config user.email "gemini@users.noreply.github.com" 2>/dev/null || true
+              git config --global --add safe.directory '*' 2>/dev/null || true
+
+              if ! git add gemini-acp-report.json; then
+                echo "::error::Could not stage gemini-acp-report.json for evidence projection status update"
+                exit 1
+              fi
+              if ! git diff --cached --quiet gemini-acp-report.json; then
+                git commit -m "docs(evidence): update canonical report with evidence projection status for ${REQUEST_ID}" || {
+                  echo "::error::Could not commit updated canonical report with evidence projection status"
+                  exit 1
+                }
+                git push origin "${{ github.ref_name }}" || {
+                  echo "::error::Could not push updated canonical report with evidence projection status"
+                  exit 1
+                }
+                echo "Updated canonical report with evidence projection status: committed and pushed"
+              fi
+            fi
+          else
+            echo "::error::gemini-acp-report.json not found; cannot update with evidence projection status"
+            exit 1
           fi
 
       - name: Send callback to Render (workflow_dispatch only)
