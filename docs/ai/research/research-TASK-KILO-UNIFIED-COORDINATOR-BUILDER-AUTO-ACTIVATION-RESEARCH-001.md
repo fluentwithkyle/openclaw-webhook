@@ -582,3 +582,15 @@ All three AI coordinators converge on the **same canonical admission boundary**
 Both paths activate the **same carrier workflow** (`gemini-builder.yml`) and the
 **same Builder CLI**, ensuring consistent authorization, idempotency, and
 fail-closed behavior regardless of which AI coordinator initiates the work.
+
+
+## Roadmap Alignment
+
+- **authoritative_roadmap**: `ARCHITECTURE.md` §16.6 (DeepSeek Coordinator Evolution); `docs/ai/STATE.md`; `docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md`.
+- **current_phase**: Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation — ACTIVE / IN PROGRESS.
+- **phase_completion_status**: Phase 4 is active. The required design-contract and cross-task lineage semantics reconciliation remains the prerequisite before implementation increments are authorized.
+- **relevant_prior_work**: This research maps the existing ChatGPT, DeepSeek, and Gemini activation paths to shared canonical ingress, ACP authority, TaskRegistry, execution claims, and Builder carrier. It is now linked from the DeepSeek Coordinator lifecycle-enforcement roadmap for deferred reuse.
+- **proposed_task_classification**: B — Potential enabling/foundation reference for the long-term unified coordination goal. This is relevance classification only, not selection as the current next task.
+- **phase_unlock_or_advancement**: None. This reference does not satisfy or replace the active Phase 4 prerequisite, transition the roadmap, or authorize implementation.
+- **alignment_conclusion**: DEFERRED REFERENCE. Reconcile against current source, tests, and live evidence when resumed. Repeat research only if a material evidence gap is found.
+
