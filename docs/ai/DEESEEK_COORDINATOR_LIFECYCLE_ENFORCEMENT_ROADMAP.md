@@ -359,6 +359,8 @@ Research and architecture decisions inform implementation but do not themselves 
 
 **Acceptance boundary**: A coordinator cannot create a substantive delegated task without the required authoritative state-inspection evidence and structured applicable-requirement evidence.
 
+**Current implementation status (2026-10-17): BLOCKED / NOT ACCEPTED.** The attempted Part 1 implementation is present on main at `8bcb3978a894419c31a4d52c208d69022920dfae`, but it violates this acceptance boundary: `routes/poc.js` overrides failed strategic alignment with `ALIGNED_PENDING_AUTHORIZATION` via `phase-4-test-bypass`; a helper rewrites a temporary projection hash instead of failing on mismatch; missing requirements/state evidence is synthesized for non-coordinator ingress; requirements matching is prefix-based; and the builder callback failed with `NO_CLAIM_ON_DISK`. Do not classify Increment 4.2 Part 1 as complete or begin Part 2 until the bypass/fallbacks are removed, strict reference validation and fail-closed projection handling are tested, and callback/claim failure is independently resolved without weakening existing claim checks. The prior research remains the design input; do not repeat it.
+
 ### Increment 4.3 — Mechanical Verification-to-Completion State Binding
 
 **Purpose**: Bind execution, independent verification, `VERIFIED` state, and completion eligibility.
