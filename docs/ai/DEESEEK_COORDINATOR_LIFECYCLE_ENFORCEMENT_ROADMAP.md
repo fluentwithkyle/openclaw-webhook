@@ -657,3 +657,17 @@ The report maps ChatGPT, DeepSeek, and Gemini entry paths to the canonical activ
 - **Deferred status:** No implementation is authorized by this reference. Resume only when Kyle selects this work.
 - **Re-entry:** Reconcile the report against current `main`, tests, and live activation evidence. Preserve VERIFIED / INFERRED / UNKNOWN distinctions. Repeat research only if reconciliation identifies a material evidence gap.
 - **Related contracts:** `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md` and `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md`.
+
+
+## Deferred Cross-Project Reference — Token Budget and Quota Guard
+
+**Status: DEFERRED DESIGN REFERENCE ONLY — no implementation authorized.**
+
+The corrected research record [Token Budget, Quota Guard, and Pre-Activation Guardrails — Evidence-Backed Gap Closure and Design Addendum](research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001.md) is retained as a future cross-cutting design reference for the DeepSeek Coordinator Evolution project.
+
+- **Use:** future review of provider-aware request token estimation, quota/error classification, bounded retry/defer behavior, safe subdivision, and pre-dispatch budget decisions.
+- **Important limitations:** reported quota values do not prove the quota window or root cause; character/token ratios are estimates, not guaranteed bounds; total task usage must not be used as an input-token predictor; HTTP mapping and common enforcement boundary require repository call-path verification.
+- **Roadmap protection:** do not fold this into Increment 4.2, whose defined scope is mandatory state inspection and applicable-requirements extraction. Reconcile it against current state and actual provider call paths before proposing a separate increment.
+- **Re-entry gates:** confirm authoritative provider/quota evidence; inspect actual request serialization and telemetry; trace each relevant model lane; define and test PROCEED/SUBDIVIDE/DEFER/BLOCK; prepare a separate Director-authorized ACP task.
+
+This link preserves the research for later implementation planning; it does not change the active Phase 4 priority, roadmap status, or authorization state.
