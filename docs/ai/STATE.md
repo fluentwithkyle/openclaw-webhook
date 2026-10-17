@@ -1,7 +1,9 @@
 ## Current AI Project State
 
 **Last Updated**: 2026-10-17
-**Updated By**: Kilo — TASK-KILO-EVIDENCE-REPORT-UPDATE-FAILURE-HANDLING-003
+**Updated By**: Kilo — TASK-KILO-RESTORE-EVIDENCE-PERSISTENCE-GUARANTEES-004
+
+| 2026-10-17 | TASK-KILO-RESTORE-EVIDENCE-PERSISTENCE-GUARANTEES-004 | COMPLETED | Kilo | Ultra-narrow corrective patch restoring fail-closed evidence-persistence guarantees lost in d3b7982. Restored: commit failure (::error:: + exit 1), no-staged-changes fetch fail-closed, retry loop fetch without || true, stash pop fail-closed (exit 1), final guard exit 1 when not verified. Preserved d3b7982: jq exit code capture, tmp file validation, fail-closed mv, missing report detection, EVIDENCE_ACTUAL_STATUS, success-only re-commit/push, status field. Added 14 regression tests (123 total pass). Committed and pushed to origin/main. | SUCCESS | .github/workflows/main.yml, test/workflow-expression.test.js, docs/ai/TASK_LOG.md, docs/ai/STATE.md |
 
 | 2026-10-17 | TASK-KILO-EVIDENCE-REPORT-UPDATE-FAILURE-HANDLING-003 | COMPLETED | Kilo | Ultra-narrow follow-up fix to close remaining report-update failure paths. Fixed jq transformation fail-closed (capture JQ_EXIT, exit 1 on failure), tmp file verification (non-empty + valid JSON before mv), mv replacement fail-closed, missing canonical report file error, EVIDENCE_ACTUAL_STATUS computation, success-only re-commit/push, and added `status` field to evidence_projection. Added 10 regression tests (109 total pass). Committed and pushed to origin/main. | SUCCESS | .github/workflows/main.yml, test/workflow-expression.test.js, docs/ai/TASK_LOG.md, docs/ai/STATE.md |
 

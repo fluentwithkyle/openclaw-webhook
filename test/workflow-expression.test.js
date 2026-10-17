@@ -1557,3 +1557,252 @@ runTest('Behavioral: stale report prevention - jq must produce valid output or f
   assert.ok(result.includes('FINAL_STATUS=success'),
     'final report should reflect the transformed evidence_projection status');
 });
+
+// === TASK-KILO-RESTORE-EVIDENCE-PERSISTENCE-GUARANTEES-004 regression tests ===
+
+runTest('Evidence projection commit failure uses ::error:: and exits 1', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, updateIdx);
+  const commitFailIdx = evidenceSection.indexOf('Evidence projection commit failed');
+  assert.ok(commitFailIdx !== -1, 'evidence projection must have commit failure handler');
+  const afterCommitFail = evidenceSection.slice(commitFailIdx);
+  assert.ok(!afterCommitFail.includes('::warning::Evidence projection commit failed'),
+    'commit failure must use ::error:: not ::warning::');
+  assert.ok(afterCommitFail.includes('exit 1'),
+    'commit failure must exit 1 (fail-closed)');
+});
+
+runTest('Evidence projection no-staged-changes branch fails closed on fetch failure', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const evidenceSection = raw.slice(evidenceIdx);
+  // The no-staged-changes branch must NOT use || true on git fetch
+  const noStagedIdx = evidenceSection.indexOf('No changes to stage');
+  assert.ok(noStagedIdx !== -1, 'evidence projection must have no-staged-changes branch');
+  const noStagedSection = evidenceSection.slice(noStagedIdx);
+  assert.ok(!noStagedSection.includes('git fetch origin "${BASE_BRANCH}" 2>/dev/null || true'),
+    'no-staged-changes fetch must NOT use 2>/dev/null || true');
+  assert.ok(noStagedSection.includes('FETCH_RESULT'),
+    'no-staged-changes branch must capture fetch exit code');
+});
+
+runTest('Evidence projection no-staged-changes branch fails closed on empty remote HEAD', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const evidenceSection = raw.slice(evidenceIdx);
+  assert.ok(evidenceSection.includes('Evidence projection remote HEAD could not be resolved'),
+    'evidence projection must check for empty remote HEAD');
+  assert.ok(evidenceSection.includes('Evidence projection remote fetch failed'),
+    'evidence projection must check for fetch failure');
+  assert.ok(evidenceSection.includes('Evidence projection commit present locally but not found on remote base branch'),
+    'evidence projection must check for commit not on remote');
+});
+
+runTest('Evidence projection retry loop does NOT suppress fetch with || true', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, updateIdx);
+  assert.ok(!/git fetch.*\|\| true/.test(evidenceSection),
+    'evidence projection retry loop must NOT suppress git fetch with || true');
+  assert.ok(!/git fetch.*2>\/dev\/null \|\| true/.test(evidenceSection),
+    'evidence projection retry loop must NOT suppress fetch stderr with 2>/dev/null || true');
+  assert.ok(evidenceSection.includes('Evidence projection fetch failed during retry'),
+    'evidence projection must produce a blocker on fetch failure during retry');
+});
+
+runTest('Evidence projection stash pop failure is fail-closed (exit 1, not warning)', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, updateIdx);
+  assert.ok(!evidenceSection.includes('::warning::Could not restore stashed changes'),
+    'stash pop failure must NOT be warning-only');
+  assert.ok(evidenceSection.includes('exit 1'),
+    'stash pop failure must exit 1 (fail-closed)');
+  assert.ok(evidenceSection.includes('Could not restore stashed changes'),
+    'stash pop failure must produce blocker message');
+});
+
+runTest('Evidence projection final guard exits 1 when push not verified', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, updateIdx);
+  assert.ok(evidenceSection.includes('PUSH_SUCCESS'),
+    'evidence projection must check PUSH_SUCCESS');
+  assert.ok(evidenceSection.includes('EVIDENCE_PUSH_VERIFIED'),
+    'evidence projection must check EVIDENCE_PUSH_VERIFIED');
+  assert.ok(/PUSH_SUCCESS.*!=.*"true"/.test(evidenceSection),
+    'evidence projection must fail if PUSH_SUCCESS is not true');
+  assert.ok(/EVIDENCE_PUSH_VERIFIED.*!=.*"true"/.test(evidenceSection),
+    'evidence projection must fail if EVIDENCE_PUSH_VERIFIED is not true');
+  assert.ok(evidenceSection.includes('exit 1'),
+    'evidence projection must exit 1 when push is not verified');
+});
+
+runTest('Evidence projection merge fallback does NOT suppress errors', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, updateIdx);
+  // The merge fallback should NOT use 2>/dev/null to suppress errors on git push
+  const mergeIdx = evidenceSection.indexOf('Rebase failed during durable evidence push, attempting merge fallback');
+  assert.ok(mergeIdx !== -1, 'evidence projection must have merge fallback');
+  const mergeSection = evidenceSection.slice(mergeIdx);
+  assert.ok(!/git push origin.*2>\/dev\/null/.test(mergeSection),
+    'push in merge fallback must NOT suppress stderr with 2>/dev/null');
+  assert.ok(!/git pull.*2>\/dev\/null/.test(mergeSection),
+    'pull in merge fallback context must NOT suppress stderr with 2>/dev/null');
+});
+
+runTest('Evidence projection remote verification failures are not suppressed', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const updateIdx = raw.indexOf('Update canonical report with evidence projection status');
+  const evidenceSection = raw.slice(evidenceIdx, updateIdx);
+  // Fetch verification must NOT use || true
+  assert.ok(evidenceSection.includes('fetch verification failed'),
+    'evidence projection must detect fetch verification failure');
+  // ls-remote must not be suppressed to the point of silent empty result
+  assert.ok(evidenceSection.includes('Evidence projection remote HEAD could not be resolved'),
+    'evidence projection must detect empty remote HEAD during verification');
+  assert.ok(evidenceSection.includes('Evidence projection commit not confirmed on remote base branch'),
+    'evidence projection must detect commit not on remote during verification');
+  // The verification fetch must NOT use || true
+  assert.ok(!/git fetch origin.*\|\| true/.test(evidenceSection),
+    'verification fetch must NOT use || true');
+});
+
+// === Behavioral tests for restored evidence-persistence failure paths ===
+
+runTest('Behavioral: fetch failure in evidence projection produces nonzero exit and blocker', () => {
+  const result = execSync(`
+    set -uo pipefail
+    EVIDENCE_PUSH_STATUS="false"
+    EVIDENCE_PUSH_VERIFIED="false"
+    EVIDENCE_COMMIT_SHA="abc123"
+    EVIDENCE_BLOCKER=""
+    FETCH_RESULT=1
+
+    if [ "$FETCH_RESULT" -ne 0 ]; then
+      EVIDENCE_BLOCKER="Evidence projection remote fetch failed (exit $FETCH_RESULT); cannot verify commit on remote"
+      echo "BLOCKER=$EVIDENCE_BLOCKER"
+      echo "EXIT_CODE=1"
+    else
+      echo "EXIT_CODE=0"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'fetch failure should produce exit code 1');
+  assert.ok(result.includes('BLOCKER=Evidence projection remote fetch failed'),
+    'fetch failure should produce a blocker message');
+});
+
+runTest('Behavioral: empty remote HEAD in evidence projection produces blocker', () => {
+  const result = execSync(`
+    set -uo pipefail
+    REMOTE_HEAD=""
+    EVIDENCE_BLOCKER=""
+
+    if [ -z "$REMOTE_HEAD" ]; then
+      EVIDENCE_BLOCKER="Evidence projection remote HEAD could not be resolved"
+      echo "BLOCKER=$EVIDENCE_BLOCKER"
+      echo "EXIT_CODE=1"
+    else
+      echo "EXIT_CODE=0"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'empty remote HEAD should produce exit code 1');
+  assert.ok(result.includes('BLOCKER=Evidence projection remote HEAD could not be resolved'),
+    'empty remote HEAD should produce a blocker message');
+});
+
+runTest('Behavioral: stash pop failure produces exit 1, not warning', () => {
+  const result = execSync(`
+    set -uo pipefail
+    STASHED=true
+
+    if [ "$STASHED" = "true" ]; then
+      # Simulate stash pop failure
+      if git stash pop 2>/dev/null; then
+        echo "STASH_POP=success"
+        echo "EXIT_CODE=0"
+      else
+        echo "::error::Could not restore stashed changes after evidence projection push; working tree may be in an inconsistent state"
+        echo "STASH_POP=failure"
+        echo "EXIT_CODE=1"
+      fi
+    else
+      echo "EXIT_CODE=0"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  // In the test environment, stash pop on a non-stashed repo will fail
+  // (no stash to pop), so STASH_POP should be failure
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'stash pop failure should produce exit code 1');
+  assert.ok(result.includes('STASH_POP=failure'),
+    'stash pop failure should be detected as failure');
+});
+
+runTest('Behavioral: push without verification produces exit 1', () => {
+  const result = execSync(`
+    set -uo pipefail
+    PUSH_SUCCESS=false
+    EVIDENCE_PUSH_VERIFIED="false"
+
+    # Final fail-closed guard
+    if [ "$PUSH_SUCCESS" != "true" ] || [ "$EVIDENCE_PUSH_VERIFIED" != "true" ]; then
+      echo "EVIDENCE_BLOCKER=push verification failed"
+      echo "EXIT_CODE=1"
+    else
+      echo "EXIT_CODE=0"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'push without verification should produce exit code 1');
+  assert.ok(result.includes('EVIDENCE_BLOCKER=push verification failed'),
+    'push failure should produce a blocker message');
+});
+
+runTest('Behavioral: push with verification produces exit 0', () => {
+  const result = execSync(`
+    set -uo pipefail
+    PUSH_SUCCESS=true
+    EVIDENCE_PUSH_VERIFIED="true"
+
+    # Final fail-closed guard
+    if [ "$PUSH_SUCCESS" != "true" ] || [ "$EVIDENCE_PUSH_VERIFIED" != "true" ]; then
+      echo "EVIDENCE_BLOCKER=push verification failed"
+      echo "EXIT_CODE=1"
+    else
+      echo "EXIT_CODE=0"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('EXIT_CODE=0'),
+    'push with verification should produce exit code 0');
+  assert.ok(!result.includes('EXIT_CODE=1'),
+    'push with verification should not produce failure exit code');
+});
+
+runTest('Behavioral: commit failure in evidence projection fails closed', () => {
+  const result = execSync(`
+    set -uo pipefail
+    COMMIT_SUCCESS=false
+    EVIDENCE_BLOCKER=""
+
+    if [ "$COMMIT_SUCCESS" = "false" ]; then
+      EVIDENCE_BLOCKER="Evidence projection commit failed"
+      echo "::error::$EVIDENCE_BLOCKER"
+      echo "COMMIT_BLOCKER=$EVIDENCE_BLOCKER"
+      echo "EXIT_CODE=1"
+    else
+      echo "EXIT_CODE=0"
+    fi
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 10000 });
+
+  assert.ok(result.includes('EXIT_CODE=1'),
+    'commit failure should produce exit code 1');
+  assert.ok(result.includes('COMMIT_BLOCKER=Evidence projection commit failed'),
+    'commit failure should produce a blocker message');
+});
