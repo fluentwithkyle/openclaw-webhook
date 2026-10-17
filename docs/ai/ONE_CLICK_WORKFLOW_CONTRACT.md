@@ -91,6 +91,7 @@ Specifically, these are **NOT** one-click workflows:
 | `.github/workflows/gemini-builder.yml` | `workflow_dispatch` | `request_id`, `task`, `repository`, `base_branch`, `builder_execution_id` (all required) | **NO** |
 | `.github/workflows/one-click-gemini-activation-verify-reconcile.yml` | `workflow_dispatch` | (none) | **YES** |
 | `.github/workflows/one-click-gemini-builder-smoke.yml` | `workflow_dispatch` | (none) | **YES** |
+| `.github/workflows/one-click-gemini-builder-phase4-increment-4-2-corrective.yml` | `workflow_dispatch` | (none) | **YES** |
 | `.github/workflows/one-click-gemini-builder-callback-correlation.yml` | `workflow_dispatch` | (none) | **YES** |
 | `.github/workflows/one-click-gemini-research-documentation.yml` | `workflow_dispatch` | (none) | **YES** |
 
