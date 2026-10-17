@@ -63,6 +63,7 @@ const CARRIER_STATES = Object.freeze({
 const VALID_ONE_CLICK_WORKFLOWS = [
     'one-click-gemini-activation-verify-reconcile.yml',
     'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-phase4-increment-4-2-corrective.yml',
     'one-click-gemini-builder-callback-correlation.yml',
     'one-click-gemini-research-documentation.yml',
     'one-click-kilo-acp-copy-safe.yml'
