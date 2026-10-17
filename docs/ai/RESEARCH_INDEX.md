@@ -27,8 +27,8 @@ Each research record is a single Markdown file in `docs/ai/research/` following 
 
 | Task ID | Date | Agent | Research Record | TASK_LOG Reference |
 |---------|------|-------|-----------------|---------------------|
-| TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001 | 2026-10-17 | Gemini / independently corrected | `docs/ai/research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001.md` | `docs/ai/TASK_LOG.md` — corrected and linked as deferred reference in the DeepSeek Coordinator lifecycle-enforcement roadmap |
-| TASK-GEMINI-RESEARCH-TOKEN-BUDGET-PREDICTION-AND-QUOTA-GUARD-001 | 2026-10-17 | Gemini | `docs/ai/research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-PREDICTION-AND-QUOTA-GUARD-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
+| TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001 | 2026-10-17 | Gemini / independently corrected | `docs/ai/research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-QUOTA-GUARD-GAP-CLOSURE-001.md` | Required design input for DeepSeek lifecycle-enforcement Increment 4.6; correction supersedes unsupported original claims |
+| TASK-GEMINI-RESEARCH-TOKEN-BUDGET-PREDICTION-AND-QUOTA-GUARD-001 | 2026-10-17 | Gemini | `docs/ai/research/research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-PREDICTION-AND-QUOTA-GUARD-001.md` | Required initial design input for DeepSeek lifecycle-enforcement Increment 4.6; read with the corrective follow-up, which takes precedence on conflicts |
 | TASK-KILO-UNIFIED-COORDINATOR-BUILDER-AUTO-ACTIVATION-001 | 2026-10-16 | Kilo | `docs/ai/research/research-TASK-KILO-UNIFIED-COORDINATOR-BUILDER-AUTO-ACTIVATION-RESEARCH-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-PHASE4-DESIGN-CONTRACT-RECONCILIATION-001 | 2026-10-16 | Gemini | `docs/ai/research/research-TASK-GEMINI-PHASE4-DESIGN-CONTRACT-RECONCILIATION-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
 | TASK-GEMINI-RECONCILE-PHASE4-TRANSITION-AUDIT-001 | 2026-10-11 | Gemini | `docs/ai/research/research-TASK-GEMINI-RECONCILE-PHASE4-TRANSITION-AUDIT-001.md` | `docs/ai/TASK_LOG.md` — appended entry |
