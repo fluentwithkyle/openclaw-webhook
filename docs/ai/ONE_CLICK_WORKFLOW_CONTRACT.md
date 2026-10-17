@@ -513,3 +513,23 @@ This one-click contract defines the **additional** requirement that a one-click 
 | Dedicated workflow created/updated when an existing one-click workflow contains a different task | **ENFORCED** |
 | Verification vs. workflow construction distinction enforced | **ENFORCED** |
 | Discoverable from the documented cold-start path | **ENFORCED** |
+
+## Deferred Reference: Unified Coordinator-to-Builder Activation Research
+
+**Status: DEFERRED — reference only; no implementation is authorized by this entry.**
+
+The research record
+[`TASK-KILO-UNIFIED-COORDINATOR-BUILDER-AUTO-ACTIVATION-001`](research/research-TASK-KILO-UNIFIED-COORDINATOR-BUILDER-AUTO-ACTIVATION-RESEARCH-001.md)
+maps how ChatGPT, DeepSeek, Gemini, and Kilo relate to the canonical activation
+ingress and execution-carrier architecture. It is retained here because this
+One-Click Workflow / Coordinator Activation project is the closest existing
+project home for the findings; use the report instead of repeating the research
+phase when this work is resumed.
+
+- Re-entry checks: reconcile findings against current `main`, this contract,
+  and `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md`.
+- Evidence discipline: preserve the report's VERIFIED / INFERRED / UNKNOWN labels;
+  do not present inferred or unknown behavior as verified.
+- Boundary: this reference does not authorize implementation or change the
+  active roadmap priority.
+
