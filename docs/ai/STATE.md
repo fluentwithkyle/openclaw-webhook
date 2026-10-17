@@ -18,6 +18,18 @@
 
 ## Current Strategic State — Authoritative for Alignment
 
+### Current Blocker — Phase 4 Lifecycle-Enforcement Increment 4.2, Part 1
+
+**Status: BLOCKED — implementation is present on main but is not safe to accept or proceed from.** Commit `8bcb3978a894419c31a4d52c208d69022920dfae` is verified on `origin/main`; this confirms delivery, not correctness. Independent source inspection found:
+- `routes/poc.js` replaces a failed strategic-alignment result with `ALIGNED_PENDING_AUTHORIZATION` for nearly every task (the `phase-4-test-bypass` branch), defeating the existing fail-closed strategic gate.
+- The new strategic-state helper rewrites a temporary projection's SHA to match `STATE.md` instead of rejecting/reconciling a stale projection.
+- Non-coordinator ingress can have missing requirements references and state-inspection evidence silently synthesized, including the `test-head-commit` sentinel.
+- Requirements-reference matching uses a prefix check rather than strict canonical document/path matching.
+- The builder callback reported `NO_CLAIM_ON_DISK`; the execution/evidence lifecycle did not complete successfully.
+
+Therefore Increment 4.2 Part 1 is **NOT COMPLETE / NOT INDEPENDENTLY VERIFIED**. Do not start Part 2 (idempotency and lifecycle-state reconciliation) until these defects are corrected, tests demonstrate fail-closed behavior, callback/claim handling is explained without weakening claim validation, and the corrected commit is independently verified on `main`. The design/research is already available; do not repeat research.
+
+
 `STATE.md` is the authoritative live strategic-state record.
 `docs/ai/strategic-state.json` is its versioned machine-readable projection for the
 strategic-alignment evaluator; it is not a second roadmap or execution authority. If
