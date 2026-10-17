@@ -11,6 +11,8 @@
 
 ---
 
+> **Independent correction status — 2026-10-17:** Review identified overstatements in the original wording. This correction supersedes any conflicting claim below: the incident's reported 250,000 limit and ~11-second retry hint do not establish a sliding-window quota period; neither a character/token ratio nor a generic heuristic is a guaranteed upper bound; total task usage divided by initial prompt tokens is not a valid input-token predictor; repository HTTP status mapping remains open pending source inspection; and the proposed ingress is only a candidate common enforcement point until all activation lanes are traced. This record is a deferred design reference, not implementation authorization.
+
 ## 1. Introduction and Purpose
 
 This research record provides targeted gap closure and design hardening for the pre-activation token budgeting and quota guard architecture originally proposed in `TASK-GEMINI-RESEARCH-TOKEN-BUDGET-PREDICTION-AND-QUOTA-GUARD-001`. 
@@ -23,7 +25,7 @@ While the original research established a high-level operational model and syste
 5. Prescriptive HTTP status code recommendations without tracing existing API error conventions.
 6. The need for precise, testable decision policies (`PROCEED`, `SUBDIVIDE`, `DEFER`, `BLOCK`) under incomplete or uncertain telemetry.
 
-This document resolves each gap through authoritative source verification, formal claim classification (`VERIFIED`, `INFERRED`, `PROPOSED`, `UNKNOWN`), and a refined, machine-enforceable design addendum.
+This document proposes a design addendum. The independent correction status and evidence classifications below supersede earlier overconfident wording; unresolved implementation details remain open.
 
 ---
 
@@ -40,52 +42,49 @@ To maintain strict architectural rigor, all claims in this research record are e
 ## 3. Gemini API Quota, Rate-Limit, and Error Semantics
 
 ### 3.1 Authoritative Sources & Verification
-- **Source 1**: Google GenAI Developer Documentation / Gemini API Pricing & Quotas.
-  - **URL**: `https://ai.google.dev/pricing` (Accessed: October 17, 2026).
-  - **Claim Supported**: Free tier limitations for Gemini API models (e.g., `gemini-1.5-flash`, `gemini-2.0-flash`, `gemini-3.5-flash-lite`) enforce strict requests-per-minute (RPM), requests-per-day (RPD), and tokens-per-minute (TPM) limits. Specifically, free tier input token quotas are metered against metrics such as `generativelanguage.googleapis.com/generate_content_free_tier_input_token_count`.
-- **Source 2**: Google Cloud API Design Guide / Error Handling (`google.rpc.Code`).
-  - **URL**: `https://cloud.google.apis.com/docs/auth/api-design/errors` (Accessed: October 17, 2026).
-  - **Claim Supported**: Exceeding rate limits or quotas results in HTTP status `429 Too Many Requests` mapping to gRPC status `RESOURCE_EXHAUSTED`, frequently accompanied by a `Retry-After` header or `ErrorInfo` metadata detailing the specific quota metric and sliding window reset delay.
+
+- **Google Gemini API rate limits** — https://ai.google.dev/gemini-api/docs/rate-limits (accessed 2026-10-17). Supports general limit dimensions such as requests per minute, input tokens per minute, and requests per day; project/model/tier dependence; and documented reset behavior for daily limits. It does not establish this incident's project-specific quota window.
+- **Google Gemini API token counting** — https://ai.google.dev/gemini-api/docs/tokens (accessed 2026-10-17). Supports approximate average token guidance and the request-specific `countTokens` API. An average is not a deterministic conversion or upper bound.
+- **Google Cloud API errors** — https://cloud.google.com/apis/design/errors (accessed 2026-10-17). Provides general API error design conventions; the actual provider response and structured details must be inspected to classify a specific failure.
 
 ### 3.2 Case Study Analysis: Observed Quota Failure
-- **Observed Parameters**: Model `gemini-3.5-flash-lite`, metric `generativelanguage.googleapis.com/generate_content_free_tier_input_token_count`, reported limit `250,000` tokens, approximate retry suggestion `11 seconds`.
-- **What Can Be Established (VERIFIED / INFERRED)**:
-  - **VERIFIED**: The request triggered a free-tier input token quota ceiling enforced by Google Generative AI APIs. The limit reported by the quota enforcement layer was 250,000 tokens for the active sliding window.
-  - **INFERRED**: The ~11-second retry suggestion indicates a short-term sliding-window rate limit (e.g., Tokens-Per-Minute bucket exhaustion) rather than a permanent daily quota exhaustion (which typically requires hours to reset).
-- **What Cannot Be Established (UNKNOWN)**:
-  - Exact account tier entitlement without live Google Cloud billing console polling.
-  - Remaining headroom at the exact millisecond of dispatch across concurrent background runs.
-  - Root cause distribution between single oversized prompt payload versus cumulative sliding-window token consumption from rapid sequential workflow executions.
+
+**Observed incident text:** model `gemini-3.5-flash-lite`; metric `generativelanguage.googleapis.com/generate_content_free_tier_input_token_count`; reported limit `250000`; approximate retry suggestion `11 seconds`.
+
+- **VERIFIED from supplied incident text:** those values were reported.
+- **INFERRED:** a provider quota/rate-limit condition associated with the named input-token metric caused rejection.
+- **UNKNOWN:** the precise period/window represented by this metric in this incident; active project/tier entitlement; whether the limit is per-minute, daily, or another configured dimension; remaining headroom; concurrent usage; whether one large request or accumulated requests caused the rejection; and whether retrying after ~11 seconds would succeed.
+- The retry hint is evidence that the service supplied a retry delay, **not proof** that the metric is a sliding-window TPM bucket. Do not classify it more specifically without the complete structured error payload and project-specific quota evidence.
 
 ### 3.3 Distinguishing Error Semantics
-| Failure Class | HTTP Status / gRPC Code | Root Cause / Mechanism | Recommended Guard Response |
-|---|---|---|---|
-| **Transient Rate Limit (TPM/RPM)** | `429 Too Many Requests` (`RESOURCE_EXHAUSTED`) | Sliding-window token or request count exceeded temporarily. | `DEFER` with bounded backoff (e.g., retry after reported delay or default 15s). |
-| **Quota Exhaustion (Daily TPD/RPD)** | `429 Too Many Requests` (`RESOURCE_EXHAUSTED`) | Daily free-tier allocation fully consumed. | `BLOCK` or `DEFER` until next calendar day; escalate to paid tier if configured. |
-| **Context Length Exceeded** | `400 Bad Request` (`INVALID_ARGUMENT`) | Single prompt exceeds model maximum context window (e.g., >1M/2M tokens or output limits). | `BLOCK` immediately; trigger `SUBDIVIDE` if task scope permits. |
-| **Billing / Project Restriction** | `403 Forbidden` (`PERMISSION_DENIED`) | Billing disabled, API disabled, or invalid API key. | `BLOCK` permanently; fail-closed. |
+
+| Provider evidence | Safe interpretation | Proposed guard decision |
+|---|---|---|
+| 429 / `RESOURCE_EXHAUSTED` with retry details | Quota/rate limit exceeded; classify the dimension only when the metric/details and documentation support it | `DEFER` for confirmed transient conditions with bounded retry; otherwise `BLOCK` or `DEFER` according to authoritative reset evidence |
+| 400 / `INVALID_ARGUMENT` with context/input-size details | Request shape or size constraint; inspect actual provider message and model limits | `BLOCK` this payload; `SUBDIVIDE` only if task semantics permit |
+| 403 / `PERMISSION_DENIED` | Permission, API, credential, or project-access failure may be involved; do not assume one cause | `BLOCK` pending configuration/authorization correction |
+| Missing, ambiguous, or unrecognized details | Root cause cannot be classified safely | Fail closed; do not blindly retry or invent a reset window |
+
+These are provider-error interpretations, not a prescription for the repository's HTTP status. The guard should return a typed internal decision and stable error code first. HTTP mapping must follow the existing route/API contract after source-level inspection; this research does not authorize a new status mapping.
 
 ---
 
 ## 4. Reassessment of Token Estimation & Tokenizer Mechanics
 
-### 4.1 Evaluation of the 0.33 Tokens-per-Character Heuristic
-- **Original Claim**: 0.33 tokens per character (~3 characters per token) is a conservative upper bound.
-- **Evidence-Based Correction (VERIFIED / PROPOSED)**:
-  - **VERIFIED**: Natural language English text averages ~4 characters per token in SentencePiece/BPE tokenizers used by Gemini models (~0.75 tokens/char). However, dense code, markdown symbols, JSON formatting, URL paths, and base64 payloads can compress to 2–3 characters per token, and highly repetitive or non-Latin text can vary wildly.
-  - **Correction**: Asserting `0.33 tokens/char` (which equals 3 characters per token) is **not** a universal upper bound for arbitrary binary or minified code payloads. For safety, the repository must adopt a **tiered estimation formula** with an explicit uncertainty multiplier rather than an unverified single constant.
+### 4.1 Evaluation of the Character/Token Heuristic
+
+Google describes roughly four characters per Gemini token **on average**. This implies an average ratio near 0.25 tokens per character, not 0.75; neither ratio is a safe upper bound. The original `0.33 tokens/character` claim is withdrawn as an upper-bound guarantee. The follow-up's proposed 2.5 characters/token ratio is also **unvalidated** and must not be called conservative, exact, or guaranteed.
 
 ### 4.2 Comparison of Counting Methodologies
-| Counting Method | Accuracy | Latency | Cost / Overhead | Model Compatibility | Failure Mode |
-|---|---|---|---|---|---|
-| **Exact Provider API Counting** (`countTokens` API) | Exact (100%) | Moderate network latency (~200ms) | API quota usage (low cost) | Model-specific | Fails if network unavailable or API key invalid. |
-| **Local Model Tokenizer** (`tiktoken` / `@google/generative-ai` SDK helper) | High (~99%) | Low (local CPU execution) | Zero network cost | Depends on installed library | Requires package dependency maintenance. |
-| **Conservative Heuristic Estimate** ($E = \frac{\text{Chars}}{C_{ratio}} \times M$) | Bounded Upper Bound | Ultra-low (instant) | Zero overhead | Universal | Prone to overestimation (false positives). |
-| **Empirical Calibration** (Historical moving average) | Adaptive | Ultra-low | Requires local telemetry store | Universal | Inaccurate for novel task types. |
 
-- **Recommendation**: Implement a **hybrid strategy**:
-  1. Primary zero-dependency baseline: Conservative character heuristic using a dense character ratio ($C_{ratio} = 2.5$ chars/token for code/markdown) plus a safety multiplier.
-  2. Optional preflight refinement: If local SDK utilities or provider `countTokens` endpoints are accessible without violating offline constraints, query exact counts.
+| Method | What it can establish | Limitations / failure behavior |
+|---|---|---|
+| Provider `countTokens` on the exact available request | Provider-calculated input count for supported request contents | Network/API dependency; request/model support must be checked; cannot predict future tool turns or generated output |
+| Model-compatible local tokenizer | Exact count only if compatibility with the provider/model and serialization is established; otherwise an estimate | Do not assume generic tokenizers match Gemini; pin/version and validate against provider counts |
+| Character/byte heuristic | Rough preflight risk estimate | No universal upper-bound guarantee; text, code, JSON, URLs, multilingual and multimodal content vary |
+| Empirical calibration | Historical estimation-error distribution for a defined model, lane and task mode | Does not guarantee unseen behavior; needs enough telemetry and drift monitoring |
+
+**Proposed policy:** use provider counting for the exact available input when supported and permitted. Otherwise treat heuristics as uncertain estimates only. If uncertainty exceeds the configured policy envelope, return `DEFER` or `BLOCK`; never silently treat a heuristic as an exact count. Evaluate tokenizer dependencies only after compatibility, maintenance and runtime costs are assessed.
 
 ---
 
@@ -109,10 +108,16 @@ At each activation lane (RESEARCH_DOCUMENT, BUILDER, VERIFY_RECONCILE), total in
 ## 6. Workload Multipliers & Empirical Calibration
 
 ### 6.1 Re-evaluating Multipliers
-- Arbitrary constants (e.g., $M_{reasoning} = 2.5$) are heuristic guesses. In production, reasoning depth varies drastically between a simple single-file doc update and a multi-file debugging session with failing test iterations.
-- **Production Calibration Formula**:
-  $$M_{actual} = \frac{\text{Actual Total Tokens Used (Prompt + Completion + Multi-turn Tools)}}{\text{Initial Static Prompt Token Count}}$$
-- **Telemetry Tracking**: The TaskRegistry must log actual `usageMetadata` (`promptTokenCount`, `candidatesTokenCount`, `totalTokenCount`) returned in API responses. The moving average of $M_{actual}$ across completed tasks of the same `task_mode` will dynamically update the safety multiplier.
+
+The ratio `total task usage / initial static prompt tokens` is not a valid future input-token estimator when total usage includes output, thinking, tool calls, retries or repeated turns. Do not present arbitrary reasoning/workload multipliers as validated estimates.
+
+Where the provider exposes the relevant fields, collect separate per-request observations for input tokens, output tokens, thinking/reasoning tokens, tool-turn/request count, retries, task mode, preflight count/estimate and uncertainty, model/provider version, error class and retry outcome. Normalize provider-specific response fields into a versioned internal schema rather than assuming a field is universally available.
+
+### 6.2 Calibration Method
+
+**PROPOSED:** for each compatible model + activation lane + task mode, compare the preflight input estimate against the provider-reported input count for that same request. Track absolute and relative error, underestimation frequency, and high-percentile error over an adequate sample. Use held-out observations to set an uncertainty margin. Keep output, turn, tool and retry budgets separate. Mark calibration insufficient when samples are sparse, telemetry is missing, or model/prompt serialization changes. Production thresholds need minimum sample counts, outlier handling, versioning and rollback; a simple moving average is not sufficient.
+
+A static prompt count cannot predict arbitrary future tool output or reasoning. Bound those separately through maximum turns/output, context reduction and lane-specific observed distributions. **No numeric multiplier is validated by this research.**
 
 ---
 
@@ -131,23 +136,16 @@ At each activation lane (RESEARCH_DOCUMENT, BUILDER, VERIFY_RECONCILE), total in
 
 ## 8. Concrete Machine-Enforceable Decision Policy
 
-When the Token Budget Quota Guard evaluates an activation payload, it returns one of four deterministic decisions based on authoritative inputs (task envelope, file sizes) and estimated thresholds:
+The guard must distinguish request-size estimation from live provider quota headroom. A local character count cannot reveal current project-wide quota consumption, concurrency, tier limits or reset time.
 
-```
-Inputs:
-- T_static = Tokens(System Instructions + Task Envelope + Permitted Files)
-- M_multiplier = Calibrated Reasoning Multiplier
-- B_model = Model Free-Tier / Quota Ceiling (e.g., 250,000)
-- H_safety = Safety Margin Ratio (default: 0.20)
+Inputs: server-configured provider/model identity; exact serialized request contents available before dispatch; provider count result where supported; authoritative model context/output limits; configured safety policy; recent provider error evidence; and calibration quality/version. Treat quota values and reset times as unknown unless obtained from authoritative live evidence or trusted configuration.
 
-E_estimated = T_static * M_multiplier
-B_safe = B_model * (1.0 - H_safety)
-```
+1. **PROCEED** — input count is known, or its estimate falls within an explicitly approved uncertainty envelope; known context/output limits are satisfied; no current provider signal requires deferral; and execution/output are bounded.
+2. **SUBDIVIDE** — the request exceeds a safe budget and can be decomposed without changing objective, acceptance criteria, authority, dependency order or independent verification. Child tasks still require normal ACP validation and authorization.
+3. **DEFER** — a transient provider condition or temporarily unavailable required counting/telemetry service is expected to recover, and retry is bounded using authoritative timing or an explicit conservative cap. Do not infer a reset time from the metric value.
+4. **BLOCK** — a known hard context limit is exceeded; required estimation is unavailable and policy requires certainty; quota/permission state is unsafe or unclassifiable; or safe subdivision is impossible.
 
-1. **PROCEED**: If $E_{estimated} \le B_{safe}$ and telemetry indicates no active rate limit.
-2. **SUBDIVIDE**: If $E_{estimated} > B_{safe}$, the task has multiple independent permitted paths or discrete sub-objectives, and task scope is divisible. Trigger automated subdivision.
-3. **DEFER**: If tokens are within bounds but sliding-window telemetry or recent 429 responses indicate an active rate-limit window. Apply bounded exponential backoff (e.g., 15s retry-after).
-4. **BLOCK**: If $E_{estimated}$ exceeds absolute model context limits, token estimation fails (unreadable files), or quota data is unknown and fail-closed security applies. Return HTTP 403 / status `blocked` with error code `TOKEN_QUOTA_EXCEEDED` or `TOKEN_ESTIMATION_FAILED`.
+Unknown quota headroom is not proof that a request exceeds quota. The configured policy must explicitly decide whether to allow a bounded request, defer for telemetry or block; it must not fabricate a quota value. Return a typed internal decision and stable error code. HTTP status mapping remains **OPEN** until existing route/API conventions are traced and tested.
 
 ---
 
@@ -167,9 +165,11 @@ B_safe = B_model * (1.0 - H_safety)
 
 ## 10. Earliest Shared Enforcement Point & Architecture Integration
 
-- **Earliest Enforcement Point**: `canonicalExternalActivationIngress` (`poc/activation-ingress.js`), invoked by `POST /poc/activation/ingress` (`routes/poc.js`).
-- **Why**: This ingress is the universal bottleneck through which *all* external and internal activations (ChatGPT, DeepSeek, Gemini CLI issue comments, Kilo carriers) must pass before TaskRegistry entry creation or execution claim.
-- **Authority Protection**: The guard runs entirely within the server-side ingress control plane. Model-generated text can never grant authority, bypass quotas, or manipulate token budget calculations.
+`canonicalExternalActivationIngress` in `poc/activation-ingress.js`, reached through `POST /poc/activation/ingress` in `routes/poc.js`, is a **candidate** common admission boundary, not yet proven to cover every internal and external model activation.
+
+Before implementation, trace and test each relevant lane (Gemini RESEARCH_DOCUMENT, Gemini Builder, DeepSeek Coordinator, and Kilo/failover carriers) from dispatch entry to provider invocation. Confirm where model identity and exact serialized request content are available. If calls bypass the candidate boundary or occur later through another transport, define a shared server-owned budget interface at the narrowest genuinely common layer or add explicit checks at provider dispatch without creating a second control plane.
+
+Do not equate `permitted_paths` with model context. Path permissions govern access; actual context comprises only content actually read/serialized, plus system/developer instructions, task envelope, included conversation history, tool results, multimodal payloads and provider wrappers. Count or bound what the lane actually sends. Model-generated text must never grant budget, authority or path permissions.
 
 ---
 
@@ -188,8 +188,24 @@ B_safe = B_model * (1.0 - H_safety)
 
 ---
 
+## 11. DeepSeek Coordinator Evolution Integration
+
+**Status: DEFERRED REFERENCE ONLY — NOT IMPLEMENTATION AUTHORIZATION.**
+
+This cross-cutting token-budget/quota-guard design belongs as a candidate reference in the existing DeepSeek Coordinator Evolution project; it must not create a second coordinator, dispatcher or control plane. Project roadmap: `docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md`.
+
+Do not silently add it to Increment 4.2: that increment's stated scope is mandatory state inspection and applicable-requirements extraction. Before scheduling this work, reconcile it with current roadmap/state and the actual provider-call graph. Required design gates:
+1. Verify the common admission/dispatch boundary for every relevant model lane.
+2. Trace repository error/HTTP conventions and available quota telemetry.
+3. Prefer exact-request provider counting where supported; define uncertainty behavior otherwise.
+4. Separate input, output, tool-turn, retry and live-quota signals.
+5. Specify tests for all four decisions, unknown quota, estimator undercount, provider errors, concurrency, and attempts by model output to influence authority.
+6. Obtain a separate Director-authorized ACP implementation task.
+
 ## 12. Verification & Evidence Basis
 
-- **VERIFIED**: All referenced files and architectures inspected via read-only repository access.
-- **VERIFIED**: Permitted paths strictly respected (`docs/ai/research/`, `docs/ai/RESEARCH_INDEX.md`, `docs/ai/TASK_LOG.md`).
-- **VERIFIED**: No production source code modified.
+- **VERIFIED**: Official Google documentation supports approximate average token guidance, request-specific counting, and general project/model/tier-dependent rate-limit dimensions; see Section 3.
+- **VERIFIED from supplied incident text**: the model, metric, reported limit and retry hint in Section 3.2 were reported; these alone do not prove quota window or root cause.
+- **PROPOSED**: Decision policy, telemetry schema, calibration method and common-boundary integration require design review and tests.
+- **UNKNOWN**: Actual project quota window/tier/headroom, complete structured error payload, and whether every activation lane crosses the candidate ingress boundary.
+- **VERIFIED**: This record is documentation only; no production source code was modified.
