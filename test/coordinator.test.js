@@ -64,7 +64,9 @@ function makeCommand(requestId) {
         authorization: { capabilities: ['read_only'] },
         verification: 'Run tests and verify',
         reporting: 'json',
-        originator: 'Kyle'
+        originator: 'Kyle',
+        requirements_reference: ['DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md'],
+        state_inspection: { commit: 'test-head-commit' }
     };
 }
 
@@ -538,6 +540,39 @@ async function main() {
 
         const task = taskRegistry.getTask('coord-protocol-mismatch');
         assertEqual(task, null);
+        cleanup();
+    });
+
+    // Test: Increment 4.2 State Inspection & Requirements Reference Gating
+    await runTest('Coordinator - missing requirements_reference or state_inspection is blocked with 400', async () => {
+        cleanup();
+        const command = makeCommand('coord-increment-42-1');
+        delete command.requirements_reference;
+        const res = await makeRequest({
+            hostname: 'localhost', port: 3004, path: '/poc/coordinator', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-deepseek-coordinator-secret': 'test-deepseek-secret' }
+        }, command);
+        assertEqual(res.status, 400);
+        assertEqual(res.body.status, 'validation blocked');
+
+        const command2 = makeCommand('coord-increment-42-2');
+        command2.state_inspection = { commit: 'invalid-commit' };
+        const res2 = await makeRequest({
+            hostname: 'localhost', port: 3004, path: '/poc/coordinator', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-deepseek-coordinator-secret': 'test-deepseek-secret' }
+        }, command2);
+        assertEqual(res2.status, 400);
+        assertEqual(res2.body.status, 'validation blocked');
+
+        const command3 = makeCommand('coord-increment-42-3');
+        command3.requirements_reference = ['UNKNOWN.md'];
+        const res3 = await makeRequest({
+            hostname: 'localhost', port: 3004, path: '/poc/coordinator', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-deepseek-coordinator-secret': 'test-deepseek-secret' }
+        }, command3);
+        assertEqual(res3.status, 400);
+        assertEqual(res3.body.status, 'validation blocked');
+
         cleanup();
     });
 
