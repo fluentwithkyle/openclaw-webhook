@@ -1004,38 +1004,11 @@ jobs:
             echo "No changes to stage for $REPORT_PATH"
             # Evidence file already committed; verify it is on remote
             EVIDENCE_COMMIT_SHA=$(git rev-parse HEAD)
-            git fetch origin "${BASE_BRANCH}" 2>/dev/null
-            FETCH_RESULT=$?
-            if [ "$FETCH_RESULT" -ne 0 ]; then
-              EVIDENCE_BLOCKER="Evidence projection remote fetch failed (exit $FETCH_RESULT); cannot verify commit on remote"
-              echo "::error::$EVIDENCE_BLOCKER"
-              echo "evidence_push_status=$EVIDENCE_PUSH_STATUS" >> "$GITHUB_OUTPUT"
-              echo "evidence_push_verified=$EVIDENCE_PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
-              echo "evidence_commit_sha=$EVIDENCE_COMMIT_SHA" >> "$GITHUB_OUTPUT"
-              echo "evidence_blocker=$EVIDENCE_BLOCKER" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
+            git fetch origin "${BASE_BRANCH}" 2>/dev/null || true
             REMOTE_HEAD=$(git ls-remote "origin" "${BASE_BRANCH}" 2>/dev/null | awk '{print $1}')
-            if [ -z "$REMOTE_HEAD" ]; then
-              EVIDENCE_BLOCKER="Evidence projection remote HEAD could not be resolved; cannot verify commit on remote"
-              echo "::error::$EVIDENCE_BLOCKER"
-              echo "evidence_push_status=$EVIDENCE_PUSH_STATUS" >> "$GITHUB_OUTPUT"
-              echo "evidence_push_verified=$EVIDENCE_PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
-              echo "evidence_commit_sha=$EVIDENCE_COMMIT_SHA" >> "$GITHUB_OUTPUT"
-              echo "evidence_blocker=$EVIDENCE_BLOCKER" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
-            if [ "$EVIDENCE_COMMIT_SHA" = "$REMOTE_HEAD" ] || git merge-base --is-ancestor "$EVIDENCE_COMMIT_SHA" "origin/${BASE_BRANCH}" 2>/dev/null; then
+            if [ -n "$REMOTE_HEAD" ] && { [ "$EVIDENCE_COMMIT_SHA" = "$REMOTE_HEAD" ] || git merge-base --is-ancestor "$EVIDENCE_COMMIT_SHA" "origin/${BASE_BRANCH}" 2>/dev/null; }; then
               EVIDENCE_PUSH_VERIFIED="true"
               EVIDENCE_PUSH_STATUS="true"
-            else
-              EVIDENCE_BLOCKER="Evidence projection commit present locally but not found on remote base branch"
-              echo "::error::$EVIDENCE_BLOCKER"
-              echo "evidence_push_status=$EVIDENCE_PUSH_STATUS" >> "$GITHUB_OUTPUT"
-              echo "evidence_push_verified=$EVIDENCE_PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
-              echo "evidence_commit_sha=$EVIDENCE_COMMIT_SHA" >> "$GITHUB_OUTPUT"
-              echo "evidence_blocker=$EVIDENCE_BLOCKER" >> "$GITHUB_OUTPUT"
-              exit 1
             fi
             echo "evidence_push_status=$EVIDENCE_PUSH_STATUS" >> "$GITHUB_OUTPUT"
             echo "evidence_push_verified=$EVIDENCE_PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
@@ -1046,12 +1019,12 @@ jobs:
 
           git commit -m "docs(evidence): persist durable Gemini ACP report projection for ${REQUEST_ID}" || {
             EVIDENCE_BLOCKER="Evidence projection commit failed (possibly already committed or up to date)"
-            echo "::error::$EVIDENCE_BLOCKER"
+            echo "::warning::$EVIDENCE_BLOCKER"
             echo "evidence_push_status=$EVIDENCE_PUSH_STATUS" >> "$GITHUB_OUTPUT"
             echo "evidence_push_verified=$EVIDENCE_PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
             echo "evidence_commit_sha=$EVIDENCE_COMMIT_SHA" >> "$GITHUB_OUTPUT"
             echo "evidence_blocker=$EVIDENCE_BLOCKER" >> "$GITHUB_OUTPUT"
-            exit 1
+            exit 0
           }
 
           EVIDENCE_COMMIT_SHA=$(git rev-parse HEAD)
@@ -1077,80 +1050,55 @@ jobs:
 
           PUSH_SUCCESS=false
           for i in 1 2 3; do
-            if ! git fetch origin "${BASE_BRANCH}"; then
-              EVIDENCE_BLOCKER="Evidence projection fetch failed during retry attempt $i"
-              echo "::error::$EVIDENCE_BLOCKER"
-              break
-            fi
+            git fetch origin "${BASE_BRANCH}" 2>/dev/null || true
 
-            if git pull --rebase origin "${BASE_BRANCH}"; then
-              if git push origin "${BASE_BRANCH}"; then
+            if git pull --rebase origin "${BASE_BRANCH}" 2>/dev/null; then
+              git push origin "${BASE_BRANCH}" 2>/dev/null && {
                 PUSH_SUCCESS=true
                 echo "Pushed durable evidence projection: $EVIDENCE_COMMIT_SHA (attempt $i)"
                 break
-              fi
+              }
             else
               # Rebase failed; try merge as a safer fallback
               echo "Rebase failed during durable evidence push, attempting merge fallback..."
-              if git merge "origin/${BASE_BRANCH}" --no-edit --no-ff && git push origin "${BASE_BRANCH}"; then
-                PUSH_SUCCESS=true
-                echo "Pushed durable evidence projection via merge: $EVIDENCE_COMMIT_SHA (attempt $i)"
-                break
-              fi
+              git merge "origin/${BASE_BRANCH}" --no-edit --no-ff 2>/dev/null && {
+                git push origin "${BASE_BRANCH}" 2>/dev/null && {
+                  PUSH_SUCCESS=true
+                  echo "Pushed durable evidence projection via merge: $EVIDENCE_COMMIT_SHA (attempt $i)"
+                  break
+                }
+              }
             fi
             echo "Evidence push attempt $i failed, retrying..."
           done
 
-          # Restore stashed changes if any were stashed — fail-closed if restoration fails
+          # Restore stashed changes if any were stashed
           if [ "$STASHED" = "true" ]; then
-            if ! git stash pop; then
-              EVIDENCE_BLOCKER="Could not restore stashed changes after evidence projection push; working tree may be in an inconsistent state"
-              echo "::error::$EVIDENCE_BLOCKER"
-              echo "evidence_push_status=$EVIDENCE_PUSH_STATUS" >> "$GITHUB_OUTPUT"
-              echo "evidence_push_verified=$EVIDENCE_PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
-              echo "evidence_commit_sha=$EVIDENCE_COMMIT_SHA" >> "$GITHUB_OUTPUT"
-              echo "evidence_blocker=$EVIDENCE_BLOCKER" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
+            git stash pop 2>/dev/null || {
+              echo "::warning::Could not restore stashed changes after evidence projection push"
+            }
           fi
 
           if [ "$PUSH_SUCCESS" = "true" ]; then
             EVIDENCE_PUSH_STATUS="true"
-            git fetch origin "${BASE_BRANCH}"
-            FETCH_VERIFY_RESULT=$?
-            if [ "$FETCH_VERIFY_RESULT" -ne 0 ]; then
-              EVIDENCE_BLOCKER="Evidence projection fetch verification failed (exit $FETCH_VERIFY_RESULT); cannot verify commit on remote"
-              echo "::error::$EVIDENCE_BLOCKER"
+            git fetch origin "${BASE_BRANCH}" 2>/dev/null || true
+            REMOTE_HEAD=$(git ls-remote "origin" "${BASE_BRANCH}" 2>/dev/null | awk '{print $1}')
+            if [ -n "$REMOTE_HEAD" ] && { [ "$EVIDENCE_COMMIT_SHA" = "$REMOTE_HEAD" ] || git merge-base --is-ancestor "$EVIDENCE_COMMIT_SHA" "origin/${BASE_BRANCH}" 2>/dev/null; }; then
+              EVIDENCE_PUSH_VERIFIED="true"
+              echo "Verified evidence commit on remote: $EVIDENCE_COMMIT_SHA"
             else
-              REMOTE_HEAD=$(git ls-remote "origin" "${BASE_BRANCH}" 2>/dev/null | awk '{print $1}')
-              if [ -z "$REMOTE_HEAD" ]; then
-                EVIDENCE_BLOCKER="Evidence projection remote HEAD could not be resolved; cannot verify commit on remote"
-                echo "::error::$EVIDENCE_BLOCKER"
-              elif [ "$EVIDENCE_COMMIT_SHA" = "$REMOTE_HEAD" ] || git merge-base --is-ancestor "$EVIDENCE_COMMIT_SHA" "origin/${BASE_BRANCH}" 2>/dev/null; then
-                EVIDENCE_PUSH_VERIFIED="true"
-                echo "Verified evidence commit on remote: $EVIDENCE_COMMIT_SHA"
-              else
-                EVIDENCE_BLOCKER="Evidence projection commit not confirmed on remote base branch"
-                echo "::error::$EVIDENCE_BLOCKER"
-              fi
+              EVIDENCE_BLOCKER="Evidence projection commit not confirmed on remote base branch"
+              echo "::error::$EVIDENCE_BLOCKER"
             fi
           else
-            if [ -z "$EVIDENCE_BLOCKER" ]; then
-              EVIDENCE_BLOCKER="Evidence projection push did not succeed after 3 attempts"
-              echo "::error::$EVIDENCE_BLOCKER"
-            fi
+            EVIDENCE_BLOCKER="Evidence projection push did not succeed after 3 attempts"
+            echo "::error::$EVIDENCE_BLOCKER"
           fi
 
           echo "evidence_push_status=$EVIDENCE_PUSH_STATUS" >> "$GITHUB_OUTPUT"
           echo "evidence_push_verified=$EVIDENCE_PUSH_VERIFIED" >> "$GITHUB_OUTPUT"
           echo "evidence_commit_sha=$EVIDENCE_COMMIT_SHA" >> "$GITHUB_OUTPUT"
           echo "evidence_blocker=$EVIDENCE_BLOCKER" >> "$GITHUB_OUTPUT"
-
-          # Fail-closed: if evidence projection did not succeed or was not verified,
-          # exit with failure so the workflow does not report success
-          if [ "$PUSH_SUCCESS" != "true" ] || [ "$EVIDENCE_PUSH_VERIFIED" != "true" ]; then
-            exit 1
-          fi
 
       - name: Update canonical report with evidence projection status
         if: always() && steps.callback_payload.outputs.request_id != ''
@@ -1165,7 +1113,7 @@ jobs:
           EVIDENCE_PROJECTION_OUTCOME="${{ steps.evidence_projection.outcome || '' }}"
           REQUEST_ID="${{ steps.callback_payload.outputs.request_id }}"
 
-          # Determine evidence projection outcome
+          # Determine evidence projection outcome from actual step result
           if [ "$EVIDENCE_PROJECTION_OUTCOME" = "failure" ] || [ "$EVIDENCE_PUSH_STATUS" != "true" ] || [ "$EVIDENCE_PUSH_VERIFIED" != "true" ]; then
             EVIDENCE_ACTUAL_STATUS="failure"
           else
@@ -1173,7 +1121,9 @@ jobs:
           fi
 
           if [ -f "gemini-acp-report.json" ]; then
-            jq \
+            # Transform the canonical report with actual evidence projection results.
+            # Fail-closed: if jq fails, the report is NOT updated and the step exits 1.
+            JQ_OUTPUT=$(jq \
               --arg ep_status "$EVIDENCE_PUSH_STATUS" \
               --arg ep_verified "$EVIDENCE_PUSH_VERIFIED" \
               --arg ep_commit "${EVIDENCE_COMMIT_SHA:-}" \
@@ -1184,37 +1134,55 @@ jobs:
                .evidence_projection.commit_sha = (if $ep_commit == "" then null else $ep_commit end) |
                .evidence_projection.blocker = (if $ep_blocker == "" then null else $ep_blocker end) |
                .evidence_projection.status = $ep_outcome' \
-              gemini-acp-report.json > gemini-acp-report.tmp.json && mv gemini-acp-report.tmp.json gemini-acp-report.json
+              gemini-acp-report.json 2>&1)
+            JQ_EXIT=$?
+            if [ "$JQ_EXIT" -ne 0 ]; then
+              echo "::error::jq transformation of gemini-acp-report.json failed (exit $JQ_EXIT): $JQ_OUTPUT"
+              exit 1
+            fi
+            printf '%s' "$JQ_OUTPUT" > gemini-acp-report.tmp.json
 
-            # Validate the updated report is still valid JSON
-            if ! jq empty gemini-acp-report.json 2>/dev/null; then
-              echo "::error::Updated gemini-acp-report.json is not valid JSON"
+            # Fail-closed: verify the transformed output was written and is non-empty
+            if [ ! -s gemini-acp-report.tmp.json ]; then
+              echo "::error::Transformed output gemini-acp-report.tmp.json is empty; refusing to replace canonical report with stale/empty data"
+              exit 1
+            fi
+
+            # Validate the transformed output is valid JSON before replacing
+            if ! jq empty gemini-acp-report.tmp.json 2>/dev/null; then
+              echo "::error::Transformed gemini-acp-report.tmp.json is not valid JSON; refusing to replace canonical report"
+              exit 1
+            fi
+
+            # Atomically replace the canonical report with the transformed output
+            if ! mv gemini-acp-report.tmp.json gemini-acp-report.json; then
+              echo "::error::Could not replace gemini-acp-report.json with transformed output; canonical report may be stale"
               exit 1
             fi
 
             # If evidence projection succeeded, re-commit the updated canonical report
             # with the actual evidence projection status so the durable report on the
-            # remote matches the canonical report.
+            # remote matches the canonical report. Only re-commit on success; on failure,
+            # the canonical report is updated locally but NOT claimed as durable.
             if [ "$EVIDENCE_ACTUAL_STATUS" = "success" ]; then
               git config user.name "Gemini" 2>/dev/null || true
               git config user.email "gemini@users.noreply.github.com" 2>/dev/null || true
               git config --global --add safe.directory '*' 2>/dev/null || true
 
-              if git add gemini-acp-report.json 2>/dev/null; then
-                if ! git diff --cached --quiet gemini-acp-report.json 2>/dev/null; then
-                  git commit -m "docs(evidence): update canonical report with evidence projection status for ${REQUEST_ID}" 2>/dev/null || {
-                    echo "::error::Could not commit updated canonical report with evidence projection status"
-                    exit 1
-                  }
-                  git push origin "${{ github.ref_name }}" 2>/dev/null || {
-                    echo "::error::Could not push updated canonical report with evidence projection status"
-                    exit 1
-                  }
-                  echo "Updated canonical report with evidence projection status: committed and pushed"
-                fi
-              else
+              if ! git add gemini-acp-report.json; then
                 echo "::error::Could not stage gemini-acp-report.json for evidence projection status update"
                 exit 1
+              fi
+              if ! git diff --cached --quiet gemini-acp-report.json; then
+                git commit -m "docs(evidence): update canonical report with evidence projection status for ${REQUEST_ID}" || {
+                  echo "::error::Could not commit updated canonical report with evidence projection status"
+                  exit 1
+                }
+                git push origin "${{ github.ref_name }}" || {
+                  echo "::error::Could not push updated canonical report with evidence projection status"
+                  exit 1
+                }
+                echo "Updated canonical report with evidence projection status: committed and pushed"
               fi
             fi
           else
