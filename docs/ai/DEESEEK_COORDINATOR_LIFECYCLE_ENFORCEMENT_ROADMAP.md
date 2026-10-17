@@ -643,3 +643,17 @@ This roadmap reconciles and incorporates the following source material:
 ---
 
 *This document is the authoritative lifecycle-enforcement roadmap for the DeepSeek Coordinator. It is the single coherent roadmap integrating both completed Gemini research passes. The two research records remain the detailed architectural evidence; this roadmap provides implementation sequencing and project-level authoritative direction.*
+
+
+## Deferred Cross-Project Reference — Unified Coordinator-to-Builder Activation
+
+**Status: DEFERRED — reference only; no implementation is authorized by this section.**
+
+The completed research record [Unified Coordinator-to-Builder Automated Activation](research/research-TASK-KILO-UNIFIED-COORDINATOR-BUILDER-AUTO-ACTIVATION-RESEARCH-001.md) is retained here because the intended long-term outcome of DeepSeek Coordinator Evolution is unified conversational coordination that can submit authorized work and activate the appropriate execution agent through the existing architecture.
+
+The report maps ChatGPT, DeepSeek, and Gemini entry paths to the canonical activation ingress, server-derived ACP authority, TaskRegistry, execution claims, and Builder carrier. It does not propose a second control plane.
+
+- **Current roadmap remains authoritative:** Phase 4 — Scaled Conversational Orchestration & Cross-Task Lineage Navigation remains ACTIVE / IN PROGRESS. This reference does not replace the required Phase 4 design-contract and cross-task lineage reconciliation or change the next-work priority.
+- **Deferred status:** No implementation is authorized by this reference. Resume only when Kyle selects this work.
+- **Re-entry:** Reconcile the report against current `main`, tests, and live activation evidence. Preserve VERIFIED / INFERRED / UNKNOWN distinctions. Repeat research only if reconciliation identifies a material evidence gap.
+- **Related contracts:** `docs/ai/EXTERNAL_ACTIVATION_PROCEDURE.md` and `docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md`.
