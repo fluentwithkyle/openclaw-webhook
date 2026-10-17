@@ -138,6 +138,10 @@ Updated By | ChatGPT — TASK-CHATGPT-DEEPSEEK-PHASE-2-CONVERGENCE-DOCUMENTATION
 **Current**: the existing `get_task` observation now supplies sanitized task-result context plus a server-derived same-execution continuation classification. A DeepSeek-submitted task stays correlated within the bounded conversation, and only COMPLETE plus `INDEPENDENT_VERIFICATION` can inform its next bounded decision.
 
 **Remaining gap**: cross-request result delivery, polling/callback delivery, workflow decomposition, automated specialist activation, and full conversational coordination remain PROPOSED / TARGET. No additional model-facing operation, authority mechanism, or state store was introduced.
+## Current Blocker — Phase 4 Increment 4.2
+
+**BLOCKED — do not start Part 2.** Part 1 commit `8bcb3978a894419c31a4d52c208d69022920dfae` is on main, but independent source inspection found a `phase-4-test-bypass` that overrides strategic-alignment rejection, a helper that fabricates a projection hash, fallback-generated requirements/state evidence, and prefix-based requirements matching. The builder callback also failed with `NO_CLAIM_ON_DISK`. Delivery is verified; correctness and lifecycle completion are not. Correct these fail-closed defects, run targeted tests, explain the callback failure without weakening claim validation, and independently verify the corrected commit before proceeding. Existing research is sufficient; no repeat research.
+
 ## Next Action
 
 Substantially complete:
