@@ -209,3 +209,8 @@ Do not silently add it to Increment 4.2: that increment's stated scope is mandat
 - **PROPOSED**: Decision policy, telemetry schema, calibration method and common-boundary integration require design review and tests.
 - **UNKNOWN**: Actual project quota window/tier/headroom, complete structured error payload, and whether every activation lane crosses the candidate ingress boundary.
 - **VERIFIED**: This record is documentation only; no production source code was modified.
+
+
+## Implementation Assignment — DeepSeek Lifecycle Increment 4.6
+
+**Assignment: REQUIRED ROADMAP DELIVERABLE — PLANNED, not yet authorized for execution.** This corrected research and the original research `research-TASK-GEMINI-RESEARCH-TOKEN-BUDGET-PREDICTION-AND-QUOTA-GUARD-001.md` are both assigned to **DeepSeek Coordinator lifecycle-enforcement Increment 4.6 — Pre-Activation Token Budget & Provider Quota Guard**, sequenced after Increment 4.5 is implemented, independently verified, and reconciled. This corrected record takes precedence where it conflicts with the original. Increment 4.6 must reconcile both records against current code/provider evidence, implement the guard, and satisfy the roadmap acceptance criteria. This assignment is not implementation authorization. See `docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md`, Increment 4.6.
