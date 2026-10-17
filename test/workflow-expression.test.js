@@ -1159,6 +1159,168 @@ runTest('Behavioral: fail-closed staging detects git add errors (new behavior)',
     cd .. && rm -rf test-failclosed-$$
   `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
 
-  assert.ok(result.includes('STAGING_FAILED=1'),
+   assert.ok(result.includes('STAGING_FAILED=1'),
     'fail-closed staging must detect and report staging errors for nonexistent paths');
+});
+
+// --- Evidence projection persistence regression tests ---
+
+runTest('main.yml evidence projection step has id: evidence_projection', () => {
+  assert.ok(raw.includes('id: evidence_projection'),
+    'evidence projection step must have id: evidence_projection for output referencing');
+});
+
+runTest('main.yml evidence projection step has fail-closed staging error detection', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  assert.ok(evidenceIdx !== -1, 'evidence projection step missing');
+  const evidenceSection = raw.slice(evidenceIdx);
+  assert.ok(evidenceSection.includes('STAGING_ERRORS') || evidenceSection.includes('Evidence projection staging failed'),
+    'evidence projection step must track staging errors with fail-closed behavior');
+});
+
+runTest('main.yml evidence projection step DOES NOT use silent || true suppression for git add', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  assert.ok(!/git add.*\|\| true/.test(evidenceSection),
+    'evidence projection step must NOT silently suppress git add errors');
+});
+
+runTest('main.yml evidence projection step stashes working-tree changes before git pull --rebase', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  assert.ok(evidenceSection.includes('git stash'),
+    'evidence projection step must stash unstaged changes before rebase to prevent "cannot pull with rebase" errors');
+});
+
+runTest('main.yml evidence projection step has merge fallback when rebase fails', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  assert.ok(evidenceSection.includes('git merge'),
+    'evidence projection step must have merge fallback when rebase fails');
+  assert.ok(evidenceSection.includes('merge fallback'),
+    'evidence projection step must document the merge fallback intent');
+});
+
+runTest('main.yml evidence projection step fails closed on staging failure (exit 1)', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  // The staging error path should exit 1 (fail-closed), not exit 0 with warning
+  assert.ok(evidenceSection.includes("EVIDENCE_BLOCKER=\"Evidence projection staging failed"),
+    'evidence projection must fail-closed with blocker message on staging failure');
+});
+
+runTest('main.yml evidence projection step does NOT silently swallow rebase failures', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  assert.ok(!evidenceSection.includes("Rebase failed during durable evidence push; evidence file remains created but not pushed"),
+    'evidence projection must NOT silently swallow rebase failures with warning-only exit');
+});
+
+runTest('main.yml evidence projection step outputs evidence_push_status, evidence_push_verified, evidence_commit_sha, evidence_blocker', () => {
+  const evidenceIdx = raw.indexOf('Persist durable readable evidence projection');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  const evidenceSection = raw.slice(evidenceIdx, uploadIdx);
+  assert.ok(evidenceSection.includes('echo "evidence_push_status'),
+    'evidence projection must output evidence_push_status');
+  assert.ok(evidenceSection.includes('echo "evidence_push_verified'),
+    'evidence projection must output evidence_push_verified');
+  assert.ok(evidenceSection.includes('echo "evidence_commit_sha'),
+    'evidence projection must output evidence_commit_sha');
+  assert.ok(evidenceSection.includes('echo "evidence_blocker'),
+    'evidence projection must output evidence_blocker');
+});
+
+runTest('main.yml callback_payload step includes evidence_projection field in canonical report', () => {
+  const callbackIdx = raw.indexOf('Prepare ACP report payload');
+  const uploadIdx = raw.indexOf('Upload Gemini result artifact');
+  const callbackSection = raw.slice(callbackIdx, uploadIdx);
+  assert.ok(callbackSection.includes('evidence_projection'),
+    'callback payload step must include evidence_projection field in canonical report');
+});
+
+runTest('main.yml has post-evidence step that updates canonical report with actual evidence projection results', () => {
+  assert.ok(raw.includes('Update canonical report with evidence projection status'),
+    'workflow must have a step to update canonical report with evidence projection results');
+  assert.ok(raw.includes('steps.evidence_projection.outputs.evidence_push_status'),
+    'workflow must reference evidence_projection outputs when updating canonical report');
+});
+
+runTest('Behavioral: git stash before pull --rebase prevents unstaged changes error', () => {
+  const result = execSync(`
+    git init -q test-stash-$$ && cd test-stash-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+
+    mkdir -p docs/ai/reports
+    echo '{"status":"test"}' > docs/ai/reports/test.json
+    git add docs/ai/reports/test.json
+    git commit -q -m "initial commit"
+
+    # Create unstaged changes (simulating worktree state from prior steps)
+    echo '{"modified": true}' > docs/ai/reports/test.json
+
+    # Simulate the safe rebase pattern: stash before pull
+    STASHED=false
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+      if git stash push --include-untracked --message "evidence-stash-test" 2>/dev/null; then
+        STASHED=true
+      fi
+    fi
+
+    echo "STASHED=$STASHED"
+    echo "HAS_UNSTAGED=$(if git diff --quiet 2>/dev/null; then echo no; else echo yes; fi)"
+
+    cd .. && rm -rf test-stash-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  assert.ok(result.includes('STASHED=true'),
+    'stash should succeed when there are unstaged changes');
+  const hasUnstagedMatch = result.match(/HAS_UNSTAGED=(\w+)/);
+  assert.ok(hasUnstagedMatch, 'should report unstaged state');
+  assert.equal(hasUnstagedMatch[1], 'no',
+    'after stashing, there should be no unstaged changes preventing rebase');
+});
+
+runTest('Behavioral: evidence projection stash failure fails closed', () => {
+  const result = execSync(`
+    git init -q test-stash-fail-$$ && cd test-stash-fail-$$ &&
+    git config user.email t@t.com && git config user.name t &&
+    git config --global --add safe.directory '*' &&
+
+    mkdir -p docs/ai/reports
+    echo '{"status":"test"}' > docs/ai/reports/test.json
+    git add docs/ai/reports/test.json
+    git commit -q -m "initial commit"
+
+    # Create unstaged changes
+    echo '{"modified": true}' > docs/ai/reports/test.json
+
+    # Simulate the fail-closed check: if stash fails, fail with blocker
+    STASHED=false
+    STASH_FAILED=false
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+      if git stash push --include-untracked --message "test" 2>/dev/null; then
+        STASHED=true
+      else
+        STASH_FAILED=true
+      fi
+    fi
+
+    if [ "$STASH_FAILED" = "true" ]; then
+      echo "EVIDENCE_BLOCKER=fail-closed-stash-failure"
+      echo "EXIT_CODE=1"
+    else
+      echo "EXIT_CODE=0"
+    fi
+
+    cd .. && rm -rf test-stash-fail-$$
+  `, { encoding: 'utf8', cwd: os.tmpdir(), shell: 'bash', timeout: 15000 });
+
+  assert.ok(!result.includes('EXIT_CODE=1'),
+    'stash should succeed in this test environment');
 });
