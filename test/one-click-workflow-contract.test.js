@@ -1539,6 +1539,7 @@ runTest('Preflight - all carriers have preflight step in workflow YAML', () => {
     const allWorkflows = [
         'one-click-gemini-activation-verify-reconcile.yml',
         'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-phase4-increment-4-2-corrective.yml',
         'one-click-gemini-builder-callback-correlation.yml',
         'one-click-gemini-research-documentation.yml',
         'one-click-kilo-acp-copy-safe.yml'
@@ -1691,6 +1692,7 @@ runTest('Preflight - all carriers include one-click-preflight step before dispat
     const allWorkflows = [
         'one-click-gemini-activation-verify-reconcile.yml',
         'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-phase4-increment-4-2-corrective.yml',
         'one-click-gemini-builder-callback-correlation.yml',
         'one-click-gemini-research-documentation.yml',
         'one-click-kilo-acp-copy-safe.yml'
@@ -2702,6 +2704,7 @@ runTest('Defect 1 - preflight fails when an invalid unrelated carrier exists (fa
 
     for (const wf of ['one-click-gemini-activation-verify-reconcile.yml',
                       'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-phase4-increment-4-2-corrective.yml',
                       'one-click-gemini-builder-callback-correlation.yml',
                       'one-click-gemini-research-documentation.yml',
                       'one-click-kilo-acp-copy-safe.yml']) {
@@ -3250,6 +3253,7 @@ runTest('VALID_ONE_CLICK_WORKFLOWS contains all active carrier workflows', () =>
     const expectedCarriers = [
         'one-click-gemini-activation-verify-reconcile.yml',
         'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-phase4-increment-4-2-corrective.yml',
         'one-click-gemini-builder-callback-correlation.yml',
         'one-click-gemini-research-documentation.yml',
         'one-click-kilo-acp-copy-safe.yml'
@@ -3276,11 +3280,13 @@ const ALL_WORKFLOWS_WITH_PROVENANCE = [
     'one-click-gemini-builder-coordinator-registration-gate.yml',
     'one-click-gemini-builder-coordinator-registration-gate-fixed.yml',
     'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-phase4-increment-4-2-corrective.yml',
     'one-click-kilo-acp-copy-safe.yml'
 ];
 
 const CARRIER_WORKFLOWS = [
     'one-click-gemini-builder-smoke.yml',
+    'one-click-gemini-builder-phase4-increment-4-2-corrective.yml',
     'one-click-gemini-builder-callback-correlation.yml',
     'one-click-gemini-builder-coordinator-registration-gate.yml',
     'one-click-gemini-builder-coordinator-registration-gate-fixed.yml',
