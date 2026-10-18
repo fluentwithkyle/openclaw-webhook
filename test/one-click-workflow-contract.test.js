@@ -3813,5 +3813,89 @@ runTest('E2E - no one-click workflow embeds a corrective task in the smoke carri
     }
 });
 
+
+runTest('Binding integrity - requested task mode, branch, capabilities, and paths must match exactly', () => {
+    const { bindCarrierToRequestedTask } = require('../poc/one-click-artifact-validator');
+    const artifact = {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+        scope: { permitted_paths: ['test/schema.test.js'] }
+    };
+    const expected = {
+        task_name: artifact.task_name,
+        target_agent: artifact.target_agent,
+        repository: artifact.repository,
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+        permitted_paths: ['test/schema.test.js']
+    };
+    assert.strictEqual(bindCarrierToRequestedTask(artifact, expected).bound, true);
+    for (const change of [
+        { task_mode: 'FAILOVER_EXECUTE' },
+        { base_branch: 'release' },
+        { permitted_paths: ['poc/'] },
+        { capabilities: ['read_only'] }
+    ]) {
+        const mismatch = bindCarrierToRequestedTask(artifact, { ...expected, ...change });
+        assert.strictEqual(mismatch.bound, false, 'Must reject authority/identity drift: ' + JSON.stringify(change));
+        assert.ok(mismatch.reason.includes(Object.keys(change)[0]), 'Diagnostic must name mismatched field');
+    }
+});
+
+runTest('Binding integrity - coordinator rejects a workflow outside the registered one-click carrier set', () => {
+    const { execFileSync } = require('child_process');
+    const args = JSON.stringify({
+        workflow_name: 'unregistered-one-click.yml',
+        workflow_dir: '.github/workflows',
+        base_branch: 'main',
+        requested_task: {
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            base_branch: 'main',
+            task_mode: 'BUILDER',
+            capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+            permitted_paths: ['test/schema.test.js']
+        }
+    });
+    let code = 0;
+    let output = '';
+    try {
+        output = execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+            encoding: 'utf8', timeout: 10000
+        });
+    } catch (e) {
+        code = e.status || 1;
+        output = (e.stdout || '') + (e.stderr || '');
+    }
+    assert.notStrictEqual(code, 0, 'Unregistered workflow must fail closed');
+    assert.match(output, /Unregistered target workflow|not a registered one-click carrier|BLOCKED/i);
+});
+
+runTest('Binding integrity - smoke callback is blocked when descriptor request_id mismatches initiating request', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const callbackIdx = raw.indexOf('Prepare ACP report payload');
+    const callbackSection = raw.slice(callbackIdx, callbackIdx + 8500);
+    assert.ok(/EXPECTED_REQUEST_ID/.test(callbackSection), 'Callback must compare descriptor request_id with initiating request_id');
+    assert.ok(/correlation_valid=false/.test(callbackSection), 'Mismatch must set correlation_valid=false');
+    assert.ok(/steps\.callback_payload\.outputs\.correlation_valid == 'true'/.test(raw),
+        'Callback dispatch must be gated on verified correlation');
+});
+
+runTest('Binding integrity - smoke callback fails the report when descriptor task identity drifts', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const callbackIdx = raw.indexOf('Prepare ACP report payload');
+    const callbackSection = raw.slice(callbackIdx, callbackIdx + 8500);
+    assert.ok(/DESCRIPTOR_TASK_NAME/.test(callbackSection), 'Callback must extract task identity from descriptor');
+    assert.ok(/TASK_IDENTITY_MISMATCH=true/.test(callbackSection), 'Descriptor task mismatch must be recorded');
+    assert.ok(/Execution descriptor task identity mismatch/.test(callbackSection), 'Mismatch must be surfaced as a failure blocker');
+    assert.ok(/TASK="$TASK_JSON"/.test(callbackSection), 'Mismatch report must retain original carrier task identity');
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);
