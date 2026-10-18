@@ -3897,5 +3897,56 @@ runTest('Binding integrity - smoke callback fails the report when descriptor tas
     assert.ok(/TASK="$TASK_JSON"/.test(callbackSection), 'Mismatch report must retain original carrier task identity');
 });
 
+
+runTest('Binding integrity - coordinator rejects task-mode or permitted-path drift with matching task name', () => {
+    const { execFileSync } = require('child_process');
+    for (const override of [
+        { task_mode: 'FAILOVER_EXECUTE' },
+        { permitted_paths: ['poc/'] },
+        { base_branch: 'release' },
+        { capabilities: ['read_only'] }
+    ]) {
+        const args = JSON.stringify({
+            workflow_name: 'one-click-gemini-builder-smoke.yml',
+            workflow_dir: '.github/workflows',
+            base_branch: 'main',
+            requested_task: {
+                task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+                target_agent: 'Gemini Builder',
+                repository: 'fluentwithkyle/openclaw-webhook',
+                base_branch: 'main',
+                task_mode: 'BUILDER',
+                capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+                permitted_paths: ['test/schema.test.js'],
+                ...override
+            }
+        });
+        let code = 0;
+        let output = '';
+        try {
+            output = execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+                encoding: 'utf8', timeout: 15000
+            });
+        } catch (e) {
+            code = e.status || 1;
+            output = (e.stdout || '') + (e.stderr || '');
+        }
+        assert.notStrictEqual(code, 0, 'Authority drift must block coordinator readiness: ' + JSON.stringify(override));
+        assert.match(output, /BLOCKED|mismatch|UNBOUND/i);
+    }
+});
+
+runTest('Binding integrity - missing execution descriptor suppresses callback and records failure', () => {
+    const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const callbackIdx = raw.indexOf('Prepare ACP report payload');
+    const callbackSection = raw.slice(callbackIdx, callbackIdx + 9000);
+    assert.ok(/DESCRIPTOR_MISSING=true/.test(callbackSection), 'Missing descriptor must be explicit');
+    assert.ok(/correlation_valid=false/.test(callbackSection), 'Missing descriptor must mark callback correlation invalid');
+    assert.ok(/Execution descriptor\/request correlation failed/.test(callbackSection), 'Missing descriptor must produce a failure blocker');
+    assert.ok(/exit 1/.test(callbackSection), 'Missing descriptor must fail the callback preparation step');
+    assert.ok(/steps\.callback_payload\.outputs\.correlation_valid == 'true'/.test(raw),
+        'Callback dispatch must be suppressed when descriptor is missing');
+});
+
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
 process.exit(failCount > 0 ? 1 : 0);
