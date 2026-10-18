@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node poc/validate-external-activation.js coordinator-verify '{"workflow_name":"one-click-gemini-builder-smoke.yml","workflow_dir":".github/workflows","base_branch":"main","requested_task":{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","task_mode":"BUILDER","permitted_paths":["services/deepseek-runtime.js","poc/schemas/acp-schema.js","poc/task-registry.js","routes/poc.js","test/deepseek-runtime.test.js","test/schema.test.js","test/coordinator.test.js"]}}'
+          node poc/validate-external-activation.js coordinator-verify '{"workflow_name":"one-click-gemini-builder-phase4-increment-4-2-corrective.yml","workflow_dir":".github/workflows","base_branch":"main","requested_task":{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","task_mode":"BUILDER","permitted_paths":["routes/poc.js","services/deepseek-runtime.js","poc/strategic-alignment.js","poc/schemas/acp-schema.js","poc/task-registry.js","test/coordinator.test.js","test/deepseek-runtime.test.js","test/schema.test.js","test/gemini-callback.test.js","test/task-registry.test.js","test/strategic-alignment.test.js","test/one-click-workflow-contract.test.js","docs/ai/STATE.md","docs/ai/CONTROL_CENTER.md","docs/ai/TASK_LOG.md","docs/ai/strategic-state.json","docs/ai/DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md"]}}'
 
       - name: Submit Director approval for consequential Builder activation
         id: director_approval
