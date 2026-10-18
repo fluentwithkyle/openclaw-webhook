@@ -1,0 +1,44 @@
+name: One-Click Binding Integrity Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'poc/one-click-artifact-validator.js'
+      - 'poc/validate-external-activation.js'
+      - 'poc/schemas/acp-schema.js'
+      - 'poc/activation-policy.js'
+      - '.github/workflows/one-click-gemini-builder-smoke.yml'
+      - '.github/workflows/one-click-binding-integrity-validation.yml'
+      - 'test/one-click-workflow-contract.test.js'
+      - 'docs/ai/ONE_CLICK_WORKFLOW_CONTRACT.md'
+      - 'docs/ai/STATE.md'
+      - 'docs/ai/TASK_LOG.md'
+
+permissions:
+  contents: read
+
+jobs:
+  binding-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out merge candidate and base history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run complete test suite
+        run: npm test
+
+      - name: Check patch whitespace
+        run: git diff --check origin/main...HEAD
