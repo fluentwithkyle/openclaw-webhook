@@ -3739,6 +3739,46 @@ runTest('E2E - smoke workflow task_name must not be the Phase 4 corrective task'
         'Smoke workflow must not embed the Phase 4 corrective task identity');
 });
 
+runTest('E2E - smoke workflow serialized payload matches embedded artifact (fail-closed consistency check)', () => {
+    const { execFileSync } = require('child_process');
+    const smokeRaw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+
+    const serializeCliMatch = smokeRaw.match(/serialize-carrier\s+'([^']+)'\)/);
+    assert.ok(serializeCliMatch, 'Smoke workflow must have a serialize-carrier CLI call');
+    const taskPayloadArg = serializeCliMatch[1];
+
+    const embeddedArtifact = extractEmbeddedCarrierArtifact(smokeRaw);
+    assert.ok(embeddedArtifact, 'Smoke workflow must have an embedded carrier artifact in heredoc');
+
+    let serializedPayload;
+    try {
+        serializedPayload = execFileSync('node', ['poc/validate-external-activation.js', 'serialize-carrier', taskPayloadArg], {
+            encoding: 'utf8', timeout: 10000
+        }).trim();
+    } catch (e) {
+        throw new Error('serialize-carrier CLI must succeed: ' + (e.stderr || e.message));
+    }
+
+    const serializedParsed = JSON.parse(serializedPayload);
+    assert.ok(serializedParsed.task_name, 'Serialized payload must contain task_name');
+    assert.strictEqual(serializedParsed.task_name, 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        'Serialized payload must carry smoke task identity');
+
+    const embeddedParsed = JSON.parse(embeddedArtifact);
+    const serializedCompact = JSON.stringify(serializedParsed);
+    const embeddedCompact = JSON.stringify(embeddedParsed);
+    assert.strictEqual(serializedCompact, embeddedCompact,
+        'Serialized payload must exactly match embedded carrier artifact (workflow enforces fail-closed consistency)');
+});
+
+runTest('E2E - smoke workflow has fail-closed SERIALIZED_COMPACT vs EMBEDDED_COMPACT check', () => {
+    const smokeRaw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    assert.ok(/SERIALIZED_COMPACT.*EMBEDDED_COMPACT/.test(smokeRaw),
+        'Smoke workflow must compare serialized payload against embedded artifact (fail-closed)');
+    assert.ok(/exit 1/.test(smokeRaw),
+        'Smoke workflow must exit non-zero if serialized payload does not match embedded artifact');
+});
+
 runTest('E2E - corrective workflow correctly embeds its own Phase 4 corrective task', () => {
     const correctiveWfPath = path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml');
     const correctiveWorkflow = fs.readFileSync(correctiveWfPath, 'utf8');
