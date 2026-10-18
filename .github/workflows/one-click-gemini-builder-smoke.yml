@@ -93,7 +93,7 @@ jobs:
 
           echo "::notice::Preflight: validating all one-click carrier artifacts"
 
-          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir":".github/workflows","target_workflow":"one-click-gemini-builder-smoke.yml","requested_task":{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook"},"persist_repairs":true}'
+          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir":".github/workflows","target_workflow":"one-click-gemini-builder-smoke.yml","requested_task":{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"permitted_paths":["test/schema.test.js"]},"persist_repairs":true}'
 
           echo "preflight_validated=true" >> "$GITHUB_OUTPUT"
 
@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node poc/validate-external-activation.js coordinator-verify '{"workflow_name":"one-click-gemini-builder-smoke.yml","workflow_dir":".github/workflows","base_branch":"main","requested_task":{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","task_mode":"BUILDER","permitted_paths":["test/schema.test.js"]}}'
+          node poc/validate-external-activation.js coordinator-verify '{"workflow_name":"one-click-gemini-builder-smoke.yml","workflow_dir":".github/workflows","base_branch":"main","requested_task":{"task_name":"TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook","base_branch":"main","task_mode":"BUILDER","capabilities":["read_only","modify_files","run_tests","commit","push"],"permitted_paths":["test/schema.test.js"]}}'
 
       - name: Submit Director approval for consequential Builder activation
         id: director_approval
@@ -588,6 +588,22 @@ jobs:
             BASE_BRANCH="$(jq -r --arg def "$DEFAULT_BRANCH" '.base_branch // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_BRANCH")"
             EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
             CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
+
+            DESCRIPTOR_TASK_NAME="$(printf '%s' "$TASK" | jq -r 'if type == "string" then (fromjson | .task_name // "") else (.task_name // "") end' 2>/dev/null || echo '')"
+            EXPECTED_TASK_NAME="$(printf '%s' "$TASK_JSON" | jq -r '.task_name // ""' 2>/dev/null || echo '')"
+            EXPECTED_REQUEST_ID="${{ steps.one_click_context.outputs.request_id }}"
+            if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" != "$EXPECTED_REQUEST_ID" ]; then
+              echo "::error::Callback correlation mismatch at execution-descriptor stage: expected request_id=$EXPECTED_REQUEST_ID actual request_id=${REQUEST_ID:-<missing>}"
+              echo "correlation_valid=false" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            if [ -z "$EXPECTED_TASK_NAME" ] || [ "$DESCRIPTOR_TASK_NAME" != "$EXPECTED_TASK_NAME" ]; then
+              echo "::error::Task identity mismatch at execution-descriptor stage: expected task_name=$EXPECTED_TASK_NAME actual task_name=${DESCRIPTOR_TASK_NAME:-<missing>}"
+              STATUS="failure"
+              VERIFICATION_STATUS="FAIL"
+              BLOCKER_MSG="Execution descriptor task identity mismatch; callback report uses original carrier task identity."
+              TASK="$TASK_JSON"
+            fi
           else
             REQUEST_ID="${{ steps.one_click_context.outputs.request_id }}"
             TASK="$TASK_JSON"
@@ -688,11 +704,12 @@ jobs:
 
           echo "report_status=generated" >> "$GITHUB_OUTPUT"
           echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "correlation_valid=true" >> "$GITHUB_OUTPUT"
 
           cat callback_payload.json
 
       - name: Send callback to Render
-        if: always() && steps.orchestration_context.outcome == 'success'
+        if: always() && steps.orchestration_context.outcome == 'success' && steps.callback_payload.outputs.correlation_valid == 'true'
         env:
           CALLBACK_URL: ${{ secrets.RENDER_BUILDER_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.BUILDER_CALLBACK_SECRET }}
