@@ -45,7 +45,7 @@ jobs:
           )
 
           EMBEDDED_COMPACT=$(echo "$EMBEDDED_TASK" | jq -c '.')
-          SERIALIZED_COMPACT=$(echo "$TASK_PAYLOAD" | jq -c '.')
+          SERIALIZED_COMPACT=$(echo "$TASK_PAYLOAD" | jq -c '.task')
 
           if [ "$SERIALIZED_COMPACT" != "$EMBEDDED_COMPACT" ]; then
             echo "::error::Serialized task does not match embedded carrier artifact"
