@@ -2446,15 +2446,15 @@ runTest('Provenance gate - existing descriptor without provenance remains SUCCES
 const { serializeCanonicalTaskArtifact, persistRepairedCarrier, persistRepairedCarrierToFile } = require('../poc/one-click-artifact-validator');
 const { execFileSync } = require('child_process');
 
-runTest('Defect 1 - smoke workflow embeds Gemini Builder task identity (not Kilo/corrective task)', () => {
+runTest('Defect 1 - smoke workflow embeds Gemini Builder smoke-test task identity', () => {
     const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
     const extracted = extractEmbeddedCarrierArtifact(raw);
     assert.ok(extracted, 'Smoke workflow must have embedded carrier artifact');
     const parsed = JSON.parse(extracted);
-    assert.strictEqual(parsed.task_name, 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
+    assert.strictEqual(parsed.task_name, 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
         'Smoke workflow task_name must be the Gemini Builder smoke-test identity, not a corrective task');
     assert.strictEqual(parsed.target_agent, 'Gemini Builder',
-        'Smoke workflow target_agent must be Gemini Builder, not Kilo');
+        'Smoke workflow target_agent must be Gemini Builder');
     assert.strictEqual(parsed.originator, 'Kyle -- Director',
          'Smoke workflow originator must use ASCII hyphen (not em-dash or double-hyphen)');
 });
@@ -2464,9 +2464,11 @@ runTest('Defect 1 - corrective task is NOT embedded as the task the smoke workfl
     const extracted = extractEmbeddedCarrierArtifact(raw);
     assert.ok(extracted, 'Must have embedded carrier');
     assert.ok(!extracted.includes('TASK-KILO-BUILDER-AUTOMATIC-WORKFLOW-CORRECTION'),
-        'Smoke workflow must not embed the corrective task as its execution task');
+        'Smoke workflow must not embed the Kilo corrective task as its execution task');
     assert.ok(!extracted.includes('TASK-KILO-FIX-WORKFLOW-CREATION-PREFLIGHT'),
         'Smoke workflow must not embed the current corrective task as its execution task');
+    assert.ok(!extracted.includes('TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001'),
+        'Smoke workflow must not embed the Phase 4 corrective task as its execution task');
 });
 
 runTest('Defect 2 - smoke workflow uses serialize-carrier CLI in task-generation path', () => {
@@ -2679,7 +2681,7 @@ runTest('Defect 1 - preflight passes when all carriers individually valid despit
 
 runTest('Defect 1 - preflight with target_workflow passes when target carrier matches requested task', () => {
     const result = preflightValidateOneClickActivation('.github/workflows', {
-        task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
         target_agent: 'Gemini Builder',
         repository: 'fluentwithkyle/openclaw-webhook'
     }, true, 'one-click-gemini-builder-smoke.yml');
@@ -2728,7 +2730,7 @@ runTest('Defect 1 - preflight fails when an invalid unrelated carrier exists (fa
 
 runTest('Defect 1 - preflight does not require every carrier to match requested task identity', () => {
     const result = preflightValidateOneClickActivation('.github/workflows', {
-        task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
         target_agent: 'Gemini Builder',
         repository: 'fluentwithkyle/openclaw-webhook'
     }, true, 'one-click-gemini-builder-smoke.yml');
@@ -2760,7 +2762,7 @@ runTest('Defect 1 - preflight CLI passes with target_workflow and matching reque
         workflow_dir: '.github/workflows',
         target_workflow: 'one-click-gemini-builder-smoke.yml',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook'
         },
@@ -2830,7 +2832,7 @@ runTest('Defect 2 - coordinator-verify fails closed when origin/main unavailable
         workflow_dir: '.github/workflows',
         base_branch: 'nonexistent-branch-zzz',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
@@ -2858,7 +2860,7 @@ runTest('Defect 2 - coordinator-verify produces verification_source=origin/main 
         workflow_dir: '.github/workflows',
         base_branch: 'main',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
@@ -2879,7 +2881,7 @@ runTest('Defect 2 - coordinator-verify verified_on_main is true only when origin
         workflow_dir: '.github/workflows',
         base_branch: 'main',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
@@ -3267,6 +3269,7 @@ runTest('VALID_ONE_CLICK_WORKFLOWS contains all active carrier workflows', () =>
 // =========================================================
 // Regression tests: workflow-failure prevention fixes
 // (TASK-KILO-SYSTEMWIDE-WORKFLOW-FAILURE-PREVENTION-001)
+// =========================================================
 // Defects #11-#13 discovered during smoke run verification
 // =========================================================
 
@@ -3426,6 +3429,347 @@ runTest('Defect 13 - provenance_result section has matching EOF delimiter', () =
         if (!hasProvenanceResult) continue;
         assert.ok(/echo "EOF"/.test(raw) || /echo 'EOF'/.test(raw),
             wfName + ' must have matching EOF delimiter after provenance_result<<EOF');
+    }
+});
+
+// (TASK-KILO-SYSTEMWIDE-WORKFLOW-FAILURE-PREVENTION-001)
+// =========================================================
+
+runTest('E2E - preflight returns independent registry_integrity and target_binding fields', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows', {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        permitted_paths: ['test/schema.test.js']
+    }, false, 'one-click-gemini-builder-smoke.yml');
+    assert.ok(result.hasOwnProperty('registry_integrity'),
+        'preflight must return registry_integrity field independent of target_binding');
+    assert.ok(result.hasOwnProperty('target_binding'),
+        'preflight must return target_binding field independent of registry_integrity');
+    assert.ok(typeof result.registry_integrity === 'object',
+        'registry_integrity must be an object');
+    assert.ok(typeof result.target_binding === 'object',
+        'target_binding must be an object');
+    assert.ok(result.registry_integrity.hasOwnProperty('status'),
+        'registry_integrity must have a status field');
+    assert.ok(result.target_binding.hasOwnProperty('status'),
+        'target_binding must have a status field');
+});
+
+runTest('E2E - registry_integrity status is VALID when all carrier artifacts are structurally valid', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows', null, false, null);
+    assert.strictEqual(result.registry_integrity.status, 'VALID',
+        'All committed carrier workflows must have valid embedded ACP artifacts');
+});
+
+runTest('E2E - target_binding status is BOUND when smoke workflow matches requested task', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows', {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        permitted_paths: ['test/schema.test.js']
+    }, false, 'one-click-gemini-builder-smoke.yml');
+    assert.strictEqual(result.target_binding.status, 'BOUND',
+        'Smoke workflow must have matching task identity for target_binding');
+    assert.strictEqual(result.target_binding.target_bound, true,
+        'target_bound must be true for smoke workflow with correct task identity');
+});
+
+runTest('E2E - target_binding is BOUND even when requested_task is provided without target_workflow', () => {
+    const result = preflightValidateOneClickActivation('.github/workflows', {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        permitted_paths: ['test/schema.test.js']
+    }, false, null);
+    const boundCount = Object.values(result.results).filter(r => r.bound === true).length;
+    assert.ok(boundCount >= 1,
+        'At least one carrier must match the requested task identity');
+    assert.strictEqual(result.target_binding.status, 'BOUND',
+        'target_binding should be BOUND when at least one carrier matches');
+});
+
+runTest('E2E - registry_integrity and target_binding fail independently (no weakening)', () => {
+    const smokeRaw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const originalArtifact = extractEmbeddedCarrierArtifact(smokeRaw);
+    const parsed = JSON.parse(originalArtifact);
+
+    parsed.task_name = 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001-WRONG';
+    const wrongIdentityArtifact = JSON.stringify(parsed, null, 2);
+
+    const { validateAcpTaskArtifact } = require('../poc/schemas/acp-schema');
+    const schemaValidation = validateAcpTaskArtifact(wrongIdentityArtifact);
+    assert.ok(schemaValidation.valid,
+        'The modified artifact must still be schema-valid (only task_name changed)');
+
+    const { persistRepairedCarrier } = require('../poc/one-click-artifact-validator');
+    const tmpDir = '/tmp/e2e-binding-test-' + Date.now();
+    fs.mkdirSync(tmpDir);
+
+    for (const wf of CANONICAL_VALID_ONE_CLICK_WORKFLOWS) {
+        const src = path.join('.github/workflows', wf);
+        const dest = path.join(tmpDir, wf);
+        fs.copyFileSync(src, dest);
+    }
+
+    const srcWf = path.join(tmpDir, 'one-click-gemini-builder-smoke.yml');
+    const srcRaw = fs.readFileSync(srcWf, 'utf8');
+    const persistResult = persistRepairedCarrier(srcRaw, wrongIdentityArtifact);
+    assert.ok(persistResult.persisted, 'persistRepairedCarrier must succeed for the smoke workflow');
+    fs.writeFileSync(srcWf, persistResult.workflow_raw, 'utf8');
+
+    const result = preflightValidateOneClickActivation(tmpDir, {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        permitted_paths: ['test/schema.test.js']
+    }, false, 'one-click-gemini-builder-smoke.yml');
+
+    assert.strictEqual(result.registry_integrity.status, 'VALID',
+        'registry_integrity must remain VALID: the artifact is structurally valid and schema-valid');
+    assert.strictEqual(result.target_binding.status, 'UNBOUND',
+        'target_binding must be UNBOUND: task_name does not match requested task');
+
+    assert.strictEqual(result.all_valid, false,
+        'all_valid must be false because target_binding failed (registry_integrity is valid)');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('E2E - registry_integrity fails independently when carrier artifact is malformed', () => {
+    const tmpDir = '/tmp/e2e-regintegrity-test-' + Date.now();
+    fs.mkdirSync(tmpDir);
+
+    const smokeRaw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    const { persistRepairedCarrier } = require('../poc/one-click-artifact-validator');
+
+    for (const wf of CANONICAL_VALID_ONE_CLICK_WORKFLOWS) {
+        const src = path.join('.github/workflows', wf);
+        const dest = path.join(tmpDir, wf);
+        fs.copyFileSync(src, dest);
+    }
+
+    const srcWf = path.join(tmpDir, 'one-click-gemini-builder-smoke.yml');
+    const srcRaw = fs.readFileSync(srcWf, 'utf8');
+    const malformedArtifact = '{"task_name": "BROKEN", invalid: json}';
+    const persistResult = persistRepairedCarrier(srcRaw, malformedArtifact);
+    assert.ok(persistResult.persisted, 'persistRepairedCarrier must succeed for the smoke workflow');
+    fs.writeFileSync(srcWf, persistResult.workflow_raw, 'utf8');
+
+    const result = preflightValidateOneClickActivation(tmpDir, {
+        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        target_agent: 'Gemini Builder',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        permitted_paths: ['test/schema.test.js']
+    }, false, 'one-click-gemini-builder-smoke.yml');
+
+    assert.strictEqual(result.registry_integrity.status, 'INVALID',
+        'registry_integrity must be INVALID when an embedded artifact is malformed JSON');
+    assert.ok(result.registry_integrity.invalid_carriers.length > 0,
+        'registry_integrity must list the invalid carrier');
+
+    assert.strictEqual(result.all_valid, false,
+        'all_valid must be false because registry_integrity failed');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('E2E - coordinator-verify emits registry_integrity_status and target_binding_status outputs', () => {
+    const tmpDir = '/tmp/e2e-coord-verify-output-' + Date.now();
+    fs.mkdirSync(tmpDir);
+
+    for (const wf of CANONICAL_VALID_ONE_CLICK_WORKFLOWS) {
+        const src = path.join('.github/workflows', wf);
+        const dest = path.join(tmpDir, wf);
+        fs.copyFileSync(src, dest);
+    }
+
+    const githubOutputFile = path.join(tmpDir, 'github_output');
+    const args = JSON.stringify({
+        workflow_name: 'one-click-gemini-builder-smoke.yml',
+        workflow_dir: tmpDir,
+        base_branch: 'main',
+        requested_task: {
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            task_mode: 'BUILDER',
+            permitted_paths: ['test/schema.test.js']
+        }
+    });
+    let output = '';
+    try {
+        output = execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+            encoding: 'utf8', timeout: 30000,
+            env: { ...process.env, GITHUB_OUTPUT: githubOutputFile }
+        });
+    } catch (e) {
+        output = (e.stdout || '') + (e.stderr || '');
+    }
+    const githubOutput = fs.existsSync(githubOutputFile) ? fs.readFileSync(githubOutputFile, 'utf8') : '';
+    const combined = output + githubOutput;
+    assert.ok(/registry_integrity_status=/.test(combined),
+        'coordinator-verify must emit registry_integrity_status output');
+    assert.ok(/target_binding_status=/.test(combined),
+        'coordinator-verify must emit target_binding_status output');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('E2E - coordinator-verify fails closed when target_binding fails', () => {
+    const tmpDir = '/tmp/e2e-coord-verify-binding-' + Date.now();
+    fs.mkdirSync(tmpDir);
+    const githubOutputFile = path.join(tmpDir, 'github_output');
+
+    const args = JSON.stringify({
+        workflow_name: 'one-click-gemini-builder-smoke.yml',
+        workflow_dir: '.github/workflows',
+        base_branch: 'main',
+        requested_task: {
+            task_name: 'TASK-NON-EXISTENT-FAKE-TASK-12345',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            permitted_paths: ['test/schema.test.js']
+        }
+    });
+    let exitedNonZero = false;
+    try {
+        execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+            encoding: 'utf8', timeout: 30000,
+            env: { ...process.env, GITHUB_OUTPUT: githubOutputFile }
+        });
+    } catch (e) {
+        exitedNonZero = true;
+    }
+    assert.ok(exitedNonZero,
+        'coordinator-verify must exit non-zero when target_binding fails');
+    const githubOutput = fs.existsSync(githubOutputFile) ? fs.readFileSync(githubOutputFile, 'utf8') : '';
+    assert.ok(/target_binding_status=UNBOUND/.test(githubOutput),
+        'coordinator-verify must emit target_binding_status=UNBOUND when binding fails');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('E2E - coordinator-verify fails closed when registry_integrity fails', () => {
+    const tmpDir = '/tmp/e2e-coordinator-regfail-' + Date.now();
+    fs.mkdirSync(tmpDir);
+
+    const { persistRepairedCarrier } = require('../poc/one-click-artifact-validator');
+
+    for (const wf of CANONICAL_VALID_ONE_CLICK_WORKFLOWS) {
+        const src = path.join('.github/workflows', wf);
+        const dest = path.join(tmpDir, wf);
+        fs.copyFileSync(src, dest);
+    }
+
+    const srcWf = path.join(tmpDir, 'one-click-gemini-builder-smoke.yml');
+    const srcRaw = fs.readFileSync(srcWf, 'utf8');
+    const malformedArtifact = '{"task_name": "BROKEN", invalid: json}';
+    const persistResult = persistRepairedCarrier(srcRaw, malformedArtifact);
+    assert.ok(persistResult.persisted, 'persistRepairedCarrier must succeed for the smoke workflow');
+    fs.writeFileSync(srcWf, persistResult.workflow_raw, 'utf8');
+
+    const githubOutputFile = path.join(tmpDir, 'github_output');
+    const args = JSON.stringify({
+        workflow_name: 'one-click-gemini-builder-smoke.yml',
+        workflow_dir: tmpDir,
+        base_branch: 'main',
+        requested_task: {
+            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook',
+            permitted_paths: ['test/schema.test.js']
+        }
+    });
+    let exitedNonZero = false;
+    try {
+        execFileSync('node', ['poc/validate-external-activation.js', 'coordinator-verify', args], {
+            encoding: 'utf8', timeout: 30000,
+            env: { ...process.env, GITHUB_OUTPUT: githubOutputFile }
+        });
+    } catch (e) {
+        exitedNonZero = true;
+    }
+    assert.ok(exitedNonZero,
+        'coordinator-verify must exit non-zero when registry_integrity fails');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('E2E - one-click-preflight emits registry_integrity_status and target_binding_status on failure', () => {
+    const tmpDir = '/tmp/e2e-preflight-output-' + Date.now();
+    fs.mkdirSync(tmpDir);
+    const githubOutputFile = path.join(tmpDir, 'github_output');
+
+    const args = JSON.stringify({
+        workflow_dir: '.github/workflows',
+        target_workflow: 'one-click-gemini-builder-smoke.yml',
+        requested_task: {
+            task_name: 'TASK-NON-EXISTENT-FAKE-TASK-99999',
+            target_agent: 'Gemini Builder',
+            repository: 'fluentwithkyle/openclaw-webhook'
+        },
+        persist_repairs: false
+    });
+    let exitedNonZero = false;
+    let output = '';
+    try {
+        output = execFileSync('node', ['poc/validate-external-activation.js', 'one-click-preflight', args], {
+            encoding: 'utf8', timeout: 30000,
+            env: { ...process.env, GITHUB_OUTPUT: githubOutputFile }
+        });
+    } catch (e) {
+        exitedNonZero = true;
+        output = (e.stdout || '') + (e.stderr || '');
+    }
+    assert.ok(exitedNonZero,
+        'one-click-preflight must exit non-zero when target_binding fails');
+    const githubOutput = fs.existsSync(githubOutputFile) ? fs.readFileSync(githubOutputFile, 'utf8') : '';
+    assert.ok(/registry_integrity_status=/.test(githubOutput),
+        'one-click-preflight must emit registry_integrity_status even on failure');
+    assert.ok(/target_binding_status=/.test(githubOutput),
+        'one-click-preflight must emit target_binding_status even on failure');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+runTest('E2E - smoke workflow task_name must not be the Phase 4 corrective task', () => {
+    const smokeWorkflow = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
+    assert.ok(!/TASK-GEMINI-BUILDER-PHASE4.*CORRECTIVE-001/.test(smokeWorkflow),
+        'Smoke workflow must not embed the Phase 4 corrective task identity');
+});
+
+runTest('E2E - corrective workflow correctly embeds its own Phase 4 corrective task', () => {
+    const correctiveWfPath = path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml');
+    const correctiveWorkflow = fs.readFileSync(correctiveWfPath, 'utf8');
+    const correctiveArtifact = extractEmbeddedCarrierArtifact(correctiveWorkflow);
+    assert.ok(correctiveArtifact,
+        'Corrective workflow must have an embedded ACP artifact');
+    const parsed = JSON.parse(correctiveArtifact);
+    assert.ok(/TASK-GEMINI-BUILDER-PHASE4.*CORRECTIVE-001/.test(parsed.task_name),
+        'Corrective workflow must embed its own Phase 4 corrective task identity');
+});
+
+runTest('E2E - smoke workflow scope is restricted to test/schema.test.js (not broad filesystem)', () => {
+    const smokeArtifact = extractEmbeddedCarrierArtifact(fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8'));
+    const parsed = JSON.parse(smokeArtifact);
+    assert.deepStrictEqual(parsed.scope.permitted_paths, ['test/schema.test.js'],
+        'Smoke workflow scope.permitted_paths must be exactly ["test/schema.test.js"]');
+    assert.ok(!/^\*\*/.test(parsed.scope.permitted_paths[0]),
+        'Smoke workflow must not use glob expansion that could escape boundary');
+    assert.ok(!/^\//.test(parsed.scope.permitted_paths[0]),
+        'Smoke workflow must not use absolute paths');
+});
+
+runTest('E2E - no one-click workflow embeds a corrective task in the smoke carrier', () => {
+    for (const wf of CANONICAL_VALID_ONE_CLICK_WORKFLOWS) {
+        if (wf === 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml') continue;
+        const raw = fs.readFileSync(path.join(ONE_CLICK_DIR, wf), 'utf8');
+        const artifact = extractEmbeddedCarrierArtifact(raw);
+        if (!artifact) continue;
+        const parsed = JSON.parse(artifact);
+        assert.ok(!/TASK-GEMINI-BUILDER-PHASE4.*CORRECTIVE-001/.test(parsed.task_name),
+            wf + ' must not embed the Phase 4 corrective task identity (corrective tasks are only for the corrective carrier)');
     }
 });
 

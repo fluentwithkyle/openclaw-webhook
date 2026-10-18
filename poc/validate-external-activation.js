@@ -132,6 +132,8 @@ async function main() {
             if (process.env.GITHUB_OUTPUT) {
                 writeOutput('preflight_passed', 'false');
                 writeOutput('preflight_yaml_valid', 'false');
+                writeOutput('registry_integrity_status', 'INVALID');
+                writeOutput('target_binding_status', 'N/A');
             }
             process.exit(1);
         }
@@ -147,6 +149,12 @@ async function main() {
                     console.error('::error::' + wf + ': task-to-carrier binding failed');
                 }
             }
+            if (process.env.GITHUB_OUTPUT) {
+                writeOutput('preflight_passed', 'false');
+                writeOutput('preflight_yaml_valid', 'true');
+                writeOutput('registry_integrity_status', preflightResult.registry_integrity.status);
+                writeOutput('target_binding_status', preflightResult.target_binding.status);
+            }
             process.exit(1);
         }
         console.log('::notice::One-click preflight validation passed: all ' + preflightResult.summary.total + ' carriers have valid embedded ACP artifacts' + (preflightResult.summary.repaired > 0 ? ' (' + preflightResult.summary.repaired + ' repaired)' : '') + (preflightResult.summary.persisted > 0 ? ' (' + preflightResult.summary.persisted + ' persisted to disk)' : '') + ' (' + yamlValidation.summary.valid + '/' + yamlValidation.summary.total + ' workflow files parse as valid YAML)');
@@ -157,6 +165,8 @@ async function main() {
             writeOutput('preflight_yaml_valid', 'true');
             writeOutput('preflight_yaml_total', String(yamlValidation.summary.total));
             writeOutput('preflight_yaml_valid_count', String(yamlValidation.summary.valid));
+            writeOutput('registry_integrity_status', preflightResult.registry_integrity.status);
+            writeOutput('target_binding_status', preflightResult.target_binding.status);
         }
         process.exit(0);
     }
@@ -183,6 +193,24 @@ async function main() {
 
         const workflowPath = workflowDir + '/' + workflowName;
 
+        const registryIntegrityCheck = validateAllWorkflowYaml(workflowDir);
+        if (!registryIntegrityCheck.all_valid) {
+            console.error('::error::BLOCKED: One or more workflow files contain invalid YAML (registry integrity failure)');
+            for (const [wf, r] of Object.entries(registryIntegrityCheck.results)) {
+                if (!r.valid) {
+                    console.error('::error::' + wf + ': ' + (r.error || 'YAML parse failure') + (r.line ? ' (line: ' + r.line + ')' : ''));
+                }
+            }
+            writeOutput('coordinator_status', 'BLOCKED');
+            writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', 'INVALID');
+            writeOutput('target_binding_status', 'N/A');
+            writeOutput('coordinator_reason', 'Registry integrity failure: workflow YAML invalid');
+            writeOutput('verification_source', null);
+            writeOutput('verified_on_main', 'false');
+            process.exit(1);
+        }
+
         let workflowRaw;
         let verificationSource = null;
         let verifiedOnMain = false;
@@ -196,6 +224,8 @@ async function main() {
             console.error('::error::BLOCKED: Workflow file not found on origin/' + baseBranch + ': ' + workflowPath + ' (' + remoteFetch.error + ')');
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', 'INVALID');
+            writeOutput('target_binding_status', 'N/A');
             writeOutput('coordinator_reason', 'Workflow file not found on origin/' + baseBranch);
             writeOutput('verification_source', null);
             writeOutput('verified_on_main', 'false');
@@ -207,6 +237,8 @@ async function main() {
             console.error('::error::BLOCKED: ' + dispatchCheck.error);
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', 'INVALID');
+            writeOutput('target_binding_status', 'N/A');
             writeOutput('coordinator_reason', dispatchCheck.error_code || 'REGISTRATION_GATE_FAILED');
             process.exit(1);
         }
@@ -217,6 +249,8 @@ async function main() {
             console.error('::error::BLOCKED: Embedded carrier artifact is invalid and cannot be automatically repaired: ' + (repairResult.error || 'validation failed'));
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', 'INVALID');
+            writeOutput('target_binding_status', 'UNBOUND');
             writeOutput('coordinator_reason', repairResult.error_code || 'CARRIER_ARTIFACT_INVALID');
             process.exit(1);
         }
@@ -227,6 +261,8 @@ async function main() {
             console.error('::error::BLOCKED: Task-to-workflow binding failed: ' + reason);
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', repairResult.valid ? 'VALID' : 'INVALID');
+            writeOutput('target_binding_status', 'UNBOUND');
             writeOutput('coordinator_reason', 'Task-to-workflow binding mismatch');
             if (binding && binding.mismatches) {
                 writeOutput('binding_mismatches', binding.mismatches.join(','));
@@ -241,7 +277,25 @@ async function main() {
             console.error('::error::BLOCKED: Workflow does not route through canonical external-activation ingress');
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', 'INVALID');
+            writeOutput('target_binding_status', 'N/A');
             writeOutput('coordinator_reason', 'Non-canonical activation path');
+            process.exit(1);
+        }
+
+        const fullPreflight = preflightValidateOneClickActivation(workflowDir, null, false, null);
+
+        if (!fullPreflight.all_valid) {
+            const invalidCarriers = Object.entries(fullPreflight.results).filter(([_, r]) => r.valid !== true);
+            console.error('::error::BLOCKED: Registry integrity failure — one or more carrier artifacts are invalid');
+            for (const [wf, r] of invalidCarriers) {
+                console.error('::error::' + wf + ': ' + (r.error || 'validation failed'));
+            }
+            writeOutput('coordinator_status', 'BLOCKED');
+            writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', 'INVALID');
+            writeOutput('target_binding_status', 'BOUND');
+            writeOutput('coordinator_reason', 'Registry integrity failure: one or more carrier artifacts invalid');
             process.exit(1);
         }
 
@@ -249,6 +303,8 @@ async function main() {
         writeOutput('coordinator_status', 'VERIFIED');
         writeOutput('coordinator_ready', 'true');
         writeOutput('coordinator_reason', 'Exact task binding verified on ' + verificationSource);
+        writeOutput('registry_integrity_status', 'VALID');
+        writeOutput('target_binding_status', 'BOUND');
         writeOutput('verification_source', verificationSource);
         writeOutput('verified_on_main', String(verifiedOnMain));
         if (repairResult.repaired) {

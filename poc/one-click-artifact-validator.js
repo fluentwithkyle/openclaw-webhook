@@ -613,9 +613,33 @@ function preflightValidateOneClickActivation(workflowDir, requestedTask, persist
 
     const allValid = allCarriersValid && bindingSatisfied;
 
+    const registryIntegrity = {
+        status: allCarriersValid ? 'VALID' : 'INVALID',
+        all_carriers_valid: allCarriersValid,
+        invalid_carriers: allCarriersValid ? [] : Object.entries(results).filter(([_, r]) => r.valid !== true).map(([wf, r]) => ({
+            workflow: wf,
+            error: r.error,
+            error_code: r.error_code
+        }))
+    };
+
+    const targetBinding = requestedTask ? {
+        status: bindingSatisfied ? 'BOUND' : 'UNBOUND',
+        target_workflow: targetWorkflow || null,
+        target_bound: targetBound,
+        requested_task: requestedTask
+    } : {
+        status: 'N/A',
+        target_workflow: null,
+        target_bound: null,
+        reason: 'No requested task provided; target binding not evaluated'
+    };
+
     return {
         all_valid: allValid,
         results,
+        registry_integrity: registryIntegrity,
+        target_binding: targetBinding,
         summary: {
             total: VALID_ONE_CLICK_WORKFLOWS.length,
             valid: Object.values(results).filter(r => r.valid === true).length,

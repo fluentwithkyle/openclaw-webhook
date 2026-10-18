@@ -221,6 +221,18 @@ This rule is the governing decision rule for all one-click workflow coordination
 
 1. Inspect requested task → 2. Inspect candidate workflow → 3. Verify exact embedded task binding → 4. Create/update workflow if binding is absent or incorrect → 5. Independently verify workflow → 6. Present Run link → 7. Director executes click → 8. Inspect resulting execution.
 
+### 4.12 End-to-End Binding Integrity
+
+The one-click activation path enforces **two independent validation layers** that are checked in sequence but never weakened:
+
+**Layer 1 — `registry_integrity`**: Every carrier in `VALID_ONE_CLICK_WORKFLOWS` must (a) parse as valid YAML, (b) contain a structurally valid canonical ACP task artifact, (c) pass schema validation including field-order compliance, and (d) have its `permitted_paths` lie within authorized boundaries (see `poc/activation-policy.js`). This layer **fails closed** if any carrier is missing, malformed, or schema-invalid. It does NOT consider task identity.
+
+**Layer 2 — `target_binding`**: The selected target carrier (identified by `target_workflow`) must embed an ACP task artifact whose `task_name`, `target_agent`, `repository`, and `permitted_paths` exactly match the requested task. If no `requested_task` is provided, this layer is `N/A`. This layer **fails closed** if the target carrier's embedded task does not match the requested task identity.
+
+**Fail-closed conjunction**: Activation is blocked if EITHER layer fails. `registry_integrity` status is `VALID` only when every carrier artifact is structurally sound; `target_binding` status is `BOUND` only when the target carrier's embedded task name matches the requested task. Weakening one layer never causes the other to pass.
+
+The `coordinator-verify` CLI emits both `registry_integrity_status` and `target_binding_status` as GitHub Actions output fields so downstream gating can audit each layer independently.
+
 ---
 
 ## 5. One-Click Workflow Construction Procedure
