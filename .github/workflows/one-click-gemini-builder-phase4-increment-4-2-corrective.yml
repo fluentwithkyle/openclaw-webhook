@@ -92,7 +92,7 @@ jobs:
 
           echo "::notice::Preflight: validating all one-click carrier artifacts"
 
-          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir":".github/workflows","target_workflow":"one-click-gemini-builder-phase4-increment-4-2-corrective.yml","requested_task":{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook"},"persist_repairs":true}'
+          node poc/validate-external-activation.js one-click-preflight '{"workflow_dir":".github/workflows","target_workflow":"one-click-gemini-builder-phase4-increment-4-2-corrective.yml","requested_task":{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001","target_agent":"Gemini Builder","repository":"fluentwithkyle/openclaw-webhook"},"persist_repairs":true}'
 
           echo "preflight_validated=true" >> "$GITHUB_OUTPUT"
 
