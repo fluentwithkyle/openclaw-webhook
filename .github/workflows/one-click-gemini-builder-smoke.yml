@@ -580,6 +580,8 @@ jobs:
 
           DESCRIPTOR_FILE="execution-descriptor.json"
           TASK_IDENTITY_MISMATCH=false
+          REQUEST_ID_MISMATCH=false
+          DESCRIPTOR_MISSING=false
           DEFAULT_REPO="${GITHUB_REPOSITORY}"
           DEFAULT_BRANCH="${GITHUB_REF_NAME}"
           if [ -f "$DESCRIPTOR_FILE" ]; then
@@ -595,8 +597,8 @@ jobs:
             EXPECTED_REQUEST_ID="${{ steps.one_click_context.outputs.request_id }}"
             if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" != "$EXPECTED_REQUEST_ID" ]; then
               echo "::error::Callback correlation mismatch at execution-descriptor stage: expected request_id=$EXPECTED_REQUEST_ID actual request_id=${REQUEST_ID:-<missing>}"
-              echo "correlation_valid=false" >> "$GITHUB_OUTPUT"
-              exit 1
+              REQUEST_ID_MISMATCH=true
+              REQUEST_ID="$EXPECTED_REQUEST_ID"
             fi
             if [ -z "$EXPECTED_TASK_NAME" ] || [ "$DESCRIPTOR_TASK_NAME" != "$EXPECTED_TASK_NAME" ]; then
               echo "::error::Task identity mismatch at execution-descriptor stage: expected task_name=$EXPECTED_TASK_NAME actual task_name=${DESCRIPTOR_TASK_NAME:-<missing>}"
@@ -604,10 +606,12 @@ jobs:
               TASK="$TASK_JSON"
             fi
           else
+            echo "::error::Execution descriptor missing during callback preparation; callback dispatch will be blocked"
+            DESCRIPTOR_MISSING=true
             REQUEST_ID="${{ steps.one_click_context.outputs.request_id }}"
             TASK="$TASK_JSON"
-            REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
-            BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+            REPOSITORY="$DEFAULT_REPO"
+            BASE_BRANCH="$DEFAULT_BRANCH"
           fi
 
           BUILDER_EXEC_ID="${{ steps.orchestration_context.outputs.builder_execution_id }}"
@@ -634,6 +638,11 @@ jobs:
             STATUS="failure"
             VERIFICATION_STATUS="FAIL"
             BLOCKER_MSG="Execution descriptor task identity mismatch; callback report uses original carrier task identity."
+          fi
+          if [ "$REQUEST_ID_MISMATCH" = "true" ] || [ "$DESCRIPTOR_MISSING" = "true" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Execution descriptor/request correlation failed; callback dispatch is suppressed."
           fi
 
           CHANGED_FILES_JSON="[]"
@@ -708,9 +717,16 @@ jobs:
 
           echo "report_status=generated" >> "$GITHUB_OUTPUT"
           echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
-          echo "correlation_valid=true" >> "$GITHUB_OUTPUT"
+          if [ "$REQUEST_ID_MISMATCH" = "true" ] || [ "$DESCRIPTOR_MISSING" = "true" ]; then
+            echo "correlation_valid=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "correlation_valid=true" >> "$GITHUB_OUTPUT"
+          fi
 
           cat callback_payload.json
+          if [ "$REQUEST_ID_MISMATCH" = "true" ] || [ "$DESCRIPTOR_MISSING" = "true" ]; then
+            exit 1
+          fi
 
       - name: Send callback to Render
         if: always() && steps.orchestration_context.outcome == 'success' && steps.callback_payload.outputs.correlation_valid == 'true'
