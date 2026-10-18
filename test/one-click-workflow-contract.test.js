@@ -1262,8 +1262,8 @@ runTest('Artifact validator - module exists and exports required functions', () 
 runTest('Artifact validator - all active one-click carriers pass canonical validation', () => {
     const results = preflightValidateOneClickActivation();
     assert.ok(results.all_valid, 'All carriers should pass: ' + JSON.stringify(results.summary));
-    assert.strictEqual(results.summary.total, 5, 'Should have 5 carriers');
-    assert.strictEqual(results.summary.valid, 5, 'All 5 should be valid');
+    assert.strictEqual(results.summary.total, 6, 'Should have 6 carriers');
+    assert.strictEqual(results.summary.valid, 6, 'All 6 should be valid');
     assert.strictEqual(results.summary.invalid, 0, 'None should be invalid');
     for (const [wf, r] of Object.entries(results.results)) {
         assert.ok(r.valid, wf + ' should be valid: ' + (r.error || ''));
@@ -2451,12 +2451,12 @@ runTest('Defect 1 - smoke workflow embeds Gemini Builder task identity (not Kilo
     const extracted = extractEmbeddedCarrierArtifact(raw);
     assert.ok(extracted, 'Smoke workflow must have embedded carrier artifact');
     const parsed = JSON.parse(extracted);
-    assert.strictEqual(parsed.task_name, 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+    assert.strictEqual(parsed.task_name, 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
         'Smoke workflow task_name must be the Gemini Builder smoke-test identity, not a corrective task');
     assert.strictEqual(parsed.target_agent, 'Gemini Builder',
         'Smoke workflow target_agent must be Gemini Builder, not Kilo');
-    assert.strictEqual(parsed.originator, 'Kyle - Director',
-        'Smoke workflow originator must use ASCII hyphen (not em-dash or double-hyphen)');
+    assert.strictEqual(parsed.originator, 'Kyle -- Director',
+         'Smoke workflow originator must use ASCII hyphen (not em-dash or double-hyphen)');
 });
 
 runTest('Defect 1 - corrective task is NOT embedded as the task the smoke workflow executes', () => {
@@ -2673,13 +2673,13 @@ runTest('Defect 4 - approval step is gated on preflight and coordinator-verify s
 runTest('Defect 1 - preflight passes when all carriers individually valid despite different task identities', () => {
     const result = preflightValidateOneClickActivation('.github/workflows');
     assert.ok(result.all_valid, 'All carriers should pass preflight even with different task identities: ' + JSON.stringify(result.summary));
-    assert.strictEqual(result.summary.total, 5, 'Should have 5 carriers');
-    assert.strictEqual(result.summary.valid, 5, 'All 5 carriers should be valid');
+    assert.strictEqual(result.summary.total, 6, 'Should have 6 carriers');
+    assert.strictEqual(result.summary.valid, 6, 'All 6 carriers should be valid');
 });
 
 runTest('Defect 1 - preflight with target_workflow passes when target carrier matches requested task', () => {
     const result = preflightValidateOneClickActivation('.github/workflows', {
-        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
         target_agent: 'Gemini Builder',
         repository: 'fluentwithkyle/openclaw-webhook'
     }, true, 'one-click-gemini-builder-smoke.yml');
@@ -2728,7 +2728,7 @@ runTest('Defect 1 - preflight fails when an invalid unrelated carrier exists (fa
 
 runTest('Defect 1 - preflight does not require every carrier to match requested task identity', () => {
     const result = preflightValidateOneClickActivation('.github/workflows', {
-        task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+        task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
         target_agent: 'Gemini Builder',
         repository: 'fluentwithkyle/openclaw-webhook'
     }, true, 'one-click-gemini-builder-smoke.yml');
@@ -2741,7 +2741,7 @@ runTest('Defect 1 - preflight does not require every carrier to match requested 
         return keys[i] !== 'one-click-gemini-builder-smoke.yml';
     });
 
-    assert.ok(nonTargetResults.length === 4, 'Should have 4 non-target carriers');
+    assert.ok(nonTargetResults.length === 5, 'Should have 5 non-target carriers');
 });
 
 runTest('Defect 1 - smoke workflow passes preflight CLI with target_workflow identifying the target carrier', () => {
@@ -2760,7 +2760,7 @@ runTest('Defect 1 - preflight CLI passes with target_workflow and matching reque
         workflow_dir: '.github/workflows',
         target_workflow: 'one-click-gemini-builder-smoke.yml',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook'
         },
@@ -2830,7 +2830,7 @@ runTest('Defect 2 - coordinator-verify fails closed when origin/main unavailable
         workflow_dir: '.github/workflows',
         base_branch: 'nonexistent-branch-zzz',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
@@ -2858,7 +2858,7 @@ runTest('Defect 2 - coordinator-verify produces verification_source=origin/main 
         workflow_dir: '.github/workflows',
         base_branch: 'main',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',
@@ -2879,7 +2879,7 @@ runTest('Defect 2 - coordinator-verify verified_on_main is true only when origin
         workflow_dir: '.github/workflows',
         base_branch: 'main',
         requested_task: {
-            task_name: 'TASK-GEMINI-BUILDER-EXECUTION-SMOKE-TEST-001',
+            task_name: 'TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001',
             target_agent: 'Gemini Builder',
             repository: 'fluentwithkyle/openclaw-webhook',
             task_mode: 'BUILDER',

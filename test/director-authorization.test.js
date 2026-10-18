@@ -36,9 +36,16 @@ function request(path, headers, body) {
 }
 function pocHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET }; }
 function directorOriginHeaders() { return { 'x-poc-trigger-secret': POC_TRIGGER_SECRET, 'x-director-origin-secret': DIRECTOR_ORIGIN_SECRET }; }
+function getCurrentRepoHead() {
+    try {
+        return require('child_process').execSync('git rev-parse HEAD', { encoding: 'utf8', timeout: 2000 }).trim();
+    } catch (e) {
+        return '';
+    }
+}
 function scope(cmd) { return { request_id: cmd.request_id, target: cmd.target, task_mode: cmd.task_mode, capabilities: cmd.authorization.capabilities, permitted_paths: cmd.constraints.permitted_paths, repository: cmd.repository, base_branch: cmd.base_branch }; }
 function command(requestId) {
-  return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Gemini', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Implement Phase 4 cross-task lineage navigation', task_name: 'TASK-ACP-CANONICAL-' + requestId, task_mode: 'FAILOVER_EXECUTE', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment' };
+  return { protocol_version: '0.1', request_id: requestId, source: 'Director', originator: 'Kyle', target: 'Gemini', task_type: 'implementation', repository: 'fluentwithkyle/openclaw-webhook', base_branch: 'main', task: 'Implement Phase 4 cross-task lineage navigation', task_name: 'TASK-ACP-CANONICAL-' + requestId, task_mode: 'FAILOVER_EXECUTE', constraints: { permitted_paths: ['poc/'] }, authorization: { capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'] }, verification: 'Run tests', reporting: 'json', activation_syntax: '@gemini-cli', activation_surface: 'github_issue_comment', requirements_reference: ['DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md'], state_inspection: { commit: getCurrentRepoHead() } };
 }
 
 function runTestAsync(name, fn) {
@@ -53,6 +60,7 @@ function runTestAsync(name, fn) {
 }
 
 (async () => {
+  let originalGeminiDispatch = null;
   try {
     taskRegistry.resetRegistry();
     const cmd = command('director-auth-1');

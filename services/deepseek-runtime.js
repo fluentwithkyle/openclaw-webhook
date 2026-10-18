@@ -9,29 +9,6 @@ const { evaluateCoordinatorIntent } = require('../poc/strategic-alignment');
 const { issueDirectorTransitionDecision } = require('../poc/transition-decision-provenance');
 const { ACP_LIFECYCLE_STATES, LINEAGE_CONTROL_SEMANTICS } = require('../poc/schemas/acp-schema');
 
-function getRobustStrategicStateOptions(userOptions = {}) {
-    try {
-        const statePath = userOptions.statePath || path.join(__dirname, '..', 'docs', 'ai', 'STATE.md');
-        const projectionPath = userOptions.projectionPath || path.join(__dirname, '..', 'docs', 'ai', 'strategic-state.json');
-
-        const stateText = fs.readFileSync(statePath, 'utf8');
-        const projection = JSON.parse(fs.readFileSync(projectionPath, 'utf8'));
-        const calculatedHash = crypto.createHash('sha256').update(stateText).digest('hex');
-
-        if (projection.state_md_sha256 === calculatedHash) {
-            return { statePath, projectionPath };
-        }
-
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'strategic-'));
-        const tmpProjectionPath = path.join(tmpDir, 'strategic-state.json');
-        const syncedProjection = { ...projection, state_md_sha256: calculatedHash };
-        fs.writeFileSync(tmpProjectionPath, JSON.stringify(syncedProjection, null, 2), 'utf8');
-
-        return { statePath, projectionPath: tmpProjectionPath };
-    } catch (e) {
-        return userOptions;
-    }
-}
 
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_ITERATIONS = 3;
@@ -276,8 +253,7 @@ function buildControlPlaneCommand(args, trustedContext = {}) {
         throw new RuntimeError(400, 'INVALID_TOOL_ARGUMENTS', 'control_plane arguments are not permitted by the runtime policy');
     }
 
-    const robustOptions = getRobustStrategicStateOptions(trustedContext.strategicStateOptions);
-    const strategicAlignment = evaluateCoordinatorIntent(args.objective, robustOptions);
+    const strategicAlignment = evaluateCoordinatorIntent(args.objective, trustedContext.strategicStateOptions);
     if (strategicAlignment.status !== 'ALIGNED_PENDING_AUTHORIZATION') {
         throw new RuntimeError(403, 'STRATEGIC_ALIGNMENT_BLOCKED', strategicAlignment.detail || 'Strategic alignment could not be established', { strategic_code: strategicAlignment.code, escalation: strategicAlignment.escalation });
     }
@@ -309,9 +285,10 @@ function buildControlPlaneCommand(args, trustedContext = {}) {
         command.requirements_reference = ['DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md', 'ARCHITECTURE.md', 'TASK_STANDARD.md'];
         try {
             const headCommit = execSync('git rev-parse HEAD', { encoding: 'utf8', timeout: 2000 }).trim();
-            command.state_inspection = { commit: headCommit };
+            if (headCommit) {
+                command.state_inspection = { commit: headCommit };
+            }
         } catch (e) {
-            command.state_inspection = { commit: 'test-head-commit' };
         }
     }
     if (hasWorkflowStep) {

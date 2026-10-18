@@ -50,6 +50,14 @@ function cleanup() {
     taskRegistry.resetRegistry();
 }
 
+function getCurrentRepoHead() {
+    try {
+        return require('child_process').execSync('git rev-parse HEAD', { encoding: 'utf8', timeout: 2000 }).trim();
+    } catch (e) {
+        return '';
+    }
+}
+
 function makeCommand(requestId) {
     return {
         protocol_version: '0.1',
@@ -66,7 +74,7 @@ function makeCommand(requestId) {
         reporting: 'json',
         originator: 'Kyle',
         requirements_reference: ['DEESEEK_COORDINATOR_LIFECYCLE_ENFORCEMENT_ROADMAP.md'],
-        state_inspection: { commit: 'test-head-commit' }
+        state_inspection: { commit: getCurrentRepoHead() }
     };
 }
 
