@@ -5,8 +5,8 @@
 
 Designed for Kyle checking the project from a phone.
 
-**Last Updated**: 2026-10-18
-**Updated By**: Gemini Builder — Increment 4.2 Part 1 corrective implementation
+**Last Updated**: 2026-10-19
+**Updated By**: ChatGPT Coordinator — PR #368 documentation reconciliation
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -140,7 +140,9 @@ Updated By | ChatGPT — TASK-CHATGPT-DEEPSEEK-PHASE-2-CONVERGENCE-DOCUMENTATION
 **Remaining gap**: cross-request result delivery, polling/callback delivery, workflow decomposition, automated specialist activation, and full conversational coordination remain PROPOSED / TARGET. No additional model-facing operation, authority mechanism, or state store was introduced.
 ## Current Blocker — Phase 4 Increment 4.2
 
-**BLOCKED — do not start Part 2.** Part 1 commit `8bcb3978a894419c31a4d52c208d69022920dfae` is on main, but independent source inspection found a `phase-4-test-bypass` that overrides strategic-alignment rejection, a helper that fabricates a projection hash, fallback-generated requirements/state evidence, and prefix-based requirements matching. The builder callback also failed with `NO_CLAIM_ON_DISK`. Delivery is verified; correctness and lifecycle completion are not. Correct these fail-closed defects, run targeted tests, explain the callback failure without weakening claim validation, and independently verify the corrected commit before proceeding. Existing research is sufficient; no repeat research.
+**Status: IMPLEMENTATION CORRECTED; CALLBACK ROOT-CAUSE ANALYSIS PENDING.** The corrective implementation `TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001` is recorded as SUCCESS: it removed the strategic-alignment test bypass, temporary projection-hash rewriting, synthesized state/requirements evidence, and prefix-based requirements matching; it added exact canonical requirements-reference matching and genuine server-verified state inspection. Do not repeat the completed design research.
+
+The remaining unresolved item is the callback failure `NO_CLAIM_ON_DISK` from corrective workflow run `39084785590`. A focused Kilo root-cause analysis is required without code changes. Until that RCA is verified and claim durability/correlation are confirmed, **Part 1's end-to-end callback lifecycle is not fully accepted and Part 2 must not start**. Do not weaken claim validation or infer callback completion from implementation/test reports alone.
 
 ## Next Action
 
