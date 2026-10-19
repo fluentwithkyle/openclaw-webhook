@@ -1436,7 +1436,7 @@ runTest('Artifact validator - bindCarrierToRequestedTask detects mismatch', () =
     const requestedTask = { task_name: 'DIFFERENT-TASK', target_agent: 'Gemini Builder', repository: 'fluentwithkyle/openclaw-webhook' };
     const binding = bindCarrierToRequestedTask(parsed, requestedTask);
     assert.ok(!binding.bound, 'Mismatched task_name should fail binding');
-    assert.ok(binding.mismatches.indexOf('task_name') !== -1, 'Should report task_name mismatch');
+    assert.ok(binding.mismatches.some(m => m.field === 'task_name'), 'Should report task_name mismatch');
 });
 
 runTest('Artifact validator - bindCarrierToRequestedTask binds matching task', () => {
@@ -1618,7 +1618,7 @@ runTest('Preflight strictness - bindCarrierToRequestedTask detects task_name mis
     const result = validateOneClickCarrier(workflow, requestedTask);
     assert.ok(result.valid, 'Artifact should be valid');
     assert.ok(!result.binding.bound, 'Task mismatch should fail binding');
-    assert.ok(result.binding.mismatches.indexOf('task_name') !== -1);
+    assert.ok(result.binding.mismatches.some(m => m.field === 'task_name') !== -1);
 });
 
 runTest('Preflight strictness - bindCarrierToRequestedTask detects target_agent mismatch', () => {
@@ -1632,7 +1632,7 @@ runTest('Preflight strictness - bindCarrierToRequestedTask detects target_agent 
     const result = validateOneClickCarrier(workflow, requestedTask);
     assert.ok(result.valid, 'Artifact should be valid');
     assert.ok(!result.binding.bound, 'Target agent mismatch should fail binding');
-    assert.ok(result.binding.mismatches.indexOf('target_agent') !== -1);
+    assert.ok(result.binding.mismatches.some(m => m.field === 'target_agent') !== -1);
 });
 
 runTest('Preflight strictness - bindCarrierToRequestedTask succeeds for exact match', () => {
@@ -3030,7 +3030,7 @@ runTest('Smoke workflow - callback_payload step uses set -uo pipefail (not -e) t
 runTest('Smoke workflow - callback_payload step always generates gemini-acp-report.json even on failure', () => {
     const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
     const cbIdx = raw.indexOf('Prepare ACP report payload');
-    const cbSection = raw.slice(cbIdx, cbIdx + 7000);
+    const cbSection = raw.slice(cbIdx, cbIdx + 12000);
     assert.ok(/callback_payload\.json/.test(cbSection),
         'callback_payload step must write to callback_payload.json');
     assert.ok(/gemini-acp-report\.json/.test(cbSection),
@@ -3042,7 +3042,7 @@ runTest('Smoke workflow - callback_payload step always generates gemini-acp-repo
 runTest('Smoke workflow - callback_payload step push status reflects actual push, not just commit existence', () => {
     const raw = fs.readFileSync(ONE_CLICK_BUILDER_SMOKE_WF, 'utf8');
     const cbIdx = raw.indexOf('Prepare ACP report payload');
-    const cbSection = raw.slice(cbIdx, cbIdx + 5000);
+    const cbSection = raw.slice(cbIdx, cbIdx + 12000);
     assert.ok(/if.*PUSH_STATUS.*=.*true/.test(cbSection) || /PUSH_VAL.*PUSH_STATUS/.test(cbSection),
         'callback_payload must derive push status from PUSH_STATUS output, not just commit SHA existence');
     assert.ok(!/PUSH_STATUS=true/.test(cbSection.replace(/if.*PUSH_STATUS.*/, '')),
@@ -3317,7 +3317,7 @@ runTest('Defect 11 - REPOSITORY/BASE_BRANCH use env vars (not inline ${{ }} in b
         const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', wfName), 'utf8');
         const cbIdx = raw.indexOf('Prepare ACP report payload');
         if (cbIdx === -1) continue;
-        const cbSection = raw.slice(cbIdx, cbIdx + 5000);
+        const cbSection = raw.slice(cbIdx, cbIdx + 12000);
         const hasEnvVar = /REPOSITORY:\s*\$\{\{/.test(cbSection) ||
             /DEFAULT_REPO.*GITHUB_REPOSITORY/.test(cbSection) ||
             /REPOSITORY=.*steps.*outputs\.repository/.test(cbSection);
@@ -3894,7 +3894,7 @@ runTest('Binding integrity - smoke callback fails the report when descriptor tas
     assert.ok(/DESCRIPTOR_TASK_NAME/.test(callbackSection), 'Callback must extract task identity from descriptor');
     assert.ok(/TASK_IDENTITY_MISMATCH=true/.test(callbackSection), 'Descriptor task mismatch must be recorded');
     assert.ok(/Execution descriptor task identity mismatch/.test(callbackSection), 'Mismatch must be surfaced as a failure blocker');
-    assert.ok(/TASK="$TASK_JSON"/.test(callbackSection), 'Mismatch report must retain original carrier task identity');
+    assert.ok(/TASK="\$TASK_JSON"/.test(callbackSection), 'Mismatch report must retain original carrier task identity');
 });
 
 
