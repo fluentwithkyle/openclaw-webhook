@@ -195,20 +195,28 @@ function bindCarrierToRequestedTask(parsed, requestedTask) {
     }
 
     const checks = [
-        { field: 'task_name', match: parsed.task_name === requestedTask.task_name },
-        { field: 'target_agent', match: parsed.target_agent === requestedTask.target_agent },
-        { field: 'repository', match: parsed.repository === requestedTask.repository }
+        { field: 'task_name', expected: requestedTask.task_name, actual: parsed.task_name, match: parsed.task_name === requestedTask.task_name },
+        { field: 'target_agent', expected: requestedTask.target_agent, actual: parsed.target_agent, match: parsed.target_agent === requestedTask.target_agent },
+        { field: 'repository', expected: requestedTask.repository, actual: parsed.repository, match: parsed.repository === requestedTask.repository },
+        { field: 'base_branch', expected: requestedTask.base_branch, actual: parsed.base_branch, match: requestedTask.base_branch === undefined || parsed.base_branch === requestedTask.base_branch },
+        { field: 'task_mode', expected: requestedTask.task_mode, actual: parsed.task_mode, match: requestedTask.task_mode === undefined || parsed.task_mode === requestedTask.task_mode },
+        { field: 'capabilities', expected: requestedTask.capabilities, actual: parsed.capabilities, match: requestedTask.capabilities === undefined || (Array.isArray(parsed.capabilities) && JSON.stringify([...parsed.capabilities].slice().sort()) === JSON.stringify([...requestedTask.capabilities].slice().sort())) },
+        { field: 'permitted_paths', expected: requestedTask.permitted_paths, actual: parsed.scope && parsed.scope.permitted_paths, match: requestedTask.permitted_paths === undefined || (Array.isArray(parsed.scope && parsed.scope.permitted_paths) && JSON.stringify([...parsed.scope.permitted_paths].slice().sort()) === JSON.stringify([...requestedTask.permitted_paths].slice().sort())) }
     ];
 
-    const mismatches = checks.filter(c => !c.match).map(c => c.field);
+    const mismatches = checks.filter(check => !check.match).map(check => ({
+        field: check.field,
+        expected: check.expected === undefined ? '(not specified)' : check.expected,
+        actual: check.actual === undefined ? '(missing)' : check.actual
+    }));
 
     if (mismatches.length === 0) {
-        return { bound: true, reason: 'Embedded carrier matches requested task' };
+        return { bound: true, reason: 'Embedded carrier matches every specified task identity and authority field' };
     }
 
     return {
         bound: false,
-        reason: 'Carrier mismatch: ' + mismatches.join(', '),
+        reason: 'Carrier binding mismatch: ' + mismatches.map(m => m.field + ' expected=' + JSON.stringify(m.expected) + ' actual=' + JSON.stringify(m.actual)).join('; '),
         mismatches
     };
 }

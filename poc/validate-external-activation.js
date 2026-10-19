@@ -11,6 +11,8 @@ const {
 const {
     preflightValidateOneClickActivation,
     repairAndRevalidateOneClickCarrier,
+    validateOneClickCarrier,
+    listOneClickWorkflows,
     validateAllWorkflowYaml,
     serializeCanonicalTaskArtifact
 } = require('./one-click-artifact-validator');
@@ -184,6 +186,16 @@ async function main() {
             process.exit(1);
         }
 
+        if (!listOneClickWorkflows().includes(workflowName)) {
+            console.error('::error::BLOCKED: workflow_name is not a registered one-click carrier: ' + workflowName);
+            writeOutput('coordinator_status', 'BLOCKED');
+            writeOutput('coordinator_ready', 'false');
+            writeOutput('registry_integrity_status', 'INVALID');
+            writeOutput('target_binding_status', 'UNBOUND');
+            writeOutput('coordinator_reason', 'Unregistered target workflow: ' + workflowName);
+            process.exit(1);
+        }
+
         if (!requestedTask || !requestedTask.task_name) {
             console.error('::error::BLOCKED: coordinator-verify requires requested_task with task_name');
             writeOutput('coordinator_status', 'BLOCKED');
@@ -243,10 +255,12 @@ async function main() {
             process.exit(1);
         }
 
-        const repairResult = repairAndRevalidateOneClickCarrier(workflowRaw, requestedTask);
+        // Readiness must validate the exact committed artifact. A locally repairable
+        // artifact is not ready until the corrected bytes are committed and present on origin.
+        const repairResult = validateOneClickCarrier(workflowRaw, requestedTask);
 
-        if (!repairResult.valid && !repairResult.repaired) {
-            console.error('::error::BLOCKED: Embedded carrier artifact is invalid and cannot be automatically repaired: ' + (repairResult.error || 'validation failed'));
+        if (!repairResult.valid) {
+            console.error('::error::BLOCKED: Committed embedded carrier artifact is invalid: ' + (repairResult.error || 'validation failed'));
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
             writeOutput('registry_integrity_status', 'INVALID');
@@ -283,19 +297,36 @@ async function main() {
             process.exit(1);
         }
 
-        const fullPreflight = preflightValidateOneClickActivation(workflowDir, null, false, null);
-
-        if (!fullPreflight.all_valid) {
-            const invalidCarriers = Object.entries(fullPreflight.results).filter(([_, r]) => r.valid !== true);
-            console.error('::error::BLOCKED: Registry integrity failure — one or more carrier artifacts are invalid');
-            for (const [wf, r] of invalidCarriers) {
-                console.error('::error::' + wf + ': ' + (r.error || 'validation failed'));
+        const registryResults = {};
+        for (const carrierWorkflow of listOneClickWorkflows()) {
+            const carrierPath = workflowDir + '/' + carrierWorkflow;
+            const remoteCarrier = fetchWorkflowFromOriginMain(carrierPath, baseBranch);
+            if (!remoteCarrier.ok) {
+                registryResults[carrierWorkflow] = {
+                    valid: false,
+                    error: 'Cannot verify registered carrier on origin/' + baseBranch + ': ' + remoteCarrier.error,
+                    error_code: 'REMOTE_CARRIER_UNAVAILABLE'
+                };
+                continue;
+            }
+            const carrierValidation = validateOneClickCarrier(remoteCarrier.content, null);
+            registryResults[carrierWorkflow] = {
+                valid: carrierValidation.valid === true,
+                error: carrierValidation.valid ? null : carrierValidation.error,
+                error_code: carrierValidation.error_code || null
+            };
+        }
+        const invalidCarriers = Object.entries(registryResults).filter(([_, result]) => result.valid !== true);
+        if (invalidCarriers.length > 0) {
+            console.error('::error::BLOCKED: Registry integrity failure — committed carrier artifacts on origin/' + baseBranch + ' are invalid or unavailable');
+            for (const [wf, result] of invalidCarriers) {
+                console.error('::error::stage=registry_integrity workflow=' + wf + ' code=' + (result.error_code || 'VALIDATION_FAILED') + ' detail=' + (result.error || 'validation failed'));
             }
             writeOutput('coordinator_status', 'BLOCKED');
             writeOutput('coordinator_ready', 'false');
             writeOutput('registry_integrity_status', 'INVALID');
             writeOutput('target_binding_status', 'BOUND');
-            writeOutput('coordinator_reason', 'Registry integrity failure: one or more carrier artifacts invalid');
+            writeOutput('coordinator_reason', 'Registry integrity failure: committed carrier artifacts invalid or unavailable');
             process.exit(1);
         }
 
