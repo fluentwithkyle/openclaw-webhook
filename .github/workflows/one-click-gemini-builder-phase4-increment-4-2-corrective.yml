@@ -580,7 +580,15 @@ jobs:
           DESCRIPTOR_FILE="execution-descriptor.json"
           DEFAULT_REPO="${GITHUB_REPOSITORY}"
           DEFAULT_BRANCH="${GITHUB_REF_NAME}"
-          if [ -f "$DESCRIPTOR_FILE" ]; then
+          ORCH_OUTPUT="${{ steps.orchestration_context.outputs.request_id }}"
+          if [ -n "$ORCH_OUTPUT" ] && [ "$ORCH_OUTPUT" != "" ]; then
+            REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
+            TASK="$TASK_JSON"
+            REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
+            BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+            EXECUTION_CLAIM_ID="${{ steps.orchestration_context.outputs.execution_claim_id }}"
+            CARRIER_IDENTITY="${{ steps.orchestration_context.outputs.carrier_identity }}"
+          elif [ -f "$DESCRIPTOR_FILE" ]; then
             REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             TASK="$(jq -r '.task // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             REPOSITORY="$(jq -r --arg def "$DEFAULT_REPO" '.repository // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_REPO")"

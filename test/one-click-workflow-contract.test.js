@@ -3395,6 +3395,33 @@ runTest('Defect 12 - TASK_JSON is declared as env: variable in callback_payload 
     }
 });
 
+runTest('Defect 13 - callback_payload prioritizes orchestration_context outputs over stale descriptor', () => {
+    const correctiveWf = 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml';
+    const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', correctiveWf), 'utf8');
+    const cbIdx = raw.indexOf('Prepare ACP report payload');
+    assert.ok(cbIdx !== -1, 'callback_payload step must exist');
+    // Use the descriptor fallback block boundary to scope the if/elif/fi section
+    const descriptorIdx = raw.indexOf('elif [ -f "$DESCRIPTOR_FILE" ]', cbIdx);
+    assert.ok(descriptorIdx !== -1, correctiveWf + ' callback_payload must have descriptor fallback (elif)');
+    const ifBlock = raw.slice(cbIdx, descriptorIdx + 500);
+
+    // Must check for orchestration_context output before falling back to descriptor
+    assert.ok(/ORCH_OUTPUT="\$\{\{ steps\.orchestration_context\.outputs\.request_id \}\}"/.test(ifBlock),
+        correctiveWf + ' callback_payload must check orchestration_context output before descriptor fallback');
+
+    // Must gate on orchestration_context output presence
+    assert.ok(/if \[ -n "\$ORCH_OUTPUT" \]./.test(ifBlock),
+        correctiveWf + ' callback_payload must gate on orchestration_context output presence');
+
+    // Must NOT read request_id from descriptor as primary source when orchestration context exists
+    assert.ok(/REQUEST_ID="\$\{\{ steps\.orchestration_context\.outputs\.request_id \}\}"/.test(ifBlock),
+        correctiveWf + ' callback_payload must use orchestration_context outputs for REQUEST_ID');
+    assert.ok(/EXECUTION_CLAIM_ID="\$\{\{ steps\.orchestration_context\.outputs\.execution_claim_id \}\}"/.test(ifBlock),
+        correctiveWf + ' callback_payload must use orchestration_context outputs for EXECUTION_CLAIM_ID');
+    assert.ok(/CARRIER_IDENTITY="\$\{\{ steps\.orchestration_context\.outputs\.carrier_identity \}\}"/.test(ifBlock),
+        correctiveWf + ' callback_payload must use orchestration_context outputs for CARRIER_IDENTITY');
+});
+
 // =========================================================
 // Defect #13: GITHUB_OUTPUT multi-line value corruption
 // echo "field=$MULTI_LINE_VALUE" >> $GITHUB_OUTPUT
