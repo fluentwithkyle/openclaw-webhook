@@ -604,8 +604,8 @@ jobs:
 
           if [ "$IDENTITY_MISSING" = "false" ] && [ -f "$DESCRIPTOR_FILE" ]; then
             DESC_REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            DESC_EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
-            DESC_CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
+            DESC_EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            DESC_CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
             if [ -z "$DESC_REQUEST_ID" ] || [ -z "$DESC_EXECUTION_CLAIM_ID" ] || [ -z "$DESC_CARRIER_IDENTITY" ]; then
               echo "::error::Callback identity validation failed: execution descriptor has missing request_id, execution_claim_id, or carrier_identity"
               DESCRIPTOR_MISMATCH=true
