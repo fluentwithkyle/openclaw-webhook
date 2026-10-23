@@ -5,8 +5,8 @@
 
 Designed for Kyle checking the project from a phone.
 
-**Last Updated**: 2026-10-19
-**Updated By**: ChatGPT Coordinator — PR #368 documentation reconciliation
+**Last Updated**: 2026-10-22
+**Updated By**: Kilo Cloud Agent — Phase 4 Increment 4.2 callback correlation & claim durability enforcement
 ---
 
 ## High-Priority Focus — DeepSeek Coordinator Evolution
@@ -140,9 +140,7 @@ Updated By | ChatGPT — TASK-CHATGPT-DEEPSEEK-PHASE-2-CONVERGENCE-DOCUMENTATION
 **Remaining gap**: cross-request result delivery, polling/callback delivery, workflow decomposition, automated specialist activation, and full conversational coordination remain PROPOSED / TARGET. No additional model-facing operation, authority mechanism, or state store was introduced.
 ## Current Blocker — Phase 4 Increment 4.2
 
-**Status: IMPLEMENTATION CORRECTED; CALLBACK ROOT-CAUSE ANALYSIS PENDING.** The corrective implementation `TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001` is recorded as SUCCESS: it removed the strategic-alignment test bypass, temporary projection-hash rewriting, synthesized state/requirements evidence, and prefix-based requirements matching; it added exact canonical requirements-reference matching and genuine server-verified state inspection. Do not repeat the completed design research.
-
-The remaining unresolved item is the callback failure `NO_CLAIM_ON_DISK` from corrective workflow run `39084785590`. A focused Kilo root-cause analysis is required without code changes. Until that RCA is verified and claim durability/correlation are confirmed, **Part 1's end-to-end callback lifecycle is not fully accepted and Part 2 must not start**. Do not weaken claim validation or infer callback completion from implementation/test reports alone.
+**Status: IMPLEMENTED AND VERIFIED LOCALLY; RENDER DURABILITY BLOCKED.** Corrected finding: BOTH `/poc/kilo/callback` AND `/poc/builder/callback` routes had an `if (executionClaim)` bypass that allowed correlation to be skipped when no authoritative claim existed — both bypasses removed, both now fail closed (403 on missing/mismatched claim_id or carrier_identity, dispatch skipped). `TASK-KILO-PHASE4-INCREMENT-4-2-CALLBACK-CORRELATION-AND-CLAIM-DURABILITY-001` implemented immutable execution identity (request_id, execution_claim_id, carrier_identity) enforcement at callback delivery for BOTH Kilo and Builder callbacks, removed the bypass from both routes, fixed the Builder callback stale `execution-descriptor.json` reread defect (prioritizes server-validated `steps.orchestration_context.outputs.*`), and added regression tests (7 kilo-callback tests, 2 task-registry restart tests, 3 workflow-contract Defect 13 tests). All tests pass (0 failures). `git diff --check` clean. Claim durability uses local filesystem (`poc/task-registry.json` atomic write + `poc/claims/*.claim.lock` O_EXCL); claim persists across process restart within a single machine but does NOT survive Render instance restarts. **UNRESOLVED BLOCKER — Render durability**: true cross-restart durability requires Render Persistent Disk or Render Postgres/Key Value with explicit dependency authorization + plan-upgrade consent, both blocked by AGENTS.md §5 and task constraints. This blocker is REPORTED, not claimed resolved. Increment 4.2 Part 2 may proceed upon separate ACP authorization.
 
 ## Next Action
 

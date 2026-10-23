@@ -439,6 +439,63 @@ router.post('/kilo/callback', authenticateKiloCallback, async (req, res) => {
         });
     }
 
+    // Execution claim correlation — fail-closed (same enforcement as Builder callback)
+    // An execution path callback MUST carry a valid authoritative execution claim.
+    // Missing claim, missing claim ID, or missing/mismatched carrier identity all
+    // fail closed with 403 and do NOT proceed to orchestrator dispatch.
+    const kiloExecutionClaim = taskRegistry.getExecutionClaim(requestId);
+    if (!kiloExecutionClaim) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: 'No authoritative execution claim for this request_id; callback rejected',
+            error_code: 'EXECUTION_CLAIM_MISSING'
+        });
+    }
+
+    const callbackClaimId = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.execution_claim_id;
+    if (!callbackClaimId) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Missing execution_claim_id; authoritative claim ${kiloExecutionClaim.execution_claim_id} exists for this request_id`,
+            error_code: 'EXECUTION_CLAIM_MISSING'
+        });
+    }
+
+    if (kiloExecutionClaim.execution_claim_id !== callbackClaimId) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Execution claim ID mismatch: expected ${kiloExecutionClaim.execution_claim_id}, got ${callbackClaimId}`,
+            error_code: 'EXECUTION_CLAIM_MISMATCH'
+        });
+    }
+
+    const callbackCarrierIdentity = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.carrier_identity;
+    if (!callbackCarrierIdentity) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Missing carrier_identity; authoritative claim ${kiloExecutionClaim.execution_claim_id} has carrier_identity ${kiloExecutionClaim.carrier_identity}`,
+            error_code: 'CARRIER_IDENTITY_MISSING'
+        });
+    }
+
+    if (kiloExecutionClaim.carrier_identity !== callbackCarrierIdentity) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Carrier identity mismatch: expected ${kiloExecutionClaim.carrier_identity}, got ${callbackCarrierIdentity}`,
+            error_code: 'CARRIER_IDENTITY_MISMATCH'
+        });
+    }
+
     // Process through orchestrator (handles idempotency and state transitions)
     const result = await orchestrator.handleKiloCompletion(requestId, req.body);
 
@@ -651,48 +708,56 @@ router.post('/builder/callback', authenticateBuilderCallback, async (req, res) =
     }
 
     const executionClaim = taskRegistry.getExecutionClaim(requestId);
-    if (executionClaim) {
-        const callbackClaimId = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.execution_claim_id;
-        if (!callbackClaimId) {
-            return res.status(403).json({
-                request_id: requestId,
-                status: 'authorization blocked',
-                stage: 'authorization blocked',
-                error: `Missing execution_claim_id; authoritative claim ${executionClaim.execution_claim_id} exists for this request_id`,
-                error_code: 'EXECUTION_CLAIM_MISSING'
-            });
-        }
+    if (!executionClaim) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: 'No authoritative execution claim for this request_id; callback rejected',
+            error_code: 'EXECUTION_CLAIM_MISSING'
+        });
+    }
 
-        if (executionClaim.execution_claim_id !== callbackClaimId) {
-            return res.status(403).json({
-                request_id: requestId,
-                status: 'authorization blocked',
-                stage: 'authorization blocked',
-                error: `Execution claim ID mismatch: expected ${executionClaim.execution_claim_id}, got ${callbackClaimId}`,
-                error_code: 'EXECUTION_CLAIM_MISMATCH'
-            });
-        }
+    const callbackClaimId = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.execution_claim_id;
+    if (!callbackClaimId) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Missing execution_claim_id; authoritative claim ${executionClaim.execution_claim_id} exists for this request_id`,
+            error_code: 'EXECUTION_CLAIM_MISSING'
+        });
+    }
 
-        const callbackCarrierIdentity = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.carrier_identity;
-        if (!callbackCarrierIdentity) {
-            return res.status(403).json({
-                request_id: requestId,
-                status: 'authorization blocked',
-                stage: 'authorization blocked',
-                error: `Missing carrier_identity; authoritative claim ${executionClaim.execution_claim_id} has carrier_identity ${executionClaim.carrier_identity}`,
-                error_code: 'CARRIER_IDENTITY_MISSING'
-            });
-        }
+    if (executionClaim.execution_claim_id !== callbackClaimId) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Execution claim ID mismatch: expected ${executionClaim.execution_claim_id}, got ${callbackClaimId}`,
+            error_code: 'EXECUTION_CLAIM_MISMATCH'
+        });
+    }
 
-        if (executionClaim.carrier_identity !== callbackCarrierIdentity) {
-            return res.status(403).json({
-                request_id: requestId,
-                status: 'authorization blocked',
-                stage: 'authorization blocked',
-                error: `Carrier identity mismatch: expected ${executionClaim.carrier_identity}, got ${callbackCarrierIdentity}`,
-                error_code: 'CARRIER_IDENTITY_MISMATCH'
-            });
-        }
+    const callbackCarrierIdentity = req.body.result && req.body.result.execution_metadata && req.body.result.execution_metadata.carrier_identity;
+    if (!callbackCarrierIdentity) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Missing carrier_identity; authoritative claim ${executionClaim.execution_claim_id} has carrier_identity ${executionClaim.carrier_identity}`,
+            error_code: 'CARRIER_IDENTITY_MISSING'
+        });
+    }
+
+    if (executionClaim.carrier_identity !== callbackCarrierIdentity) {
+        return res.status(403).json({
+            request_id: requestId,
+            status: 'authorization blocked',
+            stage: 'authorization blocked',
+            error: `Carrier identity mismatch: expected ${executionClaim.carrier_identity}, got ${callbackCarrierIdentity}`,
+            error_code: 'CARRIER_IDENTITY_MISMATCH'
+        });
     }
 
     const result = await orchestrator.handleGeminiBuilderCompletion(requestId, req.body);
