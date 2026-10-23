@@ -3395,31 +3395,27 @@ runTest('Defect 12 - TASK_JSON is declared as env: variable in callback_payload 
     }
 });
 
-runTest('Defect 13 - callback_payload prioritizes orchestration_context outputs over stale descriptor', () => {
+runTest('Defect 13 - callback_payload requires authoritative orchestration outputs without stale descriptor fallback', () => {
     const correctiveWf = 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml';
     const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', correctiveWf), 'utf8');
     const cbIdx = raw.indexOf('Prepare ACP report payload');
     assert.ok(cbIdx !== -1, 'callback_payload step must exist');
-    // Use the descriptor fallback block boundary to scope the if/elif/fi section
-    const descriptorIdx = raw.indexOf('elif [ -f "$DESCRIPTOR_FILE" ]', cbIdx);
-    assert.ok(descriptorIdx !== -1, correctiveWf + ' callback_payload must have descriptor fallback (elif)');
-    const ifBlock = raw.slice(cbIdx, descriptorIdx + 500);
+    const cbSection = raw.slice(cbIdx, cbIdx + 2000);
 
-    // Must check for orchestration_context output before falling back to descriptor
-    assert.ok(/ORCH_OUTPUT="\$\{\{ steps\.orchestration_context\.outputs\.request_id \}\}"/.test(ifBlock),
-        correctiveWf + ' callback_payload must check orchestration_context output before descriptor fallback');
+    assert.ok(/ORCH_REQUEST_ID/.test(cbSection),
+        correctiveWf + ' callback_payload must read request_id from orchestration_context outputs');
+    assert.ok(/ORCH_EXECUTION_CLAIM_ID/.test(cbSection),
+        correctiveWf + ' callback_payload must read execution_claim_id from orchestration_context outputs');
+    assert.ok(/ORCH_CARRIER_IDENTITY/.test(cbSection),
+        correctiveWf + ' callback_payload must read carrier_identity from orchestration_context outputs');
 
-    // Must gate on orchestration_context output presence
-    assert.ok(/if \[ -n "\$ORCH_OUTPUT" \]./.test(ifBlock),
-        correctiveWf + ' callback_payload must gate on orchestration_context output presence');
+    assert.ok(/IDENTITY_MISSING/.test(cbSection),
+        correctiveWf + ' callback_payload must fail closed when orchestration outputs are missing');
 
-    // Must NOT read request_id from descriptor as primary source when orchestration context exists
-    assert.ok(/REQUEST_ID="\$\{\{ steps\.orchestration_context\.outputs\.request_id \}\}"/.test(ifBlock),
-        correctiveWf + ' callback_payload must use orchestration_context outputs for REQUEST_ID');
-    assert.ok(/EXECUTION_CLAIM_ID="\$\{\{ steps\.orchestration_context\.outputs\.execution_claim_id \}\}"/.test(ifBlock),
-        correctiveWf + ' callback_payload must use orchestration_context outputs for EXECUTION_CLAIM_ID');
-    assert.ok(/CARRIER_IDENTITY="\$\{\{ steps\.orchestration_context\.outputs\.carrier_identity \}\}"/.test(ifBlock),
-        correctiveWf + ' callback_payload must use orchestration_context outputs for CARRIER_IDENTITY');
+    assert.ok(!/elif.*DESCRIPTOR_FILE/.test(cbSection),
+        correctiveWf + ' callback_payload must NOT fall back to execution-descriptor.json for authoritative identity');
+    assert.ok(!/one_click_context.*request_id/.test(cbSection),
+        correctiveWf + ' callback_payload must NOT fall back to one_click_context for authoritative request_id');
 });
 
 // =========================================================
@@ -3973,6 +3969,116 @@ runTest('Binding integrity - missing execution descriptor suppresses callback an
     assert.ok(/exit 1/.test(callbackSection), 'Missing descriptor must fail the callback preparation step');
     assert.ok(/steps\.callback_payload\.outputs\.correlation_valid == 'true'/.test(raw),
         'Callback dispatch must be suppressed when descriptor is missing');
+});
+
+// =========================================================
+// Regression tests: Phase 4 Increment 4.2 Final Callback Correlation Guard
+// TASK-KILO-PHASE4-INCREMENT-4-2-FINAL-CALLBACK-CORRELATION-GUARD-001
+// =========================================================
+
+const CORRECTIVE_WF = path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml');
+const correctiveWfRaw = fs.readFileSync(CORRECTIVE_WF, 'utf8');
+
+runTest('Final callback guard - corrective workflow requires non-empty orchestration outputs for request_id, execution_claim_id, carrier_identity', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    assert.ok(cbIdx !== -1, 'Corrective workflow must have Prepare ACP report payload step');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 2000);
+    assert.ok(/ORCH_REQUEST_ID/.test(cbSection),
+        'callback_payload must read request_id from orchestration context outputs');
+    assert.ok(/ORCH_EXECUTION_CLAIM_ID/.test(cbSection),
+        'callback_payload must read execution_claim_id from orchestration context outputs');
+    assert.ok(/ORCH_CARRIER_IDENTITY/.test(cbSection),
+        'callback_payload must read carrier_identity from orchestration context outputs');
+});
+
+runTest('Final callback guard - corrective workflow fails closed when orchestration outputs are missing', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 2000);
+    assert.ok(/IDENTITY_MISSING/.test(cbSection),
+        'callback_payload must set IDENTITY_MISSING flag when orchestration outputs are empty');
+    assert.ok(/missing authoritative orchestration outputs/.test(cbSection),
+        'callback_payload must emit error message about missing orchestration outputs');
+    assert.ok(/EXECUTION_CLAIM_ID=""/.test(cbSection) || /EXECUTION_CLAIM_ID=""/.test(cbSection.replace(/ /g, '')),
+        'callback_payload must not fall back to descriptor for execution_claim_id when orchestration identity is missing');
+});
+
+runTest('Final callback guard - corrective workflow never uses execution-descriptor.json as fallback for authoritative identity', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 8000);
+    const noFallbackPattern = /elif.*DESCRIPTOR_FILE|else.*DESCRIPTOR_FILE/;
+    assert.ok(!noFallbackPattern.test(cbSection),
+        'callback_payload must not have else/elif fallback branches to execution-descriptor.json for identity fields');
+});
+
+runTest('Final callback guard - corrective workflow validates descriptor against orchestration outputs when descriptor present', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 8000);
+    assert.ok(/DESC_REQUEST_ID/.test(cbSection),
+        'callback_payload must extract descriptor request_id for validation');
+    assert.ok(/DESC_EXECUTION_CLAIM_ID/.test(cbSection),
+        'callback_payload must extract descriptor execution_claim_id for validation');
+    assert.ok(/DESC_CARRIER_IDENTITY/.test(cbSection),
+        'callback_payload must extract descriptor carrier_identity for validation');
+    assert.ok(/DESCRIPTOR_MISMATCH/.test(cbSection),
+        'callback_payload must track descriptor mismatch state');
+    assert.ok(/do not match authoritative orchestration outputs/.test(cbSection),
+        'callback_payload must emit error when descriptor identities do not match orchestration outputs');
+});
+
+runTest('Final callback guard - corrective workflow suppresses callback dispatch on identity validation failure', () => {
+    assert.ok(/identity_valid.*false/.test(correctiveWfRaw),
+        'Corrective workflow must output identity_valid=false when validation fails');
+    assert.ok(/identity_valid.*true/.test(correctiveWfRaw),
+        'Corrective workflow must output identity_valid=true when validation passes');
+    assert.ok(/steps\.callback_payload\.outputs\.identity_valid == 'true'/.test(correctiveWfRaw),
+        'Send callback step must be gated on identity_valid == true');
+});
+
+runTest('Final callback guard - corrective callback uses only validated authoritative identities in payload', () => {
+    assert.ok(/--arg execution_claim_id "\$EXECUTION_CLAIM_ID"/.test(correctiveWfRaw),
+        'Report JSON must use validated EXECUTION_CLAIM_ID (not descriptor value)');
+    assert.ok(/--arg carrier_identity "\$CARRIER_IDENTITY"/.test(correctiveWfRaw),
+        'Report JSON must use validated CARRIER_IDENTITY (not descriptor value)');
+    assert.ok(/--arg request_id "\$REQUEST_ID"/.test(correctiveWfRaw),
+        'Report JSON must use validated REQUEST_ID (not descriptor value)');
+});
+
+runTest('Final callback guard - corrective callback dispatch step validates all three identity fields fail-closed', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Send callback to Render');
+    assert.ok(cbIdx !== -1, 'Corrective workflow must have Send callback to Render step');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 4000);
+    assert.ok(/EXECUTION_CLAIM_ID/.test(cbSection),
+        'Callback dispatch must receive execution_claim_id from callback_payload outputs');
+    assert.ok(/CARRIER_IDENTITY/.test(cbSection),
+        'Callback dispatch must receive carrier_identity from callback_payload outputs');
+    assert.ok(/execution_claim_id.*missing.*empty.*invalid/.test(cbSection),
+        'Callback dispatch must fail closed when execution_claim_id is missing/empty/null');
+    assert.ok(/carrier_identity.*missing.*empty.*invalid/.test(cbSection),
+        'Callback dispatch must fail closed when carrier_identity is missing/empty/null');
+    assert.ok(/callback_sent=false/.test(cbSection),
+        'Callback dispatch must set callback_sent=false on identity failure');
+    assert.ok(/exit 1/.test(cbSection),
+        'Callback dispatch must exit 1 on identity failure');
+});
+
+runTest('Final callback guard - stale descriptor request_id cannot bypass orchestration-derived identity', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 4000);
+    assert.ok(/ORCH_REQUEST_ID.*ORCH_EXECUTION_CLAIM_ID.*ORCH_CARRIER_IDENTITY/.test(cbSection),
+        'callback_payload must read all three identity fields from orchestration context as the authoritative source');
+    assert.ok(!/REQUEST_ID.*=.*\$\{.*one_click_context.*request_id\}/.test(cbSection),
+        'callback_payload must not read request_id from one_click_context as authoritative identity');
+});
+
+runTest('Final callback guard - corrective workflow exits non-zero after writing fail-closed report on identity failure', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 16000);
+    assert.ok(/if.*\$IDENTITY_MISSING.*=.*true.*\|\|.*\$DESCRIPTOR_MISMATCH.*=.*true.*then/.test(cbSection.replace(/\s+/g, ' ')),
+        'callback_payload must check both IDENTITY_MISSING and DESCRIPTOR_MISMATCH flags for exit');
+    assert.ok(/exit 1/.test(cbSection),
+        'callback_payload must exit 1 on identity validation failure');
+    assert.ok(/fail-closed report/.test(cbSection),
+        'callback_payload must write fail-closed report on identity failure');
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
