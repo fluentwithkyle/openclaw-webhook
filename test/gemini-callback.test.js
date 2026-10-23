@@ -481,25 +481,39 @@ async function main() {
     const requestId = 'builder-success-' + Date.now();
     await setupTask(requestId, 'builder-task');
 
-    await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'success'));
+    const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+      carrier_id: 'github-workflow-builder-success',
+      carrier_type: 'github_workflow'
+    });
+    assert.strictEqual(claimResult.success, true);
+
+    await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'success', claimResult.execution_claim_id, 'github-workflow-builder-success'));
 
     const task = taskRegistry.getTask(requestId);
     assert.strictEqual(task.builder.status, 'success');
     assert.strictEqual(task.status, 'EXECUTING');
     assert.strictEqual(task.current_agent, 'Gemini');
     assert.strictEqual(task.next_action, 'trigger_gemini');
+    cleanupClaim(requestId);
   });
 
   await runTest('Builder callback: failure report sets blockers', async () => {
     const requestId = 'builder-failure-' + Date.now();
     await setupTask(requestId, 'builder-task');
 
-    await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'failure'));
+    const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+      carrier_id: 'github-workflow-builder-failure',
+      carrier_type: 'github_workflow'
+    });
+    assert.strictEqual(claimResult.success, true);
+
+    await postRequest('/poc/builder/callback', makeBuilderReport(requestId, 'builder-task', 'failure', claimResult.execution_claim_id, 'github-workflow-builder-failure'));
 
     const task = taskRegistry.getTask(requestId);
     assert.strictEqual(task.builder.status, 'failure');
     assert.strictEqual(task.status, 'FAILED');
     assert.deepStrictEqual(task.builder.report.blockers, ['Build failed']);
+    cleanupClaim(requestId);
   });
 
   await runTest('Builder callback: invalid signature returns 401', async () => {
@@ -807,14 +821,15 @@ async function main() {
      cleanupClaim(requestId);
    });
 
-   await runTest('Builder callback: no execution claim on task - correlation skipped (backward compatible)', async () => {
+   await runTest('Builder callback: no execution claim on task - fails closed (EXECUTION_CLAIM_MISSING)', async () => {
      const requestId = 'builder-corr-no-claim-' + Date.now();
      await setupTask(requestId, 'builder-task');
 
      const report = makeBuilderReport(requestId, 'builder-task', 'success', null, null);
      const res = await postRequest('/poc/builder/callback', report);
-     assert.strictEqual(res.status, 200);
-     assert.strictEqual(res.body.status, 'Gemini Builder completion recorded');
+     assert.strictEqual(res.status, 403);
+     assert.strictEqual(res.body.error_code, 'EXECUTION_CLAIM_MISSING');
+     cleanupClaim(requestId);
    });
 
    await runTest('Builder callback: missing execution_claim_id with authoritative claim returns 403', async () => {

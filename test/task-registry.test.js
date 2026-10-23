@@ -1,10 +1,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const taskRegistry = require('../poc/task-registry');
 
 const REGISTRY_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json');
 const BACKUP_FILE = path.join(__dirname, '..', 'poc', 'task-registry.json.bak');
+const CLAIMS_DIR = taskRegistry.CLAIMS_DIR;
 
 function runTest(name, fn) {
   try {
@@ -71,6 +73,11 @@ function cleanup() {
   if (fs.existsSync(REGISTRY_FILE)) fs.unlinkSync(REGISTRY_FILE);
   if (fs.existsSync(BACKUP_FILE)) fs.unlinkSync(BACKUP_FILE);
   taskRegistry.resetRegistry();
+}
+
+function cleanupClaim(requestId) {
+  const lockPath = path.join(CLAIMS_DIR, requestId + '.claim.lock');
+  if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
 }
 
 async function runAllTests() {
@@ -556,22 +563,112 @@ async function runAllTests() {
         'Execution descriptor must carry task_name from task entry');
   });
 
-  await test('buildExecutionDescriptor - task_name is null when absent from task entry', async () => {
-    const entry = {
-        task: 'test-task',
-        repository: 'fluentwithkyle/openclaw-webhook',
-        base_branch: 'main',
-        task_mode: 'REVIEW',
-        capabilities: ['read_only'],
-        permitted_paths: ['poc/'],
-        verification: 'review',
-        workflow_stage: null,
-        current_agent: 'Gemini'
-    };
-    const descriptor = taskRegistry.buildExecutionDescriptor('req-1', entry, null);
-    assertEqual(descriptor.task_name, null,
-        'task_name must be null in descriptor when absent from task entry');
-  });
+   await test('buildExecutionDescriptor - task_name is null when absent from task entry', async () => {
+     const entry = {
+         task: 'test-task',
+         repository: 'fluentwithkyle/openclaw-webhook',
+         base_branch: 'main',
+         task_mode: 'REVIEW',
+         capabilities: ['read_only'],
+         permitted_paths: ['poc/'],
+         verification: 'review',
+         workflow_stage: null,
+         current_agent: 'Gemini'
+     };
+     const descriptor = taskRegistry.buildExecutionDescriptor('req-1', entry, null);
+     assertEqual(descriptor.task_name, null,
+         'task_name must be null in descriptor when absent from task entry');
+   });
+
+   await test('Claim durability - survives separate-process restart (true process isolation)', async () => {
+     cleanup();
+     const requestId = 'claim-durability-restart-' + Date.now();
+     const command = { ...validCommand, request_id: requestId, target: 'Kilo', task_mode: 'FAILOVER_EXECUTE' };
+
+     await taskRegistry.createTask(command);
+     await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+     await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+     await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+
+     const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-restart-isolation-1',
+       carrier_type: 'github_workflow'
+     });
+     assertEqual(claimResult.success, true);
+
+     const executionClaimId = claimResult.execution_claim_id;
+     const carrierIdentity = claimResult.carrier_identity;
+
+     const verifyScript = `
+       const tr = require('./poc/task-registry');
+       const entry = tr.getTask('${requestId}');
+       if (!entry) { process.exit(2); }
+       const claim = tr.getExecutionClaim('${requestId}');
+       if (!claim || claim.execution_claim_id !== '${executionClaimId}' || claim.carrier_identity !== '${carrierIdentity}') { process.exit(3); }
+       if (entry.status !== 'EXECUTING') { process.exit(4); }
+       if (!entry.execution_claim || entry.execution_claim.execution_claim_id !== '${executionClaimId}') { process.exit(5); }
+       if (tr.isClaimStale(entry.execution_claim)) { process.exit(6); }
+       process.exit(0);
+     `;
+     fs.writeFileSync(path.join(__dirname, '..', 'verify-claim-durability-tmp.js'), verifyScript);
+
+     const result = spawnSync('node', ['verify-claim-durability-tmp.js'], {
+       cwd: path.join(__dirname, '..'),
+       encoding: 'utf8',
+       timeout: 30000
+     });
+
+     fs.unlinkSync(path.join(__dirname, '..', 'verify-claim-durability-tmp.js'));
+
+     if (result.status !== 0) {
+       throw new Error(`Separate-process verification failed with exit code ${result.status}. stdout: ${result.stdout}, stderr: ${result.stderr}`);
+     }
+
+     cleanupClaim(requestId);
+   });
+
+   await test('Claim lock file - survives separate-process restart and prevents double-claim', async () => {
+     cleanup();
+     const requestId = 'claim-lock-restart-' + Date.now();
+     const command = { ...validCommand, request_id: requestId, target: 'Kilo', task_mode: 'FAILOVER_EXECUTE' };
+
+     await taskRegistry.createTask(command);
+     await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+     await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+     await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+
+     const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-lock-restart-1',
+       carrier_type: 'github_workflow'
+     });
+     assertEqual(claimResult.success, true);
+
+     const existingClaimId = claimResult.execution_claim_id;
+     const repoRoot = path.join(__dirname, '..');
+     const tmpScript = path.join(repoRoot, 'verify-claim-lock-tmp.js');
+
+     const lockScript = `
+       const tr = require('./poc/task-registry');
+       const claim = tr.getExecutionClaimFromDisk('${requestId}');
+       if (!claim || claim.execution_claim_id !== '${existingClaimId}') { process.exit(2); }
+       process.exit(0);
+     `;
+     fs.writeFileSync(tmpScript, lockScript);
+
+     const result = spawnSync('node', ['verify-claim-lock-tmp.js'], {
+       cwd: repoRoot,
+       encoding: 'utf8',
+       timeout: 30000
+     });
+
+     fs.unlinkSync(tmpScript);
+
+     if (result.status !== 0) {
+       throw new Error(`Separate-process lock verification failed with exit code ${result.status}. stdout: ${result.stdout}, stderr: ${result.stderr}`);
+     }
+
+     cleanupClaim(requestId);
+   });
 
   console.log(`\n=== TaskRegistry Tests: ${passCount} passed, ${failCount} failed ===`);
   if (failCount > 0) process.exit(1);

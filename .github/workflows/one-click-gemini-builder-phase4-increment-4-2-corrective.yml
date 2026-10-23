@@ -578,20 +578,41 @@ jobs:
           set -uo pipefail
 
           DESCRIPTOR_FILE="execution-descriptor.json"
-          DEFAULT_REPO="${GITHUB_REPOSITORY}"
-          DEFAULT_BRANCH="${GITHUB_REF_NAME}"
-          if [ -f "$DESCRIPTOR_FILE" ]; then
-            REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            TASK="$(jq -r '.task // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
-            REPOSITORY="$(jq -r --arg def "$DEFAULT_REPO" '.repository // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_REPO")"
-            BASE_BRANCH="$(jq -r --arg def "$DEFAULT_BRANCH" '.base_branch // $def' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$DEFAULT_BRANCH")"
-            EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$EXECUTION_CLAIM_ID")"
-            CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo "$CARRIER_IDENTITY")"
-          else
-            REQUEST_ID="${{ steps.one_click_context.outputs.request_id }}"
+          ORCH_REQUEST_ID="${{ steps.orchestration_context.outputs.request_id }}"
+          ORCH_EXECUTION_CLAIM_ID="${{ steps.orchestration_context.outputs.execution_claim_id }}"
+          ORCH_CARRIER_IDENTITY="${{ steps.orchestration_context.outputs.carrier_identity }}"
+          IDENTITY_MISSING=false
+          DESCRIPTOR_MISMATCH=false
+
+          if [ -z "$ORCH_REQUEST_ID" ] || [ -z "$ORCH_EXECUTION_CLAIM_ID" ] || [ -z "$ORCH_CARRIER_IDENTITY" ]; then
+            echo "::error::Callback identity validation failed: missing authoritative orchestration outputs (request_id, execution_claim_id, or carrier_identity)"
+            IDENTITY_MISSING=true
+            REQUEST_ID=""
             TASK="$TASK_JSON"
             REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
             BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+            EXECUTION_CLAIM_ID=""
+            CARRIER_IDENTITY=""
+          else
+            REQUEST_ID="$ORCH_REQUEST_ID"
+            TASK="$TASK_JSON"
+            REPOSITORY="${{ steps.orchestration_context.outputs.repository }}"
+            BASE_BRANCH="${{ steps.orchestration_context.outputs.base_branch }}"
+            EXECUTION_CLAIM_ID="$ORCH_EXECUTION_CLAIM_ID"
+            CARRIER_IDENTITY="$ORCH_CARRIER_IDENTITY"
+          fi
+
+          if [ "$IDENTITY_MISSING" = "false" ] && [ -f "$DESCRIPTOR_FILE" ]; then
+            DESC_REQUEST_ID="$(jq -r '.request_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            DESC_EXECUTION_CLAIM_ID="$(jq -r '.execution_claim_id // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            DESC_CARRIER_IDENTITY="$(jq -r '.carrier_identity // ""' "$DESCRIPTOR_FILE" 2>/dev/null || echo '')"
+            if [ -z "$DESC_REQUEST_ID" ] || [ -z "$DESC_EXECUTION_CLAIM_ID" ] || [ -z "$DESC_CARRIER_IDENTITY" ]; then
+              echo "::error::Callback identity validation failed: execution descriptor has missing request_id, execution_claim_id, or carrier_identity"
+              DESCRIPTOR_MISMATCH=true
+            elif [ "$DESC_REQUEST_ID" != "$REQUEST_ID" ] || [ "$DESC_EXECUTION_CLAIM_ID" != "$EXECUTION_CLAIM_ID" ] || [ "$DESC_CARRIER_IDENTITY" != "$CARRIER_IDENTITY" ]; then
+              echo "::error::Callback identity validation failed: execution descriptor identities do not match authoritative orchestration outputs"
+              DESCRIPTOR_MISMATCH=true
+            fi
           fi
 
           BUILDER_EXEC_ID="${{ steps.orchestration_context.outputs.builder_execution_id }}"
@@ -613,6 +634,16 @@ jobs:
           fi
           if [ -z "$BLOCKER_MSG" ]; then
             BLOCKER_MSG="Builder execution result unavailable"
+          fi
+          if [ "$IDENTITY_MISSING" = "true" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Missing authoritative orchestration identity (request_id, execution_claim_id, or carrier_identity); callback dispatch is suppressed."
+          fi
+          if [ "$DESCRIPTOR_MISMATCH" = "true" ]; then
+            STATUS="failure"
+            VERIFICATION_STATUS="FAIL"
+            BLOCKER_MSG="Execution descriptor identity mismatch against authoritative orchestration outputs; callback dispatch is suppressed."
           fi
 
           CHANGED_FILES_JSON="[]"
@@ -687,15 +718,27 @@ jobs:
 
           echo "report_status=generated" >> "$GITHUB_OUTPUT"
           echo "request_id=$REQUEST_ID" >> "$GITHUB_OUTPUT"
+          echo "execution_claim_id=$EXECUTION_CLAIM_ID" >> "$GITHUB_OUTPUT"
+          echo "carrier_identity=$CARRIER_IDENTITY" >> "$GITHUB_OUTPUT"
+          if [ "$IDENTITY_MISSING" = "true" ] || [ "$DESCRIPTOR_MISMATCH" = "true" ]; then
+            echo "identity_valid=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "identity_valid=true" >> "$GITHUB_OUTPUT"
+          fi
 
           cat callback_payload.json
+          if [ "$IDENTITY_MISSING" = "true" ] || [ "$DESCRIPTOR_MISMATCH" = "true" ]; then
+            exit 1
+          fi
 
       - name: Send callback to Render
-        if: always() && steps.orchestration_context.outcome == 'success'
+        if: always() && steps.orchestration_context.outcome == 'success' && steps.callback_payload.outputs.identity_valid == 'true'
         env:
           CALLBACK_URL: ${{ secrets.RENDER_BUILDER_CALLBACK_URL }}
           CALLBACK_SECRET: ${{ secrets.BUILDER_CALLBACK_SECRET }}
           REQUEST_ID: ${{ steps.callback_payload.outputs.request_id }}
+          EXECUTION_CLAIM_ID: ${{ steps.callback_payload.outputs.execution_claim_id }}
+          CARRIER_IDENTITY: ${{ steps.callback_payload.outputs.carrier_identity }}
         shell: bash
         run: |
           set -uo pipefail
@@ -709,6 +752,20 @@ jobs:
           REQUEST_ID="${REQUEST_ID:-}"
           if [ -z "$REQUEST_ID" ] || [ "$REQUEST_ID" = "null" ]; then
             echo "::error::BLOCKED: request_id is missing, empty, or invalid; callback cannot execute without valid server-derived correlation"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          EXECUTION_CLAIM_ID="${EXECUTION_CLAIM_ID:-}"
+          if [ -z "$EXECUTION_CLAIM_ID" ] || [ "$EXECUTION_CLAIM_ID" = "null" ]; then
+            echo "::error::BLOCKED: execution_claim_id is missing, empty, or invalid; callback cannot execute without valid server-derived claim identity"
+            echo "callback_sent=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          CARRIER_IDENTITY="${CARRIER_IDENTITY:-}"
+          if [ -z "$CARRIER_IDENTITY" ] || [ "$CARRIER_IDENTITY" = "null" ]; then
+            echo "::error::BLOCKED: carrier_identity is missing, empty, or invalid; callback cannot execute without valid server-derived carrier identity"
             echo "callback_sent=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi

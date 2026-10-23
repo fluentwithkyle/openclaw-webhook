@@ -58,8 +58,15 @@ function makeCommand(requestId, task = 'test-task') {
   };
 }
 
-function makeKiloReport(requestId, task = 'test-task', status = 'success') {
-  return {
+const CLAIMS_DIR = path.join(__dirname, '..', 'poc', 'claims');
+
+function cleanupClaim(requestId) {
+  const lockPath = path.join(CLAIMS_DIR, requestId + '.claim.lock');
+  if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
+}
+
+function makeKiloReportWithClaim(requestId, task = 'test-task', status = 'success', executionClaimId = null, carrierIdentity = null) {
+  const report = {
     request_id: requestId,
     agent: 'Kilo',
     status: status,
@@ -71,9 +78,35 @@ function makeKiloReport(requestId, task = 'test-task', status = 'success') {
     push: true,
     blockers: status === 'blocked' ? ['Missing authorization'] : (status === 'failure' ? ['Implementation failed'] : [])
   };
+  if (executionClaimId !== null) {
+    report.result.execution_metadata.execution_claim_id = executionClaimId;
+  }
+  if (carrierIdentity !== null) {
+    report.result.execution_metadata.carrier_identity = carrierIdentity;
+  }
+  return report;
+}
+
+function makeKiloReport(requestId, task = 'test-task', status = 'success', claimResult = null) {
+  const executionClaimId = claimResult && claimResult.execution_claim_id;
+  const carrierIdentity = claimResult && claimResult.carrier_identity;
+  return makeKiloReportWithClaim(requestId, task, status, executionClaimId, carrierIdentity);
 }
 
 async function setupTask(requestId, task = 'test-task') {
+    cleanup();
+    await taskRegistry.createTask(makeCommand(requestId, task));
+    await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+    await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+    await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+    const claim = await taskRegistry.claimExecutionContext(requestId, {
+      carrier_id: 'github-workflow-kilo-test',
+      carrier_type: 'github_workflow'
+    });
+    return claim;
+}
+
+async function setupTaskWithoutClaim(requestId, task = 'test-task') {
     cleanup();
     await taskRegistry.createTask(makeCommand(requestId, task));
     await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
@@ -207,8 +240,9 @@ async function main() {
 
   // Test 9: Kilo success callback - triggers Gemini
   await runTest('Kilo Callback - success transitions to EXECUTING and triggers Gemini', async () => {
-    setupTask('test-success-1');
-    const report = makeKiloReport('test-success-1', 'test-task', 'success');
+    const requestId = 'test-success-1';
+    const claim = await setupTask(requestId);
+    const report = makeKiloReport(requestId, 'test-task', 'success', claim);
     const res = await makeRequest({
       hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
@@ -230,8 +264,9 @@ async function main() {
 
   // Test 10: Kilo failure callback
   await runTest('Kilo Callback - failure transitions to FAILED', async () => {
-    setupTask('test-failure-1');
-    const report = makeKiloReport('test-failure-1', 'test-task', 'failure');
+    const requestId = 'test-failure-1';
+    const claim = await setupTask(requestId);
+    const report = makeKiloReport(requestId, 'test-task', 'failure', claim);
     const res = await makeRequest({
       hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
@@ -249,8 +284,9 @@ async function main() {
 
   // Test 11: Kilo blocked callback
   await runTest('Kilo Callback - blocked transitions to BLOCKED', async () => {
-    setupTask('test-blocked-1');
-    const report = makeKiloReport('test-blocked-1', 'test-task', 'blocked');
+    const requestId = 'test-blocked-1';
+    const claim = await setupTask(requestId);
+    const report = makeKiloReport(requestId, 'test-task', 'blocked', claim);
     const res = await makeRequest({
       hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
@@ -269,8 +305,9 @@ async function main() {
 
   // Test 12: Duplicate callback (idempotency)
   await runTest('Kilo Callback - duplicate returns 409', async () => {
-    setupTask('test-duplicate-1');
-    const report = makeKiloReport('test-duplicate-1', 'test-task', 'success');
+    const requestId = 'test-duplicate-1';
+    const claim = await setupTask(requestId);
+    const report = makeKiloReport(requestId, 'test-task', 'success', claim);
 
     // First callback
     const res1 = await makeRequest({
@@ -335,22 +372,223 @@ async function main() {
     process.env.KILO_CALLBACK_SECRET = originalSecret;
   });
 
-  // Test 15: Validation before state mutation - malformed report doesn't change state
-  await runTest('Kilo Callback - validation failure does not mutate state', async () => {
-    setupTask('test-validation-1');
-    const malformedReport = { ...makeKiloReport('test-validation-1'), status: 'invalid-status' };
-    const res = await makeRequest({
-      hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
-    }, malformedReport);
-    assertEqual(res.status, 400);
-    assertEqual(res.body.status, 'validation blocked');
+   // Test 15: Validation before state mutation - malformed report doesn't change state
+   await runTest('Kilo Callback - validation failure does not mutate state', async () => {
+     setupTask('test-validation-1');
+     const malformedReport = { ...makeKiloReport('test-validation-1'), status: 'invalid-status' };
+     const res = await makeRequest({
+       hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+       headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+     }, malformedReport);
+     assertEqual(res.status, 400);
+     assertEqual(res.body.status, 'validation blocked');
 
-    // Verify task state unchanged (kilo still pending)
-    const task = taskRegistry.getTask('test-validation-1');
-    assertEqual(task.kilo.status, 'pending');
-    assertEqual(task.status, 'EXECUTING');
-  });
+     // Verify task state unchanged (kilo still pending)
+     const task = taskRegistry.getTask('test-validation-1');
+     assertEqual(task.kilo.status, 'pending');
+     assertEqual(task.status, 'EXECUTING');
+   });
+
+   // =========================================================
+   // Kilo callback execution claim correlation tests
+   // =========================================================
+    await runTest('Kilo Callback - no execution claim on task: callback fails closed (EXECUTION_CLAIM_MISSING)', async () => {
+      const requestId = 'kilo-corr-no-claim-' + Date.now();
+      await setupTaskWithoutClaim(requestId);
+
+      const report = makeKiloReportWithClaim(requestId, 'test-task', 'success', null, null);
+      const res = await makeRequest({
+        hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+      }, report);
+      assertEqual(res.status, 403);
+      assertEqual(res.body.error_code, 'EXECUTION_CLAIM_MISSING');
+      cleanupClaim(requestId);
+    });
+
+    await runTest('Kilo Callback - correct execution_claim_id + carrier_identity succeeds', async () => {
+      const requestId = 'kilo-corr-ok-' + Date.now();
+      await setupTaskWithoutClaim(requestId);
+
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-kilo-corr-1',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
+
+      const report = makeKiloReportWithClaim(
+        requestId, 'test-task', 'success',
+        claimResult.execution_claim_id,
+        'github-workflow-kilo-corr-1'
+      );
+      const res = await makeRequest({
+        hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+      }, report);
+      assertEqual(res.status, 200);
+      assertEqual(res.body.status, 'Kilo completion recorded');
+      assertEqual(res.body.next_action, 'trigger_builder');
+      cleanupClaim(requestId);
+    });
+
+    await runTest('Kilo Callback - wrong execution_claim_id is rejected (fail-closed)', async () => {
+      const requestId = 'kilo-corr-claim-mismatch-' + Date.now();
+      await setupTaskWithoutClaim(requestId);
+
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-kilo-corr-2',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
+
+      const report = makeKiloReportWithClaim(
+        requestId, 'test-task', 'success',
+        'wrong-claim-id',
+        'github-workflow-kilo-corr-2'
+      );
+      const res = await makeRequest({
+        hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+      }, report);
+      assertEqual(res.status, 403);
+      assertEqual(res.body.error_code, 'EXECUTION_CLAIM_MISMATCH');
+      cleanupClaim(requestId);
+    });
+
+    await runTest('Kilo Callback - wrong carrier_identity is rejected (fail-closed)', async () => {
+      const requestId = 'kilo-corr-carrier-mismatch-' + Date.now();
+      await setupTaskWithoutClaim(requestId);
+
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-kilo-corr-3',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
+
+      const report = makeKiloReportWithClaim(
+        requestId, 'test-task', 'success',
+        claimResult.execution_claim_id,
+        'wrong-carrier-identity'
+      );
+      const res = await makeRequest({
+        hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+      }, report);
+      assertEqual(res.status, 403);
+      assertEqual(res.body.error_code, 'CARRIER_IDENTITY_MISMATCH');
+      cleanupClaim(requestId);
+    });
+
+    await runTest('Kilo Callback - missing execution_claim_id with authoritative claim returns 403', async () => {
+      const requestId = 'kilo-missing-claim-' + Date.now();
+      await setupTaskWithoutClaim(requestId);
+
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-kilo-missing-claim',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
+
+      const report = makeKiloReportWithClaim(
+        requestId, 'test-task', 'success',
+        null,
+        'github-workflow-kilo-missing-claim'
+      );
+      const res = await makeRequest({
+        hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+      }, report);
+      assertEqual(res.status, 403);
+      assertEqual(res.body.error_code, 'EXECUTION_CLAIM_MISSING');
+      cleanupClaim(requestId);
+    });
+
+    await runTest('Kilo Callback - missing carrier_identity with authoritative claim returns 403', async () => {
+      const requestId = 'kilo-missing-carrier-' + Date.now();
+      await setupTaskWithoutClaim(requestId);
+
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-kilo-missing-carrier',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
+
+      const report = makeKiloReportWithClaim(
+        requestId, 'test-task', 'success',
+        claimResult.execution_claim_id,
+        null
+      );
+      const res = await makeRequest({
+        hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+      }, report);
+      assertEqual(res.status, 403);
+      assertEqual(res.body.error_code, 'CARRIER_IDENTITY_MISSING');
+      cleanupClaim(requestId);
+    });
+
+    await runTest('Kilo Callback - no dispatch after correlation failure (task state unchanged)', async () => {
+      const requestId = 'kilo-corr-no-dispatch-' + Date.now();
+      await setupTaskWithoutClaim(requestId);
+
+      const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+        carrier_id: 'github-workflow-kilo-no-dispatch',
+        carrier_type: 'github_workflow'
+      });
+      assert.strictEqual(claimResult.success, true);
+
+      const report = makeKiloReportWithClaim(
+        requestId, 'test-task', 'success',
+        'wrong-claim-id',
+        'github-workflow-kilo-no-dispatch'
+      );
+      const res = await makeRequest({
+        hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+      }, report);
+      assertEqual(res.status, 403);
+      assertEqual(res.body.error_code, 'EXECUTION_CLAIM_MISMATCH');
+
+      const task = taskRegistry.getTask(requestId);
+      assertEqual(task.kilo.status, 'pending');
+      assertEqual(task.status, 'EXECUTING');
+      cleanupClaim(requestId);
+    });
+
+   await runTest('Kilo Callback - survives in-memory cache reset with claim persisted in registry (restart simulation)', async () => {
+     const requestId = 'kilo-rehydrate-registry-' + Date.now();
+     cleanup();
+     await taskRegistry.createTask(makeCommand(requestId, 'test-task'));
+     await taskRegistry.updateTaskStatus(requestId, 'SELECTED');
+     await taskRegistry.updateTaskStatus(requestId, 'PLANNED');
+     await taskRegistry.updateTaskStatus(requestId, 'EXECUTING');
+
+     const claimResult = await taskRegistry.claimExecutionContext(requestId, {
+       carrier_id: 'github-workflow-kilo-rehydrate-reg',
+       carrier_type: 'github_workflow'
+     });
+     assert.strictEqual(claimResult.success, true);
+
+     taskRegistry.resetMemoryCache();
+     cleanupClaim(requestId);
+
+     const cachedTask = taskRegistry.getTask(requestId);
+     assert.ok(cachedTask, 'Task should be loaded from persisted registry file after restart');
+
+     const report = makeKiloReportWithClaim(
+       requestId, 'test-task', 'success',
+       claimResult.execution_claim_id,
+       'github-workflow-kilo-rehydrate-reg'
+     );
+     const res = await makeRequest({
+       hostname: 'localhost', port: 3003, path: '/poc/kilo/callback', method: 'POST',
+       headers: { 'Content-Type': 'application/json', 'x-kilo-callback-secret': 'test-kilo-secret' }
+     }, report);
+     assertEqual(res.status, 200);
+     assertEqual(res.body.status, 'Kilo completion recorded');
+     assertEqual(res.body.kilo_status, 'success');
+     cleanupClaim(requestId);
+   });
 
   server.close();
 

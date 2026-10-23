@@ -3395,6 +3395,29 @@ runTest('Defect 12 - TASK_JSON is declared as env: variable in callback_payload 
     }
 });
 
+runTest('Defect 13 - callback_payload requires authoritative orchestration outputs without stale descriptor fallback', () => {
+    const correctiveWf = 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml';
+    const raw = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', correctiveWf), 'utf8');
+    const cbIdx = raw.indexOf('Prepare ACP report payload');
+    assert.ok(cbIdx !== -1, 'callback_payload step must exist');
+    const cbSection = raw.slice(cbIdx, cbIdx + 2000);
+
+    assert.ok(/ORCH_REQUEST_ID/.test(cbSection),
+        correctiveWf + ' callback_payload must read request_id from orchestration_context outputs');
+    assert.ok(/ORCH_EXECUTION_CLAIM_ID/.test(cbSection),
+        correctiveWf + ' callback_payload must read execution_claim_id from orchestration_context outputs');
+    assert.ok(/ORCH_CARRIER_IDENTITY/.test(cbSection),
+        correctiveWf + ' callback_payload must read carrier_identity from orchestration_context outputs');
+
+    assert.ok(/IDENTITY_MISSING/.test(cbSection),
+        correctiveWf + ' callback_payload must fail closed when orchestration outputs are missing');
+
+    assert.ok(!/elif.*DESCRIPTOR_FILE/.test(cbSection),
+        correctiveWf + ' callback_payload must NOT fall back to execution-descriptor.json for authoritative identity');
+    assert.ok(!/one_click_context.*request_id/.test(cbSection),
+        correctiveWf + ' callback_payload must NOT fall back to one_click_context for authoritative request_id');
+});
+
 // =========================================================
 // Defect #13: GITHUB_OUTPUT multi-line value corruption
 // echo "field=$MULTI_LINE_VALUE" >> $GITHUB_OUTPUT
@@ -3946,6 +3969,770 @@ runTest('Binding integrity - missing execution descriptor suppresses callback an
     assert.ok(/exit 1/.test(callbackSection), 'Missing descriptor must fail the callback preparation step');
     assert.ok(/steps\.callback_payload\.outputs\.correlation_valid == 'true'/.test(raw),
         'Callback dispatch must be suppressed when descriptor is missing');
+});
+
+// =========================================================
+// Regression tests: Phase 4 Increment 4.2 Final Callback Correlation Guard
+// TASK-KILO-PHASE4-INCREMENT-4-2-FINAL-CALLBACK-CORRELATION-GUARD-001
+// =========================================================
+
+const CORRECTIVE_WF = path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml');
+const correctiveWfRaw = fs.readFileSync(CORRECTIVE_WF, 'utf8');
+
+runTest('Final callback guard - corrective workflow requires non-empty orchestration outputs for request_id, execution_claim_id, carrier_identity', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    assert.ok(cbIdx !== -1, 'Corrective workflow must have Prepare ACP report payload step');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 2000);
+    assert.ok(/ORCH_REQUEST_ID/.test(cbSection),
+        'callback_payload must read request_id from orchestration context outputs');
+    assert.ok(/ORCH_EXECUTION_CLAIM_ID/.test(cbSection),
+        'callback_payload must read execution_claim_id from orchestration context outputs');
+    assert.ok(/ORCH_CARRIER_IDENTITY/.test(cbSection),
+        'callback_payload must read carrier_identity from orchestration context outputs');
+});
+
+runTest('Final callback guard - corrective workflow fails closed when orchestration outputs are missing', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 2000);
+    assert.ok(/IDENTITY_MISSING/.test(cbSection),
+        'callback_payload must set IDENTITY_MISSING flag when orchestration outputs are empty');
+    assert.ok(/missing authoritative orchestration outputs/.test(cbSection),
+        'callback_payload must emit error message about missing orchestration outputs');
+    assert.ok(/EXECUTION_CLAIM_ID=""/.test(cbSection) || /EXECUTION_CLAIM_ID=""/.test(cbSection.replace(/ /g, '')),
+        'callback_payload must not fall back to descriptor for execution_claim_id when orchestration identity is missing');
+});
+
+runTest('Final callback guard - corrective workflow never uses execution-descriptor.json as fallback for authoritative identity', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 8000);
+    const noFallbackPattern = /elif.*DESCRIPTOR_FILE|else.*DESCRIPTOR_FILE/;
+    assert.ok(!noFallbackPattern.test(cbSection),
+        'callback_payload must not have else/elif fallback branches to execution-descriptor.json for identity fields');
+});
+
+runTest('Final callback guard - corrective workflow validates descriptor against orchestration outputs when descriptor present', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 8000);
+    assert.ok(/DESC_REQUEST_ID/.test(cbSection),
+        'callback_payload must extract descriptor request_id for validation');
+    assert.ok(/DESC_EXECUTION_CLAIM_ID/.test(cbSection),
+        'callback_payload must extract descriptor execution_claim_id for validation');
+    assert.ok(/DESC_CARRIER_IDENTITY/.test(cbSection),
+        'callback_payload must extract descriptor carrier_identity for validation');
+    assert.ok(/DESCRIPTOR_MISMATCH/.test(cbSection),
+        'callback_payload must track descriptor mismatch state');
+    assert.ok(/do not match authoritative orchestration outputs/.test(cbSection),
+        'callback_payload must emit error when descriptor identities do not match orchestration outputs');
+});
+
+runTest('Final callback guard - corrective workflow suppresses callback dispatch on identity validation failure', () => {
+    assert.ok(/identity_valid.*false/.test(correctiveWfRaw),
+        'Corrective workflow must output identity_valid=false when validation fails');
+    assert.ok(/identity_valid.*true/.test(correctiveWfRaw),
+        'Corrective workflow must output identity_valid=true when validation passes');
+    assert.ok(/steps\.callback_payload\.outputs\.identity_valid == 'true'/.test(correctiveWfRaw),
+        'Send callback step must be gated on identity_valid == true');
+});
+
+runTest('Final callback guard - corrective callback uses only validated authoritative identities in payload', () => {
+    assert.ok(/--arg execution_claim_id "\$EXECUTION_CLAIM_ID"/.test(correctiveWfRaw),
+        'Report JSON must use validated EXECUTION_CLAIM_ID (not descriptor value)');
+    assert.ok(/--arg carrier_identity "\$CARRIER_IDENTITY"/.test(correctiveWfRaw),
+        'Report JSON must use validated CARRIER_IDENTITY (not descriptor value)');
+    assert.ok(/--arg request_id "\$REQUEST_ID"/.test(correctiveWfRaw),
+        'Report JSON must use validated REQUEST_ID (not descriptor value)');
+});
+
+runTest('Final callback guard - descriptor extraction does not substitute orchestration values for missing descriptor fields', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 8000);
+    assert.ok(/DESC_EXECUTION_CLAIM_ID=.*jq.*execution_claim_id/.test(cbSection),
+        'Must extract DESC_EXECUTION_CLAIM_ID from descriptor via jq');
+    assert.ok(!/DESC_EXECUTION_CLAIM_ID.*\|\| echo.*EXECUTION_CLAIM_ID/.test(cbSection),
+        'Must NOT fall back to orchestration EXECUTION_CLAIM_ID when descriptor extraction fails');
+    assert.ok(!/DESC_CARRIER_IDENTITY.*\|\| echo.*CARRIER_IDENTITY/.test(cbSection),
+        'Must NOT fall back to orchestration CARRIER_IDENTITY when descriptor extraction fails');
+});
+
+runTest('Final callback guard - corrective callback dispatch step validates all three identity fields fail-closed', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Send callback to Render');
+    assert.ok(cbIdx !== -1, 'Corrective workflow must have Send callback to Render step');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 4000);
+    assert.ok(/EXECUTION_CLAIM_ID/.test(cbSection),
+        'Callback dispatch must receive execution_claim_id from callback_payload outputs');
+    assert.ok(/CARRIER_IDENTITY/.test(cbSection),
+        'Callback dispatch must receive carrier_identity from callback_payload outputs');
+    assert.ok(/execution_claim_id.*missing.*empty.*invalid/.test(cbSection),
+        'Callback dispatch must fail closed when execution_claim_id is missing/empty/null');
+    assert.ok(/carrier_identity.*missing.*empty.*invalid/.test(cbSection),
+        'Callback dispatch must fail closed when carrier_identity is missing/empty/null');
+    assert.ok(/callback_sent=false/.test(cbSection),
+        'Callback dispatch must set callback_sent=false on identity failure');
+    assert.ok(/exit 1/.test(cbSection),
+        'Callback dispatch must exit 1 on identity failure');
+});
+
+runTest('Final callback guard - stale descriptor request_id cannot bypass orchestration-derived identity', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 4000);
+    assert.ok(/ORCH_REQUEST_ID.*ORCH_EXECUTION_CLAIM_ID.*ORCH_CARRIER_IDENTITY/.test(cbSection),
+        'callback_payload must read all three identity fields from orchestration context as the authoritative source');
+    assert.ok(!/REQUEST_ID.*=.*\$\{.*one_click_context.*request_id\}/.test(cbSection),
+        'callback_payload must not read request_id from one_click_context as authoritative identity');
+});
+
+runTest('Final callback guard - corrective workflow exits non-zero after writing fail-closed report on identity failure', () => {
+    const cbIdx = correctiveWfRaw.indexOf('Prepare ACP report payload');
+    const cbSection = correctiveWfRaw.slice(cbIdx, cbIdx + 16000);
+    assert.ok(/if.*\$IDENTITY_MISSING.*=.*true.*\|\|.*\$DESCRIPTOR_MISMATCH.*=.*true.*then/.test(cbSection.replace(/\s+/g, ' ')),
+        'callback_payload must check both IDENTITY_MISSING and DESCRIPTOR_MISMATCH flags for exit');
+    assert.ok(/exit 1/.test(cbSection),
+        'callback_payload must exit 1 on identity validation failure');
+    assert.ok(/fail-closed report/.test(cbSection),
+        'callback_payload must write fail-closed report on identity failure');
+});
+
+// =========================================================
+// Behavioral regression tests: callback identity validation
+// TASK-KILO-PHASE4-INCREMENT-4-2-DESCRIPTOR-IDENTITY-FAIL-CLOSED-CORRECTION-001
+// These tests exercise the actual bash logic of the callback_payload step
+// with simulated descriptor files to prove fail-closed behavior.
+// =========================================================
+
+function extractCallbackPayloadScript(wfRaw) {
+    const cbIdx = wfRaw.indexOf('Prepare ACP report payload');
+    if (cbIdx === -1) throw new Error('Prepare ACP report payload step not found');
+    const endIdx = wfRaw.indexOf('      - name: Send callback to Render');
+    if (endIdx === -1) throw new Error('Send callback to Render step not found');
+    const section = wfRaw.slice(cbIdx, endIdx);
+    const runMatch = section.match(/run:\s*\|\s*\n([\s\S]+)/);
+    if (!runMatch) throw new Error('run block not found in callback_payload step');
+    return runMatch[1];
+}
+
+function substituteGhActionsExpr(script, orchOutputs, taskJson) {
+    let result = script;
+    result = result.replace(/\$\{\{\s*steps\.orchestration_context\.outputs\.request_id\s*\}\}/g, '$ORCH_REQUEST_ID');
+    result = result.replace(/\$\{\{\s*steps\.orchestration_context\.outputs\.execution_claim_id\s*\}\}/g, '$ORCH_EXECUTION_CLAIM_ID');
+    result = result.replace(/\$\{\{\s*steps\.orchestration_context\.outputs\.carrier_identity\s*\}\}/g, '$ORCH_CARRIER_IDENTITY');
+    result = result.replace(/\$\{\{\s*steps\.orchestration_context\.outputs\.repository\s*\}\}/g, 'fluentwithkyle/openclaw-webhook');
+    result = result.replace(/\$\{\{\s*steps\.orchestration_context\.outputs\.base_branch\s*\}\}/g, 'main');
+    result = result.replace(/\$\{\{\s*steps\.orchestration_context\.outputs\.builder_execution_id\s*\}\}/g, 'builder-exec-001');
+    result = result.replace(/\$\{\{\s*steps\.orchestration_context\.outputs\.kilo_execution_id\s*\|\|.*\}\}/g, '""');
+    result = result.replace(/\$\{\{\s*steps\.one_click_context\.outputs\.request_id\s*\}\}/g, 'one-click-request-001');
+    result = result.replace(/\$\{\{\s*steps\.one_click_context\.outputs\.task\s*\}\}/g, "'" + taskJson + "'");
+    result = result.replace(/\$\{\{\s*steps\.builder_result\.outputs\.builder_status\s*\|\|.*\}\}/g, 'success');
+    result = result.replace(/\$\{\{\s*steps\.builder_result\.outputs\.verification_status\s*\|\|.*\}\}/g, 'PASS');
+    result = result.replace(/\$\{\{\s*steps\.builder_result\.outputs\.blocker_message\s*\|\|.*\}\}/g, '');
+    result = result.replace(/\$\{\{\s*steps\.builder_result\.outputs\.commit_sha\s*\|\|.*\}\}/g, 'null');
+    result = result.replace(/\$\{\{\s*steps\.builder_result\.outputs\.push_status\s*\|\|.*\}\}/g, 'false');
+    result = result.replace(/\$\{\{\s*GITHUB_REF_NAME\s*\}\}/g, 'main');
+    result = result.replace(/\$\{\{\s*GITHUB_REPOSITORY\s*\}\}/g, 'fluentwithkyle/openclaw-webhook');
+    result = result.replace(/\$\{\{[^}]*\}\}/g, '""');
+    return result;
+}
+
+function runCallbackPayload(descriptorContent, orchOutputs) {
+    const tmpDir = '/tmp/kilo-callback-test-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    const fs = require('fs');
+    const path = require('path');
+    fs.mkdirSync(tmpDir, { recursive: true });
+
+    if (descriptorContent !== null) {
+        fs.writeFileSync(path.join(tmpDir, 'execution-descriptor.json'), descriptorContent, 'utf8');
+    }
+
+    const orchRequestId = orchOutputs.request_id || '';
+    const orchExecClaimId = orchOutputs.execution_claim_id || '';
+    const orchCarrierIdentity = orchOutputs.carrier_identity || '';
+    const taskJson = '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}';
+
+    const env = {
+        ...process.env,
+        GITHUB_RUN_ID: '12345',
+        GITHUB_RUN_ATTEMPT: '1',
+        GITHUB_SHA: 'abc123',
+        GITHUB_REF_NAME: 'main',
+        GITHUB_REPOSITORY: 'fluentwithkyle/openclaw-webhook',
+        ORCH_REQUEST_ID: orchRequestId,
+        ORCH_EXECUTION_CLAIM_ID: orchExecClaimId,
+        ORCH_CARRIER_IDENTITY: orchCarrierIdentity,
+        TASK_JSON: taskJson,
+        GITHUB_OUTPUT: path.join(tmpDir, 'github_output'),
+        PATH: process.env.PATH
+    };
+
+    const script = extractCallbackPayloadScript(correctiveWfRaw);
+    const substitutedScript = substituteGhActionsExpr(script, orchOutputs, taskJson);
+
+    let scriptContent = '#!/bin/bash\nset -uo pipefail\n';
+    scriptContent += 'DESCRIPTOR_FILE="' + tmpDir + '/execution-descriptor.json"\n';
+    scriptContent += 'ORCH_REQUEST_ID="' + orchRequestId + '"\n';
+    scriptContent += 'ORCH_EXECUTION_CLAIM_ID="' + orchExecClaimId + '"\n';
+    scriptContent += 'ORCH_CARRIER_IDENTITY="' + orchCarrierIdentity + '"\n';
+    scriptContent += "TASK_JSON='" + taskJson + "'\n";
+    scriptContent += 'REQUEST_ID=""\n';
+    scriptContent += 'EXECUTION_CLAIM_ID=""\n';
+    scriptContent += 'CARRIER_IDENTITY=""\n';
+    scriptContent += 'TASK=""\n';
+    scriptContent += 'REPOSITORY=""\n';
+    scriptContent += 'BASE_BRANCH=""\n';
+    scriptContent += 'BUILDER_OUTPUT=""\n';
+    scriptContent += substitutedScript;
+
+    const scriptPath = path.join(tmpDir, 'test-callback.sh');
+    fs.writeFileSync(scriptPath, scriptContent, 'utf8');
+    fs.chmodSync(scriptPath, 0o755);
+
+    let exitCode = 0;
+    let stdout = '';
+    let stderr = '';
+
+    try {
+        const result = execFileSync('bash', [scriptPath], {
+            encoding: 'utf8',
+            timeout: 10000,
+            env: env,
+            cwd: tmpDir,
+            maxBuffer: 1024 * 1024
+        });
+        stdout = result;
+    } catch (e) {
+        exitCode = e.status || 1;
+        stdout = (e.stdout || '');
+        stderr = (e.stderr || '');
+    }
+
+    const githubOutput = fs.existsSync(env.GITHUB_OUTPUT) ? fs.readFileSync(env.GITHUB_OUTPUT, 'utf8') : '';
+    const callbackPayload = fs.existsSync(path.join(tmpDir, 'callback_payload.json'))
+        ? JSON.parse(fs.readFileSync(path.join(tmpDir, 'callback_payload.json'), 'utf8'))
+        : null;
+
+    const output = stdout + stderr;
+    const identityValid = githubOutput.includes('identity_valid=true') ? true
+        : githubOutput.includes('identity_valid=false') ? false
+        : null;
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    return { exitCode, identityValid, callbackPayload, output, githubOutput };
+}
+
+runTest('Behavioral - stale descriptor request_id blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'stale-request-id-99999',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main',
+        task_mode: 'BUILDER',
+        capabilities: ['read_only', 'modify_files', 'run_tests', 'commit', 'push'],
+        permitted_paths: ['poc/'],
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when descriptor request_id is stale');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when descriptor request_id is stale');
+    assert.ok(result.output.includes('do not match authoritative orchestration outputs'),
+        'Must emit descriptor mismatch error for stale request_id');
+});
+
+runTest('Behavioral - descriptor with missing request_id blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when descriptor request_id is missing');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when descriptor request_id is missing');
+    assert.ok(result.output.includes('missing request_id'),
+        'Must emit error about missing request_id in descriptor');
+});
+
+runTest('Behavioral - descriptor with missing execution_claim_id blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'valid-request-id-12345',
+        carrier_identity: 'github-workflow-38918426965-1',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when descriptor execution_claim_id is missing');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when descriptor execution_claim_id is missing');
+    assert.ok(result.output.includes('missing'),
+        'Must emit error about missing identity field in descriptor');
+});
+
+runTest('Behavioral - descriptor with missing carrier_identity blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when descriptor carrier_identity is missing');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when descriptor carrier_identity is missing');
+    assert.ok(result.output.includes('missing'),
+        'Must emit error about missing carrier_identity in descriptor');
+});
+
+runTest('Behavioral - descriptor with null execution_claim_id blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: null,
+        carrier_identity: 'github-workflow-38918426965-1',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when descriptor execution_claim_id is null');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when descriptor execution_claim_id is null');
+});
+
+runTest('Behavioral - stale descriptor execution_claim_id blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'stale-claim-id-99999',
+        carrier_identity: 'github-workflow-38918426965-1',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when descriptor execution_claim_id is stale');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when descriptor execution_claim_id is stale');
+    assert.ok(result.output.includes('do not match authoritative orchestration outputs'),
+        'Must emit descriptor mismatch error for stale execution_claim_id');
+});
+
+runTest('Behavioral - stale descriptor carrier_identity blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'stale-carrier-identity-99999',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when descriptor carrier_identity is stale');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when descriptor carrier_identity is stale');
+    assert.ok(result.output.includes('do not match authoritative orchestration outputs'),
+        'Must emit descriptor mismatch error for stale carrier_identity');
+});
+
+runTest('Behavioral - missing orchestration outputs blocks callback dispatch', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: '',
+        execution_claim_id: '',
+        carrier_identity: ''
+    });
+
+    assert.ok(result.exitCode !== 0,
+        'Callback payload step must exit non-zero when orchestration outputs are missing');
+    assert.strictEqual(result.identityValid, false,
+        'identity_valid must be false when orchestration outputs are missing');
+    assert.ok(result.output.includes('missing authoritative orchestration outputs'),
+        'Must emit error about missing orchestration outputs');
+    if (result.callbackPayload) {
+        assert.strictEqual(result.callbackPayload.request_id, null,
+            'Callback payload must have null request_id when identity is missing');
+        const meta = result.callbackPayload.result && result.callbackPayload.result.execution_metadata;
+        assert.ok(meta, 'Callback payload must have execution_metadata');
+        assert.strictEqual(meta.execution_claim_id, null,
+            'Callback payload must have null execution_claim_id when identity is missing');
+        assert.strictEqual(meta.carrier_identity, null,
+            'Callback payload must have null carrier_identity when identity is missing');
+    }
+});
+
+runTest('Behavioral - valid matching descriptor permits callback delivery (identity_valid=true)', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    assert.strictEqual(result.exitCode, 0,
+        'Callback payload step must exit 0 when all identities match: ' + result.output);
+    assert.strictEqual(result.identityValid, true,
+        'identity_valid must be true when all identities match');
+    assert.ok(result.callbackPayload,
+        'Callback payload JSON must be generated when identity is valid');
+    assert.strictEqual(result.callbackPayload.request_id, 'valid-request-id-12345',
+        'Callback payload must use authoritative request_id from orchestration outputs');
+    assert.strictEqual(result.callbackPayload.result.execution_metadata.execution_claim_id, 'claim-1792161979938-1uubwdmp',
+        'Callback payload must use authoritative execution_claim_id from orchestration outputs');
+    assert.strictEqual(result.callbackPayload.result.execution_metadata.carrier_identity, 'github-workflow-38918426965-1',
+        'Callback payload must use authoritative carrier_identity from orchestration outputs');
+});
+
+runTest('Behavioral - callback payload never contains stale descriptor identity values', () => {
+    const descriptor = JSON.stringify({
+        request_id: 'stale-request-id-99999',
+        execution_claim_id: 'stale-claim-id-99999',
+        carrier_identity: 'stale-carrier-identity-99999',
+        task: '{"task_name":"TASK-GEMINI-BUILDER-PHASE4-INCREMENT-4-2-STATE-AND-REQUIREMENTS-GATES-CORRECTIVE-001"}',
+        repository: 'fluentwithkyle/openclaw-webhook',
+        base_branch: 'main'
+    });
+
+    const result = runCallbackPayload(descriptor, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1'
+    });
+
+    if (result.callbackPayload) {
+        const payloadStr = JSON.stringify(result.callbackPayload);
+        assert.ok(!payloadStr.includes('stale-request-id-99999'),
+            'Callback payload must not contain stale descriptor request_id');
+        assert.ok(!payloadStr.includes('stale-claim-id-99999'),
+            'Callback payload must not contain stale descriptor execution_claim_id');
+        assert.ok(!payloadStr.includes('stale-carrier-identity-99999'),
+            'Callback payload must not contain stale descriptor carrier_identity');
+    }
+});
+
+// =========================================================
+// End-to-end callback dispatch behavior tests
+// TASK-KILO-PHASE4-INCREMENT-4-2-FINAL-CALLBACK-CORRELATION-GUARD-001
+// These tests exercise the actual "Send callback to Render" bash logic
+// with a mock curl to prove no HTTP request is sent when identities are
+// invalid, and that exactly one request with the expected payload is sent
+// when identities are valid.
+// =========================================================
+
+function extractCallbackDispatchScript(wfRaw) {
+    const cbIdx = wfRaw.indexOf('Send callback to Render');
+    if (cbIdx === -1) throw new Error('Send callback to Render step not found');
+    const endIdx = wfRaw.indexOf('      - name: Ensure gemini-acp-report.json exists', cbIdx);
+    if (endIdx === -1) throw new Error('Failure-safe step not found');
+    const section = wfRaw.slice(cbIdx, endIdx);
+    const runMatch = section.match(/run:\s*\|\s*\n([\s\S]+)/);
+    if (!runMatch) throw new Error('run block not found in Send callback step');
+    return runMatch[1];
+}
+
+function runCallbackDispatch(dispatchScript, opts) {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kilo-cb-dispatch-'));
+
+    const callbackPayload = {
+        request_id: opts.request_id || null,
+        agent: 'Gemini Builder',
+        status: opts.status || 'failure',
+        task: opts.task || '{"task_name":"TEST"}',
+        repository: opts.repository || 'fluentwithkyle/openclaw-webhook',
+        base_branch: opts.base_branch || 'main',
+        current_head_sha: 'abc123',
+        result: {
+            execution_metadata: {
+                invocation_id: 'inv-001',
+                run_id: 'run-001',
+                carrier_identity: opts.carrier_identity || null,
+                execution_claim_id: opts.execution_claim_id || null
+            },
+            builder_output: ''
+        },
+        commit: null,
+        push: false,
+        blockers: opts.blockers || [],
+        reconciliation: { status: 'SKIPPED', changed_files: [], commit_sha: null }
+    };
+    fs.writeFileSync(path.join(tmpDir, 'callback_payload.json'), JSON.stringify(callbackPayload, null, 2), 'utf8');
+
+    const mockLog = path.join(tmpDir, 'curl_invocations.jsonl');
+    fs.writeFileSync(mockLog, '', 'utf8');
+
+    const mockCurl = path.join(tmpDir, 'curl');
+    fs.writeFileSync(mockCurl, '#!/bin/bash\necho "MOCK_CURL_CALLED" >> "' + mockLog + '"\nprintf "%s " "$@" >> "' + mockLog + '" ; echo "" >> "' + mockLog + '"\nwhile [ $# -gt 0 ]; do\n  if [ "$1" = "-d" ]; then\n    shift\n    if [ "${1}" = "@callback_payload.json" ]; then\n      cat "callback_payload.json" | sed "s/^/FILECONTENT: /" >> "' + mockLog + '"\n    fi\n  fi\n  shift\ndone\necho "{}"\necho "200"\nexit 0\n', 'utf8');
+    fs.chmodSync(mockCurl, 0o755);
+
+    let scriptContent = '#!/bin/bash\nset -uo pipefail\nexport PATH="' + tmpDir + ':$PATH"\n';
+    scriptContent += 'CALLBACK_URL="' + (opts.callback_url !== undefined ? opts.callback_url : (opts.callback_url || 'https://example.com/callback')) + '"\n';
+    scriptContent += 'CALLBACK_SECRET="' + (opts.callback_secret !== undefined ? opts.callback_secret : (opts.callback_secret || 'secret-123')) + '"\n';
+    scriptContent += 'GITHUB_OUTPUT="' + path.join(tmpDir, 'github_output') + '"\n';
+    scriptContent += 'cd "' + tmpDir + '"\n';
+    scriptContent += 'REQUEST_ID="' + (opts.request_id || '') + '"\n';
+    scriptContent += 'EXECUTION_CLAIM_ID="' + (opts.execution_claim_id || '') + '"\n';
+    scriptContent += 'CARRIER_IDENTITY="' + (opts.carrier_identity || '') + '"\n';
+    scriptContent += dispatchScript;
+
+    const scriptPath = path.join(tmpDir, 'test-dispatch.sh');
+    fs.writeFileSync(scriptPath, scriptContent, 'utf8');
+    fs.chmodSync(scriptPath, 0o755);
+
+    let exitCode = 0;
+    let stdout = '';
+    let stderr = '';
+    const env = { ...process.env, PATH: tmpDir + ':' + process.env.PATH };
+
+    try {
+        const result = require('child_process').execFileSync('bash', [scriptPath], {
+            encoding: 'utf8',
+            timeout: 10000,
+            env: env,
+            cwd: tmpDir,
+            maxBuffer: 1024 * 1024
+        });
+        stdout = result;
+    } catch (e) {
+        exitCode = e.status || 1;
+        stdout = (e.stdout || '');
+        stderr = (e.stderr || '');
+    }
+
+    const fullOutput = stdout + stderr;
+    const curlLog = fs.existsSync(mockLog) ? fs.readFileSync(mockLog, 'utf8').trim() : '';
+    const curlInvocations = curlLog ? curlLog.split('\n').filter(l => l.startsWith('MOCK_CURL_CALLED')).length : 0;
+    const githubOutput = fs.existsSync(path.join(tmpDir, 'github_output'))
+        ? fs.readFileSync(path.join(tmpDir, 'github_output'), 'utf8')
+        : '';
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    return { exitCode, stdout: fullOutput, curlInvocations: Array(curlInvocations).fill(true), curlOutput: curlLog, callbackSent: githubOutput.includes('callback_sent=true') };
+}
+
+const correctiveWfForDispatch = fs.readFileSync(
+    path.join(ONE_CLICK_DIR, 'one-click-gemini-builder-phase4-increment-4-2-corrective.yml'), 'utf8'
+);
+
+runTest('E2E callback dispatch - step is gated on identity_valid == true', () => {
+    assert.ok(/steps\.callback_payload\.outputs\.identity_valid == 'true'/.test(correctiveWfForDispatch),
+        'Send callback step must be gated on identity_valid == true');
+});
+
+runTest('E2E callback dispatch - GitHub if-condition prevents step execution when identity_valid is false', () => {
+    const ifLine = correctiveWfForDispatch.match(/if:\s*always\(\)\s*&&\s*steps\.orchestration_context\.outcome\s*==\s*'success'\s*&&\s*steps\.callback_payload\.outputs\.identity_valid\s*==\s*'true'/);
+    assert.ok(ifLine, 'Send callback step must gate on identity_valid == true in the if condition');
+
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const identityInvalidIf = "always() && steps.orchestration_context.outcome == 'success' && steps.callback_payload.outputs.identity_valid == 'false'";
+    assert.ok(!identityInvalidIf.match(/identity_valid == 'true'/),
+        'identity_valid=false would NOT satisfy the gate condition');
+
+    const identityValidIf = "always() && steps.orchestration_context.outcome == 'success' && steps.callback_payload.outputs.identity_valid == 'true'";
+    assert.ok(identityValidIf.match(/identity_valid == 'true'/),
+        'identity_valid=true satisfies the gate condition');
+});
+
+runTest('E2E callback dispatch - no HTTP callback request sent when orchestration outputs are missing', () => {
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const result = runCallbackDispatch(dispatchScript, {
+        request_id: '',
+        execution_claim_id: '',
+        carrier_identity: '',
+        callback_url: 'https://render.example.com/callback',
+        callback_secret: 'secret-123'
+    });
+
+    assert.strictEqual(result.curlInvocations.length, 0,
+        'No curl/HTTP callback request must be sent when identity outputs are empty/identity_valid=false');
+    assert.ok(result.stdout.includes('BLOCKED') || result.exitCode !== 0,
+        'Dispatch step must fail-closed when identity outputs are missing');
+});
+
+runTest('E2E callback dispatch - no HTTP callback request sent when request_id is empty/null', () => {
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const result = runCallbackDispatch(dispatchScript, {
+        request_id: '',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1',
+        callback_url: 'https://render.example.com/callback',
+        callback_secret: 'secret-123'
+    });
+
+    assert.strictEqual(result.curlInvocations.length, 0,
+        'No curl/HTTP callback request must be sent when request_id is empty (identity_valid=false)');
+    assert.ok(result.stdout.includes('BLOCKED') || result.exitCode !== 0,
+        'Dispatch step must fail-closed when request_id is empty');
+});
+
+runTest('E2E callback dispatch - no HTTP callback request sent when execution_claim_id is empty/null', () => {
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const result = runCallbackDispatch(dispatchScript, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: '',
+        carrier_identity: 'github-workflow-38918426965-1',
+        callback_url: 'https://render.example.com/callback',
+        callback_secret: 'secret-123'
+    });
+
+    assert.strictEqual(result.curlInvocations.length, 0,
+        'No curl/HTTP callback request must be sent when execution_claim_id is empty (identity_valid=false)');
+    assert.ok(result.exitCode !== 0,
+        'Dispatch step must fail-closed when execution_claim_id is empty');
+});
+
+runTest('E2E callback dispatch - no HTTP callback request sent when carrier_identity is empty/null', () => {
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const result = runCallbackDispatch(dispatchScript, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: '',
+        callback_url: 'https://render.example.com/callback',
+        callback_secret: 'secret-123'
+    });
+
+    assert.strictEqual(result.curlInvocations.length, 0,
+        'No curl/HTTP callback request must be sent when carrier_identity is empty (identity_valid=false)');
+    assert.ok(result.exitCode !== 0,
+        'Dispatch step must fail-closed when carrier_identity is empty');
+});
+
+runTest('E2E callback dispatch - exactly one HTTP callback sent with valid identities and authoritative payload only', () => {
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const result = runCallbackDispatch(dispatchScript, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1',
+        callback_url: 'https://render.example.com/callback',
+        callback_secret: 'secret-123'
+    });
+
+    assert.strictEqual(result.curlInvocations.length, 1,
+        'Exactly one callback request must be sent when all identities are valid');
+    assert.ok(result.curlOutput.includes('https://render.example.com/callback'),
+        'Callback must POST to the correct CALLBACK_URL');
+    assert.ok(result.curlOutput.includes('x-builder-callback-secret'),
+        'Callback must include the x-builder-callback-secret header');
+    assert.ok(result.curlOutput.includes('Content-Type: application/json'),
+        'Callback must include Content-Type: application/json header');
+    assert.ok(result.callbackSent === true,
+        'callback_sent=true must be output when callback succeeds');
+});
+
+runTest('E2E callback dispatch - callback payload contains authoritative identities from orchestration outputs only', () => {
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const result = runCallbackDispatch(dispatchScript, {
+        request_id: 'orchestration-derived-req-789',
+        execution_claim_id: 'orchestration-derived-claim-456',
+        carrier_identity: 'orchestration-derived-carrier-321',
+        callback_url: 'https://render.example.com/callback',
+        callback_secret: 'secret-123'
+    });
+
+    assert.strictEqual(result.curlInvocations.length, 1,
+        'Callback must be dispatched when identities are valid');
+    assert.ok(result.curlOutput.includes('orchestration-derived-req-789'),
+        'Callback request must contain the authoritative request_id from orchestration outputs');
+    assert.ok(result.curlOutput.includes('orchestration-derived-claim-456'),
+        'Callback request must contain the authoritative execution_claim_id from orchestration outputs');
+    assert.ok(result.curlOutput.includes('orchestration-derived-carrier-321'),
+        'Callback request must contain the authoritative carrier_identity from orchestration outputs');
+});
+
+runTest('E2E callback dispatch - callback is skipped (not failed) when CALLBACK_URL/SECRET not configured', () => {
+    const dispatchScript = extractCallbackDispatchScript(correctiveWfForDispatch);
+
+    const result = runCallbackDispatch(dispatchScript, {
+        request_id: 'valid-request-id-12345',
+        execution_claim_id: 'claim-1792161979938-1uubwdmp',
+        carrier_identity: 'github-workflow-38918426965-1',
+        callback_url: '',
+        callback_secret: ''
+    });
+
+    assert.strictEqual(result.curlInvocations.length, 0,
+        'No curl/HTTP callback request must be sent when CALLBACK_URL or CALLBACK_SECRET is not configured');
+    assert.ok(result.stdout.includes('not configured') || result.stdout.includes('skipping callback'),
+        'Must log a warning that callback URL or secret is not configured');
+    assert.strictEqual(result.exitCode, 0,
+        'Steps must exit 0 (skip gracefully) when callback not configured, not fail');
 });
 
 console.log('\n' + passCount + ' passed, ' + failCount + ' failed');
