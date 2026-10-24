@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const appsScriptClaims = require('../services/appsScript');
 const {
   validateTaskRegistryEntry,
   createInitialTaskRegistryEntry,
@@ -36,6 +37,10 @@ const REGISTRY_LOCK_TIMEOUT_MS = 5000;
 let memoryCache = new Map();
 let approvalCache = new Map();
 let initialized = false;
+
+function isGoogleStorageClaimsEnabled() {
+  return appsScriptClaims.isAppsScriptConfigured();
+}
 
 function ensureRegistryFile() {
   if (!fs.existsSync(REGISTRY_FILE)) {
@@ -1342,6 +1347,60 @@ async function claimExecutionContext(requestId, claimIdentity) {
       };
     }
 
+    // If durable Google Storage is configured, route claim acquisition there.
+    // Fail-closed: a storage error must NOT silently fall back to local filesystem.
+    if (isGoogleStorageClaimsEnabled()) {
+      const claimResult = await appsScriptClaims.acquireClaimViaAppsScript(requestId, claimIdentity);
+
+      if (claimResult.error_code === 'STORAGE_ERROR') {
+        return {
+          success: false,
+          status: 'FAILED',
+          error_code: 'STORAGE_ERROR',
+          error: 'Durable claim storage unavailable: ' + (claimResult.error || 'Apps Script call failed')
+        };
+      }
+
+      if (claimResult.error_code === 'ALREADY_CLAIMED') {
+        return {
+          success: false,
+          status: 'ALREADY_CLAIMED',
+          error_code: 'ALREADY_CLAIMED',
+          error: 'Task already has an active execution claim',
+          existing_claim: claimResult.existing_claim
+        };
+      }
+
+      if (claimResult.success && claimResult.error_code === 'CLAIMED') {
+        entry.execution_claim = {
+          execution_claim_id: claimResult.execution_claim_id,
+          carrier_identity: claimResult.carrier_identity,
+          carrier_type: claimResult.carrier_type,
+          claimed_at: claimResult.claimed_at || new Date().toISOString(),
+          claim_epoch: claimResult.claim_epoch || Date.now()
+        };
+        entry.updated_at = entry.execution_claim.claimed_at;
+        cache.set(requestId, entry);
+        await persistCache();
+
+        return {
+          success: true,
+          status: 'CLAIMED',
+          error_code: 'CLAIMED',
+          execution_claim_id: claimResult.execution_claim_id,
+          carrier_identity: claimResult.carrier_identity,
+          task: entry
+        };
+      }
+
+      return {
+        success: false,
+        status: 'FAILED',
+        error_code: 'CLAIM_FAILED',
+        error: claimResult.error || 'Claim acquisition failed via Google Storage'
+      };
+    }
+
     const lockPath = claimLockPath(requestId);
 
     try {
@@ -1453,6 +1512,35 @@ async function releaseExecutionClaim(requestId, executionClaimId) {
       return { success: false, error_code: 'TASK_NOT_FOUND', error: 'Task not found in registry' };
     }
 
+    if (isGoogleStorageClaimsEnabled()) {
+      const claimRecord = await appsScriptClaims.getClaimFromAppsScript(requestId);
+
+      if (claimRecord && claimRecord.error_code === 'STORAGE_ERROR') {
+        return { success: false, error_code: 'STORAGE_ERROR', error: 'Durable claim storage unavailable: ' + (claimRecord.error || 'Apps Script call failed') };
+      }
+
+      var innerClaim = claimRecord && claimRecord.claim ? claimRecord.claim : claimRecord;
+
+      if (executionClaimId && innerClaim && innerClaim.execution_claim_id !== executionClaimId) {
+        return { success: false, error_code: 'CLAIM_MISMATCH', error: 'Execution claim ID does not match current claim', existing_claim: innerClaim };
+      }
+
+      const releaseResult = await appsScriptClaims.releaseClaimFromAppsScript(requestId, executionClaimId);
+
+      if (releaseResult.error_code === 'STORAGE_ERROR') {
+        return { success: false, error_code: 'STORAGE_ERROR', error: 'Durable claim storage unavailable: ' + (releaseResult.error || 'Apps Script call failed') };
+      }
+
+      if (entry.execution_claim) {
+        delete entry.execution_claim;
+        entry.updated_at = new Date().toISOString();
+        cache.set(requestId, entry);
+        await persistCache();
+      }
+
+      return { success: true, status: 'RELEASED', error_code: 'RELEASED', error: null };
+    }
+
     const lockPath = claimLockPath(requestId);
 
     if (executionClaimId) {
@@ -1524,7 +1612,7 @@ function getExecutionClaimFromRegistry(requestId) {
   };
 }
 
-function getExecutionClaimFromAnywhere(requestId) {
+async function getExecutionClaimFromAnywhere(requestId) {
   const lockPath = claimLockPath(requestId);
   let claim = readClaimLock(lockPath);
 
@@ -1532,6 +1620,16 @@ function getExecutionClaimFromAnywhere(requestId) {
     const registryClaim = getExecutionClaimFromRegistry(requestId);
     if (registryClaim) {
       return registryClaim;
+    }
+  }
+
+  if (isGoogleStorageClaimsEnabled()) {
+    const googleClaim = await appsScriptClaims.getClaimFromAppsScript(requestId);
+    if (googleClaim && googleClaim.error_code === 'STORAGE_ERROR') {
+      return null;
+    }
+    if (googleClaim && googleClaim.error_code === 'CLAIMED' && !googleClaim.claim.stale) {
+      return googleClaim.claim;
     }
   }
 
@@ -1550,7 +1648,7 @@ async function rehydrateTaskFromCallback(requestId, callbackReport) {
       callbackReport.result.execution_metadata &&
       callbackReport.result.execution_metadata.carrier_identity;
 
-    const diskClaim = getExecutionClaimFromAnywhere(requestId);
+    const diskClaim = await getExecutionClaimFromAnywhere(requestId);
 
     if (!diskClaim) {
       return {
@@ -1751,6 +1849,8 @@ module.exports = {
   releaseExecutionClaim,
    getExecutionClaim,
    getExecutionClaimFromDisk,
+   getExecutionClaimFromRegistry,
+   getExecutionClaimFromAnywhere,
    rehydrateTaskFromCallback,
   buildExecutionDescriptor,
   transitionToExecuting,
